@@ -62,19 +62,22 @@ A comprehensive, fully dynamic PCI DSS (Payment Card Industry Data Security Stan
   - **Not Started**: No evidence accepted
 - Overall compliance = weighted average across all sub-requirements
 
-### Phase Approval Workflow (SME Confirmed)
-Phases are strictly sequential and require Infosec Team approval before advancing:
+### Phase Approval Workflow (Governance Enforced)
+Phases are strictly sequential and require Admin or Business Owner approval before advancing:
 
 1. **Complete Tasks**: Check off all tasks in the current phase
 2. **Auto-Request Approval**: When all tasks complete, approval_status changes to "pending_approval"
-3. **Infosec Team Approval**: Infosec Team reviews and clicks "Approve Phase"
-4. **Advance**: After approval, "Advance to Next Phase" button appears
-5. **Task Regression**: If any task is unchecked after approval, approval is revoked
+3. **Evidence Gate**: Approval blocked until all linked requirements have accepted evidence
+4. **Admin/Business Owner Approval**: Only Admin or Business Owner can approve phases (separation of duties)
+5. **Advance**: After approval, "Advance to Next Phase" button appears
+6. **Task Regression**: If any task is unchecked after approval, approval is revoked
 
 **Phase Fields**:
 - `approval_status`: not_required | pending_approval | approved
-- `approved_by`: Name of approver (e.g., "Infosec Team")
+- `approved_by`: Name of approver
 - `approved_at`: Timestamp of approval
+
+**PhaseRequirement Model**: Links phases to requirements. Admins can configure which requirements must have accepted evidence before a phase can be approved.
 
 **Deliverables**: Each phase has deliverables shown when tasks are complete
 
@@ -84,8 +87,8 @@ Phases are strictly sequential and require Infosec Team approval before advancin
 - `GET /api/phases` - List all phases with approval status
 - `GET /api/phases/current` - Get current phase
 - `PATCH /api/phases/{id}/set-current` - Set active phase
-- `POST /api/phases/{id}/request-approval` - Request Infosec Team approval
-- `POST /api/phases/{id}/approve` - Approve phase (Infosec Team only)
+- `POST /api/phases/{id}/request-approval` - Request approval (auto-triggered when tasks complete)
+- `POST /api/phases/{id}/approve` - Approve phase (Admin/Business Owner only, requires linked evidence accepted)
 - `POST /api/phases/{id}/advance` - Advance to next phase (requires approval)
 
 ### Requirements & Evidence
