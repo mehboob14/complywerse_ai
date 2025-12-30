@@ -574,7 +574,7 @@ def request_phase_approval(phase_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/phases/{phase_id}/approve")
-def approve_phase(phase_id: int, approved_by: str = "Infosec Team", db: Session = Depends(get_db)):
+def approve_phase(phase_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin", "infosec_team"))):
     phase = db.query(Phase).filter(Phase.id == phase_id).first()
     if not phase:
         raise HTTPException(status_code=404, detail="Phase not found")
@@ -583,13 +583,13 @@ def approve_phase(phase_id: int, approved_by: str = "Infosec Team", db: Session 
         raise HTTPException(status_code=400, detail="Phase is not pending approval")
     
     phase.approval_status = "approved"
-    phase.approved_by = approved_by
+    phase.approved_by = user.display_name or user.username
     phase.approved_at = datetime.utcnow()
     phase.status = "complete"
     db.commit()
     
     return {
-        "message": f"Phase '{phase.name}' approved by {approved_by}",
+        "message": f"Phase '{phase.name}' approved by {phase.approved_by}",
         "phase": phase.name,
         "approved_by": phase.approved_by,
         "approved_at": phase.approved_at.isoformat()
@@ -727,8 +727,8 @@ def get_sub_requirement(sub_req_id: int, db: Session = Depends(get_db)):
 async def upload_evidence(
     required_evidence_id: int,
     file: UploadFile = File(...),
-    uploaded_by: str = Form(default="IT Security"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("admin", "infosec_team", "it_security"))
 ):
     req_ev = db.query(RequiredEvidence).filter(RequiredEvidence.id == required_evidence_id).first()
     if not req_ev:
@@ -746,7 +746,7 @@ async def upload_evidence(
         required_evidence_id=required_evidence_id,
         file_name=file.filename,
         file_path=file_path,
-        uploaded_by=uploaded_by,
+        uploaded_by=user.display_name or user.username,
         status=EvidenceStatus.PENDING_REVIEW.value
     )
     db.add(submission)
@@ -788,9 +788,9 @@ def get_pending_evidence(db: Session = Depends(get_db)):
 def review_evidence(
     submission_id: int,
     action: str,
-    reviewer: str = "QSA Auditor",
     notes: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("admin", "qsa_auditor"))
 ):
     submission = db.query(EvidenceSubmission).filter(EvidenceSubmission.id == submission_id).first()
     if not submission:
@@ -799,7 +799,7 @@ def review_evidence(
     if action not in ["accept", "reject"]:
         raise HTTPException(status_code=400, detail="Action must be 'accept' or 'reject'")
     
-    submission.reviewed_by = reviewer
+    submission.reviewed_by = user.display_name or user.username
     submission.reviewed_at = datetime.utcnow()
     submission.review_notes = notes
     
@@ -1028,9 +1028,9 @@ def create_risk(
 def approve_risk(
     risk_id: int,
     action: str,
-    approved_by: str = "Business Owner",
     business_justification: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("admin", "business_owner"))
 ):
     risk = db.query(Risk).filter(Risk.id == risk_id).first()
     if not risk:
@@ -1039,7 +1039,7 @@ def approve_risk(
     if action not in ["approve", "reject"]:
         raise HTTPException(status_code=400, detail="Action must be 'approve' or 'reject'")
     
-    risk.approved_by = approved_by
+    risk.approved_by = user.display_name or user.username
     risk.approved_at = datetime.utcnow()
     risk.business_justification = business_justification
     risk.status = RiskStatus.APPROVED.value if action == "approve" else RiskStatus.REJECTED.value
@@ -1076,7 +1076,7 @@ class RequiredEvidenceCreateRequest(BaseModel):
 
 
 @router.post("/admin/phases")
-def admin_create_phase(request: PhaseCreateRequest, db: Session = Depends(get_db)):
+def admin_create_phase(request: PhaseCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     phase = Phase(
         phase_number=request.phase_number,
         name=request.name,
@@ -1089,7 +1089,7 @@ def admin_create_phase(request: PhaseCreateRequest, db: Session = Depends(get_db
 
 
 @router.put("/admin/phases/{phase_id}")
-def admin_update_phase(phase_id: int, request: PhaseCreateRequest, db: Session = Depends(get_db)):
+def admin_update_phase(phase_id: int, request: PhaseCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     phase = db.query(Phase).filter(Phase.id == phase_id).first()
     if not phase:
         raise HTTPException(status_code=404, detail="Phase not found")
@@ -1102,7 +1102,7 @@ def admin_update_phase(phase_id: int, request: PhaseCreateRequest, db: Session =
 
 
 @router.delete("/admin/phases/{phase_id}")
-def admin_delete_phase(phase_id: int, db: Session = Depends(get_db)):
+def admin_delete_phase(phase_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     phase = db.query(Phase).filter(Phase.id == phase_id).first()
     if not phase:
         raise HTTPException(status_code=404, detail="Phase not found")
@@ -1113,7 +1113,7 @@ def admin_delete_phase(phase_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/admin/phases/{phase_id}/tasks")
-def admin_create_task(phase_id: int, request: TaskCreateRequest, db: Session = Depends(get_db)):
+def admin_create_task(phase_id: int, request: TaskCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     phase = db.query(Phase).filter(Phase.id == phase_id).first()
     if not phase:
         raise HTTPException(status_code=404, detail="Phase not found")
@@ -1126,7 +1126,7 @@ def admin_create_task(phase_id: int, request: TaskCreateRequest, db: Session = D
 
 
 @router.put("/admin/tasks/{task_id}")
-def admin_update_task(task_id: int, request: TaskCreateRequest, db: Session = Depends(get_db)):
+def admin_update_task(task_id: int, request: TaskCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     task = db.query(PhaseTask).filter(PhaseTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -1137,7 +1137,7 @@ def admin_update_task(task_id: int, request: TaskCreateRequest, db: Session = De
 
 
 @router.delete("/admin/tasks/{task_id}")
-def admin_delete_task(task_id: int, db: Session = Depends(get_db)):
+def admin_delete_task(task_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     task = db.query(PhaseTask).filter(PhaseTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -1148,7 +1148,7 @@ def admin_delete_task(task_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/admin/phases/{phase_id}/deliverables")
-def admin_create_deliverable(phase_id: int, request: TaskCreateRequest, db: Session = Depends(get_db)):
+def admin_create_deliverable(phase_id: int, request: TaskCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     phase = db.query(Phase).filter(Phase.id == phase_id).first()
     if not phase:
         raise HTTPException(status_code=404, detail="Phase not found")
@@ -1161,7 +1161,7 @@ def admin_create_deliverable(phase_id: int, request: TaskCreateRequest, db: Sess
 
 
 @router.put("/admin/deliverables/{deliverable_id}")
-def admin_update_deliverable(deliverable_id: int, request: TaskCreateRequest, db: Session = Depends(get_db)):
+def admin_update_deliverable(deliverable_id: int, request: TaskCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     deliverable = db.query(PhaseDeliverable).filter(PhaseDeliverable.id == deliverable_id).first()
     if not deliverable:
         raise HTTPException(status_code=404, detail="Deliverable not found")
@@ -1172,7 +1172,7 @@ def admin_update_deliverable(deliverable_id: int, request: TaskCreateRequest, db
 
 
 @router.delete("/admin/deliverables/{deliverable_id}")
-def admin_delete_deliverable(deliverable_id: int, db: Session = Depends(get_db)):
+def admin_delete_deliverable(deliverable_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     deliverable = db.query(PhaseDeliverable).filter(PhaseDeliverable.id == deliverable_id).first()
     if not deliverable:
         raise HTTPException(status_code=404, detail="Deliverable not found")
@@ -1183,7 +1183,7 @@ def admin_delete_deliverable(deliverable_id: int, db: Session = Depends(get_db))
 
 
 @router.post("/admin/requirements")
-def admin_create_requirement(request: RequirementCreateRequest, db: Session = Depends(get_db)):
+def admin_create_requirement(request: RequirementCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     req = Requirement(
         req_number=request.req_number,
         name=request.name,
@@ -1196,7 +1196,7 @@ def admin_create_requirement(request: RequirementCreateRequest, db: Session = De
 
 
 @router.put("/admin/requirements/{req_id}")
-def admin_update_requirement(req_id: int, request: RequirementCreateRequest, db: Session = Depends(get_db)):
+def admin_update_requirement(req_id: int, request: RequirementCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     req = db.query(Requirement).filter(Requirement.id == req_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="Requirement not found")
@@ -1209,7 +1209,7 @@ def admin_update_requirement(req_id: int, request: RequirementCreateRequest, db:
 
 
 @router.delete("/admin/requirements/{req_id}")
-def admin_delete_requirement(req_id: int, db: Session = Depends(get_db)):
+def admin_delete_requirement(req_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     req = db.query(Requirement).filter(Requirement.id == req_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="Requirement not found")
@@ -1220,7 +1220,7 @@ def admin_delete_requirement(req_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/admin/requirements/{req_id}/sub-requirements")
-def admin_create_sub_requirement(req_id: int, request: SubRequirementCreateRequest, db: Session = Depends(get_db)):
+def admin_create_sub_requirement(req_id: int, request: SubRequirementCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     req = db.query(Requirement).filter(Requirement.id == req_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="Requirement not found")
@@ -1237,7 +1237,7 @@ def admin_create_sub_requirement(req_id: int, request: SubRequirementCreateReque
 
 
 @router.put("/admin/sub-requirements/{sub_req_id}")
-def admin_update_sub_requirement(sub_req_id: int, request: SubRequirementCreateRequest, db: Session = Depends(get_db)):
+def admin_update_sub_requirement(sub_req_id: int, request: SubRequirementCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     sub_req = db.query(SubRequirement).filter(SubRequirement.id == sub_req_id).first()
     if not sub_req:
         raise HTTPException(status_code=404, detail="Sub-requirement not found")
@@ -1249,7 +1249,7 @@ def admin_update_sub_requirement(sub_req_id: int, request: SubRequirementCreateR
 
 
 @router.delete("/admin/sub-requirements/{sub_req_id}")
-def admin_delete_sub_requirement(sub_req_id: int, db: Session = Depends(get_db)):
+def admin_delete_sub_requirement(sub_req_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     sub_req = db.query(SubRequirement).filter(SubRequirement.id == sub_req_id).first()
     if not sub_req:
         raise HTTPException(status_code=404, detail="Sub-requirement not found")
@@ -1260,7 +1260,7 @@ def admin_delete_sub_requirement(sub_req_id: int, db: Session = Depends(get_db))
 
 
 @router.post("/admin/sub-requirements/{sub_req_id}/evidence")
-def admin_create_required_evidence(sub_req_id: int, request: RequiredEvidenceCreateRequest, db: Session = Depends(get_db)):
+def admin_create_required_evidence(sub_req_id: int, request: RequiredEvidenceCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     sub_req = db.query(SubRequirement).filter(SubRequirement.id == sub_req_id).first()
     if not sub_req:
         raise HTTPException(status_code=404, detail="Sub-requirement not found")
@@ -1278,7 +1278,7 @@ def admin_create_required_evidence(sub_req_id: int, request: RequiredEvidenceCre
 
 
 @router.put("/admin/evidence/{evidence_id}")
-def admin_update_required_evidence(evidence_id: int, request: RequiredEvidenceCreateRequest, db: Session = Depends(get_db)):
+def admin_update_required_evidence(evidence_id: int, request: RequiredEvidenceCreateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     evidence = db.query(RequiredEvidence).filter(RequiredEvidence.id == evidence_id).first()
     if not evidence:
         raise HTTPException(status_code=404, detail="Required evidence not found")
@@ -1291,7 +1291,7 @@ def admin_update_required_evidence(evidence_id: int, request: RequiredEvidenceCr
 
 
 @router.delete("/admin/evidence/{evidence_id}")
-def admin_delete_required_evidence(evidence_id: int, db: Session = Depends(get_db)):
+def admin_delete_required_evidence(evidence_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     evidence = db.query(RequiredEvidence).filter(RequiredEvidence.id == evidence_id).first()
     if not evidence:
         raise HTTPException(status_code=404, detail="Required evidence not found")
