@@ -29,6 +29,15 @@ function Dashboard() {
     }
   }
 
+  const toggleTask = async (taskId) => {
+    try {
+      await axios.patch(`/api/tasks/${taskId}/toggle`)
+      fetchData()
+    } catch (err) {
+      console.error('Failed to toggle task:', err)
+    }
+  }
+
   const currentPhase = phases.find(p => p.is_current)
   const completedTasks = currentPhase?.tasks?.filter(t => t.is_complete).length || 0
   const totalTasks = currentPhase?.tasks?.length || 0
@@ -45,7 +54,16 @@ function Dashboard() {
     return `${completed}/${total}`
   }
 
+  const getComplianceColor = (percentage) => {
+    if (percentage >= 80) return '#3fb950'
+    if (percentage >= 50) return '#d29922'
+    return '#f85149'
+  }
+
   if (loading) return <div className="loading">Loading dashboard...</div>
+
+  const compliancePercent = stats?.overall_compliance || 0
+  const complianceColor = getComplianceColor(compliancePercent)
 
   return (
     <div className="dashboard-new">
@@ -74,15 +92,15 @@ function Dashboard() {
                 cy="50" 
                 r="40" 
                 fill="none" 
-                stroke="#f85149" 
+                stroke={complianceColor}
                 strokeWidth="8"
-                strokeDasharray={`${(stats?.overall_compliance || 0) * 2.51} 251`}
+                strokeDasharray={`${compliancePercent * 2.51} 251`}
                 strokeLinecap="round"
                 transform="rotate(-90 50 50)"
               />
             </svg>
             <div className="gauge-center">
-              <span className="gauge-value">{stats?.overall_compliance || 0}%</span>
+              <span className="gauge-value" style={{color: complianceColor}}>{compliancePercent}%</span>
             </div>
           </div>
           <div className="metric-label">Compliance Readiness</div>
@@ -102,17 +120,17 @@ function Dashboard() {
           <div className="metric-icon systems-icon">&#9632;</div>
           <div className="metric-content">
             <div className="metric-header">CDE Systems</div>
-            <div className="metric-value-large">24</div>
-            <div className="metric-description">In scope for PCI</div>
+            <div className="metric-value-large">{stats?.total_sub_requirements || 0}</div>
+            <div className="metric-description">Sub-requirements tracked</div>
           </div>
         </div>
 
         <div className="metric-card">
           <div className="metric-icon vuln-icon">&#9888;</div>
           <div className="metric-content">
-            <div className="metric-header">Open Vulnerabilities</div>
+            <div className="metric-header">Open Findings</div>
             <div className="metric-value-large danger">{stats?.open_findings || 0}</div>
-            <div className="metric-description">Critical + High</div>
+            <div className="metric-description">Requires attention</div>
           </div>
         </div>
       </div>
@@ -198,20 +216,25 @@ function Dashboard() {
               return (
                 <div key={task.id} className="requirement-section">
                   {showCategory && <h3 className="section-category">{category}</h3>}
-                  <div className="assessment-task">
+                  <div className={`assessment-task ${task.is_complete ? 'completed' : ''}`}>
                     <div className="task-checkbox">
-                      <input type="checkbox" checked={task.is_complete} readOnly />
+                      <input 
+                        type="checkbox" 
+                        checked={task.is_complete} 
+                        onChange={() => toggleTask(task.id)}
+                      />
                     </div>
                     <div className="task-info">
                       <div className="task-title-row">
-                        <span className="task-title">{task.name}</span>
+                        <span className={`task-title ${task.is_complete ? 'completed' : ''}`}>{task.name}</span>
                         <span className="task-id">TASK-{String(task.id).padStart(2, '0')}</span>
                         {!task.is_complete && <span className="evidence-required-badge">Action Required</span>}
+                        {task.is_complete && <span className="task-complete-badge">Completed</span>}
                       </div>
                       <p className="task-description">
                         {task.is_complete 
                           ? 'This task has been completed successfully.'
-                          : 'Complete this task to progress in the compliance journey.'}
+                          : 'Click the checkbox to mark this task as complete.'}
                       </p>
                       <a href="/requirements" className="task-link">
                         &#8634; View related requirements and evidence
@@ -250,10 +273,9 @@ function Dashboard() {
           <div className="requirements-preview">
             <h3 className="section-category" style={{marginTop: '2rem'}}>Related Requirements</h3>
             {requirements.slice(0, 3).map((req) => {
-              const totalEvidence = req.sub_requirements?.reduce((acc, sub) => 
-                acc + (sub.required_evidence?.length || 0), 0) || 0
-              const acceptedEvidence = req.sub_requirements?.reduce((acc, sub) => 
-                acc + (sub.required_evidence?.filter(e => e.status === 'accepted').length || 0), 0) || 0
+              const totalEvidence = req.sub_requirements?.reduce((acc, sub) => acc + sub.total_required, 0) || 0
+              const acceptedEvidence = req.sub_requirements?.reduce((acc, sub) => acc + sub.total_accepted, 0) || 0
+              const progress = totalEvidence > 0 ? (acceptedEvidence / totalEvidence) * 100 : 0
 
               return (
                 <div key={req.id} className="assessment-task" style={{marginBottom: '0.75rem'}}>
@@ -262,8 +284,9 @@ function Dashboard() {
                   </div>
                   <div className="task-info">
                     <div className="task-title-row">
-                      <span className="task-title">Requirement {req.requirement_number}: {req.name}</span>
-                      <span className="task-id">PCI-{String(req.requirement_number).padStart(2, '0')}</span>
+                      <span className="task-title">Requirement {req.req_number}: {req.name}</span>
+                      <span className="task-id">PCI-{String(req.req_number).padStart(2, '0')}</span>
+                      <span className="evidence-progress-badge">{acceptedEvidence}/{totalEvidence} evidence</span>
                     </div>
                     <p className="task-description">{req.description}</p>
                   </div>
@@ -271,8 +294,10 @@ function Dashboard() {
                     <svg viewBox="0 0 36 36" className="progress-ring">
                       <circle cx="18" cy="18" r="16" fill="none" stroke="#21262d" strokeWidth="2" />
                       <circle 
-                        cx="18" cy="18" r="16" fill="none" stroke="#3fb950" strokeWidth="2"
-                        strokeDasharray={`${totalEvidence > 0 ? (acceptedEvidence / totalEvidence) * 100 : 0} 100`}
+                        cx="18" cy="18" r="16" fill="none" 
+                        stroke={progress === 100 ? "#3fb950" : progress > 0 ? "#d29922" : "#8b949e"} 
+                        strokeWidth="2"
+                        strokeDasharray={`${progress} 100`}
                         strokeLinecap="round" transform="rotate(-90 18 18)"
                       />
                     </svg>
@@ -280,6 +305,28 @@ function Dashboard() {
                 </div>
               )
             })}
+          </div>
+
+          <div className="evidence-summary" style={{marginTop: '2rem', padding: '1rem', background: '#0d1117', borderRadius: '8px', border: '1px solid #30363d'}}>
+            <h3 className="section-category">Evidence Collection Status</h3>
+            <div style={{display: 'flex', gap: '2rem', flexWrap: 'wrap', marginTop: '1rem'}}>
+              <div style={{textAlign: 'center'}}>
+                <div style={{fontSize: '1.5rem', fontWeight: '700', color: '#3fb950'}}>{stats?.total_evidence_accepted || 0}</div>
+                <div style={{fontSize: '0.8rem', color: '#8b949e'}}>Accepted</div>
+              </div>
+              <div style={{textAlign: 'center'}}>
+                <div style={{fontSize: '1.5rem', fontWeight: '700', color: '#d29922'}}>{stats?.total_evidence_pending || 0}</div>
+                <div style={{fontSize: '0.8rem', color: '#8b949e'}}>Pending Review</div>
+              </div>
+              <div style={{textAlign: 'center'}}>
+                <div style={{fontSize: '1.5rem', fontWeight: '700', color: '#f85149'}}>{stats?.total_evidence_rejected || 0}</div>
+                <div style={{fontSize: '0.8rem', color: '#8b949e'}}>Rejected</div>
+              </div>
+              <div style={{textAlign: 'center'}}>
+                <div style={{fontSize: '1.5rem', fontWeight: '700', color: '#8b949e'}}>{stats?.total_evidence_required || 0}</div>
+                <div style={{fontSize: '0.8rem', color: '#8b949e'}}>Total Required</div>
+              </div>
+            </div>
           </div>
         </main>
       </div>

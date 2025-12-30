@@ -257,6 +257,16 @@ def set_current_phase(phase_id: int, db: Session = Depends(get_db)):
     return {"message": "Current phase updated", "phase": phase.name}
 
 
+@router.patch("/tasks/{task_id}/toggle")
+def toggle_task_completion(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(PhaseTask).filter(PhaseTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    task.is_complete = not task.is_complete
+    db.commit()
+    return {"message": "Task updated", "task_id": task_id, "is_complete": task.is_complete}
+
+
 @router.get("/requirements", response_model=List[RequirementWithSubsResponse])
 def get_all_requirements(db: Session = Depends(get_db)):
     requirements = db.query(Requirement).options(
