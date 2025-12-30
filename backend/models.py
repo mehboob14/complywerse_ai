@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
@@ -17,7 +17,7 @@ class Control(Base):
     __tablename__ = "controls"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False, unique=True)
     description = Column(Text, nullable=True)
     pci_requirement = Column(String(100), nullable=False)
     
@@ -33,6 +33,10 @@ class RequiredEvidence(Base):
     evidence_type = Column(String(100), nullable=False)
     
     control = relationship("Control", back_populates="required_evidence")
+    
+    __table_args__ = (
+        UniqueConstraint('control_id', 'evidence_name', name='uq_control_evidence'),
+    )
 
 
 def get_db():
