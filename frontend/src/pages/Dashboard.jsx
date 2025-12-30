@@ -56,11 +56,23 @@ function Dashboard() {
     }
   }
 
+  const approvePhase = async () => {
+    if (!currentPhase) return
+    try {
+      await axios.post(`/api/phases/${currentPhase.id}/approve`)
+      fetchData()
+    } catch (err) {
+      console.error('Failed to approve phase:', err)
+    }
+  }
+
   const advanceToNextPhase = async () => {
-    const currentIndex = phases.findIndex(p => p.is_current)
-    if (currentIndex < phases.length - 1) {
-      const nextPhase = phases[currentIndex + 1]
-      await setCurrentPhase(nextPhase.id)
+    if (!currentPhase) return
+    try {
+      await axios.post(`/api/phases/${currentPhase.id}/advance`)
+      fetchData()
+    } catch (err) {
+      console.error('Failed to advance to next phase:', err)
     }
   }
 
@@ -405,31 +417,55 @@ function Dashboard() {
           {!allTasksComplete && (
             <div className="workflow-tip-banner">
               <span className="tip-icon">&#128161;</span>
-              <span><strong>Tip:</strong> Check off each task below as you complete it. When all tasks are done, the "Next Phase" button will appear!</span>
+              <span><strong>Tip:</strong> Complete all tasks below. Once done, Infosec Team approval is required before advancing.</span>
             </div>
           )}
           
-          {allTasksComplete && currentPhase?.phase_number < 7 && (
+          {allTasksComplete && currentPhase?.approval_status === 'pending_approval' && (
+            <div className="workflow-approval-banner">
+              <span className="approval-icon">&#128274;</span>
+              <span><strong>Awaiting Approval:</strong> All tasks complete! Infosec Team must approve before advancing to the next phase.</span>
+            </div>
+          )}
+          
+          {allTasksComplete && currentPhase?.approval_status === 'approved' && currentPhase?.phase_number < 7 && (
             <div className="workflow-success-banner">
               <span className="success-icon">&#127881;</span>
-              <span><strong>All tasks complete!</strong> Click "Next Phase" to advance to Phase {currentPhase?.phase_number + 1}.</span>
+              <span><strong>Phase Approved!</strong> Click "Advance to Next Phase" to continue to Phase {currentPhase?.phase_number + 1}.</span>
             </div>
           )}
           
           <div className="phase-content-header">
             <div>
               <h2>{currentPhase?.name || 'Gap Assessment'}</h2>
-              <p>Complete all tasks below to advance to the next phase</p>
+              <p>
+                {currentPhase?.approval_status === 'approved' 
+                  ? 'Phase approved - ready to advance'
+                  : currentPhase?.approval_status === 'pending_approval'
+                  ? 'Tasks complete - awaiting Infosec Team approval'
+                  : 'Complete all tasks below to advance to the next phase'}
+              </p>
               <div className="task-summary">
                 <span className="task-complete">&#10003; {completedTasks} completed</span>
                 <span className="task-remaining">&#9711; {totalTasks - completedTasks} remaining</span>
               </div>
             </div>
             <div className="phase-header-actions">
-              <span className="phase-status-badge">{allTasksComplete ? 'Complete' : 'In Progress'}</span>
-              {allTasksComplete && currentPhase?.phase_number < 7 && (
+              <span className={`phase-status-badge ${currentPhase?.approval_status === 'approved' ? 'approved' : currentPhase?.approval_status === 'pending_approval' ? 'pending' : ''}`}>
+                {currentPhase?.approval_status === 'approved' 
+                  ? 'Approved' 
+                  : currentPhase?.approval_status === 'pending_approval' 
+                  ? 'Pending Approval' 
+                  : allTasksComplete ? 'Complete' : 'In Progress'}
+              </span>
+              {allTasksComplete && currentPhase?.approval_status === 'pending_approval' && (
+                <button className="approve-btn" onClick={approvePhase}>
+                  &#128274; Approve Phase
+                </button>
+              )}
+              {currentPhase?.approval_status === 'approved' && currentPhase?.phase_number < 7 && (
                 <button className="advance-btn" onClick={advanceToNextPhase}>
-                  Next Phase &#8594;
+                  Advance to Next Phase &#8594;
                 </button>
               )}
             </div>
@@ -506,6 +542,29 @@ function Dashboard() {
               </div>
             )}
           </div>
+
+          {allTasksComplete && currentPhase?.deliverables?.length > 0 && (
+            <div className="phase-deliverables">
+              <h3>&#127942; Phase Deliverables</h3>
+              <div className="deliverables-list">
+                {currentPhase.deliverables.map(d => (
+                  <div key={d.id} className="deliverable-item">
+                    <span className="check">&#10003;</span>
+                    {d.name}
+                  </div>
+                ))}
+              </div>
+              {currentPhase.approval_status === 'approved' && currentPhase.approved_by && (
+                <div className="approval-info">
+                  <span>&#128274;</span>
+                  <span>Approved by <span className="approved-by">{currentPhase.approved_by}</span></span>
+                  {currentPhase.approved_at && (
+                    <span> on {new Date(currentPhase.approved_at).toLocaleDateString()}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="requirements-preview">
             <h3 className="section-category" style={{marginTop: '2rem'}}>Related Requirements</h3>

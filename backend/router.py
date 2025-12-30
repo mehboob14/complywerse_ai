@@ -40,6 +40,9 @@ class PhaseResponse(BaseModel):
     description: Optional[str]
     status: str
     is_current: bool
+    approval_status: Optional[str] = "not_required"
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
     tasks: List[TaskResponse]
     deliverables: List[DeliverableResponse]
     class Config:
@@ -297,8 +300,96 @@ def toggle_task_completion(task_id: int, db: Session = Depends(get_db)):
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     task.is_complete = not task.is_complete
+    
+    phase = db.query(Phase).filter(Phase.id == task.phase_id).first()
+    all_tasks = db.query(PhaseTask).filter(PhaseTask.phase_id == task.phase_id).all()
+    all_complete = all(t.is_complete for t in all_tasks)
+    
+    if all_complete and phase.approval_status == "not_required":
+        phase.approval_status = "pending_approval"
+        phase.status = "pending_approval"
+    elif not all_complete:
+        if phase.approval_status in ["pending_approval", "approved"]:
+            phase.approval_status = "not_required"
+            phase.approved_by = None
+            phase.approved_at = None
+        phase.status = "in_progress"
+    
     db.commit()
-    return {"message": "Task updated", "task_id": task_id, "is_complete": task.is_complete}
+    return {
+        "message": "Task updated", 
+        "task_id": task_id, 
+        "is_complete": task.is_complete,
+        "all_tasks_complete": all_complete,
+        "approval_status": phase.approval_status
+    }
+
+
+@router.post("/phases/{phase_id}/request-approval")
+def request_phase_approval(phase_id: int, db: Session = Depends(get_db)):
+    phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    all_tasks = db.query(PhaseTask).filter(PhaseTask.phase_id == phase_id).all()
+    all_complete = all(t.is_complete for t in all_tasks)
+    
+    if not all_complete:
+        raise HTTPException(status_code=400, detail="All tasks must be completed before requesting approval")
+    
+    phase.approval_status = "pending_approval"
+    phase.status = "pending_approval"
+    db.commit()
+    
+    return {"message": "Approval requested", "phase": phase.name, "approval_status": phase.approval_status}
+
+
+@router.post("/phases/{phase_id}/approve")
+def approve_phase(phase_id: int, approved_by: str = "Infosec Team", db: Session = Depends(get_db)):
+    phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    if phase.approval_status != "pending_approval":
+        raise HTTPException(status_code=400, detail="Phase is not pending approval")
+    
+    phase.approval_status = "approved"
+    phase.approved_by = approved_by
+    phase.approved_at = datetime.utcnow()
+    phase.status = "complete"
+    db.commit()
+    
+    return {
+        "message": f"Phase '{phase.name}' approved by {approved_by}",
+        "phase": phase.name,
+        "approved_by": phase.approved_by,
+        "approved_at": phase.approved_at.isoformat()
+    }
+
+
+@router.post("/phases/{phase_id}/advance")
+def advance_to_next_phase(phase_id: int, db: Session = Depends(get_db)):
+    current_phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not current_phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    if current_phase.approval_status != "approved":
+        raise HTTPException(status_code=400, detail="Phase must be approved before advancing")
+    
+    next_phase = db.query(Phase).filter(Phase.phase_number == current_phase.phase_number + 1).first()
+    if not next_phase:
+        raise HTTPException(status_code=400, detail="Already on final phase")
+    
+    current_phase.is_current = False
+    next_phase.is_current = True
+    next_phase.status = "in_progress"
+    db.commit()
+    
+    return {
+        "message": f"Advanced to '{next_phase.name}'",
+        "previous_phase": current_phase.name,
+        "current_phase": next_phase.name
+    }
 
 
 @router.get("/requirements", response_model=List[RequirementWithSubsResponse])

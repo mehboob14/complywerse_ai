@@ -39,6 +39,12 @@ class RiskStatus(str, enum.Enum):
     REJECTED = "rejected"
 
 
+class PhaseApprovalStatus(str, enum.Enum):
+    NOT_REQUIRED = "not_required"
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+
+
 class Phase(Base):
     __tablename__ = "phases"
 
@@ -48,6 +54,9 @@ class Phase(Base):
     description = Column(Text, nullable=True)
     status = Column(String(50), default="not_started")
     is_current = Column(Boolean, default=False)
+    approval_status = Column(String(50), default=PhaseApprovalStatus.NOT_REQUIRED.value)
+    approved_by = Column(String(255), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
     
     tasks = relationship("PhaseTask", back_populates="phase", cascade="all, delete-orphan")
     deliverables = relationship("PhaseDeliverable", back_populates="phase", cascade="all, delete-orphan")
