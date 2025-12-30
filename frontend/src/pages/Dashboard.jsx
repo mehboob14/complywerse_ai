@@ -345,7 +345,6 @@ function Dashboard() {
                   <div 
                     key={phase.id} 
                     className={`phase-nav-item ${phase.is_current ? 'active' : ''} ${getPhaseStatus(phase) === 'complete' ? 'completed' : ''}`}
-                    onClick={() => setCurrentPhase(phase.id)}
                   >
                     <div className="phase-nav-indicator">
                       {getPhaseStatus(phase) === 'complete' ? (
