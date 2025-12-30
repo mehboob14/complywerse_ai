@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { useAuth } from '../context/AuthContext'
 
 function Findings() {
+  const { user } = useAuth()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newFinding, setNewFinding] = useState({ title: '', description: '', severity: 'medium' })
+  
+  const canManageFindings = user?.role === 'admin' || user?.role === 'infosec_team'
 
   useEffect(() => {
     fetchFindings()
@@ -34,6 +40,22 @@ function Findings() {
     }
   }
 
+  const createFinding = async () => {
+    if (!newFinding.title || !newFinding.description) {
+      alert('Please fill in title and description')
+      return
+    }
+    try {
+      await axios.post('/api/findings', newFinding)
+      setShowCreateModal(false)
+      setNewFinding({ title: '', description: '', severity: 'medium' })
+      await fetchFindings()
+    } catch (err) {
+      console.error(err)
+      alert('Failed to create finding')
+    }
+  }
+
   const filteredFindings = findings.filter(f => {
     if (filter === 'all') return true
     if (filter === 'open') return f.status === 'open' || f.status === 'in_remediation'
@@ -53,12 +75,62 @@ function Findings() {
           <h1 className="page-title">Findings</h1>
           <p className="page-subtitle">Track and remediate compliance gaps from rejected evidence</p>
         </div>
-        <div className="findings-summary">
-          <span className="summary-item open">{openCount} Open</span>
-          <span className="summary-item in-remediation">{inRemediationCount} In Remediation</span>
-          <span className="summary-item closed">{closedCount} Closed</span>
+        <div className="findings-header-actions">
+          <div className="findings-summary">
+            <span className="summary-item open">{openCount} Open</span>
+            <span className="summary-item in-remediation">{inRemediationCount} In Remediation</span>
+            <span className="summary-item closed">{closedCount} Closed</span>
+          </div>
+          {canManageFindings && (
+            <button className="btn-create-finding" onClick={() => setShowCreateModal(true)}>
+              + Create Finding
+            </button>
+          )}
         </div>
       </div>
+
+      {showCreateModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Create New Finding</h3>
+            <p className="modal-hint">Findings are usually auto-created when evidence is rejected, but you can create one manually for other compliance gaps.</p>
+            <div className="form-group">
+              <label>Title</label>
+              <input 
+                type="text" 
+                value={newFinding.title}
+                onChange={(e) => setNewFinding({...newFinding, title: e.target.value})}
+                placeholder="e.g., Missing firewall documentation"
+              />
+            </div>
+            <div className="form-group">
+              <label>Description</label>
+              <textarea 
+                value={newFinding.description}
+                onChange={(e) => setNewFinding({...newFinding, description: e.target.value})}
+                placeholder="Describe the compliance gap and what needs to be fixed"
+                rows={3}
+              />
+            </div>
+            <div className="form-group">
+              <label>Severity</label>
+              <select 
+                value={newFinding.severity}
+                onChange={(e) => setNewFinding({...newFinding, severity: e.target.value})}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setShowCreateModal(false)}>Cancel</button>
+              <button className="btn-create" onClick={createFinding}>Create Finding</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="filter-bar">
         <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>All</button>
@@ -103,9 +175,9 @@ function Findings() {
                 </div>
               )}
 
-              {finding.status !== 'closed' && (
-                <div className="finding-actions">
-                  {finding.status === 'open' && (
+              <div className="finding-actions">
+                {finding.status === 'open' && (
+                  <>
                     <button 
                       className="btn-remediate"
                       onClick={() => {
@@ -115,14 +187,52 @@ function Findings() {
                     >
                       Start Remediation
                     </button>
-                  )}
-                  {finding.status === 'in_remediation' && (
+                    {canManageFindings && (
+                      <button 
+                        className="btn-close-finding"
+                        onClick={() => {
+                          if (confirm('Mark this finding as closed?')) {
+                            updateFinding(finding.id, 'closed')
+                          }
+                        }}
+                      >
+                        Close Finding
+                      </button>
+                    )}
+                  </>
+                )}
+                {finding.status === 'in_remediation' && (
+                  <>
                     <p className="remediation-hint">
-                      Upload corrected evidence in the Controls & Evidence page, then the auditor will re-review.
+                      Upload corrected evidence in Requirements page, then the auditor will re-review.
                     </p>
-                  )}
-                </div>
-              )}
+                    {canManageFindings && (
+                      <button 
+                        className="btn-close-finding"
+                        onClick={() => {
+                          if (confirm('Mark this finding as closed?')) {
+                            updateFinding(finding.id, 'closed')
+                          }
+                        }}
+                      >
+                        Close Finding
+                      </button>
+                    )}
+                  </>
+                )}
+                {finding.status === 'closed' && canManageFindings && (
+                  <button 
+                    className="btn-reopen"
+                    onClick={() => {
+                      if (confirm('Reopen this finding?')) {
+                        updateFinding(finding.id, 'open')
+                      }
+                    }}
+                  >
+                    Reopen Finding
+                  </button>
+                )}
+              </div>
 
               {finding.closed_at && (
                 <div className="closed-info">

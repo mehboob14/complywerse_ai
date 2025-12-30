@@ -1018,6 +1018,36 @@ def get_all_findings(db: Session = Depends(get_db)):
     return result
 
 
+class CreateFindingRequest(BaseModel):
+    title: str
+    description: str
+    severity: str = "medium"
+    sub_requirement_id: Optional[int] = None
+
+
+@router.post("/findings", response_model=dict)
+def create_finding(
+    request: CreateFindingRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "infosec_team"))
+):
+    if request.severity not in ["low", "medium", "high", "critical"]:
+        raise HTTPException(status_code=400, detail="Invalid severity")
+    
+    finding = Finding(
+        title=request.title,
+        description=request.description,
+        severity=request.severity,
+        sub_requirement_id=request.sub_requirement_id,
+        status=FindingStatus.OPEN.value,
+        created_at=datetime.utcnow()
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+    return {"message": "Finding created", "id": finding.id}
+
+
 @router.patch("/findings/{finding_id}")
 def update_finding(
     finding_id: int,
@@ -1035,6 +1065,8 @@ def update_finding(
         finding.status = status
         if status == FindingStatus.CLOSED.value:
             finding.closed_at = datetime.utcnow()
+        else:
+            finding.closed_at = None
     
     if remediation_notes:
         finding.remediation_notes = remediation_notes
