@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 
 function Dashboard() {
+  const navigate = useNavigate()
   const [phases, setPhases] = useState([])
   const [stats, setStats] = useState(null)
   const [requirements, setRequirements] = useState([])
@@ -138,10 +140,9 @@ function Dashboard() {
       <div className="dashboard-tabs">
         <button className={`tab ${activeTab === 'guided' ? 'active' : ''}`} onClick={() => setActiveTab('guided')}>Guided Workflow</button>
         <button className={`tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>Overview</button>
-        <button className={`tab ${activeTab === 'phases' ? 'active' : ''}`} onClick={() => setActiveTab('phases')}>Phases</button>
-        <button className={`tab ${activeTab === 'requirements' ? 'active' : ''}`} onClick={() => setActiveTab('requirements')}>Requirements</button>
-        <button className={`tab ${activeTab === 'cde' ? 'active' : ''}`} onClick={() => setActiveTab('cde')}>CDE Scoping</button>
-        <button className={`tab ${activeTab === 'security' ? 'active' : ''}`} onClick={() => setActiveTab('security')}>Security Testing</button>
+        <button className="tab" onClick={() => navigate('/requirements')}>Requirements</button>
+        <button className="tab" onClick={() => navigate('/findings')}>Findings</button>
+        <button className="tab" onClick={() => navigate('/risk-register')}>Risk Register</button>
       </div>
 
       <div className="dashboard-content">

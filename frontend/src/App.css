@@ -2008,26 +2008,30 @@ body {
 }
 
 .sub-status-badge.compliant {
-  background: #238636;
+  background: rgba(56, 139, 66, 0.2);
   color: #3fb950;
+  border: 1px solid #238636;
 }
 
 .sub-status-badge.partial {
-  background: #9e6a03;
+  background: rgba(158, 106, 3, 0.2);
   color: #d29922;
+  border: 1px solid #9e6a03;
 }
 
 .sub-status-badge.not-compliant {
-  background: #da3633;
+  background: rgba(218, 54, 51, 0.15);
   color: #f85149;
+  border: 1px solid #da3633;
 }
 
 .evidence-needed-badge {
   font-size: 0.7rem;
   padding: 0.15rem 0.5rem;
   border-radius: 12px;
-  background: #f85149;
-  color: #fff;
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+  border: 1px solid #da3633;
   font-weight: 500;
 }
 
