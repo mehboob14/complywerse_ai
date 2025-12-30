@@ -32,37 +32,86 @@ function Dashboard() {
     setExpandedPhase(expandedPhase === phaseId ? null : phaseId)
   }
 
-  const getPhaseIcon = (status, isCurrent) => {
-    if (status === 'complete') return <span className="phase-icon complete">&#10003;</span>
-    if (isCurrent) return <span className="phase-icon current">{phases.find(p => p.is_current)?.phase_number}</span>
-    return <span className="phase-icon pending">{phases.find(p => p.status === status)?.phase_number || '?'}</span>
-  }
-
   if (loading) return <div className="loading">Loading dashboard...</div>
 
   return (
     <div className="dashboard">
       <div className="dashboard-header">
         <h1 className="page-title">PCI DSS Compliance Dashboard</h1>
+        
         {stats && (
-          <div className="stats-bar">
-            <div className="stat-item">
-              <span className="stat-value">{stats.overall_compliance}%</span>
-              <span className="stat-label">Overall Compliance</span>
+          <>
+            <div className="stats-row">
+              <div className="stat-card main-stat">
+                <div className="stat-circle" style={{background: `conic-gradient(#3fb950 ${stats.overall_compliance}%, #21262d ${stats.overall_compliance}%)`}}>
+                  <div className="stat-circle-inner">
+                    <span className="stat-percent">{stats.overall_compliance}%</span>
+                  </div>
+                </div>
+                <div className="stat-label">Overall Compliance</div>
+              </div>
+              
+              <div className="stat-card">
+                <span className="stat-value compliant">{stats.compliant_count}</span>
+                <span className="stat-label">Compliant</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-value partial">{stats.partial_count}</span>
+                <span className="stat-label">Partial</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-value not-started">{stats.not_started_count}</span>
+                <span className="stat-label">Not Started</span>
+              </div>
             </div>
-            <div className="stat-item compliant">
-              <span className="stat-value">{stats.compliant_requirements}</span>
-              <span className="stat-label">Compliant</span>
+
+            <div className="evidence-stats">
+              <h3>Evidence Collection Progress</h3>
+              <div className="evidence-bar-container">
+                <div className="evidence-bar">
+                  <div className="evidence-bar-fill accepted" style={{width: `${(stats.total_evidence_accepted / stats.total_evidence_required) * 100}%`}}></div>
+                  <div className="evidence-bar-fill pending" style={{width: `${(stats.total_evidence_pending / stats.total_evidence_required) * 100}%`, left: `${(stats.total_evidence_accepted / stats.total_evidence_required) * 100}%`}}></div>
+                </div>
+                <div className="evidence-legend">
+                  <span><span className="legend-dot accepted"></span>Accepted: {stats.total_evidence_accepted}</span>
+                  <span><span className="legend-dot pending"></span>Pending Review: {stats.total_evidence_pending}</span>
+                  <span><span className="legend-dot rejected"></span>Rejected: {stats.total_evidence_rejected}</span>
+                  <span><span className="legend-dot required"></span>Required: {stats.total_evidence_required}</span>
+                </div>
+              </div>
             </div>
-            <div className="stat-item partial">
-              <span className="stat-value">{stats.partial_requirements}</span>
-              <span className="stat-label">Partial</span>
+
+            <div className="workflow-stats">
+              <div className="workflow-stat">
+                <div className="workflow-stat-icon findings">!</div>
+                <div className="workflow-stat-info">
+                  <span className="workflow-stat-value">{stats.open_findings}</span>
+                  <span className="workflow-stat-label">Open Findings</span>
+                </div>
+              </div>
+              <div className="workflow-stat">
+                <div className="workflow-stat-icon closed">&#10003;</div>
+                <div className="workflow-stat-info">
+                  <span className="workflow-stat-value">{stats.closed_findings}</span>
+                  <span className="workflow-stat-label">Closed Findings</span>
+                </div>
+              </div>
+              <div className="workflow-stat">
+                <div className="workflow-stat-icon risks">&#9888;</div>
+                <div className="workflow-stat-info">
+                  <span className="workflow-stat-value">{stats.pending_risks}</span>
+                  <span className="workflow-stat-label">Pending Risks</span>
+                </div>
+              </div>
+              <div className="workflow-stat">
+                <div className="workflow-stat-icon approved">&#10003;</div>
+                <div className="workflow-stat-info">
+                  <span className="workflow-stat-value">{stats.approved_risks}</span>
+                  <span className="workflow-stat-label">Approved Risks</span>
+                </div>
+              </div>
             </div>
-            <div className="stat-item not-started">
-              <span className="stat-value">{stats.not_started_requirements}</span>
-              <span className="stat-label">Not Started</span>
-            </div>
-          </div>
+          </>
         )}
       </div>
 
