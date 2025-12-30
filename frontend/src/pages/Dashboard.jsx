@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { useAuth } from '../context/AuthContext'
 
 function Dashboard() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  
+  const canApprovePhases = user?.role === 'admin' || user?.role === 'business_owner'
   const [phases, setPhases] = useState([])
   const [stats, setStats] = useState(null)
   const [requirements, setRequirements] = useState([])
@@ -459,9 +463,13 @@ function Dashboard() {
                   : allTasksComplete ? 'Complete' : 'In Progress'}
               </span>
               {allTasksComplete && currentPhase?.approval_status === 'pending_approval' && (
-                <button className="approve-btn" onClick={approvePhase}>
-                  &#128274; Approve Phase
-                </button>
+                canApprovePhases ? (
+                  <button className="approve-btn" onClick={approvePhase}>
+                    &#128274; Approve Phase
+                  </button>
+                ) : (
+                  <span className="pending-note">Awaiting Admin/Business Owner approval</span>
+                )
               )}
               {currentPhase?.approval_status === 'approved' && currentPhase?.phase_number < 7 && (
                 <button className="advance-btn" onClick={advanceToNextPhase}>

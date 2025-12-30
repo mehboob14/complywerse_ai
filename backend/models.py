@@ -77,6 +77,7 @@ class Phase(Base):
     
     tasks = relationship("PhaseTask", back_populates="phase", cascade="all, delete-orphan")
     deliverables = relationship("PhaseDeliverable", back_populates="phase", cascade="all, delete-orphan")
+    required_requirements = relationship("PhaseRequirement", back_populates="phase", cascade="all, delete-orphan")
 
 
 class PhaseTask(Base):
@@ -100,6 +101,17 @@ class PhaseDeliverable(Base):
     phase = relationship("Phase", back_populates="deliverables")
 
 
+class PhaseRequirement(Base):
+    __tablename__ = "phase_requirements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    phase_id = Column(Integer, ForeignKey("phases.id"), nullable=False)
+    requirement_id = Column(Integer, ForeignKey("requirements.id"), nullable=False)
+    
+    phase = relationship("Phase", back_populates="required_requirements")
+    requirement = relationship("Requirement", back_populates="phase_links")
+
+
 class Requirement(Base):
     __tablename__ = "requirements"
 
@@ -109,6 +121,7 @@ class Requirement(Base):
     description = Column(Text, nullable=True)
     
     sub_requirements = relationship("SubRequirement", back_populates="requirement", cascade="all, delete-orphan")
+    phase_links = relationship("PhaseRequirement", back_populates="requirement", cascade="all, delete-orphan")
 
 
 class SubRequirement(Base):

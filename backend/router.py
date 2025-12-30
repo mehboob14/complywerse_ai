@@ -5,7 +5,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime, timedelta
-from models import (get_db, Phase, PhaseTask, PhaseDeliverable, 
+from models import (get_db, Phase, PhaseTask, PhaseDeliverable, PhaseRequirement,
                    Requirement, SubRequirement, RequiredEvidence,
                    EvidenceSubmission, Finding, Risk,
                    EvidenceStatus, FindingStatus, RiskStatus,
@@ -43,6 +43,14 @@ class DeliverableResponse(BaseModel):
         from_attributes = True
 
 
+class PhaseRequirementResponse(BaseModel):
+    requirement_id: int
+    req_number: int
+    name: str
+    class Config:
+        from_attributes = True
+
+
 class PhaseResponse(BaseModel):
     id: int
     phase_number: int
@@ -55,6 +63,7 @@ class PhaseResponse(BaseModel):
     approved_at: Optional[datetime] = None
     tasks: List[TaskResponse]
     deliverables: List[DeliverableResponse]
+    required_requirements: List[PhaseRequirementResponse] = []
     class Config:
         from_attributes = True
 
@@ -483,13 +492,38 @@ def delete_user(user_id: int, db: Session = Depends(get_db), user: User = Depend
     return {"message": "User deleted"}
 
 
-@router.get("/phases", response_model=List[PhaseResponse])
+@router.get("/phases")
 def get_all_phases(db: Session = Depends(get_db)):
     phases = db.query(Phase).options(
         joinedload(Phase.tasks),
-        joinedload(Phase.deliverables)
+        joinedload(Phase.deliverables),
+        joinedload(Phase.required_requirements).joinedload(PhaseRequirement.requirement)
     ).order_by(Phase.phase_number).all()
-    return phases
+    
+    result = []
+    for phase in phases:
+        phase_data = {
+            "id": phase.id,
+            "phase_number": phase.phase_number,
+            "name": phase.name,
+            "description": phase.description,
+            "status": phase.status,
+            "is_current": phase.is_current,
+            "approval_status": phase.approval_status,
+            "approved_by": phase.approved_by,
+            "approved_at": phase.approved_at.isoformat() if phase.approved_at else None,
+            "tasks": [{"id": t.id, "name": t.name, "is_complete": t.is_complete} for t in phase.tasks],
+            "deliverables": [{"id": d.id, "name": d.name} for d in phase.deliverables],
+            "required_requirements": [
+                {
+                    "requirement_id": pr.requirement_id,
+                    "req_number": pr.requirement.req_number,
+                    "name": pr.requirement.name
+                } for pr in phase.required_requirements
+            ]
+        }
+        result.append(phase_data)
+    return result
 
 
 @router.get("/phases/current", response_model=Optional[PhaseResponse])
@@ -574,13 +608,45 @@ def request_phase_approval(phase_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/phases/{phase_id}/approve")
-def approve_phase(phase_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin", "infosec_team"))):
-    phase = db.query(Phase).filter(Phase.id == phase_id).first()
+def approve_phase(phase_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin", "business_owner"))):
+    phase = db.query(Phase).options(
+        joinedload(Phase.required_requirements).joinedload(PhaseRequirement.requirement)
+    ).filter(Phase.id == phase_id).first()
     if not phase:
         raise HTTPException(status_code=404, detail="Phase not found")
     
     if phase.approval_status != "pending_approval":
         raise HTTPException(status_code=400, detail="Phase is not pending approval")
+    
+    blocking_requirements = []
+    for phase_req in phase.required_requirements:
+        req = phase_req.requirement
+        for sub_req in db.query(SubRequirement).filter(SubRequirement.requirement_id == req.id).all():
+            required_evidence_items = db.query(RequiredEvidence).filter(
+                RequiredEvidence.sub_requirement_id == sub_req.id
+            ).all()
+            
+            for evidence_item in required_evidence_items:
+                accepted_submission = db.query(EvidenceSubmission).filter(
+                    EvidenceSubmission.required_evidence_id == evidence_item.id,
+                    EvidenceSubmission.status == "accepted"
+                ).first()
+                
+                if not accepted_submission:
+                    blocking_requirements.append({
+                        "requirement": f"Req {req.req_number}",
+                        "sub_requirement": sub_req.sub_req_number,
+                        "evidence": evidence_item.name
+                    })
+    
+    if blocking_requirements:
+        raise HTTPException(
+            status_code=400, 
+            detail={
+                "message": "Cannot approve phase - missing accepted evidence",
+                "blocking_items": blocking_requirements[:10]
+            }
+        )
     
     phase.approval_status = "approved"
     phase.approved_by = user.display_name or user.username
@@ -1180,6 +1246,73 @@ def admin_delete_deliverable(deliverable_id: int, db: Session = Depends(get_db),
     db.delete(deliverable)
     db.commit()
     return {"message": "Deliverable deleted"}
+
+
+@router.get("/admin/phases/{phase_id}/requirements")
+def admin_get_phase_requirements(phase_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
+    phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    phase_reqs = db.query(PhaseRequirement).options(
+        joinedload(PhaseRequirement.requirement)
+    ).filter(PhaseRequirement.phase_id == phase_id).all()
+    
+    return [{
+        "id": pr.id,
+        "requirement_id": pr.requirement_id,
+        "req_number": pr.requirement.req_number,
+        "name": pr.requirement.name
+    } for pr in phase_reqs]
+
+
+class PhaseRequirementRequest(BaseModel):
+    requirement_id: int
+
+
+@router.post("/admin/phases/{phase_id}/requirements")
+def admin_add_phase_requirement(phase_id: int, request: PhaseRequirementRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
+    phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    requirement = db.query(Requirement).filter(Requirement.id == request.requirement_id).first()
+    if not requirement:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    
+    existing = db.query(PhaseRequirement).filter(
+        PhaseRequirement.phase_id == phase_id,
+        PhaseRequirement.requirement_id == request.requirement_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Requirement already linked to this phase")
+    
+    phase_req = PhaseRequirement(phase_id=phase_id, requirement_id=request.requirement_id)
+    db.add(phase_req)
+    db.commit()
+    db.refresh(phase_req)
+    
+    return {
+        "message": f"Requirement {requirement.req_number} linked to phase",
+        "id": phase_req.id,
+        "requirement_id": requirement.id,
+        "req_number": requirement.req_number,
+        "name": requirement.name
+    }
+
+
+@router.delete("/admin/phases/{phase_id}/requirements/{requirement_id}")
+def admin_remove_phase_requirement(phase_id: int, requirement_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
+    phase_req = db.query(PhaseRequirement).filter(
+        PhaseRequirement.phase_id == phase_id,
+        PhaseRequirement.requirement_id == requirement_id
+    ).first()
+    if not phase_req:
+        raise HTTPException(status_code=404, detail="Phase-requirement link not found")
+    
+    db.delete(phase_req)
+    db.commit()
+    return {"message": "Requirement unlinked from phase"}
 
 
 @router.post("/admin/requirements")

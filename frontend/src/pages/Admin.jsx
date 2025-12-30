@@ -59,6 +59,11 @@ function Admin() {
       setFormData(item ? { id: item.id, name: item.name, description: item.description || '', evidence_type: item.evidence_type, sub_requirement_id: parent?.id } : { name: '', description: '', evidence_type: 'document', sub_requirement_id: parent?.id })
     } else if (type === 'user') {
       setFormData(item ? { id: item.id, username: item.username, email: item.email, role: item.role, display_name: item.display_name, is_active: item.is_active } : { username: '', email: '', password: '', role: 'it_security', display_name: '' })
+    } else if (type === 'phase_requirement') {
+      setFormData({ phase_id: parent?.id, requirement_id: '' })
+      if (requirements.length === 0) {
+        axios.get('/api/requirements').then(res => setRequirements(res.data))
+      }
     }
     setShowModal(true)
   }
@@ -154,6 +159,11 @@ function Admin() {
           await axios.post('/api/users', formData, { withCredentials: true })
           showMessage('User created successfully')
         }
+      } else if (modalType === 'phase_requirement') {
+        await axios.post(`/api/admin/phases/${formData.phase_id}/requirements`, {
+          requirement_id: parseInt(formData.requirement_id)
+        }, { withCredentials: true })
+        showMessage('Requirement linked to phase')
       }
       closeModal()
       fetchData()
@@ -184,6 +194,17 @@ function Admin() {
       fetchData()
     } catch (error) {
       showMessage('Error: ' + (error.response?.data?.detail || 'Delete failed'))
+    }
+  }
+
+  const handleUnlinkRequirement = async (phaseId, requirementId) => {
+    if (!confirm('Remove this requirement from the phase?')) return
+    try {
+      await axios.delete(`/api/admin/phases/${phaseId}/requirements/${requirementId}`, { withCredentials: true })
+      showMessage('Requirement unlinked from phase')
+      fetchData()
+    } catch (error) {
+      showMessage('Error: ' + (error.response?.data?.detail || 'Unlink failed'))
     }
   }
 
@@ -273,6 +294,23 @@ function Admin() {
                         <span>{del.name}</span>
                         <button className="edit-small" onClick={() => openModal('deliverable', del, phase)}>e</button>
                         <button className="delete-small" onClick={() => handleDelete('deliverable', del.id)}>x</button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="admin-section requirements-gate">
+                  <div className="section-header">
+                    <h4>Required for Approval ({phase.required_requirements?.length || 0})</h4>
+                    <button className="small-btn" onClick={() => openModal('phase_requirement', null, phase)}>+ Link Requirement</button>
+                  </div>
+                  <p className="helper-text">Phase cannot be approved until all evidence for these requirements is accepted by auditor.</p>
+                  <ul className="admin-list">
+                    {phase.required_requirements?.map(pr => (
+                      <li key={pr.requirement_id}>
+                        <span className="req-badge">Req {pr.req_number}</span>
+                        <span>{pr.name}</span>
+                        <button className="delete-small" onClick={() => handleUnlinkRequirement(phase.id, pr.requirement_id)}>x</button>
                       </li>
                     ))}
                   </ul>
@@ -490,6 +528,20 @@ function Admin() {
                     </div>
                   )}
                 </>
+              )}
+              {modalType === 'phase_requirement' && (
+                <div className="form-group">
+                  <label>Select Requirement to Link</label>
+                  <select value={formData.requirement_id} onChange={e => setFormData({...formData, requirement_id: e.target.value})} required>
+                    <option value="">-- Select a requirement --</option>
+                    {requirements.map(req => (
+                      <option key={req.id} value={req.id}>
+                        Req {req.req_number}: {req.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="form-help">This requirement's evidence must be approved before the phase can advance.</p>
+                </div>
               )}
               <div className="modal-actions">
                 <button type="button" onClick={closeModal}>Cancel</button>
