@@ -9,6 +9,9 @@ A comprehensive, fully dynamic PCI DSS (Payment Card Industry Data Security Stan
 - **Auto-Generated Findings**: Rejected evidence automatically creates compliance findings
 - **Risk Management**: Business owners can approve/reject residual compliance risks
 - **Role-Based Views**: Different views for IT/Security Team, QSA Auditor, and Business Owner
+- **User Authentication**: Login/Register with JWT-based session management
+- **Admin Panel**: Full CRUD management for phases, tasks, deliverables, requirements, sub-requirements, required evidence, and users
+- **Evidence Comparison**: Visual dashboard showing required vs uploaded evidence with filtering
 
 ## Project Structure
 ```
