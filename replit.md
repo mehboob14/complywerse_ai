@@ -111,3 +111,11 @@ A comprehensive, fully dynamic PCI DSS (Payment Card Industry Data Security Stan
 - Added risk register with business owner approval workflow
 - Dynamic compliance calculation based on accepted evidence
 - Role-based views for different user types
+- Redesigned Dashboard with new layout matching reference design:
+  - Circular compliance gauge with dynamic percentage
+  - Current Phase, CDE Systems, and Open Vulnerabilities metrics
+  - Tabbed navigation (Guided Workflow, Overview, Phases, Requirements, CDE Scoping, Security Testing)
+  - Left sidebar with certification phases and progress bars
+  - Main content showing actual phase tasks with completion status
+  - Related requirements preview with evidence progress
+  - Generate ROC and QSA Portal action buttons
