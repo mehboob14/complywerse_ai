@@ -174,3 +174,18 @@ Phases are strictly sequential and require Admin or Business Owner approval befo
     - Validation Criteria (e.g., "Document must be dated within 12 months")
     - Uploaded evidence with Accept/Reject actions for auditors
 - Role-based view: IT/Security can upload, QSA Auditor can accept/reject
+- Phase filter: Filter by "Current Phase" to see only requirements linked to active phase
+
+### User Experience Improvements (Dec 30, 2025)
+- **Role Guide**: "My Role" button shows role-specific actions and quick links
+- **Evidence Gating Warning**: Dashboard shows evidence status when phase needs approval
+- **Phase-Requirement Linking**: Admin can link requirements to phases in Admin panel
+- **Cross-Navigation**: Quick links from Dashboard to Requirements, Findings, Risk Register
+- **Governance Enforcement**: Phase approval requires Admin or Business Owner only
+
+### Role Responsibilities
+- **Admin**: Manage all settings, approve phases, configure phase-requirement links
+- **Business Owner**: Approve phases and residual risks, monitor compliance
+- **Infosec Team**: Complete phase tasks, upload evidence, remediate findings
+- **IT Security**: Upload evidence for requirements, complete assigned tasks
+- **QSA Auditor**: Review and accept/reject evidence (rejection creates findings)
