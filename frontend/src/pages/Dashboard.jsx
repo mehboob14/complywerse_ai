@@ -9,6 +9,7 @@ function Dashboard() {
   const [requirements, setRequirements] = useState([])
   const [activeTab, setActiveTab] = useState('guided')
   const [loading, setLoading] = useState(true)
+  const [expandedPhases, setExpandedPhases] = useState({})
 
   useEffect(() => {
     fetchData()
@@ -25,6 +26,12 @@ function Dashboard() {
       setStats(statsRes.data)
       setRequirements(reqsRes.data)
       setLoading(false)
+      
+      // Auto-expand current phase
+      const current = phasesRes.data.find(p => p.is_current)
+      if (current) {
+        setExpandedPhases({ [current.id]: true })
+      }
     } catch (err) {
       console.error(err)
       setLoading(false)
@@ -40,9 +47,34 @@ function Dashboard() {
     }
   }
 
+  const setCurrentPhase = async (phaseId) => {
+    try {
+      await axios.patch(`/api/phases/${phaseId}/set-current`)
+      fetchData()
+    } catch (err) {
+      console.error('Failed to set current phase:', err)
+    }
+  }
+
+  const advanceToNextPhase = async () => {
+    const currentIndex = phases.findIndex(p => p.is_current)
+    if (currentIndex < phases.length - 1) {
+      const nextPhase = phases[currentIndex + 1]
+      await setCurrentPhase(nextPhase.id)
+    }
+  }
+
+  const togglePhaseExpand = (phaseId) => {
+    setExpandedPhases(prev => ({
+      ...prev,
+      [phaseId]: !prev[phaseId]
+    }))
+  }
+
   const currentPhase = phases.find(p => p.is_current)
   const completedTasks = currentPhase?.tasks?.filter(t => t.is_complete).length || 0
   const totalTasks = currentPhase?.tasks?.length || 0
+  const allTasksComplete = completedTasks === totalTasks && totalTasks > 0
 
   const getPhaseProgress = (phase) => {
     const completedTasks = phase.tasks?.filter(t => t.is_complete).length || 0
@@ -54,6 +86,15 @@ function Dashboard() {
     const completed = phase.tasks?.filter(t => t.is_complete).length || 0
     const total = phase.tasks?.length || 0
     return `${completed}/${total}`
+  }
+
+  const getPhaseStatus = (phase) => {
+    const completed = phase.tasks?.filter(t => t.is_complete).length || 0
+    const total = phase.tasks?.length || 0
+    if (completed === total && total > 0) return 'complete'
+    if (phase.is_current) return 'in_progress'
+    if (completed > 0) return 'partial'
+    return 'not_started'
   }
 
   const getComplianceColor = (percentage) => {
@@ -140,6 +181,7 @@ function Dashboard() {
       <div className="dashboard-tabs">
         <button className={`tab ${activeTab === 'guided' ? 'active' : ''}`} onClick={() => setActiveTab('guided')}>Guided Workflow</button>
         <button className={`tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>Overview</button>
+        <button className={`tab ${activeTab === 'phases' ? 'active' : ''}`} onClick={() => setActiveTab('phases')}>Phases</button>
         <button className="tab" onClick={() => navigate('/requirements')}>Requirements</button>
         <button className="tab" onClick={() => navigate('/findings')}>Findings</button>
         <button className="tab" onClick={() => navigate('/risk-register')}>Risk Register</button>
@@ -153,9 +195,9 @@ function Dashboard() {
                 <h3>Compliance Timeline</h3>
                 <div className="timeline-list">
                   {phases.map((phase) => (
-                    <div key={phase.id} className={`timeline-item ${phase.status}`}>
+                    <div key={phase.id} className={`timeline-item ${getPhaseStatus(phase)}`}>
                       <div className="timeline-indicator">
-                        {phase.status === 'complete' ? (
+                        {getPhaseStatus(phase) === 'complete' ? (
                           <span className="timeline-check">&#10003;</span>
                         ) : phase.is_current ? (
                           <span className="timeline-current">&#9679;</span>
@@ -202,6 +244,91 @@ function Dashboard() {
               </div>
             </div>
           </div>
+        ) : activeTab === 'phases' ? (
+          <div className="phases-tab-content">
+            <div className="phases-list-full">
+              {phases.map((phase) => {
+                const status = getPhaseStatus(phase)
+                const isExpanded = expandedPhases[phase.id]
+                const progress = getPhaseProgress(phase)
+                
+                return (
+                  <div key={phase.id} className={`phase-card-full ${status} ${isExpanded ? 'expanded' : ''}`}>
+                    <div 
+                      className="phase-card-header"
+                      onClick={() => togglePhaseExpand(phase.id)}
+                    >
+                      <div className="phase-indicator">
+                        {status === 'complete' ? (
+                          <span className="phase-check-icon">&#10003;</span>
+                        ) : (
+                          <span className="phase-number">{phase.phase_number}</span>
+                        )}
+                      </div>
+                      <div className="phase-header-content">
+                        <div className="phase-title-row">
+                          <h3>Phase {phase.phase_number}: {phase.name}</h3>
+                          {phase.is_current && <span className="current-badge">Current</span>}
+                          {status === 'complete' && <span className="complete-badge">Complete</span>}
+                        </div>
+                        <p className="phase-description">{phase.description}</p>
+                      </div>
+                      <span className={`phase-expand-arrow ${isExpanded ? 'rotated' : ''}`}>&#9662;</span>
+                    </div>
+                    
+                    {isExpanded && (
+                      <div className="phase-card-body">
+                        <div className="phase-section">
+                          <h4>Key Tasks</h4>
+                          <ul className="phase-tasks-list-items">
+                            {phase.tasks?.map((task) => (
+                              <li key={task.id} className={task.is_complete ? 'completed' : ''}>
+                                <span className="task-bullet">{task.is_complete ? '✓' : '•'}</span>
+                                <span className="task-text">{task.name}</span>
+                              </li>
+                            ))}
+                            {(!phase.tasks || phase.tasks.length === 0) && (
+                              <li className="no-items">No tasks defined for this phase</li>
+                            )}
+                          </ul>
+                        </div>
+                        
+                        <div className="phase-section">
+                          <h4>Deliverables</h4>
+                          <div className="phase-deliverables">
+                            {phase.deliverables?.map((del) => (
+                              <span key={del.id} className="deliverable-tag">{del.name}</span>
+                            ))}
+                            {(!phase.deliverables || phase.deliverables.length === 0) && (
+                              <span className="no-items">No deliverables defined</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {!phase.is_current && status !== 'complete' && (
+                          <button 
+                            className="set-current-btn"
+                            onClick={(e) => { e.stopPropagation(); setCurrentPhase(phase.id); }}
+                          >
+                            Set as Current Phase
+                          </button>
+                        )}
+                        
+                        {phase.is_current && allTasksComplete && phase.phase_number < 7 && (
+                          <button 
+                            className="advance-phase-btn"
+                            onClick={(e) => { e.stopPropagation(); advanceToNextPhase(); }}
+                          >
+                            Advance to Phase {phase.phase_number + 1} &#8594;
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         ) : (
           <>
             <aside className="phases-sidebar">
@@ -217,10 +344,11 @@ function Dashboard() {
                 {phases.map((phase) => (
                   <div 
                     key={phase.id} 
-                    className={`phase-nav-item ${phase.is_current ? 'active' : ''} ${phase.status === 'complete' ? 'completed' : ''}`}
+                    className={`phase-nav-item ${phase.is_current ? 'active' : ''} ${getPhaseStatus(phase) === 'complete' ? 'completed' : ''}`}
+                    onClick={() => setCurrentPhase(phase.id)}
                   >
                     <div className="phase-nav-indicator">
-                      {phase.status === 'complete' ? (
+                      {getPhaseStatus(phase) === 'complete' ? (
                         <span className="check-icon">&#10003;</span>
                       ) : phase.is_current ? (
                         <span className="active-dot"></span>
@@ -254,7 +382,14 @@ function Dashboard() {
                 <span className="task-remaining">&#9711; {totalTasks - completedTasks} remaining</span>
               </div>
             </div>
-            <span className="phase-status-badge">In Progress</span>
+            <div className="phase-header-actions">
+              <span className="phase-status-badge">{allTasksComplete ? 'Complete' : 'In Progress'}</span>
+              {allTasksComplete && currentPhase?.phase_number < 7 && (
+                <button className="advance-btn" onClick={advanceToNextPhase}>
+                  Next Phase &#8594;
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="phase-tasks-list">

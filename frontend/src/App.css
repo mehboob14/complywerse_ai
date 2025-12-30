@@ -2339,3 +2339,248 @@ body {
   padding-top: 0.5rem;
   border-top: 1px solid #30363d;
 }
+
+/* Phases Tab Styles */
+.phases-tab-content {
+  padding: 1.5rem;
+  max-width: 900px;
+}
+
+.phases-list-full {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.phase-card-full {
+  border-bottom: 1px solid #21262d;
+  background: #0d1117;
+}
+
+.phase-card-full:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.phase-card-full:last-child {
+  border-radius: 0 0 8px 8px;
+  border-bottom: none;
+}
+
+.phase-card-full.complete .phase-indicator {
+  background: #238636;
+}
+
+.phase-card-full.in_progress .phase-indicator {
+  background: #1f6feb;
+}
+
+.phase-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.phase-card-header:hover {
+  background: #161b22;
+}
+
+.phase-indicator {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 50%;
+  background: #30363d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e6edf3;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.phase-check-icon {
+  color: #fff;
+  font-size: 1rem;
+}
+
+.phase-number {
+  color: #8b949e;
+}
+
+.phase-header-content {
+  flex: 1;
+}
+
+.phase-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.phase-title-row h3 {
+  color: #e6edf3;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.current-badge {
+  background: #1f6feb;
+  color: #fff;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.complete-badge {
+  background: rgba(56, 139, 66, 0.2);
+  color: #3fb950;
+  border: 1px solid #238636;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.phase-description {
+  color: #8b949e;
+  font-size: 0.85rem;
+  margin: 0.35rem 0 0 0;
+}
+
+.phase-expand-arrow {
+  color: #8b949e;
+  font-size: 1.2rem;
+  transition: transform 0.2s;
+  padding: 0.5rem;
+}
+
+.phase-expand-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.phase-card-body {
+  padding: 0 1.25rem 1.5rem 3.5rem;
+  border-top: 1px solid #21262d;
+  background: #0d1117;
+}
+
+.phase-section {
+  margin-top: 1.25rem;
+}
+
+.phase-section h4 {
+  color: #8b949e;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.phase-tasks-list-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.phase-tasks-list-items li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #e6edf3;
+  font-size: 0.9rem;
+  padding: 0.35rem 0;
+}
+
+.phase-tasks-list-items li.completed {
+  color: #8b949e;
+  text-decoration: line-through;
+}
+
+.phase-tasks-list-items li.completed .task-bullet {
+  color: #3fb950;
+}
+
+.task-bullet {
+  color: #1f6feb;
+  font-weight: bold;
+}
+
+.phase-deliverables {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.deliverable-tag {
+  background: #21262d;
+  color: #e6edf3;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  border: 1px solid #30363d;
+}
+
+.no-items {
+  color: #8b949e;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.set-current-btn, .advance-phase-btn {
+  margin-top: 1.25rem;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s;
+}
+
+.set-current-btn {
+  background: #21262d;
+  color: #e6edf3;
+  border: 1px solid #30363d;
+}
+
+.set-current-btn:hover {
+  background: #30363d;
+}
+
+.advance-phase-btn {
+  background: #238636;
+  color: #fff;
+}
+
+.advance-phase-btn:hover {
+  background: #2ea043;
+}
+
+.phase-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.advance-btn {
+  background: #238636;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.advance-btn:hover {
+  background: #2ea043;
+}
