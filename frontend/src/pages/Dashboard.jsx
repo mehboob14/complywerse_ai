@@ -8,8 +8,8 @@ function Dashboard() {
   const { user } = useAuth()
   
   const canApprovePhases = user?.role === 'admin' || user?.role === 'business_owner'
-  const canUploadEvidence = ['admin', 'infosec_team', 'it_security'].includes(user?.role)
-  const canReviewEvidence = user?.role === 'qsa_auditor' || user?.role === 'admin'
+  const canUploadEvidence = user?.role === 'it_security'
+  const canReviewEvidence = user?.role === 'infosec_team'
   const [phases, setPhases] = useState([])
   const [showRoleGuide, setShowRoleGuide] = useState(false)
   const [stats, setStats] = useState(null)
