@@ -161,6 +161,50 @@ class Risk(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class SecurityScan(Base):
+    __tablename__ = "security_scans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scan_type = Column(String(50), nullable=False)  # asv_scan, pen_test, vulnerability_scan
+    name = Column(String(255), nullable=False)
+    status = Column(String(50), default="scheduled")  # scheduled, in_progress, completed, failed
+    scheduled_date = Column(DateTime, nullable=True)
+    completed_date = Column(DateTime, nullable=True)
+    findings_count = Column(Integer, default=0)
+    critical_count = Column(Integer, default=0)
+    high_count = Column(Integer, default=0)
+    medium_count = Column(Integer, default=0)
+    low_count = Column(Integer, default=0)
+    report_path = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ComplianceAssessment(Base):
+    __tablename__ = "compliance_assessments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    assessment_type = Column(String(100), nullable=False)  # self_assessment, qsa_audit
+    status = Column(String(50), default="in_progress")  # in_progress, completed
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    assessor_name = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
+
+
+class CDESystem(Base):
+    __tablename__ = "cde_systems"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    system_type = Column(String(100), nullable=False)  # server, application, network, database
+    description = Column(Text, nullable=True)
+    ip_address = Column(String(50), nullable=True)
+    location = Column(String(255), nullable=True)
+    owner = Column(String(255), nullable=True)
+    in_scope = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 def get_db():
     db = SessionLocal()
     try:

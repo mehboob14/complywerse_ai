@@ -1,11 +1,85 @@
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from datetime import datetime, timedelta
 from models import (SessionLocal, Phase, PhaseTask, PhaseDeliverable, 
                    Requirement, SubRequirement, RequiredEvidence,
+                   SecurityScan, ComplianceAssessment, CDESystem,
                    init_db, engine)
+
+def seed_new_tables():
+    """Seed the new tables (CDE systems, security scans, assessments) if they're empty"""
+    db = SessionLocal()
+    try:
+        cde_count = db.query(CDESystem).count()
+        if cde_count > 0:
+            print(f"CDE systems already seeded ({cde_count} records). Skipping...")
+            db.close()
+            return
+        
+        cde_systems = [
+            {"name": "Payment Gateway Server", "system_type": "server", "description": "Primary payment processing server", "ip_address": "10.0.1.10", "location": "Data Center A", "owner": "IT Operations"},
+            {"name": "Card Data Database", "system_type": "database", "description": "Encrypted cardholder data storage", "ip_address": "10.0.1.20", "location": "Data Center A", "owner": "DBA Team"},
+            {"name": "POS Terminal Network", "system_type": "network", "description": "Point of sale terminal network segment", "ip_address": "10.0.2.0/24", "location": "Retail Locations", "owner": "Network Team"},
+            {"name": "E-commerce Application", "system_type": "application", "description": "Online payment processing application", "ip_address": "10.0.1.30", "location": "Data Center A", "owner": "Development Team"},
+            {"name": "Payment API Gateway", "system_type": "application", "description": "REST API for payment processing", "ip_address": "10.0.1.31", "location": "Data Center A", "owner": "Development Team"},
+            {"name": "Tokenization Server", "system_type": "server", "description": "Card data tokenization service", "ip_address": "10.0.1.40", "location": "Data Center A", "owner": "Security Team"},
+            {"name": "HSM Cluster", "system_type": "server", "description": "Hardware security modules for key management", "ip_address": "10.0.1.50", "location": "Data Center A", "owner": "Security Team"},
+            {"name": "Backup Server", "system_type": "server", "description": "Encrypted backup storage", "ip_address": "10.0.1.60", "location": "Data Center B", "owner": "IT Operations"},
+            {"name": "Log Aggregator", "system_type": "server", "description": "Centralized logging and SIEM", "ip_address": "10.0.3.10", "location": "Data Center A", "owner": "Security Team"},
+            {"name": "Admin Workstations", "system_type": "server", "description": "CDE administrative access workstations", "ip_address": "10.0.4.0/24", "location": "Corporate Office", "owner": "IT Operations"},
+            {"name": "Firewall Cluster", "system_type": "network", "description": "CDE perimeter firewalls", "ip_address": "10.0.0.1", "location": "Data Center A", "owner": "Network Team"},
+            {"name": "IDS/IPS System", "system_type": "network", "description": "Intrusion detection and prevention", "ip_address": "10.0.0.5", "location": "Data Center A", "owner": "Security Team"},
+            {"name": "VPN Gateway", "system_type": "network", "description": "Remote access VPN for CDE", "ip_address": "10.0.0.10", "location": "Data Center A", "owner": "Network Team"},
+            {"name": "Anti-malware Server", "system_type": "server", "description": "Centralized anti-malware management", "ip_address": "10.0.3.20", "location": "Data Center A", "owner": "Security Team"},
+            {"name": "Patch Management Server", "system_type": "server", "description": "CDE patch deployment system", "ip_address": "10.0.3.30", "location": "Data Center A", "owner": "IT Operations"},
+            {"name": "NTP Server", "system_type": "server", "description": "Time synchronization for CDE", "ip_address": "10.0.3.40", "location": "Data Center A", "owner": "IT Operations"},
+            {"name": "DNS Server", "system_type": "server", "description": "Internal DNS for CDE", "ip_address": "10.0.3.50", "location": "Data Center A", "owner": "IT Operations"},
+            {"name": "Wireless Controller", "system_type": "network", "description": "Wireless network controller", "ip_address": "10.0.0.20", "location": "Corporate Office", "owner": "Network Team"},
+            {"name": "File Integrity Monitor", "system_type": "application", "description": "FIM for critical system files", "ip_address": "10.0.3.60", "location": "Data Center A", "owner": "Security Team"},
+            {"name": "Vulnerability Scanner", "system_type": "application", "description": "Internal vulnerability scanning", "ip_address": "10.0.3.70", "location": "Data Center A", "owner": "Security Team"},
+            {"name": "Development Environment", "system_type": "server", "description": "Secure development environment", "ip_address": "10.0.5.0/24", "location": "Data Center A", "owner": "Development Team"},
+            {"name": "QA Environment", "system_type": "server", "description": "Quality assurance testing environment", "ip_address": "10.0.6.0/24", "location": "Data Center A", "owner": "QA Team"},
+            {"name": "Load Balancer", "system_type": "network", "description": "Application load balancer", "ip_address": "10.0.1.5", "location": "Data Center A", "owner": "Network Team"},
+            {"name": "Secrets Manager", "system_type": "application", "description": "Credential and secrets management", "ip_address": "10.0.3.80", "location": "Data Center A", "owner": "Security Team"},
+        ]
+        
+        for sys_data in cde_systems:
+            system = CDESystem(**sys_data)
+            db.add(system)
+        
+        security_scans = [
+            {"scan_type": "asv_scan", "name": "Q1 2025 ASV Scan", "status": "scheduled", "scheduled_date": datetime.now() + timedelta(days=30)},
+            {"scan_type": "pen_test", "name": "Annual External Penetration Test", "status": "scheduled", "scheduled_date": datetime.now() + timedelta(days=60)},
+            {"scan_type": "pen_test", "name": "Annual Internal Penetration Test", "status": "scheduled", "scheduled_date": datetime.now() + timedelta(days=75)},
+            {"scan_type": "vulnerability_scan", "name": "Weekly Internal Vulnerability Scan", "status": "scheduled", "scheduled_date": datetime.now() + timedelta(days=7)},
+        ]
+        
+        for scan_data in security_scans:
+            scan = SecurityScan(**scan_data)
+            db.add(scan)
+        
+        assessment = ComplianceAssessment(
+            assessment_type="self_assessment",
+            status="in_progress",
+            started_at=datetime.now(),
+            assessor_name="Internal Compliance Team",
+            notes="Annual PCI DSS v4.0 self-assessment in progress"
+        )
+        db.add(assessment)
+        
+        db.commit()
+        print("Seeded CDE systems, security scans, and assessment data!")
+    except Exception as e:
+        db.rollback()
+        print(f"Error seeding new tables: {e}")
+    finally:
+        db.close()
+
 
 def seed_database():
     init_db()
+    
+    seed_new_tables()
     
     with engine.connect() as conn:
         result = conn.execute(text("SELECT COUNT(*) FROM phases"))
@@ -410,7 +484,7 @@ def seed_database():
                     db.add(evidence)
         
         db.commit()
-        print("Database seeded with 7 phases, 12 requirements, and required evidence items!")
+        print("Database seeded with 7 phases, 12 requirements, and evidence items!")
     except IntegrityError as e:
         db.rollback()
         print(f"Database already seeded (integrity constraint). Skipping... {e}")

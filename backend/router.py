@@ -7,7 +7,8 @@ from datetime import datetime
 from models import (get_db, Phase, PhaseTask, PhaseDeliverable, 
                    Requirement, SubRequirement, RequiredEvidence,
                    EvidenceSubmission, Finding, Risk,
-                   EvidenceStatus, FindingStatus, RiskStatus)
+                   EvidenceStatus, FindingStatus, RiskStatus,
+                   SecurityScan, ComplianceAssessment, CDESystem)
 import os
 import uuid
 
@@ -138,6 +139,31 @@ class RiskResponse(BaseModel):
         from_attributes = True
 
 
+class SecurityScanResponse(BaseModel):
+    id: int
+    scan_type: str
+    name: str
+    status: str
+    scheduled_date: Optional[datetime]
+    completed_date: Optional[datetime]
+    findings_count: int
+    class Config:
+        from_attributes = True
+
+
+class CDESystemResponse(BaseModel):
+    id: int
+    name: str
+    system_type: str
+    description: Optional[str]
+    ip_address: Optional[str]
+    location: Optional[str]
+    owner: Optional[str]
+    in_scope: bool
+    class Config:
+        from_attributes = True
+
+
 class DashboardStats(BaseModel):
     total_sub_requirements: int
     compliant_count: int
@@ -155,6 +181,14 @@ class DashboardStats(BaseModel):
     pending_risks: int
     approved_risks: int
     current_phase: Optional[PhaseResponse]
+    cde_systems_count: int
+    asv_scans_completed: int
+    asv_scans_required: int
+    pen_tests_completed: int
+    pen_tests_required: int
+    last_assessment_date: Optional[str]
+    requirements_met: int
+    total_requirements: int
 
 
 def calculate_sub_req_status(sub_req):
@@ -530,6 +564,23 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         joinedload(Phase.deliverables)
     ).filter(Phase.is_current == True).first()
     
+    cde_systems = db.query(CDESystem).filter(CDESystem.in_scope == True).count()
+    
+    asv_scans = db.query(SecurityScan).filter(SecurityScan.scan_type == "asv_scan").all()
+    asv_completed = len([s for s in asv_scans if s.status == "completed"])
+    asv_required = 4  # Quarterly requirement
+    
+    pen_tests = db.query(SecurityScan).filter(SecurityScan.scan_type == "pen_test").all()
+    pen_completed = len([p for p in pen_tests if p.status == "completed"])
+    pen_required = 2  # Annual external + internal
+    
+    last_assessment = db.query(ComplianceAssessment).order_by(
+        ComplianceAssessment.started_at.desc()
+    ).first()
+    last_assessment_date = None
+    if last_assessment:
+        last_assessment_date = last_assessment.started_at.strftime("%b %d, %Y")
+    
     return DashboardStats(
         total_sub_requirements=total,
         compliant_count=compliant,
@@ -546,7 +597,15 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         closed_findings=closed_findings,
         pending_risks=pending_risks,
         approved_risks=approved_risks,
-        current_phase=current_phase
+        current_phase=current_phase,
+        cde_systems_count=cde_systems,
+        asv_scans_completed=asv_completed,
+        asv_scans_required=asv_required,
+        pen_tests_completed=pen_completed,
+        pen_tests_required=pen_required,
+        last_assessment_date=last_assessment_date,
+        requirements_met=compliant,
+        total_requirements=total
     )
 
 

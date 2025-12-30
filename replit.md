@@ -38,6 +38,9 @@ A comprehensive, fully dynamic PCI DSS (Payment Card Industry Data Security Stan
 - **EvidenceSubmission**: User-uploaded evidence with review status
 - **Finding**: Auto-created from rejected evidence
 - **Risk**: Residual risks requiring business approval
+- **CDESystem**: 24 in-scope Cardholder Data Environment systems
+- **SecurityScan**: ASV scans, penetration tests, vulnerability scans
+- **ComplianceAssessment**: Self-assessments and QSA audits
 
 ## Compliance Workflow
 
@@ -119,3 +122,15 @@ A comprehensive, fully dynamic PCI DSS (Payment Card Industry Data Security Stan
   - Main content showing actual phase tasks with completion status
   - Related requirements preview with evidence progress
   - Generate ROC and QSA Portal action buttons
+
+### Latest Update
+- Added 100% dynamic data from backend - no static/hardcoded values
+- Linked Guided Workflow and Overview tabs - both use same data source
+- Added new database models: CDESystem (24 systems), SecurityScan, ComplianceAssessment
+- Dashboard stats now include:
+  - CDE Systems count (24 in-scope systems)
+  - ASV Scans: completed/required (0/4 quarterly)
+  - Pen Tests: completed/required (0/2 annual)
+  - Last Assessment date (dynamically fetched)
+  - Requirements Met: compliant/total
+- All metrics refresh in real-time when tasks completed or evidence reviewed

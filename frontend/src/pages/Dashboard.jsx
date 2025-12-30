@@ -120,8 +120,8 @@ function Dashboard() {
           <div className="metric-icon systems-icon">&#9632;</div>
           <div className="metric-content">
             <div className="metric-header">CDE Systems</div>
-            <div className="metric-value-large">{stats?.total_sub_requirements || 0}</div>
-            <div className="metric-description">Sub-requirements tracked</div>
+            <div className="metric-value-large">{stats?.cde_systems_count || 0}</div>
+            <div className="metric-description">In-scope systems</div>
           </div>
         </div>
 
@@ -175,15 +175,15 @@ function Dashboard() {
                 <div className="key-metrics-list">
                   <div className="key-metric-row">
                     <span className="key-metric-label">Requirements Met</span>
-                    <span className="key-metric-value">{stats?.compliant_count || 0}/{stats?.total_sub_requirements || 0}</span>
+                    <span className="key-metric-value">{stats?.requirements_met || 0}/{stats?.total_requirements || 0}</span>
                   </div>
                   <div className="key-metric-row">
                     <span className="key-metric-label">ASV Scans (Quarter)</span>
-                    <span className="key-metric-value">0/1</span>
+                    <span className="key-metric-value">{stats?.asv_scans_completed || 0}/{stats?.asv_scans_required || 4}</span>
                   </div>
                   <div className="key-metric-row">
                     <span className="key-metric-label">Pen Tests (Annual)</span>
-                    <span className="key-metric-value">0/2</span>
+                    <span className="key-metric-value">{stats?.pen_tests_completed || 0}/{stats?.pen_tests_required || 2}</span>
                   </div>
                   <div className="key-metric-row">
                     <span className="key-metric-label">Evidence Items</span>
@@ -191,7 +191,11 @@ function Dashboard() {
                   </div>
                   <div className="key-metric-row">
                     <span className="key-metric-label">Last Assessment</span>
-                    <span className="key-metric-value">N/A</span>
+                    <span className="key-metric-value">{stats?.last_assessment_date || 'N/A'}</span>
+                  </div>
+                  <div className="key-metric-row">
+                    <span className="key-metric-label">CDE Systems</span>
+                    <span className="key-metric-value">{stats?.cde_systems_count || 0}</span>
                   </div>
                 </div>
               </div>
