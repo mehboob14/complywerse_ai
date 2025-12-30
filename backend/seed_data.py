@@ -4,7 +4,50 @@ from datetime import datetime, timedelta
 from models import (SessionLocal, Phase, PhaseTask, PhaseDeliverable, 
                    Requirement, SubRequirement, RequiredEvidence,
                    SecurityScan, ComplianceAssessment, CDESystem,
+                   User, UserRole,
                    init_db, engine)
+import bcrypt
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+def seed_users():
+    """Seed default users for testing"""
+    db = SessionLocal()
+    try:
+        user_count = db.query(User).count()
+        if user_count > 0:
+            print(f"Users already seeded ({user_count} records). Skipping...")
+            db.close()
+            return
+        
+        default_users = [
+            {"username": "admin", "email": "admin@pci.local", "password": "admin123", "role": "admin", "display_name": "System Administrator"},
+            {"username": "infosec", "email": "infosec@pci.local", "password": "infosec123", "role": "infosec_team", "display_name": "Infosec Team Lead"},
+            {"username": "auditor", "email": "auditor@pci.local", "password": "auditor123", "role": "qsa_auditor", "display_name": "QSA Auditor"},
+            {"username": "business", "email": "business@pci.local", "password": "business123", "role": "business_owner", "display_name": "Business Owner"},
+            {"username": "itsec", "email": "itsec@pci.local", "password": "itsec123", "role": "it_security", "display_name": "IT Security Analyst"},
+        ]
+        
+        for user_data in default_users:
+            user = User(
+                username=user_data["username"],
+                email=user_data["email"],
+                password_hash=hash_password(user_data["password"]),
+                role=user_data["role"],
+                display_name=user_data["display_name"]
+            )
+            db.add(user)
+        
+        db.commit()
+        print("Seeded default users!")
+        print("Default accounts: admin/admin123, infosec/infosec123, auditor/auditor123, business/business123, itsec/itsec123")
+    except Exception as e:
+        db.rollback()
+        print(f"Error seeding users: {e}")
+    finally:
+        db.close()
 
 def seed_new_tables():
     """Seed the new tables (CDE systems, security scans, assessments) if they're empty"""
@@ -79,6 +122,7 @@ def seed_new_tables():
 def seed_database():
     init_db()
     
+    seed_users()
     seed_new_tables()
     
     with engine.connect() as conn:

@@ -1,16 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response, Cookie
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 from models import (get_db, Phase, PhaseTask, PhaseDeliverable, 
                    Requirement, SubRequirement, RequiredEvidence,
                    EvidenceSubmission, Finding, Risk,
                    EvidenceStatus, FindingStatus, RiskStatus,
-                   SecurityScan, ComplianceAssessment, CDESystem)
+                   SecurityScan, ComplianceAssessment, CDESystem,
+                   User, UserRole)
 import os
 import uuid
+import bcrypt
+from jose import jwt, JWTError
+
+SECRET_KEY = os.getenv("SESSION_SECRET")
+if not SECRET_KEY:
+    raise RuntimeError("SESSION_SECRET environment variable must be set")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 router = APIRouter(prefix="/api", tags=["PCI DSS Lifecycle"])
 
@@ -194,6 +204,82 @@ class DashboardStats(BaseModel):
     total_requirements: int
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    role: str = "it_security"
+    display_name: Optional[str] = None
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    role: str
+    display_name: Optional[str]
+    is_active: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+
+class UserUpdateRequest(BaseModel):
+    email: Optional[str] = None
+    role: Optional[str] = None
+    display_name: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+
+
+def create_access_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_current_user(token: Optional[str] = Cookie(None, alias="auth_token"), db: Session = Depends(get_db)) -> Optional[User]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if not username:
+            return None
+        user = db.query(User).filter(User.username == username).first()
+        return user
+    except JWTError:
+        return None
+
+
+def require_auth(token: Optional[str] = Cookie(None, alias="auth_token"), db: Session = Depends(get_db)) -> User:
+    user = get_current_user(token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+
+def require_role(*roles):
+    def role_checker(user: User = Depends(require_auth)):
+        if user.role not in roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+    return role_checker
+
+
 def calculate_sub_req_status(sub_req):
     required = sub_req.required_evidence
     if not required:
@@ -252,6 +338,149 @@ def build_sub_requirement_response(sub_req):
         total_accepted=accepted,
         compliance_status=status
     )
+
+
+@router.post("/auth/register")
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(
+        (User.username == request.username) | (User.email == request.email)
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username or email already exists")
+    
+    user = User(
+        username=request.username,
+        email=request.email,
+        password_hash=hash_password(request.password),
+        role=request.role,
+        display_name=request.display_name or request.username
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    token = create_access_token({"sub": user.username})
+    response = JSONResponse(content={
+        "message": "Registration successful",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "display_name": user.display_name
+        }
+    })
+    response.set_cookie(key="auth_token", value=token, httponly=True, max_age=86400)
+    return response
+
+
+@router.post("/auth/login")
+def login(request: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == request.username).first()
+    if not user or not verify_password(request.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is deactivated")
+    
+    user.last_login = datetime.utcnow()
+    db.commit()
+    
+    token = create_access_token({"sub": user.username})
+    response = JSONResponse(content={
+        "message": "Login successful",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "display_name": user.display_name
+        }
+    })
+    response.set_cookie(key="auth_token", value=token, httponly=True, max_age=86400)
+    return response
+
+
+@router.post("/auth/logout")
+def logout():
+    response = JSONResponse(content={"message": "Logged out successfully"})
+    response.delete_cookie(key="auth_token")
+    return response
+
+
+@router.get("/auth/me")
+def get_current_user_info(token: Optional[str] = Cookie(None, alias="auth_token"), db: Session = Depends(get_db)):
+    user = get_current_user(token, db)
+    if not user:
+        return {"authenticated": False, "user": None}
+    return {
+        "authenticated": True,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "display_name": user.display_name
+        }
+    }
+
+
+@router.get("/users", response_model=List[UserResponse])
+def get_all_users(db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
+    return db.query(User).order_by(User.created_at).all()
+
+
+@router.post("/users")
+def create_user(request: RegisterRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
+    existing = db.query(User).filter(
+        (User.username == request.username) | (User.email == request.email)
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username or email already exists")
+    
+    new_user = User(
+        username=request.username,
+        email=request.email,
+        password_hash=hash_password(request.password),
+        role=request.role,
+        display_name=request.display_name or request.username
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": "User created", "user_id": new_user.id}
+
+
+@router.patch("/users/{user_id}")
+def update_user(user_id: int, request: UserUpdateRequest, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if request.email:
+        target_user.email = request.email
+    if request.role:
+        target_user.role = request.role
+    if request.display_name:
+        target_user.display_name = request.display_name
+    if request.is_active is not None:
+        target_user.is_active = request.is_active
+    
+    db.commit()
+    return {"message": "User updated"}
+
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target_user.id == user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    db.delete(target_user)
+    db.commit()
+    return {"message": "User deleted"}
 
 
 @router.get("/phases", response_model=List[PhaseResponse])
@@ -817,3 +1046,328 @@ def approve_risk(
     
     db.commit()
     return {"message": f"Risk {action}d", "status": risk.status}
+
+
+class PhaseCreateRequest(BaseModel):
+    phase_number: int
+    name: str
+    description: Optional[str] = None
+
+
+class TaskCreateRequest(BaseModel):
+    name: str
+
+
+class RequirementCreateRequest(BaseModel):
+    req_number: int
+    name: str
+    description: Optional[str] = None
+
+
+class SubRequirementCreateRequest(BaseModel):
+    sub_req_number: str
+    name: str
+
+
+class RequiredEvidenceCreateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    evidence_type: str = "document"
+
+
+@router.post("/admin/phases")
+def admin_create_phase(request: PhaseCreateRequest, db: Session = Depends(get_db)):
+    phase = Phase(
+        phase_number=request.phase_number,
+        name=request.name,
+        description=request.description
+    )
+    db.add(phase)
+    db.commit()
+    db.refresh(phase)
+    return {"message": "Phase created", "phase_id": phase.id}
+
+
+@router.put("/admin/phases/{phase_id}")
+def admin_update_phase(phase_id: int, request: PhaseCreateRequest, db: Session = Depends(get_db)):
+    phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    phase.phase_number = request.phase_number
+    phase.name = request.name
+    phase.description = request.description
+    db.commit()
+    return {"message": "Phase updated"}
+
+
+@router.delete("/admin/phases/{phase_id}")
+def admin_delete_phase(phase_id: int, db: Session = Depends(get_db)):
+    phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    db.delete(phase)
+    db.commit()
+    return {"message": "Phase deleted"}
+
+
+@router.post("/admin/phases/{phase_id}/tasks")
+def admin_create_task(phase_id: int, request: TaskCreateRequest, db: Session = Depends(get_db)):
+    phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    task = PhaseTask(phase_id=phase_id, name=request.name)
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return {"message": "Task created", "task_id": task.id}
+
+
+@router.put("/admin/tasks/{task_id}")
+def admin_update_task(task_id: int, request: TaskCreateRequest, db: Session = Depends(get_db)):
+    task = db.query(PhaseTask).filter(PhaseTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    task.name = request.name
+    db.commit()
+    return {"message": "Task updated"}
+
+
+@router.delete("/admin/tasks/{task_id}")
+def admin_delete_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(PhaseTask).filter(PhaseTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    db.delete(task)
+    db.commit()
+    return {"message": "Task deleted"}
+
+
+@router.post("/admin/phases/{phase_id}/deliverables")
+def admin_create_deliverable(phase_id: int, request: TaskCreateRequest, db: Session = Depends(get_db)):
+    phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    deliverable = PhaseDeliverable(phase_id=phase_id, name=request.name)
+    db.add(deliverable)
+    db.commit()
+    db.refresh(deliverable)
+    return {"message": "Deliverable created", "deliverable_id": deliverable.id}
+
+
+@router.delete("/admin/deliverables/{deliverable_id}")
+def admin_delete_deliverable(deliverable_id: int, db: Session = Depends(get_db)):
+    deliverable = db.query(PhaseDeliverable).filter(PhaseDeliverable.id == deliverable_id).first()
+    if not deliverable:
+        raise HTTPException(status_code=404, detail="Deliverable not found")
+    
+    db.delete(deliverable)
+    db.commit()
+    return {"message": "Deliverable deleted"}
+
+
+@router.post("/admin/requirements")
+def admin_create_requirement(request: RequirementCreateRequest, db: Session = Depends(get_db)):
+    req = Requirement(
+        req_number=request.req_number,
+        name=request.name,
+        description=request.description
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    return {"message": "Requirement created", "requirement_id": req.id}
+
+
+@router.put("/admin/requirements/{req_id}")
+def admin_update_requirement(req_id: int, request: RequirementCreateRequest, db: Session = Depends(get_db)):
+    req = db.query(Requirement).filter(Requirement.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    
+    req.req_number = request.req_number
+    req.name = request.name
+    req.description = request.description
+    db.commit()
+    return {"message": "Requirement updated"}
+
+
+@router.delete("/admin/requirements/{req_id}")
+def admin_delete_requirement(req_id: int, db: Session = Depends(get_db)):
+    req = db.query(Requirement).filter(Requirement.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    
+    db.delete(req)
+    db.commit()
+    return {"message": "Requirement deleted"}
+
+
+@router.post("/admin/requirements/{req_id}/sub-requirements")
+def admin_create_sub_requirement(req_id: int, request: SubRequirementCreateRequest, db: Session = Depends(get_db)):
+    req = db.query(Requirement).filter(Requirement.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    
+    sub_req = SubRequirement(
+        requirement_id=req_id,
+        sub_req_number=request.sub_req_number,
+        name=request.name
+    )
+    db.add(sub_req)
+    db.commit()
+    db.refresh(sub_req)
+    return {"message": "Sub-requirement created", "sub_requirement_id": sub_req.id}
+
+
+@router.put("/admin/sub-requirements/{sub_req_id}")
+def admin_update_sub_requirement(sub_req_id: int, request: SubRequirementCreateRequest, db: Session = Depends(get_db)):
+    sub_req = db.query(SubRequirement).filter(SubRequirement.id == sub_req_id).first()
+    if not sub_req:
+        raise HTTPException(status_code=404, detail="Sub-requirement not found")
+    
+    sub_req.sub_req_number = request.sub_req_number
+    sub_req.name = request.name
+    db.commit()
+    return {"message": "Sub-requirement updated"}
+
+
+@router.delete("/admin/sub-requirements/{sub_req_id}")
+def admin_delete_sub_requirement(sub_req_id: int, db: Session = Depends(get_db)):
+    sub_req = db.query(SubRequirement).filter(SubRequirement.id == sub_req_id).first()
+    if not sub_req:
+        raise HTTPException(status_code=404, detail="Sub-requirement not found")
+    
+    db.delete(sub_req)
+    db.commit()
+    return {"message": "Sub-requirement deleted"}
+
+
+@router.post("/admin/sub-requirements/{sub_req_id}/evidence")
+def admin_create_required_evidence(sub_req_id: int, request: RequiredEvidenceCreateRequest, db: Session = Depends(get_db)):
+    sub_req = db.query(SubRequirement).filter(SubRequirement.id == sub_req_id).first()
+    if not sub_req:
+        raise HTTPException(status_code=404, detail="Sub-requirement not found")
+    
+    evidence = RequiredEvidence(
+        sub_requirement_id=sub_req_id,
+        name=request.name,
+        description=request.description,
+        evidence_type=request.evidence_type
+    )
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
+    return {"message": "Required evidence created", "evidence_id": evidence.id}
+
+
+@router.put("/admin/evidence/{evidence_id}")
+def admin_update_required_evidence(evidence_id: int, request: RequiredEvidenceCreateRequest, db: Session = Depends(get_db)):
+    evidence = db.query(RequiredEvidence).filter(RequiredEvidence.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Required evidence not found")
+    
+    evidence.name = request.name
+    evidence.description = request.description
+    evidence.evidence_type = request.evidence_type
+    db.commit()
+    return {"message": "Required evidence updated"}
+
+
+@router.delete("/admin/evidence/{evidence_id}")
+def admin_delete_required_evidence(evidence_id: int, db: Session = Depends(get_db)):
+    evidence = db.query(RequiredEvidence).filter(RequiredEvidence.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Required evidence not found")
+    
+    db.delete(evidence)
+    db.commit()
+    return {"message": "Required evidence deleted"}
+
+
+@router.get("/evidence/comparison")
+def get_evidence_comparison(db: Session = Depends(get_db)):
+    """Get comprehensive evidence comparison: required vs uploaded, grouped by requirement and phase"""
+    requirements = db.query(Requirement).options(
+        joinedload(Requirement.sub_requirements)
+        .joinedload(SubRequirement.required_evidence)
+        .joinedload(RequiredEvidence.submissions)
+    ).order_by(Requirement.req_number).all()
+    
+    result = []
+    for req in requirements:
+        req_data = {
+            "id": req.id,
+            "req_number": req.req_number,
+            "name": req.name,
+            "sub_requirements": [],
+            "total_required": 0,
+            "total_uploaded": 0,
+            "total_accepted": 0,
+            "total_pending": 0,
+            "total_rejected": 0
+        }
+        
+        for sub_req in req.sub_requirements:
+            sub_data = {
+                "id": sub_req.id,
+                "sub_req_number": sub_req.sub_req_number,
+                "name": sub_req.name,
+                "evidence": []
+            }
+            
+            for ev in sub_req.required_evidence:
+                req_data["total_required"] += 1
+                
+                submissions = sorted(ev.submissions, key=lambda x: x.uploaded_at, reverse=True) if ev.submissions else []
+                has_accepted = any(s.status == EvidenceStatus.ACCEPTED.value for s in submissions)
+                has_pending = any(s.status == EvidenceStatus.PENDING_REVIEW.value for s in submissions)
+                has_rejected = any(s.status == EvidenceStatus.REJECTED.value for s in submissions)
+                
+                if submissions:
+                    req_data["total_uploaded"] += 1
+                if has_accepted:
+                    req_data["total_accepted"] += 1
+                if has_pending:
+                    req_data["total_pending"] += 1
+                if has_rejected and not has_accepted:
+                    req_data["total_rejected"] += 1
+                
+                ev_data = {
+                    "id": ev.id,
+                    "name": ev.name,
+                    "description": ev.description,
+                    "evidence_type": ev.evidence_type,
+                    "status": "accepted" if has_accepted else ("pending" if has_pending else ("rejected" if has_rejected else "not_uploaded")),
+                    "submissions_count": len(submissions),
+                    "latest_submission": {
+                        "id": submissions[0].id,
+                        "file_name": submissions[0].file_name,
+                        "uploaded_by": submissions[0].uploaded_by,
+                        "uploaded_at": submissions[0].uploaded_at.isoformat(),
+                        "status": submissions[0].status,
+                        "reviewed_by": submissions[0].reviewed_by,
+                        "review_notes": submissions[0].review_notes
+                    } if submissions else None
+                }
+                sub_data["evidence"].append(ev_data)
+            
+            req_data["sub_requirements"].append(sub_data)
+        
+        result.append(req_data)
+    
+    return {
+        "requirements": result,
+        "summary": {
+            "total_required": sum(r["total_required"] for r in result),
+            "total_uploaded": sum(r["total_uploaded"] for r in result),
+            "total_accepted": sum(r["total_accepted"] for r in result),
+            "total_pending": sum(r["total_pending"] for r in result),
+            "total_rejected": sum(r["total_rejected"] for r in result)
+        }
+    }
