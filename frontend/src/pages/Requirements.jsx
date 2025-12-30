@@ -1,28 +1,55 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { useAuth } from '../context/AuthContext'
 
 function Requirements() {
+  const { user } = useAuth()
   const [requirements, setRequirements] = useState([])
+  const [currentPhase, setCurrentPhase] = useState(null)
+  const [phaseFilter, setPhaseFilter] = useState('all')
   const [expandedReq, setExpandedReq] = useState(null)
   const [expandedSubReq, setExpandedSubReq] = useState(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(null)
-  const [userRole, setUserRole] = useState('it_security')
+  const userRole = user?.role || 'it_security'
 
   useEffect(() => {
-    fetchRequirements()
+    fetchData()
   }, [])
 
-  const fetchRequirements = async () => {
+  const fetchData = async () => {
     try {
-      const response = await axios.get('/api/requirements')
-      setRequirements(response.data)
+      const [reqRes, phaseRes] = await Promise.all([
+        axios.get('/api/requirements'),
+        axios.get('/api/phases')
+      ])
+      setRequirements(reqRes.data)
+      const current = phaseRes.data.find(p => p.is_current)
+      setCurrentPhase(current)
       setLoading(false)
     } catch (err) {
       console.error(err)
       setLoading(false)
     }
   }
+
+  const fetchRequirements = async () => {
+    try {
+      const response = await axios.get('/api/requirements')
+      setRequirements(response.data)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const getLinkedRequirementIds = () => {
+    if (!currentPhase?.phase_requirements) return []
+    return currentPhase.phase_requirements.map(pr => pr.requirement_id)
+  }
+
+  const filteredRequirements = phaseFilter === 'current' 
+    ? requirements.filter(r => getLinkedRequirementIds().includes(r.id))
+    : requirements
 
   const toggleReq = (reqId) => {
     setExpandedReq(expandedReq === reqId ? null : reqId)
@@ -167,18 +194,39 @@ function Requirements() {
           <h1>PCI DSS v4.0 Requirements</h1>
           <p>12 core requirements with detailed sub-requirements and evidence tracking</p>
         </div>
-        <div className="role-selector">
-          <label>Viewing as:</label>
-          <select value={userRole} onChange={(e) => setUserRole(e.target.value)}>
-            <option value="it_security">IT/Security Team</option>
-            <option value="auditor">QSA Auditor</option>
-            <option value="business_owner">Business Owner</option>
-          </select>
+        <div className="phase-filter-section">
+          {currentPhase && (
+            <div className="current-phase-info">
+              <span className="phase-label">Current Phase:</span>
+              <span className="phase-name">{currentPhase.name}</span>
+            </div>
+          )}
+          <div className="filter-buttons">
+            <button 
+              className={`filter-btn ${phaseFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setPhaseFilter('all')}
+            >
+              All Requirements ({requirements.length})
+            </button>
+            <button 
+              className={`filter-btn ${phaseFilter === 'current' ? 'active' : ''}`}
+              onClick={() => setPhaseFilter('current')}
+              disabled={getLinkedRequirementIds().length === 0}
+            >
+              Current Phase ({getLinkedRequirementIds().length})
+            </button>
+          </div>
         </div>
       </div>
 
+      {phaseFilter === 'current' && getLinkedRequirementIds().length === 0 && (
+        <div className="no-linked-requirements">
+          <p>No requirements are linked to the current phase. Admin can configure phase requirements in the Admin panel.</p>
+        </div>
+      )}
+
       <div className="requirements-list-v2">
-        {requirements.map((req) => (
+        {filteredRequirements.map((req) => (
           <div key={req.id} className="requirement-row">
             <div className="requirement-header-v2" onClick={() => toggleReq(req.id)}>
               <div className="req-number-circle">{req.req_number}</div>

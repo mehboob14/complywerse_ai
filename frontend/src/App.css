@@ -1835,6 +1835,73 @@ body {
   font-size: 0.875rem;
 }
 
+/* Phase Filter Section */
+.phase-filter-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.current-phase-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.current-phase-info .phase-label {
+  color: #8b949e;
+}
+
+.current-phase-info .phase-name {
+  color: #58a6ff;
+  font-weight: 500;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-btn {
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover:not(:disabled) {
+  background: #30363d;
+  border-color: #8b949e;
+}
+
+.filter-btn.active {
+  background: #238636;
+  border-color: #238636;
+  color: #fff;
+}
+
+.filter-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.no-linked-requirements {
+  background: rgba(210, 153, 34, 0.1);
+  border: 1px solid rgba(210, 153, 34, 0.3);
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  color: #d29922;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 .requirements-list-v2 {
   display: flex;
   flex-direction: column;
@@ -2789,6 +2856,123 @@ body {
   padding: 0.4rem 0.8rem;
   background: rgba(210, 153, 34, 0.1);
   border-radius: 4px;
+}
+
+/* Role Guide Banner */
+.role-guide-banner {
+  background: linear-gradient(135deg, #161b22 0%, #1c2128 100%);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.role-guide-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #30363d;
+}
+
+.role-badge {
+  background: #238636;
+  color: #fff;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.role-username {
+  color: #8b949e;
+  font-size: 0.9rem;
+}
+
+.role-guide-content h4 {
+  color: #c9d1d9;
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+}
+
+.role-actions-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.5rem;
+}
+
+.role-actions-list li {
+  color: #8b949e;
+  font-size: 0.875rem;
+  padding: 0.4rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+}
+
+.role-actions-list li::before {
+  content: "\\2713";
+  position: absolute;
+  left: 0;
+  color: #3fb950;
+}
+
+.role-guide-quicklinks {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 0.75rem;
+  border-top: 1px solid #30363d;
+}
+
+.quicklink-label {
+  color: #8b949e;
+  font-size: 0.85rem;
+}
+
+.quicklink-btn {
+  background: #21262d;
+  color: #58a6ff;
+  border: 1px solid #30363d;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quicklink-btn:hover {
+  background: #30363d;
+  border-color: #58a6ff;
+}
+
+/* Evidence Gate Warning */
+.evidence-gate-warning {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(210, 153, 34, 0.3);
+}
+
+.evidence-link-btn {
+  background: transparent;
+  color: #58a6ff;
+  border: 1px solid #58a6ff;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.evidence-link-btn:hover {
+  background: rgba(88, 166, 255, 0.1);
 }
 
 /* Status badge variants */

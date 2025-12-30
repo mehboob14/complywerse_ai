@@ -8,7 +8,10 @@ function Dashboard() {
   const { user } = useAuth()
   
   const canApprovePhases = user?.role === 'admin' || user?.role === 'business_owner'
+  const canUploadEvidence = ['admin', 'infosec_team', 'it_security'].includes(user?.role)
+  const canReviewEvidence = user?.role === 'qsa_auditor' || user?.role === 'admin'
   const [phases, setPhases] = useState([])
+  const [showRoleGuide, setShowRoleGuide] = useState(false)
   const [stats, setStats] = useState(null)
   const [requirements, setRequirements] = useState([])
   const [activeTab, setActiveTab] = useState('guided')
@@ -119,6 +122,84 @@ function Dashboard() {
     return '#f85149'
   }
 
+  const getRoleActions = () => {
+    const roleGuides = {
+      admin: {
+        title: 'Administrator',
+        actions: [
+          'Manage all phases, tasks, requirements, and users in Admin panel',
+          'Configure which requirements must have evidence before phase approval',
+          'Approve phases when all tasks complete and evidence is accepted',
+          'Upload evidence and review all submissions'
+        ]
+      },
+      business_owner: {
+        title: 'Business Owner',
+        actions: [
+          'Approve phases when all tasks complete and evidence is accepted',
+          'Approve or reject residual risks in Risk Register',
+          'Monitor overall compliance progress',
+          'View all findings and requirements status'
+        ]
+      },
+      infosec_team: {
+        title: 'Infosec Team',
+        actions: [
+          'Complete phase tasks as they are assigned',
+          'Upload evidence for requirements in Requirements page',
+          'Start remediation for findings when evidence is rejected',
+          'Monitor compliance progress and gaps'
+        ]
+      },
+      it_security: {
+        title: 'IT Security',
+        actions: [
+          'Upload evidence for assigned requirements',
+          'Complete assigned phase tasks',
+          'View compliance status and findings',
+          'Prepare evidence documentation'
+        ]
+      },
+      qsa_auditor: {
+        title: 'QSA Auditor',
+        actions: [
+          'Review pending evidence submissions in Requirements page',
+          'Accept or reject evidence (rejection creates a finding)',
+          'Monitor overall compliance readiness',
+          'View all requirements and evidence status'
+        ]
+      }
+    }
+    return roleGuides[user?.role] || roleGuides.it_security
+  }
+
+  const getEvidenceStatusForPhase = (phase) => {
+    if (!phase.phase_requirements || phase.phase_requirements.length === 0) {
+      return { status: 'no_requirements', message: 'No requirements linked', color: '#8b949e' }
+    }
+    
+    let totalRequired = 0
+    let totalAccepted = 0
+    
+    phase.phase_requirements.forEach(pr => {
+      const req = requirements.find(r => r.id === pr.requirement_id)
+      if (req) {
+        req.sub_requirements?.forEach(sr => {
+          sr.required_evidence?.forEach(re => {
+            totalRequired++
+            const accepted = re.submissions?.some(s => s.status === 'accepted')
+            if (accepted) totalAccepted++
+          })
+        })
+      }
+    })
+    
+    if (totalRequired === 0) return { status: 'no_evidence', message: 'No evidence required', color: '#8b949e' }
+    if (totalAccepted === totalRequired) return { status: 'complete', message: `${totalAccepted}/${totalRequired} evidence accepted`, color: '#3fb950' }
+    if (totalAccepted > 0) return { status: 'partial', message: `${totalAccepted}/${totalRequired} evidence accepted`, color: '#d29922' }
+    return { status: 'none', message: `0/${totalRequired} evidence accepted`, color: '#f85149' }
+  }
+
   if (loading) return <div className="loading">Loading dashboard...</div>
 
   const compliancePercent = stats?.overall_compliance || 0
@@ -132,6 +213,9 @@ function Dashboard() {
           <p className="subtitle">Payment Card Industry Data Security Standard certification</p>
         </div>
         <div className="dashboard-actions">
+          <button className="btn-secondary" onClick={() => setShowRoleGuide(!showRoleGuide)}>
+            <span className="btn-icon">&#128101;</span> {showRoleGuide ? 'Hide Guide' : 'My Role'}
+          </button>
           <button className="btn-secondary">
             <span className="btn-icon">&#128196;</span> Generate ROC
           </button>
@@ -140,6 +224,46 @@ function Dashboard() {
           </button>
         </div>
       </div>
+
+      {showRoleGuide && (
+        <div className="role-guide-banner">
+          <div className="role-guide-header">
+            <span className="role-badge">{getRoleActions().title}</span>
+            <span className="role-username">{user?.username}</span>
+          </div>
+          <div className="role-guide-content">
+            <h4>What You Can Do:</h4>
+            <ul className="role-actions-list">
+              {getRoleActions().actions.map((action, idx) => (
+                <li key={idx}>{action}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="role-guide-quicklinks">
+            <span className="quicklink-label">Quick Actions:</span>
+            {canUploadEvidence && (
+              <button onClick={() => navigate('/requirements')} className="quicklink-btn">
+                Upload Evidence
+              </button>
+            )}
+            {canReviewEvidence && (
+              <button onClick={() => navigate('/requirements')} className="quicklink-btn">
+                Review Evidence
+              </button>
+            )}
+            {canApprovePhases && (
+              <button onClick={() => navigate('/risk-register')} className="quicklink-btn">
+                Manage Risks
+              </button>
+            )}
+            {user?.role === 'admin' && (
+              <button onClick={() => navigate('/admin')} className="quicklink-btn">
+                Admin Panel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="metrics-row">
         <div className="metric-card main-metric">
@@ -421,14 +545,25 @@ function Dashboard() {
           {!allTasksComplete && (
             <div className="workflow-tip-banner">
               <span className="tip-icon">&#128161;</span>
-              <span><strong>Tip:</strong> Complete all tasks below. Once done, Infosec Team approval is required before advancing.</span>
+              <span><strong>Tip:</strong> Complete all tasks below. Once done, Admin or Business Owner approval is required before advancing.</span>
             </div>
           )}
           
           {allTasksComplete && currentPhase?.approval_status === 'pending_approval' && (
             <div className="workflow-approval-banner">
               <span className="approval-icon">&#128274;</span>
-              <span><strong>Awaiting Approval:</strong> All tasks complete! Infosec Team must approve before advancing to the next phase.</span>
+              <span><strong>Awaiting Approval:</strong> All tasks complete! Admin or Business Owner must approve before advancing to the next phase.</span>
+              {currentPhase && (() => {
+                const evidenceStatus = getEvidenceStatusForPhase(currentPhase)
+                return evidenceStatus.status !== 'complete' && evidenceStatus.status !== 'no_requirements' && evidenceStatus.status !== 'no_evidence' ? (
+                  <div className="evidence-gate-warning">
+                    <span style={{color: evidenceStatus.color}}>{evidenceStatus.message}</span>
+                    <button onClick={() => navigate('/requirements')} className="evidence-link-btn">
+                      View Requirements
+                    </button>
+                  </div>
+                ) : null
+              })()}
             </div>
           )}
           
@@ -446,7 +581,7 @@ function Dashboard() {
                 {currentPhase?.approval_status === 'approved' 
                   ? 'Phase approved - ready to advance'
                   : currentPhase?.approval_status === 'pending_approval'
-                  ? 'Tasks complete - awaiting Infosec Team approval'
+                  ? 'Tasks complete - awaiting Admin/Business Owner approval'
                   : 'Complete all tasks below to advance to the next phase'}
               </p>
               <div className="task-summary">
