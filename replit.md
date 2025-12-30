@@ -34,10 +34,21 @@ A comprehensive PCI DSS (Payment Card Industry Data Security Standard) complianc
 - Table view with drill-down drawer
 - Navigation to all planned sections
 
+### Module 2: Gap Assessment (Completed)
+- UploadedEvidence model with status tracking (Pending/Accepted/Rejected)
+- 8 mock uploaded evidence items seeded
+- Dynamic status calculation: Not Started / Partial / Complete
+- Gap analysis comparing required vs uploaded evidence
+- Evidence Checklist page with side-by-side comparison
+- Missing items highlighted in red with upload buttons
+
 ## API Endpoints
 - `GET /api/controls` - List all controls
 - `GET /api/controls/{id}` - Get single control with evidence
 - `GET /api/controls/with-evidence` - List all controls with their evidence
+- `GET /api/controls/status` - List controls with compliance status
+- `GET /api/controls/{id}/gap` - Gap analysis for a control
+- `GET /api/evidence` - List all uploaded evidence
 - `GET /api/required-evidence/{control_id}` - Get evidence items for a control
 
 ## Environment Variables

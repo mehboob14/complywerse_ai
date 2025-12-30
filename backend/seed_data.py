@@ -1,6 +1,6 @@
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from models import SessionLocal, Control, RequiredEvidence, init_db, engine
+from models import SessionLocal, Control, RequiredEvidence, UploadedEvidence, init_db, engine
 
 def seed_database():
     init_db()
@@ -69,6 +69,8 @@ def seed_database():
             },
         ]
         
+        required_evidence_map = {}
+        
         for control_data in controls_data:
             control = Control(
                 name=control_data["name"],
@@ -85,12 +87,36 @@ def seed_database():
                     evidence_type=evidence_data["type"]
                 )
                 db.add(evidence)
+                db.flush()
+                required_evidence_map[(control.id, evidence_data["name"])] = evidence.id
+        
+        uploaded_evidence_data = [
+            {"control_id": 1, "evidence_name": "Firewall Policy Document", "file_name": "firewall_policy_v2.pdf", "type": "policy_doc", "status": "Accepted"},
+            {"control_id": 1, "evidence_name": "Firewall Configuration Snapshot", "file_name": "fw_config_2024.json", "type": "config_snapshot", "status": "Pending"},
+            {"control_id": 2, "evidence_name": "Encryption Policy Document", "file_name": "encryption_standards.pdf", "type": "policy_doc", "status": "Accepted"},
+            {"control_id": 3, "evidence_name": "Log Retention Policy", "file_name": "log_policy.pdf", "type": "policy_doc", "status": "Accepted"},
+            {"control_id": 3, "evidence_name": "Sample Audit Logs", "file_name": "audit_logs_dec2024.csv", "type": "log_sample", "status": "Accepted"},
+            {"control_id": 3, "evidence_name": "SIEM Configuration Screenshot", "file_name": "siem_config.png", "type": "config_snapshot", "status": "Pending"},
+            {"control_id": 5, "evidence_name": "Access Control Policy", "file_name": "access_policy_2024.pdf", "type": "policy_doc", "status": "Accepted"},
+            {"control_id": 5, "evidence_name": "User Access Matrix", "file_name": "user_matrix.xlsx", "type": "spreadsheet", "status": "Rejected"},
+        ]
+        
+        for ue_data in uploaded_evidence_data:
+            req_evidence_id = required_evidence_map.get((ue_data["control_id"], ue_data["evidence_name"]))
+            uploaded = UploadedEvidence(
+                control_id=ue_data["control_id"],
+                required_evidence_id=req_evidence_id,
+                file_name=ue_data["file_name"],
+                evidence_type=ue_data["type"],
+                status=ue_data["status"]
+            )
+            db.add(uploaded)
         
         db.commit()
-        print("Database seeded successfully with 5 controls and 16 evidence items!")
-    except IntegrityError:
+        print("Database seeded successfully with 5 controls, 16 required evidence items, and 8 uploaded evidence items!")
+    except IntegrityError as e:
         db.rollback()
-        print("Database already seeded (integrity constraint). Skipping...")
+        print(f"Database already seeded (integrity constraint). Skipping... {e}")
     finally:
         db.close()
 

@@ -15,11 +15,11 @@ function App() {
           <div className="nav-brand">PCI DSS Lifecycle</div>
           <div className="nav-links">
             <NavLink to="/" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
-            <NavLink to="/upload-evidence" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Upload Evidence</NavLink>
+            <NavLink to="/controls" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Controls & Evidence</NavLink>
             <NavLink to="/evidence-checklist" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Evidence Checklist</NavLink>
             <NavLink to="/findings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Findings</NavLink>
             <NavLink to="/risk-register" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Risk Register</NavLink>
-            <NavLink to="/controls" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Controls & Evidence</NavLink>
+            <NavLink to="/upload-evidence" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Upload Evidence</NavLink>
           </div>
         </nav>
         <main className="main-content">

@@ -7,6 +7,7 @@ function ControlsEvidence() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedControl, setSelectedControl] = useState(null)
+  const [gapData, setGapData] = useState(null)
 
   useEffect(() => {
     fetchControls()
@@ -14,7 +15,7 @@ function ControlsEvidence() {
 
   const fetchControls = async () => {
     try {
-      const response = await axios.get('/api/controls/with-evidence')
+      const response = await axios.get('/api/controls/status')
       setControls(response.data)
       setLoading(false)
     } catch (err) {
@@ -23,12 +24,19 @@ function ControlsEvidence() {
     }
   }
 
-  const openDrawer = (control) => {
+  const openDrawer = async (control) => {
     setSelectedControl(control)
+    try {
+      const response = await axios.get(`/api/controls/${control.id}/gap`)
+      setGapData(response.data)
+    } catch (err) {
+      console.error('Failed to load gap data', err)
+    }
   }
 
   const closeDrawer = () => {
     setSelectedControl(null)
+    setGapData(null)
   }
 
   const getEvidenceIcon = (type) => {
@@ -47,6 +55,14 @@ function ControlsEvidence() {
 
   const formatEvidenceType = (type) => {
     return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+  }
+
+  const getStatusClass = (status) => {
+    switch (status) {
+      case 'Complete': return 'status-complete'
+      case 'Partial': return 'status-in-progress'
+      default: return 'status-not-started'
+    }
   }
 
   if (loading) return <div className="loading">Loading controls...</div>
@@ -90,7 +106,12 @@ function ControlsEvidence() {
                   </ul>
                 </td>
                 <td>
-                  <span className="status-badge status-not-started">Not Started</span>
+                  <span className={`status-badge ${getStatusClass(control.status)}`}>
+                    {control.status}
+                  </span>
+                  <div className="status-count">
+                    {control.uploaded_count}/{control.required_count}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -115,17 +136,46 @@ function ControlsEvidence() {
               </div>
               
               <div className="drawer-section">
-                <h3 className="drawer-section-title">Required Evidence ({selectedControl.required_evidence.length} items)</h3>
+                <div className="gap-summary">
+                  <span className={`status-badge ${getStatusClass(selectedControl.status)}`}>
+                    {selectedControl.status}
+                  </span>
+                  <span className="gap-count">
+                    {selectedControl.uploaded_count} of {selectedControl.required_count} evidence items uploaded
+                  </span>
+                </div>
+              </div>
+
+              <div className="drawer-section">
+                <h3 className="drawer-section-title">Evidence Status</h3>
                 <ul className="drawer-evidence-list">
-                  {selectedControl.required_evidence.map((evidence) => (
-                    <li key={evidence.id} className="drawer-evidence-item">
+                  {gapData?.evidence_items.map((evidence) => (
+                    <li key={evidence.id} className={`drawer-evidence-item ${!evidence.is_uploaded ? 'missing' : ''}`}>
                       <div className="evidence-icon">
                         {getEvidenceIcon(evidence.evidence_type)}
                       </div>
                       <div className="evidence-details">
                         <div className="evidence-name">{evidence.evidence_name}</div>
                         <div className="evidence-type">{formatEvidenceType(evidence.evidence_type)}</div>
+                        {evidence.is_uploaded ? (
+                          <div className="evidence-file">
+                            <span className={`upload-status status-${evidence.upload_status?.toLowerCase()}`}>
+                              {evidence.upload_status}
+                            </span>
+                            {evidence.uploaded_file}
+                          </div>
+                        ) : (
+                          <div className="evidence-missing">Missing</div>
+                        )}
                       </div>
+                      {!evidence.is_uploaded && (
+                        <Link 
+                          to={`/upload-evidence?control=${selectedControl.id}&evidence=${evidence.id}`}
+                          className="btn-upload-small"
+                        >
+                          Upload
+                        </Link>
+                      )}
                     </li>
                   ))}
                 </ul>
