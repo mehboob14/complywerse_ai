@@ -145,47 +145,101 @@ function Dashboard() {
       </div>
 
       <div className="dashboard-content">
-        <aside className="phases-sidebar">
-          <h3>Certification Phases</h3>
-          <div className="phase-progress-summary">
-            {completedTasks} of {totalTasks} tasks completed
-          </div>
-          <div className="phase-progress-bar">
-            <div className="phase-progress-fill" style={{width: `${totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0}%`}}></div>
-          </div>
-          
-          <div className="phases-nav">
-            {phases.map((phase) => (
-              <div 
-                key={phase.id} 
-                className={`phase-nav-item ${phase.is_current ? 'active' : ''} ${phase.status === 'complete' ? 'completed' : ''}`}
-              >
-                <div className="phase-nav-indicator">
-                  {phase.status === 'complete' ? (
-                    <span className="check-icon">&#10003;</span>
-                  ) : phase.is_current ? (
-                    <span className="active-dot"></span>
-                  ) : (
-                    <span className="empty-dot"></span>
-                  )}
-                </div>
-                <div className="phase-nav-content">
-                  <div className="phase-nav-name">{phase.name}</div>
-                  {phase.is_current && <span className="active-badge">Active</span>}
-                  <div className="phase-nav-progress">
-                    <div className="mini-progress-bar">
-                      <div className="mini-progress-fill" style={{width: `${getPhaseProgress(phase)}%`}}></div>
+        {activeTab === 'overview' ? (
+          <div className="overview-content">
+            <div className="overview-grid">
+              <div className="timeline-section">
+                <h3>Compliance Timeline</h3>
+                <div className="timeline-list">
+                  {phases.map((phase) => (
+                    <div key={phase.id} className={`timeline-item ${phase.status}`}>
+                      <div className="timeline-indicator">
+                        {phase.status === 'complete' ? (
+                          <span className="timeline-check">&#10003;</span>
+                        ) : phase.is_current ? (
+                          <span className="timeline-current">&#9679;</span>
+                        ) : (
+                          <span className="timeline-pending">&#9675;</span>
+                        )}
+                      </div>
+                      <div className="timeline-label">
+                        Phase {phase.phase_number}: {phase.name}
+                      </div>
                     </div>
-                    <span className="task-count">{getPhaseTaskSummary(phase)}</span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="key-metrics-section">
+                <h3>Key Metrics</h3>
+                <div className="key-metrics-list">
+                  <div className="key-metric-row">
+                    <span className="key-metric-label">Requirements Met</span>
+                    <span className="key-metric-value">{stats?.compliant_count || 0}/{stats?.total_sub_requirements || 0}</span>
+                  </div>
+                  <div className="key-metric-row">
+                    <span className="key-metric-label">ASV Scans (Quarter)</span>
+                    <span className="key-metric-value">0/1</span>
+                  </div>
+                  <div className="key-metric-row">
+                    <span className="key-metric-label">Pen Tests (Annual)</span>
+                    <span className="key-metric-value">0/2</span>
+                  </div>
+                  <div className="key-metric-row">
+                    <span className="key-metric-label">Evidence Items</span>
+                    <span className="key-metric-value">{stats?.total_evidence_accepted || 0}/{stats?.total_evidence_required || 0}</span>
+                  </div>
+                  <div className="key-metric-row">
+                    <span className="key-metric-label">Last Assessment</span>
+                    <span className="key-metric-value">N/A</span>
                   </div>
                 </div>
-                <span className="phase-nav-arrow">&#8250;</span>
               </div>
-            ))}
+            </div>
           </div>
-        </aside>
+        ) : (
+          <>
+            <aside className="phases-sidebar">
+              <h3>Certification Phases</h3>
+              <div className="phase-progress-summary">
+                {completedTasks} of {totalTasks} tasks completed
+              </div>
+              <div className="phase-progress-bar">
+                <div className="phase-progress-fill" style={{width: `${totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0}%`}}></div>
+              </div>
+              
+              <div className="phases-nav">
+                {phases.map((phase) => (
+                  <div 
+                    key={phase.id} 
+                    className={`phase-nav-item ${phase.is_current ? 'active' : ''} ${phase.status === 'complete' ? 'completed' : ''}`}
+                  >
+                    <div className="phase-nav-indicator">
+                      {phase.status === 'complete' ? (
+                        <span className="check-icon">&#10003;</span>
+                      ) : phase.is_current ? (
+                        <span className="active-dot"></span>
+                      ) : (
+                        <span className="empty-dot"></span>
+                      )}
+                    </div>
+                    <div className="phase-nav-content">
+                      <div className="phase-nav-name">{phase.name}</div>
+                      {phase.is_current && <span className="active-badge">Active</span>}
+                      <div className="phase-nav-progress">
+                        <div className="mini-progress-bar">
+                          <div className="mini-progress-fill" style={{width: `${getPhaseProgress(phase)}%`}}></div>
+                        </div>
+                        <span className="task-count">{getPhaseTaskSummary(phase)}</span>
+                      </div>
+                    </div>
+                    <span className="phase-nav-arrow">&#8250;</span>
+                  </div>
+                ))}
+              </div>
+            </aside>
 
-        <main className="phase-content">
+            <main className="phase-content">
           <div className="phase-content-header">
             <div>
               <h2>{currentPhase?.name || 'Gap Assessment'}</h2>
@@ -329,6 +383,8 @@ function Dashboard() {
             </div>
           </div>
         </main>
+          </>
+        )}
       </div>
     </div>
   )
