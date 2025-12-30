@@ -3238,6 +3238,20 @@ body {
   gap: 0.5rem;
 }
 
+.edit-small {
+  background: transparent;
+  border: none;
+  color: #58a6ff;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.85rem;
+  margin-right: 0.25rem;
+}
+
+.edit-small:hover {
+  color: #79c0ff;
+}
+
 .delete-small {
   background: transparent;
   border: none;
@@ -3327,6 +3341,19 @@ body {
   background: #21262d;
   padding: 0.15rem 0.4rem;
   border-radius: 3px;
+}
+
+.edit-tiny {
+  background: transparent;
+  border: none;
+  color: #58a6ff;
+  cursor: pointer;
+  font-size: 0.75rem;
+  margin-right: 0.25rem;
+}
+
+.edit-tiny:hover {
+  color: #79c0ff;
 }
 
 .delete-tiny {

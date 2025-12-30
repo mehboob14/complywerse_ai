@@ -1160,6 +1160,17 @@ def admin_create_deliverable(phase_id: int, request: TaskCreateRequest, db: Sess
     return {"message": "Deliverable created", "deliverable_id": deliverable.id}
 
 
+@router.put("/admin/deliverables/{deliverable_id}")
+def admin_update_deliverable(deliverable_id: int, request: TaskCreateRequest, db: Session = Depends(get_db)):
+    deliverable = db.query(PhaseDeliverable).filter(PhaseDeliverable.id == deliverable_id).first()
+    if not deliverable:
+        raise HTTPException(status_code=404, detail="Deliverable not found")
+    
+    deliverable.name = request.name
+    db.commit()
+    return {"message": "Deliverable updated"}
+
+
 @router.delete("/admin/deliverables/{deliverable_id}")
 def admin_delete_deliverable(deliverable_id: int, db: Session = Depends(get_db)):
     deliverable = db.query(PhaseDeliverable).filter(PhaseDeliverable.id == deliverable_id).first()

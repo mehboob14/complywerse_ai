@@ -10,6 +10,7 @@ function Admin() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingItem, setEditingItem] = useState(null)
+  const [parentItem, setParentItem] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [modalType, setModalType] = useState('')
   const [formData, setFormData] = useState({})
@@ -39,23 +40,25 @@ function Admin() {
     }
   }
 
-  const openModal = (type, item = null) => {
+  const openModal = (type, item = null, parent = null) => {
     setModalType(type)
     setEditingItem(item)
+    setParentItem(parent)
+    
     if (type === 'phase') {
       setFormData(item ? { phase_number: item.phase_number, name: item.name, description: item.description || '' } : { phase_number: '', name: '', description: '' })
     } else if (type === 'task') {
-      setFormData({ name: '', phase_id: item?.id })
+      setFormData(item ? { id: item.id, name: item.name, phase_id: parent?.id } : { name: '', phase_id: parent?.id })
     } else if (type === 'deliverable') {
-      setFormData({ name: '', phase_id: item?.id })
+      setFormData(item ? { id: item.id, name: item.name, phase_id: parent?.id } : { name: '', phase_id: parent?.id })
     } else if (type === 'requirement') {
       setFormData(item ? { req_number: item.req_number, name: item.name, description: item.description || '' } : { req_number: '', name: '', description: '' })
     } else if (type === 'sub_requirement') {
-      setFormData({ sub_req_number: '', name: '', requirement_id: item?.id })
+      setFormData(item ? { id: item.id, sub_req_number: item.sub_req_number, name: item.name, requirement_id: parent?.id } : { sub_req_number: '', name: '', requirement_id: parent?.id })
     } else if (type === 'evidence') {
-      setFormData({ name: '', description: '', evidence_type: 'document', sub_requirement_id: item?.id })
+      setFormData(item ? { id: item.id, name: item.name, description: item.description || '', evidence_type: item.evidence_type, sub_requirement_id: parent?.id } : { name: '', description: '', evidence_type: 'document', sub_requirement_id: parent?.id })
     } else if (type === 'user') {
-      setFormData(item ? { email: item.email, role: item.role, display_name: item.display_name, is_active: item.is_active } : { username: '', email: '', password: '', role: 'it_security', display_name: '' })
+      setFormData(item ? { id: item.id, username: item.username, email: item.email, role: item.role, display_name: item.display_name, is_active: item.is_active } : { username: '', email: '', password: '', role: 'it_security', display_name: '' })
     }
     setShowModal(true)
   }
@@ -63,6 +66,7 @@ function Admin() {
   const closeModal = () => {
     setShowModal(false)
     setEditingItem(null)
+    setParentItem(null)
     setFormData({})
   }
 
@@ -83,11 +87,21 @@ function Admin() {
           showMessage('Phase created successfully')
         }
       } else if (modalType === 'task') {
-        await axios.post(`/api/admin/phases/${formData.phase_id}/tasks`, { name: formData.name })
-        showMessage('Task created successfully')
+        if (editingItem) {
+          await axios.put(`/api/admin/tasks/${editingItem.id}`, { name: formData.name })
+          showMessage('Task updated successfully')
+        } else {
+          await axios.post(`/api/admin/phases/${formData.phase_id}/tasks`, { name: formData.name })
+          showMessage('Task created successfully')
+        }
       } else if (modalType === 'deliverable') {
-        await axios.post(`/api/admin/phases/${formData.phase_id}/deliverables`, { name: formData.name })
-        showMessage('Deliverable created successfully')
+        if (editingItem) {
+          await axios.put(`/api/admin/deliverables/${editingItem.id}`, { name: formData.name })
+          showMessage('Deliverable updated successfully')
+        } else {
+          await axios.post(`/api/admin/phases/${formData.phase_id}/deliverables`, { name: formData.name })
+          showMessage('Deliverable created successfully')
+        }
       } else if (modalType === 'requirement') {
         if (editingItem) {
           await axios.put(`/api/admin/requirements/${editingItem.id}`, formData)
@@ -97,21 +111,44 @@ function Admin() {
           showMessage('Requirement created successfully')
         }
       } else if (modalType === 'sub_requirement') {
-        await axios.post(`/api/admin/requirements/${formData.requirement_id}/sub-requirements`, {
-          sub_req_number: formData.sub_req_number,
-          name: formData.name
-        })
-        showMessage('Sub-requirement created successfully')
+        if (editingItem) {
+          await axios.put(`/api/admin/sub-requirements/${editingItem.id}`, {
+            sub_req_number: formData.sub_req_number,
+            name: formData.name
+          })
+          showMessage('Sub-requirement updated successfully')
+        } else {
+          await axios.post(`/api/admin/requirements/${formData.requirement_id}/sub-requirements`, {
+            sub_req_number: formData.sub_req_number,
+            name: formData.name
+          })
+          showMessage('Sub-requirement created successfully')
+        }
       } else if (modalType === 'evidence') {
-        await axios.post(`/api/admin/sub-requirements/${formData.sub_requirement_id}/evidence`, {
-          name: formData.name,
-          description: formData.description,
-          evidence_type: formData.evidence_type
-        })
-        showMessage('Required evidence created successfully')
+        if (editingItem) {
+          await axios.put(`/api/admin/evidence/${editingItem.id}`, {
+            name: formData.name,
+            description: formData.description,
+            evidence_type: formData.evidence_type
+          })
+          showMessage('Required evidence updated successfully')
+        } else {
+          await axios.post(`/api/admin/sub-requirements/${formData.sub_requirement_id}/evidence`, {
+            name: formData.name,
+            description: formData.description,
+            evidence_type: formData.evidence_type
+          })
+          showMessage('Required evidence created successfully')
+        }
       } else if (modalType === 'user') {
         if (editingItem) {
-          await axios.patch(`/api/users/${editingItem.id}`, formData, { withCredentials: true })
+          const updateData = {
+            email: formData.email,
+            role: formData.role,
+            display_name: formData.display_name,
+            is_active: formData.is_active
+          }
+          await axios.patch(`/api/users/${editingItem.id}`, updateData, { withCredentials: true })
           showMessage('User updated successfully')
         } else {
           await axios.post('/api/users', formData, { withCredentials: true })
@@ -212,12 +249,13 @@ function Admin() {
                 <div className="admin-section">
                   <div className="section-header">
                     <h4>Tasks ({phase.tasks?.length || 0})</h4>
-                    <button className="small-btn" onClick={() => openModal('task', phase)}>+ Add Task</button>
+                    <button className="small-btn" onClick={() => openModal('task', null, phase)}>+ Add Task</button>
                   </div>
                   <ul className="admin-list">
                     {phase.tasks?.map(task => (
                       <li key={task.id}>
                         <span>{task.name}</span>
+                        <button className="edit-small" onClick={() => openModal('task', task, phase)}>e</button>
                         <button className="delete-small" onClick={() => handleDelete('task', task.id)}>x</button>
                       </li>
                     ))}
@@ -227,12 +265,13 @@ function Admin() {
                 <div className="admin-section">
                   <div className="section-header">
                     <h4>Deliverables ({phase.deliverables?.length || 0})</h4>
-                    <button className="small-btn" onClick={() => openModal('deliverable', phase)}>+ Add Deliverable</button>
+                    <button className="small-btn" onClick={() => openModal('deliverable', null, phase)}>+ Add Deliverable</button>
                   </div>
                   <ul className="admin-list">
                     {phase.deliverables?.map(del => (
                       <li key={del.id}>
                         <span>{del.name}</span>
+                        <button className="edit-small" onClick={() => openModal('deliverable', del, phase)}>e</button>
                         <button className="delete-small" onClick={() => handleDelete('deliverable', del.id)}>x</button>
                       </li>
                     ))}
@@ -260,25 +299,27 @@ function Admin() {
                 <div className="admin-section">
                   <div className="section-header">
                     <h4>Sub-Requirements ({req.sub_requirements?.length || 0})</h4>
-                    <button className="small-btn" onClick={() => openModal('sub_requirement', req)}>+ Add Sub-Req</button>
+                    <button className="small-btn" onClick={() => openModal('sub_requirement', null, req)}>+ Add Sub-Req</button>
                   </div>
                   {req.sub_requirements?.map(sub => (
                     <div key={sub.id} className="sub-item">
                       <div className="sub-header">
                         <span className="sub-number">{sub.sub_req_number}</span>
                         <span className="sub-name">{sub.name}</span>
+                        <button className="edit-small" onClick={() => openModal('sub_requirement', sub, req)}>e</button>
                         <button className="delete-small" onClick={() => handleDelete('sub_requirement', sub.id)}>x</button>
                       </div>
                       <div className="evidence-section">
                         <div className="evidence-header">
                           <span>Required Evidence ({sub.required_evidence?.length || 0})</span>
-                          <button className="tiny-btn" onClick={() => openModal('evidence', sub)}>+</button>
+                          <button className="tiny-btn" onClick={() => openModal('evidence', null, sub)}>+</button>
                         </div>
                         <ul className="evidence-list">
                           {sub.required_evidence?.map(ev => (
                             <li key={ev.id}>
                               <span className="ev-name">{ev.name}</span>
                               <span className="ev-type">{ev.evidence_type}</span>
+                              <button className="edit-tiny" onClick={() => openModal('evidence', ev, sub)}>e</button>
                               <button className="delete-tiny" onClick={() => handleDelete('evidence', ev.id)}>x</button>
                             </li>
                           ))}
