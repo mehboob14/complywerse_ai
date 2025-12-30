@@ -1,8 +1,8 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, UniqueConstraint, Enum
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Boolean, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-import enum
+from datetime import datetime
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///pci_compliance.db")
 
@@ -14,51 +14,105 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-class EvidenceStatus(enum.Enum):
-    PENDING = "Pending"
-    ACCEPTED = "Accepted"
-    REJECTED = "Rejected"
-
-
-class Control(Base):
-    __tablename__ = "controls"
+class Phase(Base):
+    __tablename__ = "phases"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False, unique=True)
+    phase_number = Column(Integer, nullable=False, unique=True)
+    name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    pci_requirement = Column(String(100), nullable=False)
+    status = Column(String(50), default="not_started")
+    is_current = Column(Boolean, default=False)
     
-    required_evidence = relationship("RequiredEvidence", back_populates="control", cascade="all, delete-orphan")
-    uploaded_evidence = relationship("UploadedEvidence", back_populates="control", cascade="all, delete-orphan")
+    tasks = relationship("PhaseTask", back_populates="phase", cascade="all, delete-orphan")
+    deliverables = relationship("PhaseDeliverable", back_populates="phase", cascade="all, delete-orphan")
 
 
-class RequiredEvidence(Base):
-    __tablename__ = "required_evidence"
+class PhaseTask(Base):
+    __tablename__ = "phase_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
-    control_id = Column(Integer, ForeignKey("controls.id"), nullable=False)
-    evidence_name = Column(String(255), nullable=False)
-    evidence_type = Column(String(100), nullable=False)
+    phase_id = Column(Integer, ForeignKey("phases.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    is_complete = Column(Boolean, default=False)
     
-    control = relationship("Control", back_populates="required_evidence")
-    
-    __table_args__ = (
-        UniqueConstraint('control_id', 'evidence_name', name='uq_control_evidence'),
-    )
+    phase = relationship("Phase", back_populates="tasks")
 
 
-class UploadedEvidence(Base):
-    __tablename__ = "uploaded_evidence"
+class PhaseDeliverable(Base):
+    __tablename__ = "phase_deliverables"
 
     id = Column(Integer, primary_key=True, index=True)
-    control_id = Column(Integer, ForeignKey("controls.id"), nullable=False)
-    required_evidence_id = Column(Integer, ForeignKey("required_evidence.id"), nullable=True)
-    file_name = Column(String(255), nullable=False)
-    evidence_type = Column(String(100), nullable=False)
-    status = Column(String(20), nullable=False, default="Pending")
+    phase_id = Column(Integer, ForeignKey("phases.id"), nullable=False)
+    name = Column(String(255), nullable=False)
     
-    control = relationship("Control", back_populates="uploaded_evidence")
-    required_evidence = relationship("RequiredEvidence")
+    phase = relationship("Phase", back_populates="deliverables")
+
+
+class Requirement(Base):
+    __tablename__ = "requirements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    req_number = Column(Integer, nullable=False, unique=True)
+    name = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    sub_requirements = relationship("SubRequirement", back_populates="requirement", cascade="all, delete-orphan")
+
+
+class SubRequirement(Base):
+    __tablename__ = "sub_requirements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    requirement_id = Column(Integer, ForeignKey("requirements.id"), nullable=False)
+    sub_req_number = Column(String(20), nullable=False)
+    name = Column(Text, nullable=False)
+    status = Column(String(50), default="not_started")
+    evidence_needed = Column(Integer, default=0)
+    
+    requirement = relationship("Requirement", back_populates="sub_requirements")
+    evidence_items = relationship("EvidenceItem", back_populates="sub_requirement", cascade="all, delete-orphan")
+
+
+class EvidenceItem(Base):
+    __tablename__ = "evidence_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sub_requirement_id = Column(Integer, ForeignKey("sub_requirements.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    evidence_type = Column(String(100), nullable=False)
+    is_uploaded = Column(Boolean, default=False)
+    file_name = Column(String(255), nullable=True)
+    upload_status = Column(String(50), nullable=True)
+    uploaded_at = Column(DateTime, nullable=True)
+    
+    sub_requirement = relationship("SubRequirement", back_populates="evidence_items")
+
+
+class Finding(Base):
+    __tablename__ = "findings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sub_requirement_id = Column(Integer, ForeignKey("sub_requirements.id"), nullable=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    severity = Column(String(50), default="medium")
+    status = Column(String(50), default="open")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    closed_at = Column(DateTime, nullable=True)
+
+
+class Risk(Base):
+    __tablename__ = "risks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    owner = Column(String(255), nullable=True)
+    status = Column(String(50), default="pending")
+    approved_by = Column(String(255), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 def get_db():

@@ -1,215 +1,269 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from typing import List, Optional
 from pydantic import BaseModel
-from models import get_db, Control, RequiredEvidence, UploadedEvidence
+from models import (get_db, Phase, PhaseTask, PhaseDeliverable, 
+                   Requirement, SubRequirement, EvidenceItem, Finding, Risk)
 
-router = APIRouter(prefix="/api", tags=["PCI DSS Controls"])
+router = APIRouter(prefix="/api", tags=["PCI DSS Lifecycle"])
 
 
-class RequiredEvidenceResponse(BaseModel):
+class TaskResponse(BaseModel):
     id: int
-    control_id: int
-    evidence_name: str
-    evidence_type: str
-
+    name: str
+    is_complete: bool
     class Config:
         from_attributes = True
 
 
-class UploadedEvidenceResponse(BaseModel):
+class DeliverableResponse(BaseModel):
     id: int
-    control_id: int
-    required_evidence_id: Optional[int]
-    file_name: str
-    evidence_type: str
+    name: str
+    class Config:
+        from_attributes = True
+
+
+class PhaseResponse(BaseModel):
+    id: int
+    phase_number: int
+    name: str
+    description: Optional[str]
     status: str
-
+    is_current: bool
+    tasks: List[TaskResponse]
+    deliverables: List[DeliverableResponse]
     class Config:
         from_attributes = True
 
 
-class ControlResponse(BaseModel):
+class SubRequirementResponse(BaseModel):
     id: int
+    sub_req_number: str
     name: str
-    description: Optional[str]
-    pci_requirement: str
-
-    class Config:
-        from_attributes = True
-
-
-class ControlWithEvidenceResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-    pci_requirement: str
-    required_evidence: List[RequiredEvidenceResponse]
-
-    class Config:
-        from_attributes = True
-
-
-class ControlStatusResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-    pci_requirement: str
     status: str
-    required_count: int
-    uploaded_count: int
-    required_evidence: List[RequiredEvidenceResponse]
-
+    evidence_needed: int
     class Config:
         from_attributes = True
 
 
-class GapEvidenceItem(BaseModel):
+class RequirementResponse(BaseModel):
     id: int
-    evidence_name: str
+    req_number: int
+    name: str
+    description: Optional[str]
+    class Config:
+        from_attributes = True
+
+
+class RequirementWithSubsResponse(BaseModel):
+    id: int
+    req_number: int
+    name: str
+    description: Optional[str]
+    sub_requirements: List[SubRequirementResponse]
+    compliant_count: int
+    total_count: int
+    compliance_percentage: float
+    class Config:
+        from_attributes = True
+
+
+class EvidenceItemResponse(BaseModel):
+    id: int
+    name: str
     evidence_type: str
     is_uploaded: bool
-    uploaded_file: Optional[str]
+    file_name: Optional[str]
     upload_status: Optional[str]
-
     class Config:
         from_attributes = True
 
 
-class ControlGapResponse(BaseModel):
+class FindingResponse(BaseModel):
     id: int
-    name: str
-    pci_requirement: str
+    title: str
+    description: Optional[str]
+    severity: str
     status: str
-    required_count: int
-    uploaded_count: int
-    missing_count: int
-    evidence_items: List[GapEvidenceItem]
-
     class Config:
         from_attributes = True
 
 
-@router.get("/controls", response_model=List[ControlResponse])
-def get_all_controls(db: Session = Depends(get_db)):
-    controls = db.query(Control).all()
-    return controls
+class RiskResponse(BaseModel):
+    id: int
+    title: str
+    description: Optional[str]
+    owner: Optional[str]
+    status: str
+    class Config:
+        from_attributes = True
 
 
-@router.get("/controls/with-evidence", response_model=List[ControlWithEvidenceResponse])
-def get_controls_with_evidence(db: Session = Depends(get_db)):
-    controls = db.query(Control).options(joinedload(Control.required_evidence)).all()
-    return controls
+class DashboardStats(BaseModel):
+    total_requirements: int
+    compliant_requirements: int
+    partial_requirements: int
+    not_started_requirements: int
+    overall_compliance: float
+    current_phase: Optional[PhaseResponse]
 
 
-@router.get("/controls/status", response_model=List[ControlStatusResponse])
-def get_controls_status(db: Session = Depends(get_db)):
-    controls = db.query(Control).options(
-        joinedload(Control.required_evidence),
-        joinedload(Control.uploaded_evidence)
-    ).all()
+@router.get("/phases", response_model=List[PhaseResponse])
+def get_all_phases(db: Session = Depends(get_db)):
+    phases = db.query(Phase).options(
+        joinedload(Phase.tasks),
+        joinedload(Phase.deliverables)
+    ).order_by(Phase.phase_number).all()
+    return phases
+
+
+@router.get("/phases/current", response_model=Optional[PhaseResponse])
+def get_current_phase(db: Session = Depends(get_db)):
+    phase = db.query(Phase).options(
+        joinedload(Phase.tasks),
+        joinedload(Phase.deliverables)
+    ).filter(Phase.is_current == True).first()
+    return phase
+
+
+@router.get("/phases/{phase_id}", response_model=PhaseResponse)
+def get_phase(phase_id: int, db: Session = Depends(get_db)):
+    phase = db.query(Phase).options(
+        joinedload(Phase.tasks),
+        joinedload(Phase.deliverables)
+    ).filter(Phase.id == phase_id).first()
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    return phase
+
+
+@router.get("/requirements", response_model=List[RequirementWithSubsResponse])
+def get_all_requirements(db: Session = Depends(get_db)):
+    requirements = db.query(Requirement).options(
+        joinedload(Requirement.sub_requirements)
+    ).order_by(Requirement.req_number).all()
     
     result = []
-    for control in controls:
-        required_count = len(control.required_evidence)
-        required_ids = {re.id for re in control.required_evidence}
-        uploaded_ids = {ue.required_evidence_id for ue in control.uploaded_evidence if ue.required_evidence_id}
-        uploaded_count = len(required_ids & uploaded_ids)
+    for req in requirements:
+        total = len(req.sub_requirements)
+        compliant = len([s for s in req.sub_requirements if s.status == "compliant"])
+        percentage = (compliant / total * 100) if total > 0 else 0
         
-        if uploaded_count == 0:
-            status = "Not Started"
-        elif uploaded_count < required_count:
-            status = "Partial"
-        else:
-            status = "Complete"
-        
-        result.append(ControlStatusResponse(
-            id=control.id,
-            name=control.name,
-            description=control.description,
-            pci_requirement=control.pci_requirement,
-            status=status,
-            required_count=required_count,
-            uploaded_count=uploaded_count,
-            required_evidence=[RequiredEvidenceResponse(
-                id=re.id,
-                control_id=re.control_id,
-                evidence_name=re.evidence_name,
-                evidence_type=re.evidence_type
-            ) for re in control.required_evidence]
+        result.append(RequirementWithSubsResponse(
+            id=req.id,
+            req_number=req.req_number,
+            name=req.name,
+            description=req.description,
+            sub_requirements=[SubRequirementResponse(
+                id=s.id,
+                sub_req_number=s.sub_req_number,
+                name=s.name,
+                status=s.status,
+                evidence_needed=s.evidence_needed
+            ) for s in req.sub_requirements],
+            compliant_count=compliant,
+            total_count=total,
+            compliance_percentage=round(percentage, 0)
         ))
     
     return result
 
 
-@router.get("/controls/{control_id}", response_model=ControlWithEvidenceResponse)
-def get_control(control_id: int, db: Session = Depends(get_db)):
-    control = db.query(Control).options(joinedload(Control.required_evidence)).filter(Control.id == control_id).first()
-    if not control:
-        raise HTTPException(status_code=404, detail="Control not found")
-    return control
-
-
-@router.get("/controls/{control_id}/gap", response_model=ControlGapResponse)
-def get_control_gap(control_id: int, db: Session = Depends(get_db)):
-    control = db.query(Control).options(
-        joinedload(Control.required_evidence),
-        joinedload(Control.uploaded_evidence)
-    ).filter(Control.id == control_id).first()
+@router.get("/requirements/{req_id}", response_model=RequirementWithSubsResponse)
+def get_requirement(req_id: int, db: Session = Depends(get_db)):
+    req = db.query(Requirement).options(
+        joinedload(Requirement.sub_requirements)
+    ).filter(Requirement.id == req_id).first()
     
-    if not control:
-        raise HTTPException(status_code=404, detail="Control not found")
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
     
-    uploaded_map = {}
-    for ue in control.uploaded_evidence:
-        if ue.required_evidence_id:
-            uploaded_map[ue.required_evidence_id] = ue
+    total = len(req.sub_requirements)
+    compliant = len([s for s in req.sub_requirements if s.status == "compliant"])
+    percentage = (compliant / total * 100) if total > 0 else 0
     
-    evidence_items = []
-    for req in control.required_evidence:
-        uploaded = uploaded_map.get(req.id)
-        evidence_items.append(GapEvidenceItem(
-            id=req.id,
-            evidence_name=req.evidence_name,
-            evidence_type=req.evidence_type,
-            is_uploaded=uploaded is not None,
-            uploaded_file=uploaded.file_name if uploaded else None,
-            upload_status=uploaded.status if uploaded else None
-        ))
-    
-    required_count = len(control.required_evidence)
-    uploaded_count = len([e for e in evidence_items if e.is_uploaded])
-    missing_count = required_count - uploaded_count
-    
-    if uploaded_count == 0:
-        status = "Not Started"
-    elif uploaded_count < required_count:
-        status = "Partial"
-    else:
-        status = "Complete"
-    
-    return ControlGapResponse(
-        id=control.id,
-        name=control.name,
-        pci_requirement=control.pci_requirement,
-        status=status,
-        required_count=required_count,
-        uploaded_count=uploaded_count,
-        missing_count=missing_count,
-        evidence_items=evidence_items
+    return RequirementWithSubsResponse(
+        id=req.id,
+        req_number=req.req_number,
+        name=req.name,
+        description=req.description,
+        sub_requirements=[SubRequirementResponse(
+            id=s.id,
+            sub_req_number=s.sub_req_number,
+            name=s.name,
+            status=s.status,
+            evidence_needed=s.evidence_needed
+        ) for s in req.sub_requirements],
+        compliant_count=compliant,
+        total_count=total,
+        compliance_percentage=round(percentage, 0)
     )
 
 
-@router.get("/evidence", response_model=List[UploadedEvidenceResponse])
-def get_all_evidence(db: Session = Depends(get_db)):
-    evidence = db.query(UploadedEvidence).all()
-    return evidence
+@router.get("/dashboard/stats", response_model=DashboardStats)
+def get_dashboard_stats(db: Session = Depends(get_db)):
+    sub_reqs = db.query(SubRequirement).all()
+    
+    total = len(sub_reqs)
+    compliant = len([s for s in sub_reqs if s.status == "compliant"])
+    partial = len([s for s in sub_reqs if s.status == "partial"])
+    not_started = len([s for s in sub_reqs if s.status == "not_started"])
+    
+    overall = (compliant / total * 100) if total > 0 else 0
+    
+    current_phase = db.query(Phase).options(
+        joinedload(Phase.tasks),
+        joinedload(Phase.deliverables)
+    ).filter(Phase.is_current == True).first()
+    
+    return DashboardStats(
+        total_requirements=total,
+        compliant_requirements=compliant,
+        partial_requirements=partial,
+        not_started_requirements=not_started,
+        overall_compliance=round(overall, 1),
+        current_phase=current_phase
+    )
 
 
-@router.get("/required-evidence/{control_id}", response_model=List[RequiredEvidenceResponse])
-def get_required_evidence(control_id: int, db: Session = Depends(get_db)):
-    control = db.query(Control).filter(Control.id == control_id).first()
-    if not control:
-        raise HTTPException(status_code=404, detail="Control not found")
-    evidence = db.query(RequiredEvidence).filter(RequiredEvidence.control_id == control_id).all()
-    return evidence
+@router.get("/findings", response_model=List[FindingResponse])
+def get_all_findings(db: Session = Depends(get_db)):
+    findings = db.query(Finding).order_by(Finding.created_at.desc()).all()
+    return findings
+
+
+@router.get("/risks", response_model=List[RiskResponse])
+def get_all_risks(db: Session = Depends(get_db)):
+    risks = db.query(Risk).order_by(Risk.created_at.desc()).all()
+    return risks
+
+
+@router.patch("/sub-requirements/{sub_req_id}/status")
+def update_sub_requirement_status(sub_req_id: int, status: str, db: Session = Depends(get_db)):
+    sub_req = db.query(SubRequirement).filter(SubRequirement.id == sub_req_id).first()
+    if not sub_req:
+        raise HTTPException(status_code=404, detail="Sub-requirement not found")
+    
+    if status not in ["compliant", "partial", "not_started"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    
+    sub_req.status = status
+    if status == "compliant":
+        sub_req.evidence_needed = 0
+    
+    db.commit()
+    return {"message": "Status updated", "status": status}
+
+
+@router.patch("/phases/{phase_id}/set-current")
+def set_current_phase(phase_id: int, db: Session = Depends(get_db)):
+    db.query(Phase).update({"is_current": False})
+    
+    phase = db.query(Phase).filter(Phase.id == phase_id).first()
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    phase.is_current = True
+    db.commit()
+    return {"message": "Current phase updated", "phase": phase.name}
