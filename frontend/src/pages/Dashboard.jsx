@@ -246,6 +246,36 @@ function Dashboard() {
           </div>
         ) : activeTab === 'phases' ? (
           <div className="phases-tab-content">
+            <div className="phases-instruction-banner">
+              <div className="instruction-icon">&#128221;</div>
+              <div className="instruction-content">
+                <h4>How Phase Progression Works</h4>
+                <p>PCI DSS certification follows a 7-phase lifecycle. You must complete each phase in order:</p>
+                <ol>
+                  <li><strong>Complete Tasks</strong> - Check off all tasks in your current phase</li>
+                  <li><strong>Advance</strong> - Click "Next Phase" button when all tasks are done</li>
+                  <li><strong>Repeat</strong> - Continue through all 7 phases until certification</li>
+                </ol>
+              </div>
+            </div>
+            
+            <div className="phases-progress-overview">
+              <div className="progress-step-row">
+                {phases.map((phase, idx) => (
+                  <div key={phase.id} className={`progress-step ${getPhaseStatus(phase)} ${phase.is_current ? 'current' : ''}`}>
+                    <div className="step-circle">
+                      {getPhaseStatus(phase) === 'complete' ? '✓' : phase.phase_number}
+                    </div>
+                    {idx < phases.length - 1 && <div className="step-line"></div>}
+                  </div>
+                ))}
+              </div>
+              <div className="progress-labels">
+                <span>Phase 1: Scope</span>
+                <span>Phase 7: Continuous</span>
+              </div>
+            </div>
+            
             <div className="phases-list-full">
               {phases.map((phase) => {
                 const status = getPhaseStatus(phase)
@@ -372,6 +402,20 @@ function Dashboard() {
             </aside>
 
             <main className="phase-content">
+          {!allTasksComplete && (
+            <div className="workflow-tip-banner">
+              <span className="tip-icon">&#128161;</span>
+              <span><strong>Tip:</strong> Check off each task below as you complete it. When all tasks are done, the "Next Phase" button will appear!</span>
+            </div>
+          )}
+          
+          {allTasksComplete && currentPhase?.phase_number < 7 && (
+            <div className="workflow-success-banner">
+              <span className="success-icon">&#127881;</span>
+              <span><strong>All tasks complete!</strong> Click "Next Phase" to advance to Phase {currentPhase?.phase_number + 1}.</span>
+            </div>
+          )}
+          
           <div className="phase-content-header">
             <div>
               <h2>{currentPhase?.name || 'Gap Assessment'}</h2>

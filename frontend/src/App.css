@@ -2584,3 +2584,162 @@ body {
 .advance-btn:hover {
   background: #2ea043;
 }
+
+/* Phase Instruction Banners */
+.phases-instruction-banner {
+  display: flex;
+  gap: 1rem;
+  background: linear-gradient(135deg, #1a2332 0%, #161b22 100%);
+  border: 1px solid #30363d;
+  border-left: 4px solid #1f6feb;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.instruction-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.instruction-content h4 {
+  color: #e6edf3;
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+}
+
+.instruction-content p {
+  color: #8b949e;
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9rem;
+}
+
+.instruction-content ol {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: #c9d1d9;
+  font-size: 0.875rem;
+}
+
+.instruction-content ol li {
+  margin-bottom: 0.35rem;
+}
+
+.instruction-content ol li strong {
+  color: #58a6ff;
+}
+
+/* Phase Progress Overview */
+.phases-progress-overview {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.progress-step-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+}
+
+.progress-step {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.progress-step:last-child {
+  flex: 0;
+}
+
+.step-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  background: #21262d;
+  color: #8b949e;
+  border: 2px solid #30363d;
+  flex-shrink: 0;
+}
+
+.progress-step.complete .step-circle {
+  background: #238636;
+  color: #fff;
+  border-color: #238636;
+}
+
+.progress-step.current .step-circle {
+  background: #1f6feb;
+  color: #fff;
+  border-color: #1f6feb;
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
+}
+
+.progress-step.in_progress .step-circle {
+  background: #1f6feb;
+  color: #fff;
+  border-color: #1f6feb;
+}
+
+.step-line {
+  flex: 1;
+  height: 3px;
+  background: #30363d;
+  margin: 0 0.5rem;
+}
+
+.progress-step.complete .step-line {
+  background: #238636;
+}
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+  padding: 0 0.5rem;
+  color: #8b949e;
+  font-size: 0.75rem;
+}
+
+/* Workflow Tip Banners */
+.workflow-tip-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(31, 111, 235, 0.1);
+  border: 1px solid #1f6feb;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  color: #58a6ff;
+  font-size: 0.875rem;
+}
+
+.tip-icon {
+  font-size: 1.2rem;
+}
+
+.workflow-success-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(35, 134, 54, 0.15);
+  border: 1px solid #238636;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  color: #3fb950;
+  font-size: 0.875rem;
+}
+
+.success-icon {
+  font-size: 1.2rem;
+}
