@@ -134,3 +134,18 @@ A comprehensive, fully dynamic PCI DSS (Payment Card Industry Data Security Stan
   - Last Assessment date (dynamically fetched)
   - Requirements Met: compliant/total
 - All metrics refresh in real-time when tasks completed or evidence reviewed
+
+### Requirements Page V2 (Evidence Upload)
+- Redesigned Requirements page matching reference design
+- Shows 12 PCI DSS requirements with "X/Y compliant" badges and progress bars
+- Expandable requirements showing sub-requirements with status badges:
+  - compliant (green), partial (yellow), non compliant (red)
+  - "X evidence needed" badge for incomplete items
+- Sub-requirement detail panel includes:
+  - Testing Procedures section with clickable items
+  - Required Evidence section with:
+    - Evidence cards with Upload button
+    - Examples (e.g., "Network Security Policy PDF", "Firewall rules export")
+    - Validation Criteria (e.g., "Document must be dated within 12 months")
+    - Uploaded evidence with Accept/Reject actions for auditors
+- Role-based view: IT/Security can upload, QSA Auditor can accept/reject
