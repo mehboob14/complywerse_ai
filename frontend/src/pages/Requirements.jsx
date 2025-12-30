@@ -300,7 +300,7 @@ function Requirements() {
                                     <p className="evidence-card-desc">{ev.description}</p>
                                   </div>
                                   
-                                  {!ev.has_accepted && ['admin', 'infosec_team', 'it_security'].includes(userRole) && (
+                                  {!ev.has_accepted && userRole === 'it_security' && (
                                     <div className="upload-btn-container">
                                       <input
                                         type="file"
@@ -361,7 +361,7 @@ function Requirements() {
                                           </span>
                                         </div>
                                         <div className="submission-actions">
-                                          {submission.status === 'pending_review' && (userRole === 'qsa_auditor' || userRole === 'admin') && (
+                                          {submission.status === 'pending_review' && userRole === 'infosec_team' && (
                                             <>
                                               <button 
                                                 className="btn-accept-sm"
@@ -386,7 +386,7 @@ function Requirements() {
                                           {submission.status === 'rejected' && (
                                             <span className="status-rejected">✗ Rejected</span>
                                           )}
-                                          {submission.status === 'pending_review' && userRole !== 'qsa_auditor' && userRole !== 'admin' && (
+                                          {submission.status === 'pending_review' && userRole !== 'infosec_team' && (
                                             <span className="status-pending">⏳ Pending Review</span>
                                           )}
                                         </div>

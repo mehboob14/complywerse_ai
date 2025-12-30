@@ -794,7 +794,7 @@ async def upload_evidence(
     required_evidence_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("admin", "infosec_team", "it_security"))
+    user: User = Depends(require_role("it_security"))
 ):
     req_ev = db.query(RequiredEvidence).filter(RequiredEvidence.id == required_evidence_id).first()
     if not req_ev:
@@ -856,7 +856,7 @@ def review_evidence(
     action: str,
     notes: str = None,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role("admin", "qsa_auditor"))
+    user: User = Depends(require_role("infosec_team"))
 ):
     submission = db.query(EvidenceSubmission).filter(EvidenceSubmission.id == submission_id).first()
     if not submission:

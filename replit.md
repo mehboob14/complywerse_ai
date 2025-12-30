@@ -184,8 +184,8 @@ Phases are strictly sequential and require Admin or Business Owner approval befo
 - **Governance Enforcement**: Phase approval requires Admin or Business Owner only
 
 ### Role Responsibilities
-- **Admin**: Manage all settings, approve phases, configure phase-requirement links
-- **Business Owner**: Approve phases and residual risks, monitor compliance
-- **Infosec Team**: Complete phase tasks, upload evidence, remediate findings
-- **IT Security**: Upload evidence for requirements, complete assigned tasks
-- **QSA Auditor**: Review and accept/reject evidence (rejection creates findings)
+- **Admin**: Manage all settings, approve phases, configure phase-requirement links (view-only on evidence)
+- **Business Owner**: Approve phases and residual risks, monitor compliance (view-only on evidence)
+- **Infosec Team**: Review and accept/reject evidence (rejection creates findings), manage findings
+- **IT Security**: Upload evidence for requirements, complete assigned phase tasks
+- **QSA Auditor**: View-only access to monitor compliance readiness and audit documentation

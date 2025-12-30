@@ -130,7 +130,7 @@ function Dashboard() {
           'Manage all phases, tasks, requirements, and users in Admin panel',
           'Configure which requirements must have evidence before phase approval',
           'Approve phases when all tasks complete and evidence is accepted',
-          'Upload evidence and review all submissions'
+          'View all evidence and compliance status (read-only)'
         ]
       },
       business_owner: {
@@ -139,34 +139,34 @@ function Dashboard() {
           'Approve phases when all tasks complete and evidence is accepted',
           'Approve or reject residual risks in Risk Register',
           'Monitor overall compliance progress',
-          'View all findings and requirements status'
+          'View all findings and requirements status (read-only)'
         ]
       },
       infosec_team: {
         title: 'Infosec Team',
         actions: [
-          'Complete phase tasks as they are assigned',
-          'Upload evidence for requirements in Requirements page',
+          'Review and accept/reject evidence submissions in Requirements page',
           'Start remediation for findings when evidence is rejected',
+          'Create and close findings manually',
           'Monitor compliance progress and gaps'
         ]
       },
       it_security: {
         title: 'IT Security',
         actions: [
-          'Upload evidence for assigned requirements',
+          'Upload evidence for assigned requirements in Requirements page',
           'Complete assigned phase tasks',
           'View compliance status and findings',
-          'Prepare evidence documentation'
+          'Prepare and submit evidence documentation'
         ]
       },
       qsa_auditor: {
         title: 'QSA Auditor',
         actions: [
-          'Review pending evidence submissions in Requirements page',
-          'Accept or reject evidence (rejection creates a finding)',
           'Monitor overall compliance readiness',
-          'View all requirements and evidence status'
+          'View all requirements and evidence status',
+          'Review findings and compliance gaps',
+          'Audit compliance documentation (read-only)'
         ]
       }
     }
