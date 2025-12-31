@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../config/api'
 import { useAuth } from '../context/AuthContext'
 
 function Admin() {
@@ -24,13 +24,13 @@ function Admin() {
     setLoading(true)
     try {
       if (activeTab === 'phases') {
-        const response = await axios.get('/api/phases')
+        const response = await api.get('/phases')
         setPhases(response.data)
       } else if (activeTab === 'requirements') {
-        const response = await axios.get('/api/requirements')
+        const response = await api.get('/requirements')
         setRequirements(response.data)
       } else if (activeTab === 'users') {
-        const response = await axios.get('/api/users', { withCredentials: true })
+        const response = await api.get('/users')
         setUsers(response.data)
       }
     } catch (error) {

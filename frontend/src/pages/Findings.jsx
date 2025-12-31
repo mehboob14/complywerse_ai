@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../config/api'
 import { useAuth } from '../context/AuthContext'
 
 function Findings() {
@@ -18,7 +18,7 @@ function Findings() {
 
   const fetchFindings = async () => {
     try {
-      const response = await axios.get('/api/findings')
+      const response = await api.get('/findings')
       setFindings(response.data)
       setLoading(false)
     } catch (err) {

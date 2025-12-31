@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../config/api'
 
 function RiskRegister() {
   const [risks, setRisks] = useState([])
@@ -18,7 +18,7 @@ function RiskRegister() {
 
   const fetchRisks = async () => {
     try {
-      const response = await axios.get('/api/risks')
+      const response = await api.get('/risks')
       setRisks(response.data)
       setLoading(false)
     } catch (err) {

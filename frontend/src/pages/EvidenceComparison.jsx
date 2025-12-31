@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../config/api'
 
 function EvidenceComparison() {
   const [data, setData] = useState(null)
@@ -13,7 +13,7 @@ function EvidenceComparison() {
 
   const fetchComparison = async () => {
     try {
-      const response = await axios.get('/api/evidence/comparison')
+      const response = await api.get('/evidence/comparison')
       setData(response.data)
     } catch (error) {
       console.error('Error fetching comparison:', error)

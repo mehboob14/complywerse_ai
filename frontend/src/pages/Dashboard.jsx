@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import api from '../config/api'
 import { useAuth } from '../context/AuthContext'
 
 function Dashboard() {
@@ -25,9 +25,9 @@ function Dashboard() {
   const fetchData = async () => {
     try {
       const [phasesRes, statsRes, reqsRes] = await Promise.all([
-        axios.get('/api/phases'),
-        axios.get('/api/dashboard/stats'),
-        axios.get('/api/requirements')
+        api.get('/phases'),
+        api.get('/dashboard/stats'),
+        api.get('/requirements')
       ])
       setPhases(phasesRes.data)
       setStats(statsRes.data)

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../config/api'
 import { useAuth } from '../context/AuthContext'
 
 function Requirements() {
@@ -20,8 +20,8 @@ function Requirements() {
   const fetchData = async () => {
     try {
       const [reqRes, phaseRes] = await Promise.all([
-        axios.get('/api/requirements'),
-        axios.get('/api/phases')
+        api.get('/requirements'),
+        api.get('/phases')
       ])
       setRequirements(reqRes.data)
       const current = phaseRes.data.find(p => p.is_current)
