@@ -165,32 +165,56 @@ export interface EvidenceAIAssessment {
   created_at: string;
 }
 
-export enum RiskCategory {
-  STRATEGIC = 'strategic',
-  OPERATIONAL = 'operational',
-  FINANCIAL = 'financial',
-  COMPLIANCE = 'compliance',
-  REPUTATIONAL = 'reputational',
-  TECHNOLOGY = 'technology',
-  CYBERSECURITY = 'cybersecurity',
-}
+export type RiskCategory = 'strategic' | 'operational' | 'financial' | 'compliance' | 'technology' | 'third_party';
+export type RiskStatus = 'open' | 'in_treatment' | 'mitigated' | 'accepted' | 'closed';
 
 export interface Risk {
-  id: string;
-  tenant_id: string;
+  id: number;
+  tenant_id: number;
   title: string;
-  description: string;
-  category: RiskCategory;
-  likelihood: number;
-  impact: number;
-  inherent_risk_score: number;
-  residual_risk_score: number;
-  risk_owner_id: string;
-  status: 'identified' | 'assessed' | 'mitigated' | 'accepted' | 'closed';
-  treatment_plan: string;
-  target_date: string;
+  description?: string;
+  risk_category: RiskCategory;
+  inherent_likelihood?: number;
+  inherent_impact?: number;
+  inherent_score?: number;
+  residual_likelihood?: number;
+  residual_impact?: number;
+  residual_score?: number;
+  risk_appetite?: string;
+  status: RiskStatus;
+  treatment_plan?: string;
+  owner_id?: number;
+  owner_name?: string;
+  due_date?: string;
+  review_date?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface RiskDetail extends Risk {
+  linked_controls: Array<{id: number; code: string; name: string}>;
+  linked_framework_controls: Array<{id: number; control_ref: string; title: string; mitigation_effectiveness: string}>;
+  linked_assets: Array<{id: number; name: string; asset_type: string}>;
+  linked_evidence: Array<{id: number; name: string; status: string}>;
+  linked_governance: Array<{id: number; name: string; impact_level: string}>;
+}
+
+export interface RiskDashboard {
+  total_risks: number;
+  by_category: Record<string, number>;
+  by_status: Record<string, number>;
+  by_score_range: {critical: number; high: number; medium: number; low: number};
+  avg_inherent_score: number;
+  avg_residual_score: number;
+  open_risks: number;
+  risks_needing_review: number;
+}
+
+export interface HeatmapCell {
+  likelihood: number;
+  impact: number;
+  count: number;
+  risks: Array<{id: number; title: string; score: number}>;
 }
 
 export interface GovernanceObjective {

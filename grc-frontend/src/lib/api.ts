@@ -4,6 +4,9 @@ import {
   Control,
   Evidence,
   Risk,
+  RiskDetail,
+  RiskDashboard,
+  HeatmapCell,
   GovernanceObjective,
   Exception,
   Issue,
@@ -82,10 +85,22 @@ export const evidenceApi = {
 
 export const risksApi = {
   getAll: () => apiClient.get<Risk[]>('/risks'),
-  getById: (id: string) => apiClient.get<Risk>(`/risks/${id}`),
+  getById: (id: number) => apiClient.get<Risk>(`/risks/${id}`),
+  getDetail: (id: number) => apiClient.get<RiskDetail>(`/risks/${id}/detail`),
+  getDashboard: () => apiClient.get<RiskDashboard>('/risks/dashboard'),
+  getHeatmap: (riskType?: string) => apiClient.get<HeatmapCell[]>(`/risks/heatmap${riskType ? `?risk_type=${riskType}` : ''}`),
   create: (data: Partial<Risk>) => apiClient.post<Risk>('/risks', data),
-  update: (id: string, data: Partial<Risk>) => apiClient.put<Risk>(`/risks/${id}`, data),
-  delete: (id: string) => apiClient.delete(`/risks/${id}`),
+  update: (id: number, data: Partial<Risk>) => apiClient.put<Risk>(`/risks/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/risks/${id}`),
+  assess: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/assess`, data),
+  updateTreatment: (id: number, plan: string) => apiClient.post(`/risks/${id}/treatment`, { treatment_plan: plan }),
+  linkFrameworkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-framework-control`, data),
+  unlinkFrameworkControl: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-framework-control/${linkId}`),
+  linkGovernance: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-governance`, data),
+  unlinkGovernance: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-governance/${linkId}`),
+  linkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/controls`, data),
+  linkAsset: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/assets`, data),
+  linkEvidence: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/evidence`, data),
 };
 
 export const governanceApi = {
