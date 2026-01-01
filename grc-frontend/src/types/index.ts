@@ -262,33 +262,34 @@ export interface DocumentVersion {
   created_at: string;
 }
 
-export enum AssetType {
-  SERVER = 'server',
-  WORKSTATION = 'workstation',
-  NETWORK_DEVICE = 'network_device',
-  APPLICATION = 'application',
-  DATABASE = 'database',
-  CLOUD_SERVICE = 'cloud_service',
-  IOT_DEVICE = 'iot_device',
-}
+export type AssetType = 'application' | 'infrastructure' | 'data' | 'cloud' | 'third_party';
 
 export interface ITAsset {
-  id: string;
-  tenant_id: string;
+  id: number;
+  tenant_id: number;
   name: string;
-  description: string;
+  description?: string;
   asset_type: AssetType;
-  asset_tag: string;
-  ip_address: string;
-  hostname: string;
-  owner_id: string;
-  department: string;
-  location: string;
+  owner_id?: number;
+  owner_name?: string;
   criticality: 'low' | 'medium' | 'high' | 'critical';
+  confidentiality_rating?: number;
+  integrity_rating?: number;
+  availability_rating?: number;
+  valuation?: number;
+  vendor?: string;
+  location?: string;
   status: 'active' | 'inactive' | 'decommissioned';
-  metadata: Record<string, unknown>;
   created_at: string;
-  updated_at: string;
+}
+
+export interface AssetDetail extends ITAsset {
+  linked_controls: Array<{id: number; code: string; title: string}>;
+  linked_framework_controls: Array<{id: number; control_ref: string; title: string; framework_name: string}>;
+  linked_risks: Array<{id: number; title: string; risk_score: number}>;
+  linked_evidence: Array<{id: number; name: string; status: string}>;
+  risk_assessments: Array<{id: number; risk_score: number; coverage_percentage: number; assessment_date: string}>;
+  coverage_percentage?: number;
 }
 
 export interface CertificationJourney {
