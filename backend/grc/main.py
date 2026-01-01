@@ -11,7 +11,8 @@ from .routers import (
     governance_router,
     documents_router,
     assets_router,
-    dashboard_router
+    dashboard_router,
+    certification_router
 )
 
 app = FastAPI(
@@ -40,6 +41,7 @@ app.include_router(governance_router)
 app.include_router(documents_router)
 app.include_router(assets_router)
 app.include_router(dashboard_router)
+app.include_router(certification_router)
 
 
 @app.on_event("startup")
@@ -59,7 +61,8 @@ def root():
             "risks",
             "governance",
             "documents",
-            "assets"
+            "assets",
+            "certifications"
         ]
     }
 

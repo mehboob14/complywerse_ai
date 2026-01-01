@@ -8,6 +8,7 @@ from .governance_router import router as governance_router
 from .documents_router import router as documents_router
 from .assets_router import router as assets_router
 from .dashboard_router import router as dashboard_router
+from .certification_router import router as certification_router
 
 __all__ = [
     "auth_router",
@@ -20,4 +21,5 @@ __all__ = [
     "documents_router",
     "assets_router",
     "dashboard_router",
+    "certification_router",
 ]

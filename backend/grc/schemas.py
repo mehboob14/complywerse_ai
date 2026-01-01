@@ -767,3 +767,111 @@ class PaginatedResponse(BaseModel):
 class MessageResponse(BaseModel):
     message: str
     id: Optional[int] = None
+
+
+class CertificationJourneyCreate(BaseModel):
+    framework_id: int
+    name: str
+    target_date: Optional[datetime] = None
+    notes: Optional[str] = None
+    tenant_id: Optional[int] = None
+
+
+class CertificationJourneyUpdate(BaseModel):
+    name: Optional[str] = None
+    target_date: Optional[datetime] = None
+    status: Optional[str] = None
+    current_phase: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class CertificationJourneyResponse(BaseModel):
+    id: int
+    tenant_id: int
+    framework_id: int
+    name: str
+    target_date: Optional[datetime]
+    started_at: datetime
+    completed_at: Optional[datetime]
+    status: str
+    current_phase: int
+    notes: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class ControlImplementationUpdate(BaseModel):
+    status: Optional[str] = None
+    implementation_notes: Optional[str] = None
+    is_applicable: Optional[bool] = None
+    priority: Optional[int] = None
+
+
+class ControlImplementationResponse(BaseModel):
+    id: int
+    journey_id: int
+    framework_control_id: int
+    status: str
+    implementation_notes: Optional[str]
+    implementation_date: Optional[datetime]
+    verified_date: Optional[datetime]
+    verified_by: Optional[int]
+    is_applicable: bool
+    priority: int
+
+    class Config:
+        from_attributes = True
+
+
+class ImplementationEvidenceCreate(BaseModel):
+    evidence_id: Optional[int] = None
+
+
+class ImplementationEvidenceResponse(BaseModel):
+    id: int
+    implementation_id: int
+    evidence_id: Optional[int]
+    file_name: Optional[str]
+    file_path: Optional[str]
+    file_size: Optional[int]
+    mime_type: Optional[str]
+    uploaded_at: datetime
+    uploaded_by: int
+    ai_confidence_score: Optional[float]
+    ai_assessment_status: Optional[str]
+    ai_assessment_notes: Optional[str]
+    ai_matched_controls: List[int]
+    review_status: str
+    reviewed_by: Optional[int]
+    reviewed_at: Optional[datetime]
+    review_notes: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class ProgressSummary(BaseModel):
+    total_controls: int
+    implemented_count: int
+    verified_count: int
+    in_progress_count: int
+    not_started_count: int
+    not_applicable_count: int
+    completion_percentage: float
+    by_status: Dict[str, int]
+    by_domain: Dict[str, Dict[str, Any]]
+
+
+class GapAnalysis(BaseModel):
+    total_gaps: int
+    controls_without_evidence: List[Dict[str, Any]]
+    controls_not_implemented: List[Dict[str, Any]]
+    controls_pending_verification: List[Dict[str, Any]]
+    evidence_pending_review: List[Dict[str, Any]]
+    high_priority_gaps: List[Dict[str, Any]]
+
+
+class EvidenceReviewAction(BaseModel):
+    action: str
+    notes: Optional[str] = None

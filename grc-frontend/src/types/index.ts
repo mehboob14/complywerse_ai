@@ -280,3 +280,72 @@ export interface ITAsset {
   created_at: string;
   updated_at: string;
 }
+
+export interface CertificationJourney {
+  id: number;
+  tenant_id: number;
+  framework_id: number;
+  framework?: Framework;
+  name: string;
+  target_date?: string;
+  started_at: string;
+  completed_at?: string;
+  status: 'not_started' | 'in_progress' | 'completed' | 'on_hold';
+  current_phase: number;
+  notes?: string;
+  progress?: ProgressSummary;
+}
+
+export interface ControlImplementation {
+  id: number;
+  journey_id: number;
+  framework_control_id: number;
+  framework_control?: FrameworkControl;
+  status: 'not_started' | 'in_progress' | 'implemented' | 'verified' | 'not_applicable';
+  implementation_notes?: string;
+  implementation_date?: string;
+  verified_date?: string;
+  is_applicable: boolean;
+  priority: number;
+  evidence_attachments?: ImplementationEvidence[];
+}
+
+export interface ImplementationEvidence {
+  id: number;
+  implementation_id: number;
+  file_name?: string;
+  file_path?: string;
+  uploaded_at: string;
+  ai_confidence_score?: number;
+  ai_assessment_status?: string;
+  ai_assessment_notes?: string;
+  ai_matched_controls?: number[];
+  review_status: 'pending' | 'approved' | 'rejected';
+  review_notes?: string;
+}
+
+export interface ProgressSummary {
+  total_controls: number;
+  implemented: number;
+  verified: number;
+  in_progress: number;
+  not_started: number;
+  not_applicable: number;
+  completion_percentage: number;
+  by_domain: { domain_id: number; domain_name: string; total: number; completed: number }[];
+}
+
+export interface GapAnalysis {
+  missing_evidence: { control_id: number; control_code: string; control_name: string }[];
+  not_implemented: { control_id: number; control_code: string; control_name: string; priority: number }[];
+  pending_verification: { control_id: number; control_code: string; control_name: string }[];
+}
+
+export interface FrameworkControl {
+  id: number;
+  code: string;
+  name: string;
+  statement?: string;
+  is_mandatory: boolean;
+  objective?: { id: number; code: string; name: string; domain?: { id: number; code: string; name: string } };
+}

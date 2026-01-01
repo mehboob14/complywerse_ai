@@ -44,6 +44,7 @@ class Tenant(Base):
     documents = relationship("Document", back_populates="tenant", cascade="all, delete-orphan")
     it_assets = relationship("ITAsset", back_populates="tenant", cascade="all, delete-orphan")
     compliance_programs = relationship("ComplianceProgram", back_populates="tenant", cascade="all, delete-orphan")
+    certification_journeys = relationship("CertificationJourney", back_populates="tenant", cascade="all, delete-orphan")
 
 
 class TenantUser(Base):
@@ -790,6 +791,85 @@ class GRCComplianceAssessment(Base):
     __table_args__ = (
         Index("ix_compliance_assessment_program", "program_id", "status"),
     )
+
+
+# =============================================================================
+# 13. Certification Journey Models
+# =============================================================================
+
+class CertificationJourney(Base):
+    """Tracks a tenant's certification/compliance journey for a specific framework"""
+    __tablename__ = "grc_certification_journeys"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    framework_id = Column(Integer, ForeignKey("grc_frameworks.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    target_date = Column(DateTime, nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    status = Column(String(50), default="in_progress")
+    current_phase = Column(Integer, default=1)
+    notes = Column(Text, nullable=True)
+    
+    tenant = relationship("Tenant", back_populates="certification_journeys")
+    framework = relationship("Framework")
+    control_implementations = relationship("ControlImplementation", back_populates="journey", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_cert_journey_tenant_framework", "tenant_id", "framework_id"),
+    )
+
+
+class ControlImplementation(Base):
+    """Tracks implementation status of each control in a certification journey"""
+    __tablename__ = "grc_control_implementations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    journey_id = Column(Integer, ForeignKey("grc_certification_journeys.id"), nullable=False, index=True)
+    framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=False, index=True)
+    status = Column(String(50), default="not_started")
+    implementation_notes = Column(Text, nullable=True)
+    implementation_date = Column(DateTime, nullable=True)
+    verified_date = Column(DateTime, nullable=True)
+    verified_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    is_applicable = Column(Boolean, default=True)
+    priority = Column(Integer, default=3)
+    
+    journey = relationship("CertificationJourney", back_populates="control_implementations")
+    framework_control = relationship("FrameworkControl")
+    verifier = relationship("GRCUser")
+    evidence_attachments = relationship("ImplementationEvidence", back_populates="implementation", cascade="all, delete-orphan")
+
+
+class ImplementationEvidence(Base):
+    """Links evidence to control implementations with AI scoring"""
+    __tablename__ = "grc_implementation_evidence"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    implementation_id = Column(Integer, ForeignKey("grc_control_implementations.id"), nullable=False, index=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=True, index=True)
+    file_name = Column(String(255), nullable=True)
+    file_path = Column(String(500), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    uploaded_by = Column(Integer, ForeignKey("grc_users.id"), nullable=False)
+    
+    ai_confidence_score = Column(Float, nullable=True)
+    ai_assessment_status = Column(String(50), nullable=True)
+    ai_assessment_notes = Column(Text, nullable=True)
+    ai_matched_controls = Column(JSON, default=[])
+    
+    review_status = Column(String(50), default="pending")
+    reviewed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    review_notes = Column(Text, nullable=True)
+    
+    implementation = relationship("ControlImplementation", back_populates="evidence_attachments")
+    evidence = relationship("Evidence")
+    uploader = relationship("GRCUser", foreign_keys=[uploaded_by])
+    reviewer = relationship("GRCUser", foreign_keys=[reviewed_by])
 
 
 # =============================================================================

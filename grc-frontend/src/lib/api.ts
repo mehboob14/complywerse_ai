@@ -120,4 +120,34 @@ export const assetsApi = {
   delete: (id: string) => apiClient.delete(`/assets/${id}`),
 };
 
+export const certificationsApi = {
+  getAll: (params?: { status?: string; framework_id?: number }) => 
+    apiClient.get('/certifications', { params }),
+  getById: (id: number) => apiClient.get(`/certifications/${id}`),
+  create: (data: { framework_id: number; name: string; target_date?: string }) => 
+    apiClient.post('/certifications', data),
+  update: (id: number, data: { status?: string; target_date?: string; notes?: string }) => 
+    apiClient.patch(`/certifications/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/certifications/${id}`),
+  
+  getControls: (id: number, params?: { status?: string; domain_id?: number }) => 
+    apiClient.get(`/certifications/${id}/controls`, { params }),
+  getControlDetail: (journeyId: number, controlId: number) => 
+    apiClient.get(`/certifications/${journeyId}/controls/${controlId}`),
+  updateControl: (journeyId: number, controlId: number, data: { status?: string; notes?: string; priority?: number; is_applicable?: boolean }) => 
+    apiClient.patch(`/certifications/${journeyId}/controls/${controlId}`, data),
+  
+  uploadEvidence: (journeyId: number, controlId: number, formData: FormData) => 
+    apiClient.post(`/certifications/${journeyId}/controls/${controlId}/evidence`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+  assessEvidence: (journeyId: number, controlId: number, evidenceId: number) => 
+    apiClient.post(`/certifications/${journeyId}/controls/${controlId}/evidence/${evidenceId}/assess`),
+  reviewEvidence: (journeyId: number, controlId: number, evidenceId: number, data: { action: string; notes?: string }) => 
+    apiClient.post(`/certifications/${journeyId}/controls/${controlId}/evidence/${evidenceId}/review`, data),
+  
+  getProgress: (id: number) => apiClient.get(`/certifications/${id}/progress`),
+  getGaps: (id: number) => apiClient.get(`/certifications/${id}/gaps`),
+};
+
 export default apiClient;
