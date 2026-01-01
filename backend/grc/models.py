@@ -468,6 +468,7 @@ class Risk(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    business_unit_id = Column(Integer, ForeignKey("grc_business_units.id"), nullable=True, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     category = Column(String(50), nullable=False)  # strategic, operational, financial, compliance, technology, third_party
@@ -578,6 +579,215 @@ class RiskGovernanceLink(Base):
     
     __table_args__ = (
         UniqueConstraint("risk_id", "governance_objective_id", name="uq_risk_governance"),
+    )
+
+
+class RiskKRI(Base):
+    """Key Risk Indicators - metrics and thresholds for risk monitoring"""
+    __tablename__ = "grc_risk_kris"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    metric_type = Column(String(50), default="numeric")  # numeric, percentage, count, boolean
+    unit = Column(String(50), nullable=True)  # %, count, days, USD, etc.
+    current_value = Column(Float, nullable=True)
+    green_threshold = Column(Float, nullable=True)  # Below this is green
+    amber_threshold = Column(Float, nullable=True)  # Below this is amber, above is red
+    threshold_direction = Column(String(20), default="lower_is_better")  # lower_is_better, higher_is_better
+    frequency = Column(String(50), default="monthly")  # daily, weekly, monthly, quarterly
+    data_source = Column(String(255), nullable=True)
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    last_measured_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    risk = relationship("Risk", backref="kris")
+    owner = relationship("GRCUser")
+    measurements = relationship("RiskKRIMeasurement", back_populates="kri", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_kri_risk", "risk_id"),
+    )
+
+
+class RiskKRIMeasurement(Base):
+    """Historical KRI measurements for trend tracking"""
+    __tablename__ = "grc_risk_kri_measurements"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    kri_id = Column(Integer, ForeignKey("grc_risk_kris.id"), nullable=False, index=True)
+    value = Column(Float, nullable=False)
+    status = Column(String(20), default="green")  # green, amber, red
+    measured_at = Column(DateTime, default=datetime.utcnow)
+    measured_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    kri = relationship("RiskKRI", back_populates="measurements")
+    measurer = relationship("GRCUser")
+    
+    __table_args__ = (
+        Index("ix_kri_measurement_time", "kri_id", "measured_at"),
+    )
+
+
+class RiskIncident(Base):
+    """Risk events and incidents - actual realized risks"""
+    __tablename__ = "grc_risk_incidents"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    incident_date = Column(DateTime, nullable=False)
+    discovered_date = Column(DateTime, default=datetime.utcnow)
+    severity = Column(String(50), default="medium")  # critical, high, medium, low
+    status = Column(String(50), default="open")  # open, investigating, contained, resolved, closed
+    financial_impact = Column(Float, nullable=True)
+    operational_impact = Column(Text, nullable=True)
+    root_cause = Column(Text, nullable=True)
+    corrective_actions = Column(Text, nullable=True)
+    lessons_learned = Column(Text, nullable=True)
+    reported_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    assigned_to = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    risk = relationship("Risk", backref="incidents")
+    reporter = relationship("GRCUser", foreign_keys=[reported_by])
+    assignee = relationship("GRCUser", foreign_keys=[assigned_to])
+    
+    __table_args__ = (
+        Index("ix_incident_tenant_status", "tenant_id", "status"),
+        Index("ix_incident_risk", "risk_id"),
+    )
+
+
+class RiskReview(Base):
+    """Risk review workflow - periodic assessments and approvals"""
+    __tablename__ = "grc_risk_reviews"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    review_cycle = Column(String(50), default="quarterly")  # monthly, quarterly, semi_annual, annual
+    review_type = Column(String(50), default="periodic")  # periodic, triggered, adhoc
+    status = Column(String(50), default="pending")  # pending, in_review, approved, rejected
+    due_date = Column(DateTime, nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    reviewer_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approver_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    previous_inherent_score = Column(Float, nullable=True)
+    previous_residual_score = Column(Float, nullable=True)
+    new_inherent_score = Column(Float, nullable=True)
+    new_residual_score = Column(Float, nullable=True)
+    findings = Column(Text, nullable=True)
+    recommendations = Column(Text, nullable=True)
+    approval_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    risk = relationship("Risk", backref="reviews")
+    reviewer = relationship("GRCUser", foreign_keys=[reviewer_id])
+    approver = relationship("GRCUser", foreign_keys=[approver_id])
+    
+    __table_args__ = (
+        Index("ix_review_risk_status", "risk_id", "status"),
+        Index("ix_review_due_date", "due_date"),
+    )
+
+
+class RiskScoreHistory(Base):
+    """Track risk score changes over time for trend analysis"""
+    __tablename__ = "grc_risk_score_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    inherent_likelihood = Column(Integer, nullable=True)
+    inherent_impact = Column(Integer, nullable=True)
+    inherent_score = Column(Float, nullable=True)
+    residual_likelihood = Column(Integer, nullable=True)
+    residual_impact = Column(Integer, nullable=True)
+    residual_score = Column(Float, nullable=True)
+    status = Column(String(50), nullable=True)
+    change_reason = Column(String(255), nullable=True)
+    changed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    recorded_at = Column(DateTime, default=datetime.utcnow)
+    
+    risk = relationship("Risk", backref="score_history")
+    user = relationship("GRCUser")
+    
+    __table_args__ = (
+        Index("ix_score_history_risk_time", "risk_id", "recorded_at"),
+    )
+
+
+class RiskDependency(Base):
+    """Map relationships between risks - cascading impact analysis"""
+    __tablename__ = "grc_risk_dependencies"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    source_risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    target_risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    dependency_type = Column(String(50), default="causes")  # causes, aggravates, mitigates, related
+    impact_factor = Column(Float, default=1.0)  # Multiplier for cascade calculation
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    source_risk = relationship("Risk", foreign_keys=[source_risk_id], backref="outgoing_dependencies")
+    target_risk = relationship("Risk", foreign_keys=[target_risk_id], backref="incoming_dependencies")
+    
+    __table_args__ = (
+        UniqueConstraint("source_risk_id", "target_risk_id", name="uq_risk_dependency"),
+        Index("ix_dependency_source", "source_risk_id"),
+        Index("ix_dependency_target", "target_risk_id"),
+    )
+
+
+class RiskAppetiteConfig(Base):
+    """Risk appetite configuration per tenant/category"""
+    __tablename__ = "grc_risk_appetite_config"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    category = Column(String(50), nullable=False)
+    appetite_level = Column(String(50), default="moderate")  # averse, minimal, cautious, moderate, open, hungry
+    max_acceptable_score = Column(Float, default=12.0)
+    description = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "category", name="uq_risk_appetite_tenant_category"),
+    )
+
+
+class RiskReport(Base):
+    """Generated risk reports for governance oversight"""
+    __tablename__ = "grc_risk_reports"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    report_type = Column(String(50), nullable=False)  # board_summary, department, audit, regulatory, breach
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    report_period_start = Column(DateTime, nullable=True)
+    report_period_end = Column(DateTime, nullable=True)
+    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    report_data = Column(JSON, default={})
+    file_path = Column(String(500), nullable=True)
+    status = Column(String(50), default="generated")  # draft, generated, reviewed, published
+    
+    tenant = relationship("Tenant")
+    generator = relationship("GRCUser")
+    
+    __table_args__ = (
+        Index("ix_report_tenant_type", "tenant_id", "report_type"),
     )
 
 
