@@ -238,6 +238,11 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - Risk detail page with 6 tabs and comprehensive linking modals
 - New models: RiskFrameworkControlLink, RiskGovernanceLink
 - 15+ API endpoints for complete ERM functionality
+- **Risk Register Upload**: Upload Excel files (.xlsx) to bulk import risks
+  - Supported columns: Ref, Asset Name, Threat, Vulnerabilities, Likelihood, Impact, Risk Score, Mitigating Action Controls, Post-treatment Likelihood/Impact, Residual Risk, Gaps, Recommendations, Risk Treatment option, Action Plan, Responsibility
+  - Auto-maps threat text to risk categories
+  - Auto-maps treatment option to risk status
+  - Calculates inherent/residual scores from likelihood × impact
 
 ### IT Asset Inventory & Valuation (Jan 1, 2026)
 - 5 asset types: application, infrastructure, data, cloud, third_party

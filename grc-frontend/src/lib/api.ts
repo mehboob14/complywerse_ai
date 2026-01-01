@@ -104,6 +104,13 @@ export const risksApi = {
   unlinkAsset: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/assets/${linkId}`),
   linkEvidence: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/evidence`, data),
   unlinkEvidence: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/evidence/${linkId}`),
+  uploadRiskRegister: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>('/risks/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export const governanceApi = {

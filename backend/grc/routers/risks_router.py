@@ -1,8 +1,10 @@
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from io import BytesIO
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
+import openpyxl
 
 from ..models import (
     Risk, RiskControlLink, RiskAssetLink, RiskEvidenceLink,
@@ -902,3 +904,223 @@ def unlink_risk_from_evidence(
     db.delete(link)
     db.commit()
     return None
+
+
+@router.post("/upload")
+async def upload_risk_register(
+    file: UploadFile = File(...),
+    tenant_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    else:
+        tenant_id = get_user_primary_tenant(current_user, db)
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is not assigned to any tenant"
+            )
+    
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only Excel files (.xlsx, .xls) are supported"
+        )
+    
+    try:
+        contents = await file.read()
+        wb = openpyxl.load_workbook(BytesIO(contents))
+        
+        ws = None
+        for sheet_name in ['Risk Assessment', 'Risks', 'Risk Register', 'Sheet1']:
+            if sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                break
+        if ws is None:
+            ws = wb.active
+        
+        headers = []
+        header_row = 1
+        for row_num in range(1, 6):
+            row_values = [cell.value for cell in ws[row_num]]
+            non_none = [v for v in row_values if v is not None]
+            if len(non_none) >= 5:
+                headers = row_values
+                header_row = row_num
+                break
+        
+        header_map = {}
+        for idx, h in enumerate(headers):
+            if h:
+                header_map[str(h).lower().strip()] = idx
+        
+        def get_value(row, *possible_names):
+            for name in possible_names:
+                if name.lower() in header_map:
+                    idx = header_map[name.lower()]
+                    if idx < len(row):
+                        return row[idx]
+            return None
+        
+        def parse_int(val, default=1):
+            if val is None:
+                return default
+            if isinstance(val, (int, float)):
+                return max(1, min(5, int(val)))
+            try:
+                return max(1, min(5, int(float(str(val).strip()))))
+            except:
+                return default
+        
+        def parse_score(val):
+            if val is None:
+                return None
+            if isinstance(val, (int, float)):
+                return float(val)
+            if isinstance(val, str) and val.startswith('='):
+                return None
+            try:
+                return float(val)
+            except:
+                return None
+        
+        def map_category(threat_or_category):
+            if not threat_or_category:
+                return 'operational'
+            text = str(threat_or_category).lower()
+            if any(w in text for w in ['strategic', 'business', 'market']):
+                return 'strategic'
+            if any(w in text for w in ['financial', 'money', 'cost', 'budget']):
+                return 'financial'
+            if any(w in text for w in ['compliance', 'regulatory', 'legal', 'pci', 'gdpr']):
+                return 'compliance'
+            if any(w in text for w in ['technology', 'system', 'network', 'cyber', 'malware', 'phishing', 'security']):
+                return 'technology'
+            if any(w in text for w in ['vendor', 'supplier', 'third', 'partner', 'outsourcing']):
+                return 'third_party'
+            return 'operational'
+        
+        def map_status(treatment_option, residual_score):
+            if not treatment_option:
+                return 'open'
+            text = str(treatment_option).lower()
+            if 'accept' in text:
+                return 'accepted'
+            if 'avoid' in text or 'close' in text:
+                return 'closed'
+            if 'mitigat' in text or 'reduc' in text or 'treat' in text:
+                if residual_score and residual_score < 10:
+                    return 'mitigated'
+                return 'in_treatment'
+            if 'transfer' in text:
+                return 'in_treatment'
+            return 'open'
+        
+        created_count = 0
+        skipped_count = 0
+        errors = []
+        
+        for row_num, row in enumerate(ws.iter_rows(min_row=header_row + 1, values_only=True), start=header_row + 1):
+            if not any(row):
+                continue
+            
+            ref = get_value(row, 'ref', 'ref.', 'id', 'risk id', 'risk_id')
+            asset_name = get_value(row, 'asset name', 'asset', 'asset_name')
+            threat = get_value(row, 'threat', 'threat description')
+            vulnerability = get_value(row, 'vulnerabilities', 'vulnerability', 'vuln')
+            
+            title_parts = []
+            if ref:
+                title_parts.append(str(ref))
+            if asset_name:
+                title_parts.append(str(asset_name))
+            if threat:
+                threat_preview = str(threat).strip()[:50]
+                if threat_preview:
+                    title_parts.append(threat_preview)
+            
+            if not title_parts:
+                skipped_count += 1
+                continue
+            
+            title = " - ".join(title_parts)[:200]
+            
+            description_parts = []
+            if threat:
+                description_parts.append(f"Threat: {threat}")
+            if vulnerability:
+                description_parts.append(f"Vulnerability: {vulnerability}")
+            gaps = get_value(row, 'gaps', 'gap')
+            if gaps:
+                description_parts.append(f"Gaps: {gaps}")
+            recommendations = get_value(row, 'recommendations', 'recommendation')
+            if recommendations:
+                description_parts.append(f"Recommendations: {recommendations}")
+            
+            description = "\n\n".join(description_parts) if description_parts else None
+            
+            inherent_likelihood = parse_int(get_value(row, 'likelihood', 'inherent likelihood', 'probability'))
+            inherent_impact = parse_int(get_value(row, 'impact', 'inherent impact', 'consequence'))
+            inherent_score = parse_score(get_value(row, 'risk score', 'inherent score', 'inherent risk'))
+            if inherent_score is None:
+                inherent_score = inherent_likelihood * inherent_impact
+            
+            residual_likelihood = parse_int(get_value(row, 'post-treatment likelihood', 'residual likelihood'), default=None)
+            residual_impact = parse_int(get_value(row, 'post-treatment impact', 'residual impact'), default=None)
+            residual_score = parse_score(get_value(row, 'residual risk', 'residual score', 'post-treatment risk'))
+            if residual_score is None and residual_likelihood and residual_impact:
+                residual_score = residual_likelihood * residual_impact
+            
+            mitigating_controls = get_value(row, 'mitigating action controls', 'controls', 'existing controls', 'mitigating controls')
+            action_plan = get_value(row, 'action plan', 'treatment plan', 'plan')
+            treatment_parts = []
+            if mitigating_controls:
+                treatment_parts.append(f"Existing Controls: {mitigating_controls}")
+            if action_plan:
+                treatment_parts.append(f"Action Plan: {action_plan}")
+            treatment_plan = "\n\n".join(treatment_parts) if treatment_parts else None
+            
+            treatment_option = get_value(row, 'risk treatment option', 'treatment option', 'treatment')
+            category = map_category(threat)
+            risk_status = map_status(treatment_option, residual_score)
+            
+            owner_name = get_value(row, 'responsibility', 'owner', 'risk owner')
+            
+            try:
+                db_risk = Risk(
+                    tenant_id=tenant_id,
+                    title=title,
+                    description=description,
+                    category=category,
+                    risk_category=category,
+                    inherent_likelihood=inherent_likelihood,
+                    inherent_impact=inherent_impact,
+                    inherent_score=inherent_score,
+                    residual_likelihood=residual_likelihood if residual_likelihood else None,
+                    residual_impact=residual_impact if residual_impact else None,
+                    residual_score=residual_score,
+                    treatment_plan=treatment_plan,
+                    status=risk_status,
+                    owner_id=current_user.id
+                )
+                db.add(db_risk)
+                created_count += 1
+            except Exception as e:
+                errors.append(f"Row {row_num}: {str(e)}")
+        
+        db.commit()
+        
+        return {
+            "message": f"Successfully imported {created_count} risks",
+            "created": created_count,
+            "skipped": skipped_count,
+            "errors": errors[:10] if errors else []
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to parse Excel file: {str(e)}"
+        )

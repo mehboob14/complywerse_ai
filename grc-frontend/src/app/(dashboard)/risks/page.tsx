@@ -16,8 +16,12 @@ import {
   Shield,
   User,
   Edit2,
-  Trash2
+  Trash2,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle
 } from 'lucide-react';
+import { useRef } from 'react';
 
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 
@@ -73,6 +77,9 @@ export default function RisksPage() {
   const [selectedHeatmapCell, setSelectedHeatmapCell] = useState<{l: number, i: number} | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRisk, setEditingRisk] = useState<Risk | null>(null);
+  const [uploadResult, setUploadResult] = useState<{ message: string; created: number; skipped: number; errors: string[] } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   const { data: risks, isLoading, error } = useQuery({
@@ -129,6 +136,35 @@ export default function RisksPage() {
       queryClient.invalidateQueries({ queryKey: ['risks-heatmap'] });
     },
   });
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setIsUploading(true);
+    setUploadResult(null);
+    
+    try {
+      const response = await risksApi.uploadRiskRegister(file);
+      setUploadResult(response.data);
+      queryClient.invalidateQueries({ queryKey: ['risks'] });
+      queryClient.invalidateQueries({ queryKey: ['risks-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['risks-heatmap'] });
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to upload file';
+      setUploadResult({
+        message: errorMessage,
+        created: 0,
+        skipped: 0,
+        errors: [errorMessage],
+      });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const heatmapMatrix = useMemo(() => {
     const matrix: Record<string, { count: number; risks: Array<{id: number; title: string; score: number}> }> = {};
@@ -258,17 +294,75 @@ export default function RisksPage() {
           <h1 className="text-2xl font-bold text-white">Enterprise Risk Management</h1>
           <p className="text-slate-400">Identify, assess, and manage organizational risks</p>
         </div>
-        <button
-          onClick={() => {
-            setEditingRisk(null);
-            setIsModalOpen(true);
-          }}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
-        >
-          <Plus size={18} />
-          Add Risk
-        </button>
+        <div className="flex gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept=".xlsx,.xls"
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 font-medium text-white hover:bg-slate-600 disabled:opacity-50"
+          >
+            {isUploading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Upload size={18} />
+            )}
+            Upload Register
+          </button>
+          <button
+            onClick={() => {
+              setEditingRisk(null);
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+          >
+            <Plus size={18} />
+            Add Risk
+          </button>
+        </div>
       </div>
+
+      {uploadResult && (
+        <div className={`card ${uploadResult.errors.length > 0 ? 'border border-red-500/50' : 'border border-green-500/50'}`}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              {uploadResult.errors.length > 0 ? (
+                <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+              ) : (
+                <CheckCircle className="h-5 w-5 text-green-400 mt-0.5" />
+              )}
+              <div>
+                <p className="font-medium text-white">{uploadResult.message}</p>
+                <div className="mt-1 flex gap-4 text-sm">
+                  <span className="text-green-400">Created: {uploadResult.created}</span>
+                  <span className="text-yellow-400">Skipped: {uploadResult.skipped}</span>
+                  {uploadResult.errors.length > 0 && (
+                    <span className="text-red-400">Errors: {uploadResult.errors.length}</span>
+                  )}
+                </div>
+                {uploadResult.errors.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {uploadResult.errors.slice(0, 5).map((err, idx) => (
+                      <p key={idx} className="text-xs text-red-400">{err}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => setUploadResult(null)}
+              className="text-slate-400 hover:text-white"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <div className="card">
