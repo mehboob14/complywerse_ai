@@ -36,6 +36,9 @@ import {
   AppetiteBreach,
   RiskTrendData,
   IncidentDashboard,
+  RiskMitigationAction,
+  RiskAuditFindingLink,
+  LikelihoodImpactScale,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
@@ -239,6 +242,38 @@ export const ermApi = {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },
+    closeRisk: (riskId: number, notes: string) => 
+      apiClient.post<Risk>(`/erm/risks/${riskId}/close`, { notes }),
+    reopenRisk: (riskId: number) => 
+      apiClient.post<Risk>(`/erm/risks/${riskId}/reopen`),
+    getRiskAging: () => 
+      apiClient.get<Array<{ risk_id: number; title: string; days_open: number; status: string }>>('/erm/risks/aging'),
+  },
+  mitigationActions: {
+    getAll: (riskId: number) => 
+      apiClient.get<RiskMitigationAction[]>(`/erm/risks/${riskId}/mitigation-actions`),
+    create: (riskId: number, data: Partial<RiskMitigationAction>) => 
+      apiClient.post<RiskMitigationAction>(`/erm/risks/${riskId}/mitigation-actions`, data),
+    update: (actionId: number, data: Partial<RiskMitigationAction>) => 
+      apiClient.put<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}`, data),
+    delete: (actionId: number) => 
+      apiClient.delete(`/erm/mitigation-actions/${actionId}`),
+    complete: (actionId: number, actualReduction?: number) => 
+      apiClient.post<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}/complete`, { actual_residual_reduction: actualReduction }),
+    getOverdue: () => 
+      apiClient.get<RiskMitigationAction[]>('/erm/mitigation-actions/overdue'),
+  },
+  auditFindings: {
+    link: (riskId: number, issueId: number, notes?: string) => 
+      apiClient.post<RiskAuditFindingLink>(`/erm/risks/${riskId}/audit-findings`, { issue_id: issueId, notes }),
+    unlink: (riskId: number, linkId: number) => 
+      apiClient.delete(`/erm/risks/${riskId}/audit-findings/${linkId}`),
+  },
+  scales: {
+    getAll: () => 
+      apiClient.get<LikelihoodImpactScale[]>('/erm/scales'),
+    seedDefaults: () => 
+      apiClient.post<{ message: string }>('/erm/scales/seed-defaults'),
   },
   kris: {
     getAll: (params?: { risk_id?: number; status_filter?: string; is_active?: boolean }) => 

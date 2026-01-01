@@ -18,6 +18,9 @@ import {
   Trash2,
   Upload,
   CheckCircle,
+  Lock,
+  Unlock,
+  ListTodo,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRef } from 'react';
@@ -31,6 +34,28 @@ const RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgCo
   { value: 'compliance', label: 'Compliance', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
   { value: 'technology', label: 'Technology', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
   { value: 'third_party', label: 'Third Party', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  { value: 'project_change', label: 'Project/Change', color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
+];
+
+const SUB_CATEGORIES_BY_CATEGORY: Record<RiskCategory, string[]> = {
+  strategic: ['Market', 'Reputation', 'Strategic Planning', 'Competitive', 'Brand', 'Other'],
+  operational: ['Process', 'Human Resources', 'Supply Chain', 'Business Continuity', 'Quality', 'Other'],
+  financial: ['Credit', 'Market Risk', 'Liquidity', 'Accounting', 'Budget', 'Other'],
+  compliance: ['Regulatory', 'Legal', 'Contractual', 'Ethical', 'Data Privacy', 'Other'],
+  technology: ['Cybersecurity', 'Infrastructure', 'Data', 'System Availability', 'Software', 'Other'],
+  third_party: ['Vendor', 'Outsourcing', 'Partnership', 'Contractor', 'Other'],
+  project_change: ['Project Delivery', 'Change Management', 'Integration', 'Scope', 'Other'],
+};
+
+const DEPARTMENTS = [
+  { id: 1, name: 'IT' },
+  { id: 2, name: 'Finance' },
+  { id: 3, name: 'Operations' },
+  { id: 4, name: 'HR' },
+  { id: 5, name: 'Legal' },
+  { id: 6, name: 'Sales' },
+  { id: 7, name: 'Marketing' },
+  { id: 8, name: 'Security' },
 ];
 
 const RISK_STATUSES: { value: RiskStatus; label: string; color: string; bgColor: string }[] = [
@@ -576,9 +601,30 @@ export default function ERMRisksPage() {
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${categoryStyle.bgColor} ${categoryStyle.color}`}>
                             {categoryStyle.label}
                           </span>
+                          {risk.risk_sub_category && (
+                            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-600/50 text-slate-300">
+                              {risk.risk_sub_category}
+                            </span>
+                          )}
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
                             {statusStyle.label}
                           </span>
+                          {risk.closure_status && (
+                            <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                              risk.closure_status === 'closed' 
+                                ? 'bg-slate-500/30 text-slate-300' 
+                                : 'bg-amber-500/20 text-amber-400'
+                            }`}>
+                              {risk.closure_status === 'closed' ? <Lock size={10} /> : <Unlock size={10} />}
+                              {risk.closure_status === 'closed' ? 'Closed' : 'Pending Closure'}
+                            </span>
+                          )}
+                          {(risk.mitigation_actions?.length || 0) > 0 && (
+                            <span className="flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-indigo-500/20 text-indigo-400">
+                              <ListTodo size={10} />
+                              {risk.mitigation_actions?.length} Actions
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="ml-4 flex items-center gap-4">
@@ -646,6 +692,12 @@ export default function ERMRisksPage() {
   );
 }
 
+interface User {
+  id: number;
+  email: string;
+  full_name?: string;
+}
+
 function RiskModal({
   risk,
   onClose,
@@ -661,6 +713,9 @@ function RiskModal({
     title: risk?.title || '',
     description: risk?.description || '',
     risk_category: risk?.risk_category || 'operational' as RiskCategory,
+    risk_sub_category: risk?.risk_sub_category || '',
+    business_owner_id: risk?.business_owner_id || undefined as number | undefined,
+    affected_department_ids: risk?.affected_department_ids || [] as number[],
     status: risk?.status || 'open' as RiskStatus,
     inherent_likelihood: risk?.inherent_likelihood || 3,
     inherent_impact: risk?.inherent_impact || 3,
@@ -668,6 +723,38 @@ function RiskModal({
     residual_impact: risk?.residual_impact || 2,
     treatment_plan: risk?.treatment_plan || '',
   });
+
+  const { data: users } = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/users');
+        if (!response.ok) return [];
+        return response.json() as Promise<User[]>;
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const subCategories = SUB_CATEGORIES_BY_CATEGORY[formData.risk_category] || [];
+
+  const handleCategoryChange = (newCategory: RiskCategory) => {
+    setFormData({ 
+      ...formData, 
+      risk_category: newCategory,
+      risk_sub_category: ''
+    });
+  };
+
+  const handleDepartmentToggle = (deptId: number) => {
+    const current = formData.affected_department_ids;
+    if (current.includes(deptId)) {
+      setFormData({ ...formData, affected_department_ids: current.filter(id => id !== deptId) });
+    } else {
+      setFormData({ ...formData, affected_department_ids: [...current, deptId] });
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -715,7 +802,7 @@ function RiskModal({
               <label className="block text-sm text-slate-400">Category</label>
               <select
                 value={formData.risk_category}
-                onChange={(e) => setFormData({ ...formData, risk_category: e.target.value as RiskCategory })}
+                onChange={(e) => handleCategoryChange(e.target.value as RiskCategory)}
                 className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
               >
                 {RISK_CATEGORIES.map((cat) => (
@@ -723,6 +810,22 @@ function RiskModal({
                 ))}
               </select>
             </div>
+            <div>
+              <label className="block text-sm text-slate-400">Sub-Category</label>
+              <select
+                value={formData.risk_sub_category}
+                onChange={(e) => setFormData({ ...formData, risk_sub_category: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              >
+                <option value="">Select sub-category...</option>
+                {subCategories.map((sub) => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-slate-400">Status</label>
               <select
@@ -734,6 +837,39 @@ function RiskModal({
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400">Business Owner</label>
+              <select
+                value={formData.business_owner_id || ''}
+                onChange={(e) => setFormData({ ...formData, business_owner_id: e.target.value ? Number(e.target.value) : undefined })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              >
+                <option value="">Select owner...</option>
+                {(users || []).map((user) => (
+                  <option key={user.id} value={user.id}>{user.full_name || user.email}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-400 mb-2">Affected Departments</label>
+            <div className="flex flex-wrap gap-2">
+              {DEPARTMENTS.map((dept) => (
+                <button
+                  key={dept.id}
+                  type="button"
+                  onClick={() => handleDepartmentToggle(dept.id)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    formData.affected_department_ids.includes(dept.id)
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
+                  }`}
+                >
+                  {dept.name}
+                </button>
+              ))}
             </div>
           </div>
 

@@ -165,8 +165,65 @@ export interface EvidenceAIAssessment {
   created_at: string;
 }
 
-export type RiskCategory = 'strategic' | 'operational' | 'financial' | 'compliance' | 'technology' | 'third_party';
+export type RiskCategory = 'strategic' | 'operational' | 'financial' | 'compliance' | 'technology' | 'third_party' | 'project_change';
 export type RiskStatus = 'open' | 'in_treatment' | 'mitigated' | 'accepted' | 'closed';
+
+export interface RiskMitigationAction {
+  id: number;
+  risk_id: number;
+  title: string;
+  description?: string;
+  action_type: 'mitigate' | 'transfer' | 'avoid' | 'accept';
+  status: 'open' | 'in_progress' | 'completed' | 'overdue' | 'cancelled';
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  owner_id?: number;
+  owner?: { id: number; email: string; full_name?: string };
+  due_date?: string;
+  completed_at?: string;
+  expected_residual_reduction?: number;
+  actual_residual_reduction?: number;
+  evidence_id?: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RiskAuditFindingLink {
+  id: number;
+  risk_id: number;
+  issue_id: number;
+  notes?: string;
+  created_at: string;
+  issue?: GovernanceIssue;
+}
+
+export interface LikelihoodImpactScale {
+  id: number;
+  tenant_id: number;
+  scale_type: 'likelihood' | 'impact';
+  level: number;
+  label: string;
+  description?: string;
+  score_value: number;
+  color?: string;
+  is_default: boolean;
+  created_at: string;
+}
+
+export interface GovernanceIssue {
+  id: number;
+  tenant_id: number;
+  title: string;
+  description?: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  source?: string;
+  assignee_id?: number;
+  due_date?: string;
+  resolution?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface Risk {
   id: number;
@@ -174,6 +231,14 @@ export interface Risk {
   title: string;
   description?: string;
   risk_category: RiskCategory;
+  risk_sub_category?: string;
+  business_owner_id?: number;
+  business_owner?: { id: number; email: string; full_name?: string };
+  affected_department_ids?: number[];
+  closure_status?: 'pending_closure' | 'closed' | null;
+  closed_at?: string;
+  closed_by?: number;
+  closure_notes?: string;
   inherent_likelihood?: number;
   inherent_impact?: number;
   inherent_score?: number;
@@ -187,6 +252,8 @@ export interface Risk {
   owner_name?: string;
   due_date?: string;
   review_date?: string;
+  mitigation_actions?: RiskMitigationAction[];
+  audit_finding_links?: RiskAuditFindingLink[];
   created_at: string;
   updated_at: string;
 }
