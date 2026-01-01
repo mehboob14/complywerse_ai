@@ -424,6 +424,7 @@ class RiskBase(BaseModel):
     title: str
     description: Optional[str] = None
     category: str
+    risk_category: Optional[str] = None
     owner_id: Optional[int] = None
 
 
@@ -435,6 +436,7 @@ class RiskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
+    risk_category: Optional[str] = None
     owner_id: Optional[int] = None
     status: Optional[str] = None
 

@@ -6,13 +6,16 @@ from sqlalchemy import func
 
 from ..models import (
     Risk, RiskControlLink, RiskAssetLink, RiskEvidenceLink,
-    NormalizedControl, ITAsset, Evidence, GRCUser, Tenant, get_db
+    RiskFrameworkControlLink, RiskGovernanceLink,
+    NormalizedControl, FrameworkControl, ITAsset, Evidence,
+    GovernanceObjective, GRCUser, Tenant, get_db
 )
 from ..schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
     RiskAssessment, RiskTreatment,
     RiskControlLinkCreate, RiskAssetLinkCreate, RiskEvidenceLinkCreate,
-    RiskDashboard, RiskHeatmapCell, MessageResponse
+    RiskFrameworkControlLinkCreate, RiskGovernanceLinkCreate,
+    RiskDetailResponse, RiskHeatmapData, MessageResponse
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -95,6 +98,7 @@ def create_risk(
         title=risk.title,
         description=risk.description,
         category=risk.category,
+        risk_category=getattr(risk, 'risk_category', risk.category),
         owner_id=risk.owner_id
     )
     db.add(db_risk)
@@ -103,7 +107,7 @@ def create_risk(
     return db_risk
 
 
-@router.get("/dashboard", response_model=RiskDashboard)
+@router.get("/dashboard")
 def get_risk_dashboard(
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -111,72 +115,80 @@ def get_risk_dashboard(
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
-        return RiskDashboard(
-            total_risks=0,
-            by_category={},
-            by_status={},
-            by_score_range={"high": 0, "medium": 0, "low": 0},
-            high_risks=0,
-            medium_risks=0,
-            low_risks=0
-        )
+        return {
+            "total_risks": 0,
+            "by_category": {},
+            "by_status": {},
+            "by_score_range": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "avg_inherent_score": 0,
+            "avg_residual_score": 0,
+            "open_risks": 0,
+            "risks_needing_review": 0
+        }
     
     query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
+    
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Risk.tenant_id == tenant_id)
     
     risks = query.all()
-    total = len(risks)
     
     by_category = {}
     by_status = {}
-    high_risks = 0
-    medium_risks = 0
-    low_risks = 0
+    by_score_range = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    total_inherent_score = 0
+    total_residual_score = 0
+    risks_with_score = 0
     
     for risk in risks:
-        by_category[risk.category] = by_category.get(risk.category, 0) + 1
-        by_status[risk.status] = by_status.get(risk.status, 0) + 1
+        cat = risk.risk_category or risk.category or "operational"
+        by_category[cat] = by_category.get(cat, 0) + 1
+        
+        status_val = risk.status or "open"
+        by_status[status_val] = by_status.get(status_val, 0) + 1
+        
+        score = risk.residual_score or risk.inherent_score or 0
+        if score >= 20:
+            by_score_range["critical"] += 1
+        elif score >= 12:
+            by_score_range["high"] += 1
+        elif score >= 6:
+            by_score_range["medium"] += 1
+        else:
+            by_score_range["low"] += 1
         
         if risk.inherent_score:
-            if risk.inherent_score >= 15:
-                high_risks += 1
-            elif risk.inherent_score >= 8:
-                medium_risks += 1
-            else:
-                low_risks += 1
+            total_inherent_score += risk.inherent_score
+            risks_with_score += 1
+        if risk.residual_score:
+            total_residual_score += risk.residual_score
     
-    return RiskDashboard(
-        total_risks=total,
-        by_category=by_category,
-        by_status=by_status,
-        by_score_range={
-            "high": high_risks,
-            "medium": medium_risks,
-            "low": low_risks
-        },
-        high_risks=high_risks,
-        medium_risks=medium_risks,
-        low_risks=low_risks
-    )
+    return {
+        "total_risks": len(risks),
+        "by_category": by_category,
+        "by_status": by_status,
+        "by_score_range": by_score_range,
+        "avg_inherent_score": round(total_inherent_score / risks_with_score, 1) if risks_with_score > 0 else 0,
+        "avg_residual_score": round(total_residual_score / risks_with_score, 1) if risks_with_score > 0 else 0,
+        "open_risks": by_status.get("open", 0),
+        "risks_needing_review": sum(1 for r in risks if r.review_date and r.review_date < datetime.utcnow())
+    }
 
 
 @router.get("/heatmap")
 def get_risk_heatmap(
+    risk_type: Optional[str] = None,
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
-        return {"cells": []}
+        return []
     
-    query = db.query(Risk).filter(
-        Risk.inherent_likelihood.isnot(None),
-        Risk.inherent_impact.isnot(None),
-        Risk.tenant_id.in_(user_tenants)
-    )
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
+    
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Risk.tenant_id == tenant_id)
@@ -184,19 +196,132 @@ def get_risk_heatmap(
     risks = query.all()
     
     heatmap = {}
-    for risk in risks:
-        key = f"{risk.inherent_likelihood}_{risk.inherent_impact}"
-        if key not in heatmap:
-            heatmap[key] = {
-                "likelihood": risk.inherent_likelihood,
-                "impact": risk.inherent_impact,
-                "count": 0,
-                "risk_ids": []
-            }
-        heatmap[key]["count"] += 1
-        heatmap[key]["risk_ids"].append(risk.id)
+    risk_type_prefix = risk_type if risk_type in ["inherent", "residual"] else "inherent"
     
-    return {"cells": list(heatmap.values())}
+    for risk in risks:
+        likelihood = getattr(risk, f"{risk_type_prefix}_likelihood") or 0
+        impact = getattr(risk, f"{risk_type_prefix}_impact") or 0
+        
+        if likelihood > 0 and impact > 0:
+            key = f"{likelihood}-{impact}"
+            if key not in heatmap:
+                heatmap[key] = {"likelihood": likelihood, "impact": impact, "count": 0, "risks": []}
+            heatmap[key]["count"] += 1
+            heatmap[key]["risks"].append({
+                "id": risk.id,
+                "title": risk.title,
+                "score": getattr(risk, f"{risk_type_prefix}_score")
+            })
+    
+    return list(heatmap.values())
+
+
+@router.get("/{risk_id}/detail")
+def get_risk_detail(
+    risk_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).options(
+        joinedload(Risk.control_links).joinedload(RiskControlLink.normalized_control),
+        joinedload(Risk.asset_links).joinedload(RiskAssetLink.asset),
+        joinedload(Risk.evidence_links).joinedload(RiskEvidenceLink.evidence),
+        joinedload(Risk.framework_control_links).joinedload(RiskFrameworkControlLink.framework_control),
+        joinedload(Risk.governance_links).joinedload(RiskGovernanceLink.governance_objective),
+        joinedload(Risk.owner)
+    ).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    linked_controls = []
+    for link in risk.control_links:
+        if link.normalized_control:
+            linked_controls.append({
+                "id": link.id,
+                "control_id": link.normalized_control.id,
+                "code": link.normalized_control.code,
+                "name": link.normalized_control.name
+            })
+    
+    linked_framework_controls = []
+    for link in risk.framework_control_links:
+        if link.framework_control:
+            linked_framework_controls.append({
+                "id": link.id,
+                "framework_control_id": link.framework_control.id,
+                "code": link.framework_control.code,
+                "name": link.framework_control.name,
+                "mitigation_effectiveness": link.mitigation_effectiveness,
+                "notes": link.notes
+            })
+    
+    linked_assets = []
+    for link in risk.asset_links:
+        if link.asset:
+            linked_assets.append({
+                "id": link.id,
+                "asset_id": link.asset.id,
+                "name": link.asset.name,
+                "asset_type": link.asset.asset_type
+            })
+    
+    linked_evidence = []
+    for link in risk.evidence_links:
+        if link.evidence:
+            linked_evidence.append({
+                "id": link.id,
+                "evidence_id": link.evidence.id,
+                "name": link.evidence.name,
+                "status": link.evidence.status
+            })
+    
+    linked_governance = []
+    for link in risk.governance_links:
+        if link.governance_objective:
+            linked_governance.append({
+                "id": link.id,
+                "governance_objective_id": link.governance_objective.id,
+                "name": link.governance_objective.name,
+                "impact_level": link.impact_level
+            })
+    
+    return {
+        "id": risk.id,
+        "tenant_id": risk.tenant_id,
+        "title": risk.title,
+        "description": risk.description,
+        "category": risk.category,
+        "risk_category": risk.risk_category,
+        "owner_id": risk.owner_id,
+        "owner_name": risk.owner.display_name if risk.owner else None,
+        "inherent_likelihood": risk.inherent_likelihood,
+        "inherent_impact": risk.inherent_impact,
+        "inherent_score": risk.inherent_score,
+        "residual_likelihood": risk.residual_likelihood,
+        "residual_impact": risk.residual_impact,
+        "residual_score": risk.residual_score,
+        "risk_appetite": risk.risk_appetite,
+        "status": risk.status,
+        "treatment_plan": risk.treatment_plan,
+        "due_date": risk.due_date.isoformat() if risk.due_date else None,
+        "review_date": risk.review_date.isoformat() if risk.review_date else None,
+        "created_at": risk.created_at.isoformat(),
+        "updated_at": risk.updated_at.isoformat(),
+        "linked_controls": linked_controls,
+        "linked_framework_controls": linked_framework_controls,
+        "linked_assets": linked_assets,
+        "linked_evidence": linked_evidence,
+        "linked_governance": linked_governance
+    }
 
 
 @router.get("/{risk_id}", response_model=dict)
@@ -228,6 +353,7 @@ def get_risk(
         "title": risk.title,
         "description": risk.description,
         "category": risk.category,
+        "risk_category": risk.risk_category,
         "owner_id": risk.owner_id,
         "inherent_likelihood": risk.inherent_likelihood,
         "inherent_impact": risk.inherent_impact,
@@ -414,6 +540,174 @@ def link_risk_to_control(
     db.commit()
     
     return MessageResponse(message="Control linked successfully")
+
+
+@router.post("/{risk_id}/link-framework-control", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def link_risk_to_framework_control(
+    risk_id: int,
+    link: RiskFrameworkControlLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    framework_control = db.query(FrameworkControl).filter(
+        FrameworkControl.id == link.framework_control_id
+    ).first()
+    if not framework_control:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework control not found"
+        )
+    
+    existing = db.query(RiskFrameworkControlLink).filter(
+        RiskFrameworkControlLink.risk_id == risk_id,
+        RiskFrameworkControlLink.framework_control_id == link.framework_control_id
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link already exists"
+        )
+    
+    db_link = RiskFrameworkControlLink(
+        risk_id=risk_id,
+        framework_control_id=link.framework_control_id,
+        mitigation_effectiveness=link.mitigation_effectiveness,
+        notes=link.notes
+    )
+    db.add(db_link)
+    db.commit()
+    
+    return MessageResponse(message="Framework control linked successfully")
+
+
+@router.delete("/{risk_id}/link-framework-control/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_risk_from_framework_control(
+    risk_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    link = db.query(RiskFrameworkControlLink).filter(
+        RiskFrameworkControlLink.id == link_id,
+        RiskFrameworkControlLink.risk_id == risk_id
+    ).first()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework control link not found"
+        )
+    
+    db.delete(link)
+    db.commit()
+    return None
+
+
+@router.post("/{risk_id}/link-governance", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def link_risk_to_governance(
+    risk_id: int,
+    link: RiskGovernanceLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    governance_objective = db.query(GovernanceObjective).filter(
+        GovernanceObjective.id == link.governance_objective_id,
+        GovernanceObjective.tenant_id.in_(user_tenants)
+    ).first()
+    if not governance_objective:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Governance objective not found"
+        )
+    
+    existing = db.query(RiskGovernanceLink).filter(
+        RiskGovernanceLink.risk_id == risk_id,
+        RiskGovernanceLink.governance_objective_id == link.governance_objective_id
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link already exists"
+        )
+    
+    db_link = RiskGovernanceLink(
+        risk_id=risk_id,
+        governance_objective_id=link.governance_objective_id,
+        impact_level=link.impact_level
+    )
+    db.add(db_link)
+    db.commit()
+    
+    return MessageResponse(message="Governance objective linked successfully")
+
+
+@router.delete("/{risk_id}/link-governance/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_risk_from_governance(
+    risk_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    link = db.query(RiskGovernanceLink).filter(
+        RiskGovernanceLink.id == link_id,
+        RiskGovernanceLink.risk_id == risk_id
+    ).first()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Governance link not found"
+        )
+    
+    db.delete(link)
+    db.commit()
+    return None
 
 
 @router.post("/{risk_id}/assets", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
