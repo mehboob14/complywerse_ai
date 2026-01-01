@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { certificationsApi } from '@/lib/api';
-import { CertificationJourney, ControlImplementation, ProgressSummary } from '@/types';
+import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
 import { 
   Loader2, 
@@ -44,8 +44,50 @@ import {
   Plus,
   Minus,
   Award,
-  TrendingUp
+  TrendingUp,
+  Radio,
+  Paperclip
 } from 'lucide-react';
+
+const EVIDENCE_TYPE_MAP: Record<string, { label: string; color: string }> = {
+  policy: { label: 'Policy', color: 'bg-blue-500/20 text-blue-400' },
+  procedure: { label: 'Procedure', color: 'bg-purple-500/20 text-purple-400' },
+  screenshot: { label: 'Screenshot', color: 'bg-cyan-500/20 text-cyan-400' },
+  audit: { label: 'Audit Log', color: 'bg-orange-500/20 text-orange-400' },
+  log: { label: 'Log', color: 'bg-orange-500/20 text-orange-400' },
+  training: { label: 'Training', color: 'bg-green-500/20 text-green-400' },
+  risk: { label: 'Risk Assessment', color: 'bg-red-500/20 text-red-400' },
+  access: { label: 'Access Review', color: 'bg-yellow-500/20 text-yellow-400' },
+  config: { label: 'Configuration', color: 'bg-indigo-500/20 text-indigo-400' },
+  report: { label: 'Report', color: 'bg-pink-500/20 text-pink-400' },
+  certificate: { label: 'Certificate', color: 'bg-emerald-500/20 text-emerald-400' },
+  contract: { label: 'Contract', color: 'bg-amber-500/20 text-amber-400' },
+  register: { label: 'Register', color: 'bg-teal-500/20 text-teal-400' },
+  inventory: { label: 'Inventory', color: 'bg-lime-500/20 text-lime-400' },
+  plan: { label: 'Plan', color: 'bg-sky-500/20 text-sky-400' },
+  matrix: { label: 'Matrix', color: 'bg-violet-500/20 text-violet-400' },
+  list: { label: 'List', color: 'bg-fuchsia-500/20 text-fuchsia-400' },
+};
+
+const getEvidenceType = (recommendation: string): { label: string; color: string } => {
+  const key = recommendation.toLowerCase();
+  for (const [pattern, value] of Object.entries(EVIDENCE_TYPE_MAP)) {
+    if (key.includes(pattern)) return value;
+  }
+  return { label: 'Document', color: 'bg-slate-500/20 text-slate-400' };
+};
+
+const getCategoryFromDomain = (domainName: string): string => {
+  const name = domainName?.toLowerCase() || '';
+  if (name.includes('organizational')) return 'Organizational';
+  if (name.includes('people')) return 'People';
+  if (name.includes('physical')) return 'Physical';
+  if (name.includes('technological')) return 'Technological';
+  return 'Other';
+};
+
+type CategoryFilter = 'all' | 'organizational' | 'people' | 'physical' | 'technological';
+type StatusFilter = 'all' | 'implemented' | 'not_implemented' | 'partial' | 'in_progress' | 'verified';
 
 const CERTIFICATION_PHASES = [
   { id: 1, name: 'ISMS Scoping', description: 'Define the scope and boundaries of the ISMS', tasks: ['Define organizational scope', 'Identify key stakeholders', 'Document scope boundaries', 'Identify exclusions'], deliverables: ['Scope Statement', 'Stakeholder Register', 'Scope Boundaries Document'] },
@@ -88,6 +130,11 @@ export default function CertificationJourneyPage() {
   const [selectedDomain, setSelectedDomain] = useState<number | null>(null);
   const [selectedControl, setSelectedControl] = useState<ControlImplementation | null>(null);
   const [showControlModal, setShowControlModal] = useState(false);
+  const [expandedControls, setExpandedControls] = useState<number[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [uploadingControlId, setUploadingControlId] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: journey, isLoading: journeyLoading, error: journeyError } = useQuery({
     queryKey: ['certification', journeyId],
@@ -98,13 +145,27 @@ export default function CertificationJourneyPage() {
   });
 
   const { data: controls, isLoading: controlsLoading } = useQuery({
-    queryKey: ['certification-controls', journeyId, selectedDomain],
+    queryKey: ['certification-controls', journeyId],
     queryFn: async () => {
-      const params = selectedDomain ? { domain_id: selectedDomain } : undefined;
-      const response = await certificationsApi.getControls(journeyId, params);
-      return response.data as ControlImplementation[];
+      const response = await certificationsApi.getControls(journeyId);
+      return response.data as CertificationControl[];
     },
     enabled: !!journeyId,
+  });
+
+  const uploadEvidenceMutation = useMutation({
+    mutationFn: async ({ controlId, file }: { controlId: number; file: File }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return certificationsApi.uploadEvidence(journeyId, controlId, formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      setUploadingControlId(null);
+    },
+    onError: () => {
+      setUploadingControlId(null);
+    }
   });
 
   const { data: progress } = useQuery({
@@ -171,6 +232,63 @@ export default function CertificationJourneyPage() {
         ? prev.filter(id => id !== domainId)
         : [...prev, domainId]
     );
+  };
+
+  const toggleControl = (controlId: number) => {
+    setExpandedControls(prev => 
+      prev.includes(controlId) 
+        ? prev.filter(id => id !== controlId)
+        : [...prev, controlId]
+    );
+  };
+
+  const handleFileUpload = (controlId: number, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setUploadingControlId(controlId);
+      uploadEvidenceMutation.mutate({ controlId, file });
+    }
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
+
+  const filteredControls = controls?.filter((control: CertificationControl) => {
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = 
+        control.control_code?.toLowerCase().includes(query) ||
+        control.control_name?.toLowerCase().includes(query) ||
+        control.control_statement?.toLowerCase().includes(query);
+      if (!matchesSearch) return false;
+    }
+    if (categoryFilter !== 'all') {
+      const category = getCategoryFromDomain(control.domain_name).toLowerCase();
+      if (category !== categoryFilter) return false;
+    }
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'not_implemented' && control.status !== 'not_started') return false;
+      if (statusFilter === 'implemented' && !['implemented', 'verified'].includes(control.status)) return false;
+      if (statusFilter === 'partial' && control.status !== 'in_progress') return false;
+      if (statusFilter === 'in_progress' && control.status !== 'in_progress') return false;
+      if (statusFilter === 'verified' && control.status !== 'verified') return false;
+    }
+    return true;
+  }) || [];
+
+  const controlStats = {
+    total: controls?.length || 0,
+    applicable: controls?.filter((c: CertificationControl) => c.is_applicable).length || 0,
+    notApplicable: controls?.filter((c: CertificationControl) => !c.is_applicable).length || 0,
+    implemented: controls?.filter((c: CertificationControl) => ['implemented', 'verified'].includes(c.status)).length || 0,
+    partial: controls?.filter((c: CertificationControl) => c.status === 'in_progress').length || 0,
+    notImplemented: controls?.filter((c: CertificationControl) => c.status === 'not_started').length || 0,
+    byCategory: {
+      organizational: controls?.filter((c: CertificationControl) => getCategoryFromDomain(c.domain_name) === 'Organizational').length || 0,
+      people: controls?.filter((c: CertificationControl) => getCategoryFromDomain(c.domain_name) === 'People').length || 0,
+      physical: controls?.filter((c: CertificationControl) => getCategoryFromDomain(c.domain_name) === 'Physical').length || 0,
+      technological: controls?.filter((c: CertificationControl) => getCategoryFromDomain(c.domain_name) === 'Technological').length || 0,
+    }
   };
 
   const handleControlClick = (control: ControlImplementation) => {
@@ -582,6 +700,167 @@ export default function CertificationJourneyPage() {
     </div>
   );
 
+  const renderControlAccordion = (control: CertificationControl, showUpload = true) => {
+    const isExpanded = expandedControls.includes(control.id);
+    const category = getCategoryFromDomain(control.domain_name);
+    const statusConfig: Record<string, { label: string; color: string }> = {
+      not_started: { label: 'Not Implemented', color: 'bg-red-500/20 text-red-400' },
+      in_progress: { label: 'Partial', color: 'bg-yellow-500/20 text-yellow-400' },
+      implemented: { label: 'Implemented', color: 'bg-green-500/20 text-green-400' },
+      verified: { label: 'Verified', color: 'bg-blue-500/20 text-blue-400' },
+      not_applicable: { label: 'N/A', color: 'bg-slate-500/20 text-slate-400' },
+    };
+    const status = statusConfig[control.status] || statusConfig.not_started;
+    
+    return (
+      <div key={control.id} className="rounded-lg border border-slate-700 bg-slate-800/50">
+        <button
+          onClick={() => toggleControl(control.id)}
+          className="flex w-full items-center justify-between p-4 text-left"
+        >
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm text-primary-400">{control.control_code}</span>
+                <span className="font-medium text-white truncate">{control.control_name}</span>
+              </div>
+              <p className="text-sm text-slate-500 truncate mt-0.5">{control.control_statement}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+            <span className="rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300">{category}</span>
+            <span className={`rounded-full px-2 py-1 text-xs ${control.is_applicable ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/20 text-slate-400'}`}>
+              {control.is_applicable ? 'Applicable' : 'N/A'}
+            </span>
+            <span className={`rounded-full px-2 py-1 text-xs ${status.color}`}>{status.label}</span>
+            <span className="text-xs text-slate-500">{control.evidence_count}/{control.required_evidence_count}</span>
+            <Circle className={`h-4 w-4 ${control.evidence_count > 0 ? 'text-green-400 fill-green-400' : 'text-slate-600'}`} />
+          </div>
+        </button>
+        {isExpanded && (
+          <div className="border-t border-slate-700 p-4">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div>
+                <h4 className="mb-4 text-sm font-semibold text-white">
+                  Required Evidence for {control.control_code}
+                </h4>
+                {control.sub_controls?.length > 0 ? (
+                  <div className="space-y-3">
+                    {control.sub_controls.map((sub: SubControlWithEvidence) => (
+                      <div key={sub.id} className="rounded-lg bg-slate-900/50 p-3">
+                        <div className="flex items-start gap-3">
+                          <Radio className="h-4 w-4 text-primary-400 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white">{sub.name}</p>
+                            <p className="text-xs text-slate-400 mt-1">{sub.description}</p>
+                            {sub.evidence_recommendations?.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {sub.evidence_recommendations.map((rec, idx) => {
+                                  const evType = getEvidenceType(rec);
+                                  return (
+                                    <span key={idx} className={`rounded px-1.5 py-0.5 text-xs ${evType.color}`}>
+                                      {evType.label}
+                                    </span>
+                                  );
+                                })}
+                                <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400">Annual</span>
+                              </div>
+                            )}
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className="rounded bg-orange-500/20 px-1.5 py-0.5 text-xs text-orange-400">Required</span>
+                              {showUpload && (
+                                <label className="cursor-pointer">
+                                  <input
+                                    type="file"
+                                    className="hidden"
+                                    onChange={(e) => handleFileUpload(control.id, e)}
+                                    disabled={uploadingControlId === control.id}
+                                  />
+                                  <span className="flex items-center gap-1 rounded bg-primary-500/20 px-2 py-0.5 text-xs text-primary-400 hover:bg-primary-500/30">
+                                    {uploadingControlId === control.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Upload className="h-3 w-3" />
+                                    )}
+                                    Upload
+                                  </span>
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-slate-900/50 p-4 text-center">
+                    <p className="text-sm text-slate-400">No sub-controls defined</p>
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-sm font-semibold text-white">
+                    Linked Evidence ({control.evidence_count})
+                  </h4>
+                  {showUpload && (
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => handleFileUpload(control.id, e)}
+                        disabled={uploadingControlId === control.id}
+                      />
+                      <span className="flex items-center gap-1 rounded bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600">
+                        {uploadingControlId === control.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Upload className="h-3 w-3" />
+                        )}
+                        Upload
+                      </span>
+                    </label>
+                  )}
+                </div>
+                {control.evidence?.length > 0 ? (
+                  <div className="space-y-2">
+                    {control.evidence.map((ev: ControlEvidence) => (
+                      <div key={ev.id} className="flex items-center gap-3 rounded-lg bg-slate-900/50 p-3">
+                        <Paperclip className="h-4 w-4 text-slate-400" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white truncate">{ev.file_name || 'Evidence file'}</p>
+                          <p className="text-xs text-slate-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
+                        </div>
+                        <span className={`rounded px-2 py-0.5 text-xs ${
+                          ev.review_status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                          ev.review_status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                          'bg-yellow-500/20 text-yellow-400'
+                        }`}>
+                          {ev.review_status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6 text-center">
+                    <Paperclip className="mx-auto h-8 w-8 text-slate-600 mb-2" />
+                    <p className="text-sm text-slate-400">No evidence linked yet</p>
+                    <p className="text-xs text-slate-500 mt-1">Upload evidence to comply</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderSoaTab = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
@@ -590,7 +869,7 @@ export default function CertificationJourneyPage() {
             <Layers className="h-5 w-5 text-slate-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">{progress?.total_controls || 93}</p>
+            <p className="text-2xl font-bold text-white">{controlStats.total}</p>
             <p className="text-xs text-slate-400">Total Controls</p>
           </div>
         </div>
@@ -599,7 +878,7 @@ export default function CertificationJourneyPage() {
             <CheckCircle2 className="h-5 w-5 text-green-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-green-400">{progress?.implemented || 0}</p>
+            <p className="text-2xl font-bold text-green-400">{controlStats.applicable}</p>
             <p className="text-xs text-slate-400">Applicable</p>
           </div>
         </div>
@@ -608,7 +887,7 @@ export default function CertificationJourneyPage() {
             <XCircle className="h-5 w-5 text-slate-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-400">{progress?.not_applicable || 0}</p>
+            <p className="text-2xl font-bold text-slate-400">{controlStats.notApplicable}</p>
             <p className="text-xs text-slate-400">Not Applicable</p>
           </div>
         </div>
@@ -617,7 +896,7 @@ export default function CertificationJourneyPage() {
             <Check className="h-5 w-5 text-blue-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-blue-400">{progress?.verified || 0}</p>
+            <p className="text-2xl font-bold text-blue-400">{controlStats.implemented}</p>
             <p className="text-xs text-slate-400">Implemented</p>
           </div>
         </div>
@@ -626,7 +905,7 @@ export default function CertificationJourneyPage() {
             <Clock className="h-5 w-5 text-yellow-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-yellow-400">{progress?.in_progress || 0}</p>
+            <p className="text-2xl font-bold text-yellow-400">{controlStats.partial}</p>
             <p className="text-xs text-slate-400">Partial</p>
           </div>
         </div>
@@ -635,119 +914,74 @@ export default function CertificationJourneyPage() {
             <AlertCircle className="h-5 w-5 text-red-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-red-400">{progress?.not_started || 0}</p>
+            <p className="text-2xl font-bold text-red-400">{controlStats.notImplemented}</p>
             <p className="text-xs text-slate-400">Not Implemented</p>
           </div>
         </div>
       </div>
 
       <div className="card">
-        <div className="mb-6 flex items-center justify-between border-b border-slate-700 pb-4">
-          <div className="flex gap-4">
-            {(['controls', 'summary', 'export'] as SoaSubTab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setSoaSubTab(tab)}
-                className={`text-sm font-medium transition-colors ${
-                  soaSubTab === tab
-                    ? 'text-primary-400'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
-          </div>
-          <div className="relative">
+        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-700 pb-4">
+          {([
+            { key: 'all', label: 'All', count: controlStats.total },
+            { key: 'organizational', label: 'Organizational', count: controlStats.byCategory.organizational },
+            { key: 'people', label: 'People', count: controlStats.byCategory.people },
+            { key: 'physical', label: 'Physical', count: controlStats.byCategory.physical },
+            { key: 'technological', label: 'Technological', count: controlStats.byCategory.technological },
+          ] as { key: CategoryFilter; label: string; count: number }[]).map((cat) => (
+            <button
+              key={cat.key}
+              onClick={() => setCategoryFilter(cat.key)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                categoryFilter === cat.key
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+              }`}
+            >
+              {cat.label} ({cat.count})
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-4 flex gap-4">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search controls..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="input pl-10"
+              className="input w-full pl-10"
             />
           </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="input w-48"
+          >
+            <option value="all">All Status</option>
+            <option value="implemented">Implemented</option>
+            <option value="not_implemented">Not Implemented</option>
+            <option value="partial">Partial</option>
+          </select>
         </div>
 
-        {soaSubTab === 'controls' && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-              Annex A Controls
-            </h4>
-            {ANNEX_A_DOMAINS.map((domain) => {
-              const isExpanded = expandedDomains.includes(domain.id);
-              return (
-                <div key={domain.id} className="rounded-lg border border-slate-700 bg-slate-800/50">
-                  <button
-                    onClick={() => toggleDomain(domain.id)}
-                    className="flex w-full items-center justify-between p-4 text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm text-primary-400">{domain.id}</span>
-                      <span className="font-medium text-white">{domain.name}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300">
-                        {domain.controlCount} controls
-                      </span>
-                      {isExpanded ? (
-                        <ChevronUp className="h-4 w-4 text-slate-400" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-slate-400" />
-                      )}
-                    </div>
-                  </button>
-                  {isExpanded && (
-                    <div className="border-t border-slate-700 p-4">
-                      <div className="space-y-2">
-                        {Array.from({ length: Math.min(5, domain.controlCount) }).map((_, idx) => (
-                          <div key={idx} className="flex items-center justify-between rounded-lg bg-slate-700/50 p-3">
-                            <div>
-                              <span className="font-mono text-sm text-primary-400">{domain.id}.{idx + 1}</span>
-                              <span className="ml-2 text-sm text-slate-300">Control {idx + 1}</span>
-                            </div>
-                            <span className="rounded-full bg-slate-600 px-2 py-1 text-xs text-slate-300">
-                              Not Set
-                            </span>
-                          </div>
-                        ))}
-                        {domain.controlCount > 5 && (
-                          <p className="text-center text-sm text-slate-500">
-                            + {domain.controlCount - 5} more controls
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {soaSubTab === 'summary' && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <BarChart3 className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-white">SoA Summary</h3>
-            <p className="mt-1 text-slate-400">Statement of Applicability summary will appear here</p>
-          </div>
-        )}
-
-        {soaSubTab === 'export' && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Download className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-white">Export SoA</h3>
-            <p className="mt-1 text-slate-400">Export Statement of Applicability document</p>
-            <button className="btn-primary mt-4 flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Download SoA
-            </button>
-          </div>
-        )}
+        <div className="space-y-3">
+          {filteredControls.length > 0 ? (
+            filteredControls.map((control: CertificationControl) => renderControlAccordion(control))
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Shield className="mb-4 h-12 w-12 text-slate-600" />
+              <p className="text-slate-400">No controls found</p>
+              <p className="text-sm text-slate-500 mt-1">Try adjusting your filters</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
+
+  const totalEvidence = controls?.reduce((acc: number, c: CertificationControl) => acc + c.evidence_count, 0) || 0;
 
   const renderControlsTab = () => (
     <div className="space-y-6">
@@ -757,7 +991,7 @@ export default function CertificationJourneyPage() {
             <Layers className="h-5 w-5 text-slate-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">{progress?.total_controls || 0}</p>
+            <p className="text-2xl font-bold text-white">{controlStats.total}</p>
             <p className="text-xs text-slate-400">Total Controls</p>
           </div>
         </div>
@@ -766,7 +1000,7 @@ export default function CertificationJourneyPage() {
             <CheckCircle2 className="h-5 w-5 text-green-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-green-400">{progress?.implemented || 0}</p>
+            <p className="text-2xl font-bold text-green-400">{controlStats.implemented}</p>
             <p className="text-xs text-slate-400">Implemented</p>
           </div>
         </div>
@@ -775,8 +1009,8 @@ export default function CertificationJourneyPage() {
             <FileCheck className="h-5 w-5 text-blue-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-blue-400">0</p>
-            <p className="text-xs text-slate-400">Policies Approved</p>
+            <p className="text-2xl font-bold text-blue-400">{controlStats.partial}</p>
+            <p className="text-xs text-slate-400">In Progress</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
@@ -784,7 +1018,7 @@ export default function CertificationJourneyPage() {
             <FileText className="h-5 w-5 text-purple-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-purple-400">0</p>
+            <p className="text-2xl font-bold text-purple-400">{totalEvidence}</p>
             <p className="text-xs text-slate-400">Evidence Collected</p>
           </div>
         </div>
@@ -834,62 +1068,42 @@ export default function CertificationJourneyPage() {
                 <input
                   type="text"
                   placeholder="Search controls..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="input w-full pl-10"
                 />
               </div>
-              <select className="input w-48">
-                <option>All Categories</option>
-                <option>Organizational</option>
-                <option>People</option>
-                <option>Physical</option>
-                <option>Technological</option>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
+                className="input w-48"
+              >
+                <option value="all">All Categories</option>
+                <option value="organizational">Organizational</option>
+                <option value="people">People</option>
+                <option value="physical">Physical</option>
+                <option value="technological">Technological</option>
               </select>
-              <select className="input w-48">
-                <option>All Statuses</option>
-                <option>Implemented</option>
-                <option>In Progress</option>
-                <option>Not Started</option>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className="input w-48"
+              >
+                <option value="all">All Statuses</option>
+                <option value="implemented">Implemented</option>
+                <option value="partial">In Progress</option>
+                <option value="not_implemented">Not Started</option>
               </select>
             </div>
 
-            <div className="divide-y divide-slate-700">
-              {controls?.slice(0, 10).map((control: ControlImplementation) => (
-                <div
-                  key={control.id}
-                  onClick={() => handleControlClick(control)}
-                  className="flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-slate-700/50"
-                >
-                  <div className={`h-2 w-2 rounded-full ${
-                    control.status === 'verified' ? 'bg-green-400' :
-                    control.status === 'implemented' ? 'bg-blue-400' :
-                    control.status === 'in_progress' ? 'bg-yellow-400' :
-                    'bg-slate-400'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm text-primary-400">
-                        {control.framework_control?.code}
-                      </span>
-                    </div>
-                    <p className="truncate text-sm text-slate-300">
-                      {control.framework_control?.name}
-                    </p>
-                  </div>
-                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                    control.status === 'verified' ? 'bg-green-500/20 text-green-400' :
-                    control.status === 'implemented' ? 'bg-blue-500/20 text-blue-400' :
-                    control.status === 'in_progress' ? 'bg-yellow-500/20 text-yellow-400' :
-                    'bg-slate-700 text-slate-400'
-                  }`}>
-                    {control.status.replace('_', ' ')}
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-slate-500" />
-                </div>
-              ))}
-              {(!controls || controls.length === 0) && (
+            <div className="space-y-3">
+              {filteredControls.length > 0 ? (
+                filteredControls.map((control: CertificationControl) => renderControlAccordion(control))
+              ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Shield className="mb-4 h-12 w-12 text-slate-600" />
                   <p className="text-slate-400">No controls found</p>
+                  <p className="text-sm text-slate-500 mt-1">Try adjusting your filters</p>
                 </div>
               )}
             </div>

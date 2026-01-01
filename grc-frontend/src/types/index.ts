@@ -358,3 +358,45 @@ export interface FrameworkControl {
   is_mandatory: boolean;
   objective?: { id: number; code: string; name: string; domain?: { id: number; code: string; name: string } };
 }
+
+export interface SubControlWithEvidence {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+  evidence_recommendations: string[];
+  ai_matching_keywords: string[];
+}
+
+export interface ControlEvidence {
+  id: number;
+  file_name?: string;
+  file_size?: number;
+  uploaded_at: string;
+  ai_confidence_score?: number;
+  review_status: 'pending' | 'approved' | 'rejected';
+}
+
+export interface CertificationControl {
+  id: number;
+  journey_id: number;
+  framework_control_id: number;
+  control_code: string;
+  control_name: string;
+  control_statement: string;
+  domain_id: number;
+  domain_code: string;
+  domain_name: string;
+  objective_code?: string;
+  objective_name?: string;
+  status: string;
+  implementation_notes?: string;
+  implementation_date?: string;
+  verified_date?: string;
+  is_applicable: boolean;
+  priority: number;
+  sub_controls: SubControlWithEvidence[];
+  evidence: ControlEvidence[];
+  evidence_count: number;
+  required_evidence_count: number;
+}

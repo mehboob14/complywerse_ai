@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..models import (
     CertificationJourney, ControlImplementation, ImplementationEvidence,
     Framework, FrameworkControl, FrameworkDomain, ControlObjective,
-    Evidence, GRCUser, Tenant, get_db
+    FrameworkSubControl, Evidence, GRCUser, Tenant, get_db
 )
 from ..schemas import (
     CertificationJourneyCreate, CertificationJourneyUpdate, CertificationJourneyResponse,
@@ -209,19 +209,24 @@ def list_journey_controls(
     journey_id: int,
     status_filter: Optional[str] = None,
     priority: Optional[int] = None,
+    domain_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     journey = get_journey_or_404(journey_id, current_user, db)
     
     query = db.query(ControlImplementation).options(
-        joinedload(ControlImplementation.framework_control).joinedload(FrameworkControl.objective).joinedload(ControlObjective.domain)
+        joinedload(ControlImplementation.framework_control).joinedload(FrameworkControl.objective).joinedload(ControlObjective.domain),
+        joinedload(ControlImplementation.framework_control).joinedload(FrameworkControl.sub_controls),
+        joinedload(ControlImplementation.evidence_attachments)
     ).filter(ControlImplementation.journey_id == journey_id)
     
     if status_filter:
         query = query.filter(ControlImplementation.status == status_filter)
     if priority:
         query = query.filter(ControlImplementation.priority == priority)
+    if domain_id:
+        query = query.join(FrameworkControl).join(ControlObjective).filter(ControlObjective.domain_id == domain_id)
     
     implementations = query.all()
     
@@ -231,9 +236,28 @@ def list_journey_controls(
         objective = control.objective if control else None
         domain = objective.domain if objective else None
         
-        evidence_count = db.query(ImplementationEvidence).filter(
-            ImplementationEvidence.implementation_id == impl.id
-        ).count()
+        sub_controls_list = []
+        if control and control.sub_controls:
+            for sub in control.sub_controls:
+                sub_controls_list.append({
+                    "id": sub.id,
+                    "code": sub.code,
+                    "name": sub.name,
+                    "description": sub.description,
+                    "evidence_recommendations": sub.evidence_recommendations or [],
+                    "ai_matching_keywords": sub.ai_matching_keywords or []
+                })
+        
+        evidence_list = []
+        for ev in impl.evidence_attachments:
+            evidence_list.append({
+                "id": ev.id,
+                "file_name": ev.file_name,
+                "file_size": ev.file_size,
+                "uploaded_at": ev.uploaded_at.isoformat() if ev.uploaded_at else None,
+                "ai_confidence_score": ev.ai_confidence_score,
+                "review_status": ev.review_status
+            })
         
         result.append({
             "id": impl.id,
@@ -242,15 +266,21 @@ def list_journey_controls(
             "control_code": control.code if control else None,
             "control_name": control.name if control else None,
             "control_statement": control.statement if control else None,
+            "domain_id": domain.id if domain else None,
             "domain_code": domain.code if domain else None,
             "domain_name": domain.name if domain else None,
+            "objective_code": objective.code if objective else None,
+            "objective_name": objective.name if objective else None,
             "status": impl.status,
             "implementation_notes": impl.implementation_notes,
             "implementation_date": impl.implementation_date.isoformat() if impl.implementation_date else None,
             "verified_date": impl.verified_date.isoformat() if impl.verified_date else None,
             "is_applicable": impl.is_applicable,
             "priority": impl.priority,
-            "evidence_count": evidence_count
+            "sub_controls": sub_controls_list,
+            "evidence": evidence_list,
+            "evidence_count": len(evidence_list),
+            "required_evidence_count": len(sub_controls_list) * 2
         })
     
     return result
