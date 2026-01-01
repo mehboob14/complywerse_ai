@@ -124,7 +124,7 @@ export const certificationsApi = {
   getAll: (params?: { status?: string; framework_id?: number }) => 
     apiClient.get('/certifications', { params }),
   getById: (id: number) => apiClient.get(`/certifications/${id}`),
-  getFrameworkPhases: (frameworkId: number) => apiClient.get(`/grc/certifications/frameworks/${frameworkId}/phases`),
+  getFrameworkPhases: (frameworkId: number) => apiClient.get(`/certifications/frameworks/${frameworkId}/phases`),
   create: (data: { framework_id: number; name: string; target_date?: string }) => 
     apiClient.post('/certifications', data),
   update: (id: number, data: { status?: string; target_date?: string; notes?: string }) => 

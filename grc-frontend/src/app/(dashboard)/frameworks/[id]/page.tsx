@@ -156,7 +156,7 @@ const ANNEX_A_DOMAINS = [
   { id: 'A.8', name: 'Technological Controls', controlCount: 34 },
 ];
 
-type TabType = 'overview' | 'phases' | 'scoping' | 'context' | 'risk' | 'soa' | 'controls' | 'training' | 'audit' | 'review' | 'certification';
+type TabType = 'overview' | 'phases' | 'controls' | string;
 type ScopingSubTab = 'definition' | 'locations' | 'exclusions' | 'departments';
 type SoaSubTab = 'controls' | 'summary' | 'export';
 type ControlsSubTab = 'library' | 'policies' | 'evidence';
@@ -361,18 +361,16 @@ export default function CertificationJourneyPage() {
     setShowControlModal(true);
   };
 
+  const phaseTabs = phases.map((phase, index) => ({
+    id: `phase-${phase.id}` as TabType,
+    label: `${index + 1}. ${phase.name.split(' ')[0]}`
+  }));
+  
   const tabs: { id: TabType; label: string; icon?: React.ReactNode }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'phases', label: 'Phases' },
-    { id: 'scoping', label: '1. Scoping' },
-    { id: 'context', label: '2. Context' },
-    { id: 'risk', label: '3. Risk' },
-    { id: 'soa', label: '4. SoA' },
-    { id: 'controls', label: '5. Controls' },
-    { id: 'training', label: '6. Training' },
-    { id: 'audit', label: '7. Audit' },
-    { id: 'review', label: '8. Review' },
-    { id: 'certification', label: 'Certification' },
+    ...phaseTabs,
+    { id: 'controls', label: 'Controls' },
   ];
 
   const CircularProgress = ({ percentage }: { percentage: number }) => {
