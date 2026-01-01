@@ -4,6 +4,9 @@ from .incidents import router as incidents_router
 from .reviews import router as reviews_router
 from .dependencies import router as dependencies_router
 from .reports import router as reports_router
+from .mitigation_actions import router as mitigation_actions_router
+from .mitigation_actions import risk_actions_router
+from .scales import router as scales_router
 
 __all__ = [
     "risks_router",
@@ -11,5 +14,8 @@ __all__ = [
     "incidents_router",
     "reviews_router",
     "dependencies_router",
-    "reports_router"
+    "reports_router",
+    "mitigation_actions_router",
+    "risk_actions_router",
+    "scales_router"
 ]

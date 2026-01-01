@@ -8,16 +8,17 @@ import openpyxl
 
 from ....models import (
     Risk, RiskControlLink, RiskAssetLink, RiskEvidenceLink,
-    RiskFrameworkControlLink, RiskGovernanceLink,
+    RiskFrameworkControlLink, RiskGovernanceLink, RiskAuditFindingLink,
     NormalizedControl, FrameworkControl, ITAsset, Evidence,
-    GovernanceObjective, GRCUser, Tenant, get_db
+    GovernanceObjective, Issue, GRCUser, Tenant, get_db
 )
 from ....schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
     RiskAssessment, RiskTreatment,
     RiskControlLinkCreate, RiskAssetLinkCreate, RiskEvidenceLinkCreate,
     RiskFrameworkControlLinkCreate, RiskGovernanceLinkCreate,
-    RiskDetailResponse, RiskHeatmapData, MessageResponse
+    RiskDetailResponse, RiskHeatmapData, MessageResponse,
+    RiskAuditFindingLinkCreate, RiskAuditFindingLinkResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -1134,3 +1135,212 @@ async def upload_risk_register(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to parse Excel file: {str(e)}"
         )
+
+
+@router.get("/aging")
+def get_risks_with_aging(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
+    
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        query = query.filter(Risk.tenant_id == tenant_id)
+    
+    risks = query.order_by(Risk.created_at.asc()).all()
+    
+    now = datetime.utcnow()
+    result = []
+    for risk in risks:
+        days_since_created = (now - risk.created_at).days if risk.created_at else 0
+        days_since_updated = (now - risk.updated_at).days if risk.updated_at else days_since_created
+        
+        result.append({
+            "id": risk.id,
+            "title": risk.title,
+            "category": risk.risk_category or risk.category,
+            "status": risk.status,
+            "inherent_score": risk.inherent_score,
+            "residual_score": risk.residual_score,
+            "created_at": risk.created_at.isoformat() if risk.created_at else None,
+            "updated_at": risk.updated_at.isoformat() if risk.updated_at else None,
+            "days_since_created": days_since_created,
+            "days_since_updated": days_since_updated,
+            "owner_id": risk.owner_id
+        })
+    
+    return result
+
+
+@router.post("/{risk_id}/close", response_model=RiskResponse)
+def close_risk(
+    risk_id: int,
+    closure_notes: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    if risk.status == "closed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Risk is already closed"
+        )
+    
+    risk.status = "closed"
+    risk.closure_status = "closed"
+    risk.closed_at = datetime.utcnow()
+    risk.closed_by = current_user.id
+    risk.closure_notes = closure_notes
+    risk.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(risk)
+    return risk
+
+
+@router.post("/{risk_id}/reopen", response_model=RiskResponse)
+def reopen_risk(
+    risk_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    if risk.status != "closed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Risk is not closed"
+        )
+    
+    risk.status = "open"
+    risk.closure_status = None
+    risk.closed_at = None
+    risk.closed_by = None
+    risk.closure_notes = None
+    risk.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(risk)
+    return risk
+
+
+@router.post("/{risk_id}/audit-findings", response_model=RiskAuditFindingLinkResponse, status_code=status.HTTP_201_CREATED)
+def link_audit_finding_to_risk(
+    risk_id: int,
+    link: RiskAuditFindingLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    issue = db.query(Issue).filter(
+        Issue.id == link.issue_id,
+        Issue.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not issue:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audit finding/issue not found"
+        )
+    
+    existing = db.query(RiskAuditFindingLink).filter(
+        RiskAuditFindingLink.risk_id == risk_id,
+        RiskAuditFindingLink.issue_id == link.issue_id
+    ).first()
+    
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link already exists"
+        )
+    
+    db_link = RiskAuditFindingLink(
+        risk_id=risk_id,
+        issue_id=link.issue_id,
+        notes=link.notes
+    )
+    db.add(db_link)
+    db.commit()
+    db.refresh(db_link)
+    
+    response = RiskAuditFindingLinkResponse.model_validate(db_link)
+    response.issue_title = issue.title
+    response.issue_severity = issue.severity
+    return response
+
+
+@router.delete("/{risk_id}/audit-findings/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_audit_finding_from_risk(
+    risk_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    link = db.query(RiskAuditFindingLink).filter(
+        RiskAuditFindingLink.id == link_id,
+        RiskAuditFindingLink.risk_id == risk_id
+    ).first()
+    
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audit finding link not found"
+        )
+    
+    db.delete(link)
+    db.commit()
+    return None
