@@ -943,10 +943,12 @@ async def upload_risk_register(
         
         headers = []
         header_row = 1
-        for row_num in range(1, 6):
+        header_keywords = ['asset name', 'threat', 'likelihood', 'impact', 'risk score']
+        for row_num in range(1, 10):
             row_values = [cell.value for cell in ws[row_num]]
-            non_none = [v for v in row_values if v is not None]
-            if len(non_none) >= 5:
+            row_str = ' '.join([str(v).lower() for v in row_values if v])
+            matches = sum(1 for kw in header_keywords if kw in row_str)
+            if matches >= 3:
                 headers = row_values
                 header_row = row_num
                 break
@@ -1031,15 +1033,23 @@ async def upload_risk_register(
             threat = get_value(row, 'threat', 'threat description')
             vulnerability = get_value(row, 'vulnerabilities', 'vulnerability', 'vuln')
             
+            if not asset_name and not threat and not vulnerability:
+                skipped_count += 1
+                continue
+            
             title_parts = []
-            if ref:
-                title_parts.append(str(ref))
             if asset_name:
-                title_parts.append(str(asset_name))
+                title_parts.append(str(asset_name).strip())
             if threat:
-                threat_preview = str(threat).strip()[:50]
-                if threat_preview:
-                    title_parts.append(threat_preview)
+                threat_clean = str(threat).strip().replace('\n', ' ')[:80]
+                if threat_clean:
+                    title_parts.append(threat_clean)
+            
+            if not title_parts:
+                if vulnerability:
+                    title_parts.append(str(vulnerability).strip()[:80])
+                elif ref:
+                    title_parts.append(str(ref))
             
             if not title_parts:
                 skipped_count += 1
