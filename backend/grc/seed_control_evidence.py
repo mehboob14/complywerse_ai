@@ -5,6 +5,31 @@ Uses keyword/pattern matching to create specific, actionable evidence items.
 
 from .models import SessionLocal, FrameworkControl, CuratedEvidenceItem
 
+# HIGH PRIORITY PATTERNS - checked first to override generic matches
+HIGH_PRIORITY_PATTERNS = {
+    "supplier_services": {
+        "keywords": ["supplier service", "supplier management", "third party service", "vendor service", "outsourcing", "service provider management", "supplier relationship", "supplier performance", "supplier risk"],
+        "evidence": [
+            {"title": "Supplier Performance Review Report", "description": "Periodic review of supplier service delivery against SLAs", "artifact_type": "report", "format_guidance": "Quarterly performance review with metrics", "frequency": "quarterly"},
+            {"title": "Supplier SLA Compliance Records", "description": "Records showing supplier compliance with service level agreements", "artifact_type": "record", "format_guidance": "SLA tracking spreadsheet or dashboard export", "frequency": "monthly"},
+            {"title": "Supplier Security Assessment Report", "description": "Security assessment or audit of supplier's controls", "artifact_type": "report", "format_guidance": "Third-party assessment or questionnaire results", "frequency": "annual"},
+            {"title": "Supplier Change Request Records", "description": "Records of changes to supplier services and approvals", "artifact_type": "record", "format_guidance": "Change management records for supplier changes", "frequency": "quarterly"},
+            {"title": "Supplier Risk Assessment", "description": "Risk assessment for critical suppliers", "artifact_type": "report", "format_guidance": "Completed risk assessment with risk ratings", "frequency": "annual"},
+            {"title": "Supplier Contract with Security Clauses", "description": "Contract excerpts showing security and compliance requirements", "artifact_type": "record", "format_guidance": "Relevant contract sections", "frequency": "annual"},
+        ]
+    },
+    "supplier_monitoring": {
+        "keywords": ["monitoring of supplier", "monitor supplier", "supplier monitoring", "review of supplier", "evaluate supplier", "supplier review", "change management of supplier"],
+        "evidence": [
+            {"title": "Supplier Performance Dashboard", "description": "Dashboard showing supplier performance metrics and KPIs", "artifact_type": "screenshot", "format_guidance": "Screenshot of monitoring dashboard", "frequency": "monthly"},
+            {"title": "Supplier Review Meeting Minutes", "description": "Minutes from periodic supplier review meetings", "artifact_type": "record", "format_guidance": "Meeting notes with attendees and action items", "frequency": "quarterly"},
+            {"title": "Supplier Incident Log", "description": "Log of incidents or issues with supplier services", "artifact_type": "log", "format_guidance": "Incident tracking system export", "frequency": "monthly"},
+            {"title": "Supplier Change Impact Assessment", "description": "Assessment of changes to supplier services", "artifact_type": "report", "format_guidance": "Change impact analysis document", "frequency": "as_needed"},
+            {"title": "Supplier Compliance Attestation", "description": "Attestation from supplier confirming compliance", "artifact_type": "certificate", "format_guidance": "SOC 2 report, ISO certificate, or compliance attestation", "frequency": "annual"},
+        ]
+    },
+}
+
 EVIDENCE_PATTERNS = {
     "network_diagram": {
         "keywords": ["network diagram", "network topology", "cardholder data flow", "data flow diagram", "network documentation"],
@@ -560,6 +585,18 @@ def analyze_control_text(code: str, name: str, statement: str) -> list:
     text = f"{code} {name} {statement}".lower()
     matched_patterns = []
     
+    # Check HIGH PRIORITY patterns first - these override generic matches
+    for pattern_name, pattern_data in HIGH_PRIORITY_PATTERNS.items():
+        for keyword in pattern_data["keywords"]:
+            if keyword.lower() in text:
+                matched_patterns.append(f"high_priority_{pattern_name}")
+                break
+    
+    # If high priority patterns matched, return them (skip generic patterns)
+    if matched_patterns:
+        return matched_patterns
+    
+    # Check regular evidence patterns
     for pattern_name, pattern_data in EVIDENCE_PATTERNS.items():
         for keyword in pattern_data["keywords"]:
             if keyword.lower() in text:
@@ -588,7 +625,10 @@ def generate_evidence_for_control(control: FrameworkControl) -> list:
     seen_titles = set()
     
     for pattern_name in matched_patterns:
-        if pattern_name.startswith("generic_"):
+        if pattern_name.startswith("high_priority_"):
+            pattern_key = pattern_name.replace("high_priority_", "")
+            pattern_data = HIGH_PRIORITY_PATTERNS.get(pattern_key, {})
+        elif pattern_name.startswith("generic_"):
             pattern_key = pattern_name.replace("generic_", "")
             pattern_data = GENERIC_PATTERNS.get(pattern_key, {})
         else:
@@ -621,7 +661,7 @@ def generate_evidence_for_control(control: FrameworkControl) -> list:
     return evidence_items
 
 
-def seed_control_evidence():
+def seed_control_evidence(force_reseed: bool = False):
     """Generate and seed unique evidence requirements for all framework controls."""
     db = SessionLocal()
     try:
@@ -629,9 +669,16 @@ def seed_control_evidence():
             CuratedEvidenceItem.framework_control_id.isnot(None)
         ).count()
         
-        if existing_count > 0:
+        if existing_count > 0 and not force_reseed:
             print(f"Control evidence already seeded ({existing_count} items), skipping...")
             return
+        
+        if force_reseed and existing_count > 0:
+            print(f"Force reseeding: clearing {existing_count} existing control evidence items...")
+            db.query(CuratedEvidenceItem).filter(
+                CuratedEvidenceItem.framework_control_id.isnot(None)
+            ).delete()
+            db.commit()
         
         print("Seeding unique evidence requirements for framework controls...")
         
