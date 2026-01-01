@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { advancedErmApi } from '@/lib/api';
+import { ermApi } from '@/lib/api';
 import { ReportType } from '@/types';
 import {
   FileText,
@@ -18,50 +18,50 @@ export default function ReportsPage() {
   const queryClient = useQueryClient();
 
   const { data: executiveDashboard, isLoading: loadingExec } = useQuery({
-    queryKey: ['executive-dashboard'],
+    queryKey: ['erm-executive-dashboard'],
     queryFn: async () => {
-      const response = await advancedErmApi.getExecutiveDashboard();
+      const response = await ermApi.reports.getExecutiveDashboard();
       return response.data;
     },
   });
 
   const { data: boardSummary, isLoading: loadingBoard } = useQuery({
-    queryKey: ['board-summary'],
+    queryKey: ['erm-board-summary'],
     queryFn: async () => {
-      const response = await advancedErmApi.getBoardSummary();
+      const response = await ermApi.reports.getBoardSummary();
       return response.data;
     },
   });
 
   const { data: aggregatedView } = useQuery({
-    queryKey: ['aggregated-view'],
+    queryKey: ['erm-aggregated-view'],
     queryFn: async () => {
-      const response = await advancedErmApi.getAggregatedView('category');
+      const response = await ermApi.reports.getAggregatedView('category');
       return response.data;
     },
   });
 
   const { data: appetiteBreaches } = useQuery({
-    queryKey: ['appetite-breaches'],
+    queryKey: ['erm-appetite-breaches'],
     queryFn: async () => {
-      const response = await advancedErmApi.getAppetiteBreaches();
+      const response = await ermApi.reports.getAppetiteBreaches();
       return response.data;
     },
   });
 
   const { data: trends } = useQuery({
-    queryKey: ['risk-trends'],
+    queryKey: ['erm-risk-trends'],
     queryFn: async () => {
-      const response = await advancedErmApi.getRiskTrends(90);
+      const response = await ermApi.reports.getRiskTrends(90);
       return response.data;
     },
   });
 
   const generateMutation = useMutation({
     mutationFn: (data: { name: string; report_type: ReportType }) =>
-      advancedErmApi.generateReport(data),
+      ermApi.reports.generate(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-reports'] });
     },
   });
 

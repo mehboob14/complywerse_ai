@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { advancedErmApi, risksApi } from '@/lib/api';
+import { ermApi } from '@/lib/api';
 import {
   RiskIncident,
   RiskIncidentCreate,
@@ -46,37 +46,37 @@ export default function IncidentsPage() {
   const queryClient = useQueryClient();
 
   const { data: incidents, isLoading } = useQuery({
-    queryKey: ['incidents', severityFilter, statusFilter],
+    queryKey: ['erm-incidents', severityFilter, statusFilter],
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (severityFilter !== 'all') params.severity = severityFilter;
       if (statusFilter !== 'all') params.status_filter = statusFilter;
-      const response = await advancedErmApi.getIncidents(params);
+      const response = await ermApi.incidents.getAll(params);
       return response.data;
     },
   });
 
   const { data: incidentDashboard } = useQuery({
-    queryKey: ['incident-dashboard'],
+    queryKey: ['erm-incident-dashboard'],
     queryFn: async () => {
-      const response = await advancedErmApi.getIncidentDashboard();
+      const response = await ermApi.incidents.getDashboard();
       return response.data;
     },
   });
 
   const { data: risks } = useQuery({
-    queryKey: ['risks-list'],
+    queryKey: ['erm-risks-list'],
     queryFn: async () => {
-      const response = await risksApi.getAll();
+      const response = await ermApi.risks.getAll();
       return response.data;
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => advancedErmApi.deleteIncident(id),
+    mutationFn: (id: number) => ermApi.incidents.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['incidents'] });
-      queryClient.invalidateQueries({ queryKey: ['incident-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-incidents'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-incident-dashboard'] });
     },
   });
 
@@ -246,8 +246,8 @@ export default function IncidentsPage() {
           onSuccess={() => {
             setShowCreateModal(false);
             setEditingIncident(null);
-            queryClient.invalidateQueries({ queryKey: ['incidents'] });
-            queryClient.invalidateQueries({ queryKey: ['incident-dashboard'] });
+            queryClient.invalidateQueries({ queryKey: ['erm-incidents'] });
+            queryClient.invalidateQueries({ queryKey: ['erm-incident-dashboard'] });
           }}
         />
       )}
@@ -279,13 +279,13 @@ function IncidentModal({
   const [status, setStatus] = useState<IncidentStatus>(incident?.status || 'open');
 
   const createMutation = useMutation({
-    mutationFn: (data: RiskIncidentCreate) => advancedErmApi.createIncident(data),
+    mutationFn: (data: RiskIncidentCreate) => ermApi.incidents.create(data),
     onSuccess,
   });
 
   const updateMutation = useMutation({
     mutationFn: (data: { id: number; updates: Partial<RiskIncidentCreate & { status: IncidentStatus }> }) =>
-      advancedErmApi.updateIncident(data.id, data.updates),
+      ermApi.incidents.update(data.id, data.updates),
     onSuccess,
   });
 

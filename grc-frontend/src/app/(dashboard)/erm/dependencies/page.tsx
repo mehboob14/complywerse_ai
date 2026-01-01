@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { advancedErmApi, risksApi } from '@/lib/api';
+import { ermApi } from '@/lib/api';
 import {
   RiskDependency,
   RiskDependencyCreate,
@@ -33,35 +33,35 @@ export default function DependenciesPage() {
   const queryClient = useQueryClient();
 
   const { data: dependencies, isLoading } = useQuery({
-    queryKey: ['dependencies'],
+    queryKey: ['erm-dependencies'],
     queryFn: async () => {
-      const response = await advancedErmApi.getDependencies();
+      const response = await ermApi.dependencies.getAll();
       return response.data;
     },
   });
 
   const { data: risks } = useQuery({
-    queryKey: ['risks-list'],
+    queryKey: ['erm-risks-list'],
     queryFn: async () => {
-      const response = await risksApi.getAll();
+      const response = await ermApi.risks.getAll();
       return response.data;
     },
   });
 
   const { data: cascadeAnalysis } = useQuery({
-    queryKey: ['cascade-analysis', selectedRisk],
+    queryKey: ['erm-cascade-analysis', selectedRisk],
     queryFn: async () => {
       if (!selectedRisk) return null;
-      const response = await advancedErmApi.getCascadeAnalysis(selectedRisk);
+      const response = await ermApi.dependencies.getCascadeAnalysis(selectedRisk);
       return response.data;
     },
     enabled: !!selectedRisk,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => advancedErmApi.deleteDependency(id),
+    mutationFn: (id: number) => ermApi.dependencies.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dependencies'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-dependencies'] });
     },
   });
 
@@ -181,7 +181,7 @@ export default function DependenciesPage() {
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
-            queryClient.invalidateQueries({ queryKey: ['dependencies'] });
+            queryClient.invalidateQueries({ queryKey: ['erm-dependencies'] });
           }}
         />
       )}
@@ -207,7 +207,7 @@ function DependencyModal({
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: RiskDependencyCreate) => advancedErmApi.createDependency(data),
+    mutationFn: (data: RiskDependencyCreate) => ermApi.dependencies.create(data),
     onSuccess,
   });
 

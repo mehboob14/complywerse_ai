@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { advancedErmApi, risksApi } from '@/lib/api';
+import { ermApi } from '@/lib/api';
 import {
   RiskKRI,
   RiskKRICreate,
@@ -36,34 +36,34 @@ export default function KRIsPage() {
   const queryClient = useQueryClient();
 
   const { data: kris, isLoading } = useQuery({
-    queryKey: ['kris'],
+    queryKey: ['erm-kris'],
     queryFn: async () => {
-      const response = await advancedErmApi.getKRIs();
+      const response = await ermApi.kris.getAll();
       return response.data;
     },
   });
 
   const { data: alerts } = useQuery({
-    queryKey: ['kri-alerts'],
+    queryKey: ['erm-kri-alerts'],
     queryFn: async () => {
-      const response = await advancedErmApi.getKRIAlerts();
+      const response = await ermApi.kris.getAlerts();
       return response.data;
     },
   });
 
   const { data: risks } = useQuery({
-    queryKey: ['risks-list'],
+    queryKey: ['erm-risks-list'],
     queryFn: async () => {
-      const response = await risksApi.getAll();
+      const response = await ermApi.risks.getAll();
       return response.data;
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => advancedErmApi.deleteKRI(id),
+    mutationFn: (id: number) => ermApi.kris.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['kris'] });
-      queryClient.invalidateQueries({ queryKey: ['kri-alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-kris'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-kri-alerts'] });
     },
   });
 
@@ -141,7 +141,7 @@ export default function KRIsPage() {
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
-            queryClient.invalidateQueries({ queryKey: ['kris'] });
+            queryClient.invalidateQueries({ queryKey: ['erm-kris'] });
           }}
         />
       )}
@@ -153,7 +153,7 @@ export default function KRIsPage() {
           onClose={() => setEditingKRI(null)}
           onSuccess={() => {
             setEditingKRI(null);
-            queryClient.invalidateQueries({ queryKey: ['kris'] });
+            queryClient.invalidateQueries({ queryKey: ['erm-kris'] });
           }}
         />
       )}
@@ -164,8 +164,8 @@ export default function KRIsPage() {
           onClose={() => setShowMeasureModal(null)}
           onSuccess={() => {
             setShowMeasureModal(null);
-            queryClient.invalidateQueries({ queryKey: ['kris'] });
-            queryClient.invalidateQueries({ queryKey: ['kri-alerts'] });
+            queryClient.invalidateQueries({ queryKey: ['erm-kris'] });
+            queryClient.invalidateQueries({ queryKey: ['erm-kri-alerts'] });
           }}
         />
       )}
@@ -287,13 +287,13 @@ function KRIModal({
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: RiskKRICreate) => advancedErmApi.createKRI(data),
+    mutationFn: (data: RiskKRICreate) => ermApi.kris.create(data),
     onSuccess,
   });
 
   const updateMutation = useMutation({
     mutationFn: (data: { id: number; updates: Partial<RiskKRICreate> }) =>
-      advancedErmApi.updateKRI(data.id, data.updates),
+      ermApi.kris.update(data.id, data.updates),
     onSuccess,
   });
 
@@ -467,7 +467,7 @@ function MeasureKRIModal({
   const [notes, setNotes] = useState('');
 
   const measureMutation = useMutation({
-    mutationFn: (data: { value: number; notes?: string }) => advancedErmApi.measureKRI(kri.id, data),
+    mutationFn: (data: { value: number; notes?: string }) => ermApi.kris.measure(kri.id, data),
     onSuccess,
   });
 

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { risksApi } from '@/lib/api';
+import { ermApi } from '@/lib/api';
 import { Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
 import { 
   AlertTriangle, 
@@ -82,57 +82,57 @@ export default function ERMRisksPage() {
   const queryClient = useQueryClient();
 
   const { data: risks, isLoading, error } = useQuery({
-    queryKey: ['risks'],
+    queryKey: ['erm-risks'],
     queryFn: async () => {
-      const response = await risksApi.getAll();
+      const response = await ermApi.risks.getAll();
       return response.data;
     },
   });
 
   const { data: dashboard } = useQuery({
-    queryKey: ['risks-dashboard'],
+    queryKey: ['erm-risks-dashboard'],
     queryFn: async () => {
-      const response = await risksApi.getDashboard();
+      const response = await ermApi.risks.getDashboard();
       return response.data;
     },
   });
 
   const { data: heatmapData } = useQuery({
-    queryKey: ['risks-heatmap', heatmapType],
+    queryKey: ['erm-risks-heatmap', heatmapType],
     queryFn: async () => {
-      const response = await risksApi.getHeatmap(heatmapType);
+      const response = await ermApi.risks.getHeatmap(heatmapType);
       return response.data;
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: Partial<Risk>) => risksApi.create(data),
+    mutationFn: (data: Partial<Risk>) => ermApi.risks.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['risks'] });
-      queryClient.invalidateQueries({ queryKey: ['risks-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['risks-heatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks-heatmap'] });
       setIsModalOpen(false);
       setEditingRisk(null);
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Risk> }) => risksApi.update(id, data),
+    mutationFn: ({ id, data }: { id: number; data: Partial<Risk> }) => ermApi.risks.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['risks'] });
-      queryClient.invalidateQueries({ queryKey: ['risks-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['risks-heatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks-heatmap'] });
       setIsModalOpen(false);
       setEditingRisk(null);
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => risksApi.delete(id),
+    mutationFn: (id: number) => ermApi.risks.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['risks'] });
-      queryClient.invalidateQueries({ queryKey: ['risks-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['risks-heatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks-heatmap'] });
     },
   });
 
@@ -144,11 +144,11 @@ export default function ERMRisksPage() {
     setUploadResult(null);
     
     try {
-      const response = await risksApi.uploadRiskRegister(file);
+      const response = await ermApi.risks.uploadRiskRegister(file);
       setUploadResult(response.data);
-      queryClient.invalidateQueries({ queryKey: ['risks'] });
-      queryClient.invalidateQueries({ queryKey: ['risks-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['risks-heatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks-heatmap'] });
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to upload file';
       setUploadResult({

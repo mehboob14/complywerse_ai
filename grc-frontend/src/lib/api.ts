@@ -224,80 +224,80 @@ export const certificationsApi = {
 
 export const ermApi = {
   risks: {
-    getAll: () => apiClient.get<Risk[]>('/grc/erm/risks'),
-    getById: (id: number) => apiClient.get<Risk>(`/grc/erm/risks/${id}`),
-    getDetail: (id: number) => apiClient.get<RiskDetail>(`/grc/erm/risks/${id}/detail`),
-    getDashboard: () => apiClient.get<RiskDashboard>('/grc/erm/risks/dashboard'),
-    getHeatmap: (riskType?: string) => apiClient.get<HeatmapCell[]>(`/grc/erm/risks/heatmap${riskType ? `?risk_type=${riskType}` : ''}`),
-    create: (data: Partial<Risk>) => apiClient.post<Risk>('/grc/erm/risks', data),
-    update: (id: number, data: Partial<Risk>) => apiClient.put<Risk>(`/grc/erm/risks/${id}`, data),
-    delete: (id: number) => apiClient.delete(`/grc/erm/risks/${id}`),
+    getAll: () => apiClient.get<Risk[]>('/erm/risks'),
+    getById: (id: number) => apiClient.get<Risk>(`/erm/risks/${id}`),
+    getDetail: (id: number) => apiClient.get<RiskDetail>(`/erm/risks/${id}/detail`),
+    getDashboard: () => apiClient.get<RiskDashboard>('/erm/risks/dashboard'),
+    getHeatmap: (riskType?: string) => apiClient.get<HeatmapCell[]>(`/erm/risks/heatmap${riskType ? `?risk_type=${riskType}` : ''}`),
+    create: (data: Partial<Risk>) => apiClient.post<Risk>('/erm/risks', data),
+    update: (id: number, data: Partial<Risk>) => apiClient.put<Risk>(`/erm/risks/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/erm/risks/${id}`),
     uploadRiskRegister: (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
-      return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>('/grc/erm/risks/upload', formData, {
+      return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>('/erm/risks/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },
   },
   kris: {
     getAll: (params?: { risk_id?: number; status_filter?: string; is_active?: boolean }) => 
-      apiClient.get<RiskKRI[]>('/grc/erm/kris', { params }),
-    getById: (id: number) => apiClient.get<RiskKRI>(`/grc/erm/kris/${id}`),
-    create: (data: RiskKRICreate) => apiClient.post<RiskKRI>('/grc/erm/kris', data),
-    update: (id: number, data: RiskKRIUpdate) => apiClient.put<RiskKRI>(`/grc/erm/kris/${id}`, data),
-    delete: (id: number) => apiClient.delete(`/grc/erm/kris/${id}`),
+      apiClient.get<RiskKRI[]>('/erm/kris', { params }),
+    getById: (id: number) => apiClient.get<RiskKRI>(`/erm/kris/${id}`),
+    create: (data: RiskKRICreate) => apiClient.post<RiskKRI>('/erm/kris', data),
+    update: (id: number, data: RiskKRIUpdate) => apiClient.put<RiskKRI>(`/erm/kris/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/erm/kris/${id}`),
     measure: (id: number, data: { value: number; notes?: string }) => 
-      apiClient.post<RiskKRIMeasurement>(`/grc/erm/kris/${id}/measure`, data),
+      apiClient.post<RiskKRIMeasurement>(`/erm/kris/${id}/measure`, data),
     getTrend: (id: number, days?: number) => 
-      apiClient.get<RiskKRIMeasurement[]>(`/grc/erm/kris/${id}/trend`, { params: { days } }),
-    getAlerts: () => apiClient.get<RiskKRI[]>('/grc/erm/kris/alerts'),
+      apiClient.get<RiskKRIMeasurement[]>(`/erm/kris/${id}/trend`, { params: { days } }),
+    getAlerts: () => apiClient.get<RiskKRI[]>('/erm/kris/alerts'),
   },
   incidents: {
     getAll: (params?: { risk_id?: number; severity?: string; status_filter?: string; start_date?: string; end_date?: string }) => 
-      apiClient.get<RiskIncident[]>('/grc/erm/incidents', { params }),
-    getById: (id: number) => apiClient.get<RiskIncident>(`/grc/erm/incidents/${id}`),
-    create: (data: RiskIncidentCreate) => apiClient.post<RiskIncident>('/grc/erm/incidents', data),
-    update: (id: number, data: RiskIncidentUpdate) => apiClient.put<RiskIncident>(`/grc/erm/incidents/${id}`, data),
-    delete: (id: number) => apiClient.delete(`/grc/erm/incidents/${id}`),
-    getDashboard: () => apiClient.get<IncidentDashboard>('/grc/erm/incidents/dashboard'),
+      apiClient.get<RiskIncident[]>('/erm/incidents', { params }),
+    getById: (id: number) => apiClient.get<RiskIncident>(`/erm/incidents/${id}`),
+    create: (data: RiskIncidentCreate) => apiClient.post<RiskIncident>('/erm/incidents', data),
+    update: (id: number, data: RiskIncidentUpdate) => apiClient.put<RiskIncident>(`/erm/incidents/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/erm/incidents/${id}`),
+    getDashboard: () => apiClient.get<IncidentDashboard>('/erm/incidents/dashboard'),
   },
   reviews: {
     getAll: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number }) => 
-      apiClient.get<RiskReview[]>('/grc/erm/reviews', { params }),
-    getById: (id: number) => apiClient.get<RiskReview>(`/grc/erm/reviews/${id}`),
-    create: (data: RiskReviewCreate) => apiClient.post<RiskReview>('/grc/erm/reviews', data),
-    update: (id: number, data: RiskReviewUpdate) => apiClient.put<RiskReview>(`/grc/erm/reviews/${id}`, data),
+      apiClient.get<RiskReview[]>('/erm/reviews', { params }),
+    getById: (id: number) => apiClient.get<RiskReview>(`/erm/reviews/${id}`),
+    create: (data: RiskReviewCreate) => apiClient.post<RiskReview>('/erm/reviews', data),
+    update: (id: number, data: RiskReviewUpdate) => apiClient.put<RiskReview>(`/erm/reviews/${id}`, data),
     complete: (id: number, data: { findings?: string; recommendations?: string; new_inherent_score?: number; new_residual_score?: number }) => 
-      apiClient.post<RiskReview>(`/grc/erm/reviews/${id}/complete`, data),
-    getPending: () => apiClient.get<RiskReview[]>('/grc/erm/reviews/pending'),
-    getOverdue: () => apiClient.get<RiskReview[]>('/grc/erm/reviews/overdue'),
+      apiClient.post<RiskReview>(`/erm/reviews/${id}/complete`, data),
+    getPending: () => apiClient.get<RiskReview[]>('/erm/reviews/pending'),
+    getOverdue: () => apiClient.get<RiskReview[]>('/erm/reviews/overdue'),
   },
   dependencies: {
     getAll: (params?: { risk_id?: number }) => 
-      apiClient.get<RiskDependency[]>('/grc/erm/dependencies', { params }),
-    create: (data: RiskDependencyCreate) => apiClient.post<RiskDependency>('/grc/erm/dependencies', data),
-    delete: (id: number) => apiClient.delete(`/grc/erm/dependencies/${id}`),
-    getCascadeAnalysis: (riskId: number) => apiClient.get<CascadeAnalysis>(`/grc/erm/dependencies/${riskId}/cascade`),
+      apiClient.get<RiskDependency[]>('/erm/dependencies', { params }),
+    create: (data: RiskDependencyCreate) => apiClient.post<RiskDependency>('/erm/dependencies', data),
+    delete: (id: number) => apiClient.delete(`/erm/dependencies/${id}`),
+    getCascadeAnalysis: (riskId: number) => apiClient.get<CascadeAnalysis>(`/erm/dependencies/${riskId}/cascade`),
     getGraph: (riskId?: number) => 
-      apiClient.get(`/grc/erm/dependencies/graph`, { params: { risk_id: riskId } }),
+      apiClient.get(`/erm/dependencies/graph`, { params: { risk_id: riskId } }),
   },
   reports: {
     getAll: (params?: { report_type?: string; status?: string }) => 
-      apiClient.get<RiskReport[]>('/grc/erm/reports', { params }),
-    getById: (id: number) => apiClient.get<RiskReport>(`/grc/erm/reports/${id}`),
-    generate: (data: RiskReportCreate) => apiClient.post<RiskReport>('/grc/erm/reports', data),
-    delete: (id: number) => apiClient.delete(`/grc/erm/reports/${id}`),
-    getExecutiveDashboard: () => apiClient.get<ExecutiveDashboard>('/grc/erm/reports/executive-dashboard'),
+      apiClient.get<RiskReport[]>('/erm/reports', { params }),
+    getById: (id: number) => apiClient.get<RiskReport>(`/erm/reports/${id}`),
+    generate: (data: RiskReportCreate) => apiClient.post<RiskReport>('/erm/reports', data),
+    delete: (id: number) => apiClient.delete(`/erm/reports/${id}`),
+    getExecutiveDashboard: () => apiClient.get<ExecutiveDashboard>('/erm/reports/executive-dashboard'),
     getBoardSummary: (params?: { period?: string }) => 
-      apiClient.get<BoardReportData>('/grc/erm/reports/board-summary', { params }),
+      apiClient.get<BoardReportData>('/erm/reports/board-summary', { params }),
     getDepartmentSummary: (departmentId: number) => 
-      apiClient.get<DepartmentRiskSummary>(`/grc/erm/reports/department/${departmentId}`),
+      apiClient.get<DepartmentRiskSummary>(`/erm/reports/department/${departmentId}`),
     getAggregatedView: (groupBy?: string) => 
-      apiClient.get<AggregatedRiskView[]>('/grc/erm/analytics/aggregated', { params: { group_by: groupBy } }),
-    getAppetiteBreaches: () => apiClient.get<AppetiteBreach[]>('/grc/erm/analytics/appetite-breaches'),
+      apiClient.get<AggregatedRiskView[]>('/erm/analytics/aggregated', { params: { group_by: groupBy } }),
+    getAppetiteBreaches: () => apiClient.get<AppetiteBreach[]>('/erm/analytics/appetite-breaches'),
     getRiskTrends: (days?: number) => 
-      apiClient.get<RiskTrendData[]>('/grc/erm/analytics/trends', { params: { days } }),
+      apiClient.get<RiskTrendData[]>('/erm/analytics/trends', { params: { days } }),
   },
 };
 

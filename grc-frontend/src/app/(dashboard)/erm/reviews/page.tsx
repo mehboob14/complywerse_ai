@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { advancedErmApi, risksApi } from '@/lib/api';
+import { ermApi } from '@/lib/api';
 import {
   RiskReview,
   RiskReviewCreate,
@@ -34,35 +34,35 @@ export default function ReviewsPage() {
   const queryClient = useQueryClient();
 
   const { data: reviews, isLoading } = useQuery({
-    queryKey: ['reviews', statusFilter],
+    queryKey: ['erm-reviews', statusFilter],
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (statusFilter !== 'all') params.status_filter = statusFilter;
-      const response = await advancedErmApi.getReviews(params);
+      const response = await ermApi.reviews.getAll(params);
       return response.data;
     },
   });
 
   const { data: pendingReviews } = useQuery({
-    queryKey: ['pending-reviews'],
+    queryKey: ['erm-pending-reviews'],
     queryFn: async () => {
-      const response = await advancedErmApi.getPendingReviews();
+      const response = await ermApi.reviews.getPending();
       return response.data;
     },
   });
 
   const { data: overdueReviews } = useQuery({
-    queryKey: ['overdue-reviews'],
+    queryKey: ['erm-overdue-reviews'],
     queryFn: async () => {
-      const response = await advancedErmApi.getOverdueReviews();
+      const response = await ermApi.reviews.getOverdue();
       return response.data;
     },
   });
 
   const { data: risks } = useQuery({
-    queryKey: ['risks-list'],
+    queryKey: ['erm-risks-list'],
     queryFn: async () => {
-      const response = await risksApi.getAll();
+      const response = await ermApi.risks.getAll();
       return response.data;
     },
   });
@@ -150,8 +150,8 @@ export default function ReviewsPage() {
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
-            queryClient.invalidateQueries({ queryKey: ['reviews'] });
-            queryClient.invalidateQueries({ queryKey: ['pending-reviews'] });
+            queryClient.invalidateQueries({ queryKey: ['erm-reviews'] });
+            queryClient.invalidateQueries({ queryKey: ['erm-pending-reviews'] });
           }}
         />
       )}
@@ -165,11 +165,11 @@ function ReviewCard({ review }: { review: RiskReview }) {
   const queryClient = useQueryClient();
 
   const updateMutation = useMutation({
-    mutationFn: (status: string) => advancedErmApi.updateReview(review.id, { status: status as any }),
+    mutationFn: (status: string) => ermApi.reviews.update(review.id, { status: status as any }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reviews'] });
-      queryClient.invalidateQueries({ queryKey: ['pending-reviews'] });
-      queryClient.invalidateQueries({ queryKey: ['overdue-reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-pending-reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-overdue-reviews'] });
     },
   });
 
@@ -245,7 +245,7 @@ function ReviewModal({
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: RiskReviewCreate) => advancedErmApi.createReview(data),
+    mutationFn: (data: RiskReviewCreate) => ermApi.reviews.create(data),
     onSuccess,
   });
 

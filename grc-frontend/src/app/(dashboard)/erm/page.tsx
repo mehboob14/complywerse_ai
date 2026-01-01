@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { risksApi, advancedErmApi } from '@/lib/api';
+import { ermApi } from '@/lib/api';
 import {
   AlertTriangle,
   Activity,
@@ -33,49 +33,49 @@ const SEVERITY_COLORS = {
 
 export default function ERMOverviewPage() {
   const { data: risks, isLoading: risksLoading } = useQuery({
-    queryKey: ['risks'],
+    queryKey: ['erm-risks'],
     queryFn: async () => {
-      const response = await risksApi.getAll();
+      const response = await ermApi.risks.getAll();
       return response.data;
     },
   });
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
-    queryKey: ['risks-dashboard'],
+    queryKey: ['erm-risks-dashboard'],
     queryFn: async () => {
-      const response = await risksApi.getDashboard();
+      const response = await ermApi.risks.getDashboard();
       return response.data;
     },
   });
 
   const { data: kriAlerts } = useQuery({
-    queryKey: ['kri-alerts'],
+    queryKey: ['erm-kri-alerts'],
     queryFn: async () => {
-      const response = await advancedErmApi.getKRIAlerts();
+      const response = await ermApi.kris.getAlerts();
       return response.data;
     },
   });
 
   const { data: incidents } = useQuery({
-    queryKey: ['recent-incidents'],
+    queryKey: ['erm-recent-incidents'],
     queryFn: async () => {
-      const response = await advancedErmApi.getIncidents();
+      const response = await ermApi.incidents.getAll();
       return response.data;
     },
   });
 
   const { data: pendingReviews } = useQuery({
-    queryKey: ['pending-reviews'],
+    queryKey: ['erm-pending-reviews'],
     queryFn: async () => {
-      const response = await advancedErmApi.getPendingReviews();
+      const response = await ermApi.reviews.getPending();
       return response.data;
     },
   });
 
   const { data: overdueReviews } = useQuery({
-    queryKey: ['overdue-reviews'],
+    queryKey: ['erm-overdue-reviews'],
     queryFn: async () => {
-      const response = await advancedErmApi.getOverdueReviews();
+      const response = await ermApi.reviews.getOverdue();
       return response.data;
     },
   });
