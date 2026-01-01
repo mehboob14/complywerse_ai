@@ -10,12 +10,16 @@ import {
   Calendar,
   GitBranch,
   FileText,
+  ListTodo,
+  Target,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const ermNavigation = [
   { name: 'Overview', href: '/erm', icon: LayoutDashboard },
   { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle },
+  { name: 'Appetite', href: '/erm/appetite', icon: Target },
+  { name: 'Mitigation Actions', href: '/erm/mitigation-actions', icon: ListTodo },
   { name: 'KRIs', href: '/erm/kris', icon: Activity },
   { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle },
   { name: 'Reviews', href: '/erm/reviews', icon: Calendar },

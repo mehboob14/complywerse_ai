@@ -334,6 +334,13 @@ export const ermApi = {
     getRiskTrends: (days?: number) => 
       apiClient.get<RiskTrendData[]>('/erm/analytics/trends', { params: { days } }),
   },
+  appetite: {
+    getAll: () => apiClient.get('/erm/appetite'),
+    update: (id: number, data: Record<string, unknown>) => 
+      apiClient.put(`/erm/appetite/${id}`, data),
+    create: (data: Record<string, unknown>) => 
+      apiClient.post('/erm/appetite', data),
+  },
 };
 
 export const advancedErmApi = {
