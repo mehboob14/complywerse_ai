@@ -38,7 +38,34 @@ def list_frameworks(
         query = query.filter(Framework.is_mandatory == is_mandatory)
     
     frameworks = query.offset(skip).limit(limit).all()
-    return frameworks
+    
+    result = []
+    for framework in frameworks:
+        domain_count = db.query(FrameworkDomain).filter(
+            FrameworkDomain.framework_id == framework.id
+        ).count()
+        
+        control_count = db.query(FrameworkControl).join(ControlObjective).join(FrameworkDomain).filter(
+            FrameworkDomain.framework_id == framework.id
+        ).count()
+        
+        result.append({
+            "id": framework.id,
+            "name": framework.name,
+            "short_code": framework.short_code,
+            "regulator": framework.regulator,
+            "jurisdiction": framework.jurisdiction,
+            "version": framework.version,
+            "description": framework.description,
+            "is_mandatory": framework.is_mandatory,
+            "enforcement_type": framework.enforcement_type,
+            "is_active": framework.is_active,
+            "is_custom": framework.is_custom,
+            "domain_count": domain_count,
+            "control_count": control_count
+        })
+    
+    return result
 
 
 @router.post("", response_model=FrameworkResponse, status_code=status.HTTP_201_CREATED)

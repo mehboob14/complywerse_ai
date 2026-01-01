@@ -138,6 +138,8 @@ class FrameworkResponse(BaseModel):
     enforcement_type: Optional[str]
     is_active: bool
     is_custom: bool
+    domain_count: int = 0
+    control_count: int = 0
 
     class Config:
         from_attributes = True

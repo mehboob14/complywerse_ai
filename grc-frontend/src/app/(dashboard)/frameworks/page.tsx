@@ -198,8 +198,8 @@ export default function FrameworksPage() {
           {frameworks?.map((framework: Framework) => {
             const journey = getJourneyForFramework(framework.id);
             const hasActiveJourney = !!journey;
-            const domainCount = framework.domains?.length || 0;
-            const controlCount = countControls(framework);
+            const domainCount = framework.domain_count || framework.domains?.length || 0;
+            const controlCount = framework.control_count || countControls(framework);
             
             return (
               <div 
