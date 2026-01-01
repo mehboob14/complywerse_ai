@@ -490,11 +490,16 @@ class Risk(Base):
     
     tenant = relationship("Tenant", back_populates="risks")
     owner = relationship("GRCUser", back_populates="owned_risks")
+    business_unit = relationship("BusinessUnit")
     control_links = relationship("RiskControlLink", back_populates="risk", cascade="all, delete-orphan")
     asset_links = relationship("RiskAssetLink", back_populates="risk", cascade="all, delete-orphan")
     evidence_links = relationship("RiskEvidenceLink", back_populates="risk", cascade="all, delete-orphan")
     framework_control_links = relationship("RiskFrameworkControlLink", back_populates="risk", cascade="all, delete-orphan")
     governance_links = relationship("RiskGovernanceLink", back_populates="risk", cascade="all, delete-orphan")
+    kris = relationship("RiskKRI", back_populates="risk", cascade="all, delete-orphan")
+    incidents = relationship("RiskIncident", back_populates="risk", cascade="all, delete-orphan")
+    reviews = relationship("RiskReview", back_populates="risk", cascade="all, delete-orphan")
+    score_history = relationship("RiskScoreHistory", back_populates="risk", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_risk_tenant_category", "tenant_id", "category"),
@@ -603,7 +608,7 @@ class RiskKRI(Base):
     last_measured_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    risk = relationship("Risk", backref="kris")
+    risk = relationship("Risk", back_populates="kris")
     owner = relationship("GRCUser")
     measurements = relationship("RiskKRIMeasurement", back_populates="kri", cascade="all, delete-orphan")
     
@@ -657,7 +662,7 @@ class RiskIncident(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     tenant = relationship("Tenant")
-    risk = relationship("Risk", backref="incidents")
+    risk = relationship("Risk", back_populates="incidents")
     reporter = relationship("GRCUser", foreign_keys=[reported_by])
     assignee = relationship("GRCUser", foreign_keys=[assigned_to])
     
@@ -690,7 +695,7 @@ class RiskReview(Base):
     approval_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    risk = relationship("Risk", backref="reviews")
+    risk = relationship("Risk", back_populates="reviews")
     reviewer = relationship("GRCUser", foreign_keys=[reviewer_id])
     approver = relationship("GRCUser", foreign_keys=[approver_id])
     
@@ -717,7 +722,7 @@ class RiskScoreHistory(Base):
     changed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     recorded_at = Column(DateTime, default=datetime.utcnow)
     
-    risk = relationship("Risk", backref="score_history")
+    risk = relationship("Risk", back_populates="score_history")
     user = relationship("GRCUser")
     
     __table_args__ = (
