@@ -77,6 +77,65 @@ const getEvidenceType = (recommendation: string): { label: string; color: string
   return { label: 'Document', color: 'bg-slate-500/20 text-slate-400' };
 };
 
+interface EvidenceRequirement {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  typeLabel: string;
+  typeColor: string;
+  frequency: string;
+  isRequired: boolean;
+}
+
+const EVIDENCE_DETAILS: Record<string, { title: string; description: string; frequency: string; isRequired: boolean }> = {
+  policy_document: { title: 'Policy Document', description: 'Approved and published policy document', frequency: 'annual', isRequired: true },
+  procedure_document: { title: 'Procedure Document', description: 'Documented operational procedures', frequency: 'annual', isRequired: true },
+  screenshot: { title: 'System Screenshot', description: 'Screenshot evidence of system configuration', frequency: 'quarterly', isRequired: false },
+  audit_log: { title: 'Audit Log Records', description: 'System audit log exports showing activity', frequency: 'monthly', isRequired: true },
+  configuration_export: { title: 'Configuration Export', description: 'System configuration settings export', frequency: 'quarterly', isRequired: true },
+  training_record: { title: 'Training Records', description: 'Records of personnel training completion', frequency: 'annual', isRequired: true },
+  risk_assessment: { title: 'Risk Assessment Report', description: 'Documented risk assessment results', frequency: 'annual', isRequired: true },
+  penetration_test_report: { title: 'Penetration Test Report', description: 'External penetration testing results', frequency: 'annual', isRequired: true },
+  vulnerability_scan: { title: 'Vulnerability Scan Results', description: 'Automated vulnerability scan output', frequency: 'quarterly', isRequired: true },
+  access_review: { title: 'Access Review Records', description: 'Periodic access review documentation', frequency: 'quarterly', isRequired: true },
+  change_request: { title: 'Change Request Records', description: 'Records of change requests', frequency: 'monthly', isRequired: true },
+  incident_report: { title: 'Incident Reports', description: 'Security incident documentation', frequency: 'as_needed', isRequired: false },
+  backup_log: { title: 'Backup Log Records', description: 'System backup verification logs', frequency: 'monthly', isRequired: true },
+  encryption_certificate: { title: 'Encryption Certificate', description: 'Valid encryption/SSL certificate', frequency: 'annual', isRequired: true },
+  contract: { title: 'Contract/Agreement', description: 'Signed contractual agreements', frequency: 'as_needed', isRequired: true },
+  register: { title: 'Register/Inventory', description: 'Maintained register or inventory list', frequency: 'quarterly', isRequired: true },
+  plan: { title: 'Management Plan', description: 'Documented management or response plan', frequency: 'annual', isRequired: true },
+  matrix: { title: 'Responsibility Matrix', description: 'Roles and responsibilities matrix', frequency: 'annual', isRequired: true },
+  meeting_minutes: { title: 'Meeting Minutes', description: 'Meeting records and minutes', frequency: 'monthly', isRequired: false },
+  acknowledgment: { title: 'Acknowledgment Records', description: 'Signed acknowledgment forms', frequency: 'annual', isRequired: true },
+  job_description: { title: 'Job Descriptions', description: 'Role-specific job descriptions', frequency: 'annual', isRequired: false },
+  org_chart: { title: 'Organizational Chart', description: 'Current organizational structure', frequency: 'annual', isRequired: false },
+};
+
+const getEvidenceRequirements = (controlName: string, evidenceRecs: string[]): EvidenceRequirement[] => {
+  return evidenceRecs.map((rec, idx) => {
+    const key = rec.toLowerCase().replace(/-/g, '_');
+    const details = EVIDENCE_DETAILS[key] || {
+      title: rec.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+      description: `Documentation for ${rec.replace(/_/g, ' ')}`,
+      frequency: 'annual',
+      isRequired: true
+    };
+    const evType = getEvidenceType(rec);
+    return {
+      id: `${rec}-${idx}`,
+      title: details.title,
+      description: details.description,
+      type: rec,
+      typeLabel: evType.label,
+      typeColor: evType.color,
+      frequency: details.frequency,
+      isRequired: details.isRequired
+    };
+  });
+};
+
 const getCategoryFromDomain = (domainName: string): string => {
   const name = domainName?.toLowerCase() || '';
   if (name.includes('organizational')) return 'Organizational';
@@ -746,62 +805,79 @@ export default function CertificationJourneyPage() {
           <div className="border-t border-slate-700 p-4">
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div>
-                <h4 className="mb-4 text-sm font-semibold text-white">
+                <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
+                  <FileCheck className="h-4 w-4 text-slate-400" />
                   Required Evidence for {control.control_code}
                 </h4>
-                {control.sub_controls?.length > 0 ? (
-                  <div className="space-y-3">
-                    {control.sub_controls.map((sub: SubControlWithEvidence) => (
-                      <div key={sub.id} className="rounded-lg bg-slate-900/50 p-3">
-                        <div className="flex items-start gap-3">
-                          <Radio className="h-4 w-4 text-primary-400 mt-0.5 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-white">{sub.name}</p>
-                            <p className="text-xs text-slate-400 mt-1">{sub.description}</p>
-                            {sub.evidence_recommendations?.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {sub.evidence_recommendations.map((rec, idx) => {
-                                  const evType = getEvidenceType(rec);
-                                  return (
-                                    <span key={idx} className={`rounded px-1.5 py-0.5 text-xs ${evType.color}`}>
-                                      {evType.label}
-                                    </span>
-                                  );
-                                })}
-                                <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400">Annual</span>
-                              </div>
-                            )}
-                            <div className="mt-2 flex items-center gap-2">
-                              <span className="rounded bg-orange-500/20 px-1.5 py-0.5 text-xs text-orange-400">Required</span>
-                              {showUpload && (
-                                <label className="cursor-pointer">
-                                  <input
-                                    type="file"
-                                    className="hidden"
-                                    onChange={(e) => handleFileUpload(control.id, e)}
-                                    disabled={uploadingControlId === control.id}
-                                  />
-                                  <span className="flex items-center gap-1 rounded bg-primary-500/20 px-2 py-0.5 text-xs text-primary-400 hover:bg-primary-500/30">
-                                    {uploadingControlId === control.id ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <Upload className="h-3 w-3" />
-                                    )}
-                                    Upload
+                {(() => {
+                  const allEvidence: EvidenceRequirement[] = [];
+                  control.sub_controls?.forEach((sub: SubControlWithEvidence) => {
+                    if (sub.evidence_recommendations?.length > 0) {
+                      const reqs = getEvidenceRequirements(control.control_name, sub.evidence_recommendations);
+                      allEvidence.push(...reqs);
+                    }
+                  });
+                  const uniqueEvidence = allEvidence.filter((ev, idx, arr) => 
+                    arr.findIndex(e => e.type === ev.type) === idx
+                  );
+                  
+                  if (uniqueEvidence.length > 0) {
+                    return (
+                      <div className="space-y-2">
+                        {uniqueEvidence.map((ev, idx) => (
+                          <div key={ev.id} className="rounded-lg bg-slate-900/50 p-3">
+                            <div className="flex items-start gap-3">
+                              <Radio className="h-4 w-4 text-primary-400 mt-1 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-white">{ev.title}</p>
+                                <p className="text-xs text-slate-400 mt-1">{ev.description}</p>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  <span className={`rounded px-1.5 py-0.5 text-xs ${ev.typeColor}`}>
+                                    {ev.typeLabel}
                                   </span>
-                                </label>
-                              )}
+                                  {ev.frequency !== 'as_needed' && (
+                                    <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400 flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      {ev.frequency}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`rounded px-2 py-1 text-xs ${ev.isRequired ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-400'}`}>
+                                  {ev.isRequired ? 'Required' : 'Optional'}
+                                </span>
+                                {showUpload && (
+                                  <label className="cursor-pointer">
+                                    <input
+                                      type="file"
+                                      className="hidden"
+                                      onChange={(e) => handleFileUpload(control.id, e)}
+                                      disabled={uploadingControlId === control.id}
+                                    />
+                                    <span className="flex items-center gap-1 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700">
+                                      {uploadingControlId === control.id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <Upload className="h-3 w-3" />
+                                      )}
+                                    </span>
+                                  </label>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-lg bg-slate-900/50 p-4 text-center">
-                    <p className="text-sm text-slate-400">No sub-controls defined</p>
-                  </div>
-                )}
+                    );
+                  } else {
+                    return (
+                      <div className="rounded-lg bg-slate-900/50 p-4 text-center">
+                        <p className="text-sm text-slate-400">No evidence requirements defined</p>
+                      </div>
+                    );
+                  }
+                })()}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-4">
