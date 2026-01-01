@@ -287,6 +287,7 @@ class FrameworkControl(Base):
     sub_controls = relationship("FrameworkSubControl", back_populates="control", cascade="all, delete-orphan")
     control_mappings = relationship("ControlMapping", back_populates="framework_control", cascade="all, delete-orphan")
     evidence_mappings = relationship("EvidenceControlMapping", back_populates="framework_control")
+    curated_evidence_items = relationship("CuratedEvidenceItem", back_populates="framework_control", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_control_objective", "objective_id", "code"),
@@ -877,11 +878,12 @@ class ImplementationEvidence(Base):
 
 
 class CuratedEvidenceItem(Base):
-    """Curated, specific evidence requirements for sub-controls"""
+    """Curated, specific evidence requirements for controls"""
     __tablename__ = "grc_curated_evidence_items"
     
     id = Column(Integer, primary_key=True, index=True)
-    sub_control_id = Column(Integer, ForeignKey("grc_framework_sub_controls.id"), nullable=False, index=True)
+    sub_control_id = Column(Integer, ForeignKey("grc_framework_sub_controls.id"), nullable=True, index=True)
+    framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=True, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     artifact_type = Column(String(50), nullable=False)  # policy, configuration, log, screenshot, report, record, certificate
@@ -891,9 +893,11 @@ class CuratedEvidenceItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     sub_control = relationship("FrameworkSubControl", back_populates="curated_evidence_items")
+    framework_control = relationship("FrameworkControl", back_populates="curated_evidence_items")
     
     __table_args__ = (
         Index("ix_curated_evidence_sub_control", "sub_control_id"),
+        Index("ix_curated_evidence_framework_control", "framework_control_id"),
     )
 
 
@@ -913,6 +917,9 @@ def init_grc_db():
     
     from .seed_evidence_items import seed_curated_evidence_items
     seed_curated_evidence_items()
+    
+    from .seed_control_evidence import seed_control_evidence
+    seed_control_evidence()
 
 
 def get_db():

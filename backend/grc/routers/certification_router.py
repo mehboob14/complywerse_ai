@@ -25,14 +25,21 @@ UPLOAD_DIR = "backend/uploads/certification_evidence"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-def get_curated_evidence_for_sub_controls(sub_control_ids: List[int], db: Session) -> List[dict]:
-    """Fetch curated evidence items for the given sub-control IDs."""
-    if not sub_control_ids:
+def get_curated_evidence_for_control(control_id: int, db: Session) -> List[dict]:
+    """Fetch curated evidence items for the given framework control ID."""
+    if not control_id:
         return []
     
     curated_items = db.query(CuratedEvidenceItem).filter(
-        CuratedEvidenceItem.sub_control_id.in_(sub_control_ids)
+        CuratedEvidenceItem.framework_control_id == control_id
     ).all()
+    
+    if not curated_items:
+        curated_items = db.query(CuratedEvidenceItem).join(
+            FrameworkSubControl, CuratedEvidenceItem.sub_control_id == FrameworkSubControl.id
+        ).filter(
+            FrameworkSubControl.control_id == control_id
+        ).all()
     
     return [
         {
@@ -43,6 +50,7 @@ def get_curated_evidence_for_sub_controls(sub_control_ids: List[int], db: Sessio
             "format_guidance": item.format_guidance,
             "frequency": item.frequency,
             "is_required": item.is_required,
+            "framework_control_id": item.framework_control_id,
             "sub_control_id": item.sub_control_id
         }
         for item in curated_items
@@ -261,7 +269,6 @@ def list_journey_controls(
         domain = objective.domain if objective else None
         
         sub_controls_list = []
-        sub_control_ids = []
         if control and control.sub_controls:
             for sub in control.sub_controls:
                 sub_controls_list.append({
@@ -272,9 +279,8 @@ def list_journey_controls(
                     "evidence_recommendations": sub.evidence_recommendations or [],
                     "ai_matching_keywords": sub.ai_matching_keywords or []
                 })
-                sub_control_ids.append(sub.id)
         
-        evidence_requirements = get_curated_evidence_for_sub_controls(sub_control_ids, db)
+        evidence_requirements = get_curated_evidence_for_control(impl.framework_control_id, db)
         
         evidence_list = []
         for ev in impl.evidence_attachments:
