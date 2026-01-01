@@ -105,6 +105,7 @@ class FrameworkBase(BaseModel):
     short_code: str
     regulator: Optional[str] = None
     jurisdiction: Optional[str] = None
+    region: Optional[str] = None
     version: Optional[str] = None
     description: Optional[str] = None
     is_mandatory: bool = False
@@ -132,6 +133,7 @@ class FrameworkResponse(BaseModel):
     short_code: str
     regulator: Optional[str]
     jurisdiction: Optional[str]
+    region: Optional[str] = None
     version: Optional[str]
     description: Optional[str]
     is_mandatory: bool
@@ -195,7 +197,10 @@ class FrameworkControlBase(BaseModel):
     code: str
     name: str
     statement: Optional[str] = None
+    control_objective: Optional[str] = None
     is_mandatory: bool = True
+    risk_category: str = "security"
+    evidence_type: str = "policy"
     implementation_guidance: Optional[str] = None
     testing_guidance: Optional[str] = None
     order: int = 0
@@ -211,7 +216,10 @@ class FrameworkControlResponse(BaseModel):
     code: str
     name: str
     statement: Optional[str]
+    control_objective: Optional[str] = None
     is_mandatory: bool
+    risk_category: Optional[str] = "security"
+    evidence_type: Optional[str] = "policy"
     implementation_guidance: Optional[str]
     testing_guidance: Optional[str]
     order: int

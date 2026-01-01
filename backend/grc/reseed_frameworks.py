@@ -8,6 +8,7 @@ from .models import (
     CertificationJourney, ControlImplementation, ImplementationEvidence, Base, engine
 )
 from .expanded_seed_data import PCI_DSS_V4_DATA
+from .seed_frameworks import _determine_control_attributes
 
 
 def reseed_frameworks():
@@ -78,6 +79,7 @@ def seed_framework_from_data(db, data):
         short_code=data["short_code"],
         regulator=data.get("regulator"),
         jurisdiction=data.get("jurisdiction"),
+        region=data.get("region", "Global"),
         version=data.get("version"),
         description=data.get("description"),
         is_mandatory=data.get("is_mandatory", False),
@@ -109,12 +111,19 @@ def seed_framework_from_data(db, data):
             db.flush()
             
             for ctrl_data in obj_data.get("controls", []):
+                risk_cat, ev_type, ctrl_obj = _determine_control_attributes(
+                    ctrl_data.get("name"), ctrl_data.get("statement")
+                )
+                
                 control = FrameworkControl(
                     objective_id=objective.id,
                     code=ctrl_data["code"],
                     name=ctrl_data["name"],
                     statement=ctrl_data.get("statement"),
+                    control_objective=ctrl_data.get("control_objective", ctrl_obj),
                     is_mandatory=ctrl_data.get("is_mandatory", True),
+                    risk_category=ctrl_data.get("risk_category", risk_cat),
+                    evidence_type=ctrl_data.get("evidence_type", ev_type),
                     implementation_guidance=ctrl_data.get("implementation_guidance"),
                     testing_guidance=ctrl_data.get("testing_guidance"),
                     order=ctrl_data.get("order", 0)
@@ -140,6 +149,7 @@ def seed_iso_27001(db):
         short_code="ISO_27001",
         regulator="International Organization for Standardization",
         jurisdiction="Global",
+        region="Global",
         version="2022",
         description="Information Security Management System",
         is_mandatory=False,
@@ -503,6 +513,7 @@ def seed_iso_20000(db):
         short_code="ISO_20000",
         regulator="International Organization for Standardization",
         jurisdiction="Global",
+        region="Global",
         version="2018",
         description="IT Service Management System",
         is_mandatory=False,
@@ -664,6 +675,7 @@ def seed_swift_csp(db):
         short_code="SWIFT_CSF",
         regulator="SWIFT",
         jurisdiction="Global",
+        region="Global",
         version="2024",
         description="Customer Security Programme Framework",
         is_mandatory=True,
@@ -762,6 +774,7 @@ def seed_nist_csf(db):
         short_code="NIST_CSF",
         regulator="National Institute of Standards and Technology",
         jurisdiction="United States",
+        region="USA",
         version="2.0",
         description="NIST Cybersecurity Framework",
         is_mandatory=False,
@@ -954,6 +967,7 @@ def seed_cbb(db):
         short_code="CBB",
         regulator="Central Bank of Bahrain",
         jurisdiction="Bahrain",
+        region="Middle East",
         version="2023",
         description="Central Bank of Bahrain Cyber Security Framework",
         is_mandatory=True,
@@ -1050,6 +1064,7 @@ def seed_sama(db):
         short_code="SAMA",
         regulator="Saudi Arabian Monetary Authority",
         jurisdiction="Saudi Arabia",
+        region="Middle East",
         version="1.0",
         description="SAMA Cybersecurity Framework for Financial Institutions",
         is_mandatory=True,
@@ -1153,6 +1168,7 @@ def seed_sbp(db):
         short_code="SBP",
         regulator="State Bank of Pakistan",
         jurisdiction="Pakistan",
+        region="South Asia",
         version="2023",
         description="IT/IS Risk Guidelines for Financial Institutions",
         is_mandatory=True,

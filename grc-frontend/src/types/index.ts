@@ -47,6 +47,7 @@ export interface Framework {
   source: string;
   regulator?: string;
   jurisdiction?: string;
+  region?: string;
   effective_date: string;
   is_mandatory?: boolean;
   enforcement_type?: string;
@@ -355,7 +356,10 @@ export interface FrameworkControl {
   code: string;
   name: string;
   statement?: string;
+  control_objective?: string;
   is_mandatory: boolean;
+  risk_category?: string;
+  evidence_type?: string;
   objective?: { id: number; code: string; name: string; domain?: { id: number; code: string; name: string } };
 }
 

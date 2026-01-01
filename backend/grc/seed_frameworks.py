@@ -5,6 +5,121 @@ from .models import (
 )
 
 
+def _determine_control_attributes(control_name, control_statement):
+    """Determine risk_category, evidence_type, and control_objective based on control content."""
+    name_lower = control_name.lower() if control_name else ""
+    statement_lower = control_statement.lower() if control_statement else ""
+    combined = f"{name_lower} {statement_lower}"
+    
+    risk_category = "security"
+    evidence_type = "policy"
+    control_objective = control_statement[:200] if control_statement else f"Ensure {control_name} requirements are met"
+    
+    if any(kw in combined for kw in ["access control", "access management", "authentication", "mfa", "multi-factor", 
+                                      "identity", "password", "privileged", "user id", "user access", "rbac", "iam"]):
+        risk_category = "security"
+        evidence_type = "configuration"
+        control_objective = "Control access to systems and data through authentication and authorization mechanisms"
+    
+    elif any(kw in combined for kw in ["encryption", "cryptograph", "key management", "tls", "ssl", "cipher", "hashing"]):
+        risk_category = "security"
+        evidence_type = "configuration"
+        control_objective = "Protect data confidentiality through cryptographic controls"
+    
+    elif any(kw in combined for kw in ["firewall", "network security", "network segment", "ids", "ips", "intrusion", 
+                                        "perimeter", "traffic", "network control"]):
+        risk_category = "security"
+        evidence_type = "configuration"
+        control_objective = "Protect network infrastructure from unauthorized access and attacks"
+    
+    elif any(kw in combined for kw in ["log", "monitor", "audit trail", "siem", "detect", "alert", "event"]):
+        risk_category = "operational"
+        evidence_type = "log"
+        control_objective = "Detect security events through monitoring and logging"
+    
+    elif any(kw in combined for kw in ["incident", "response", "breach", "csirt", "forensic"]):
+        risk_category = "operational"
+        evidence_type = "procedure"
+        control_objective = "Respond effectively to security incidents"
+    
+    elif any(kw in combined for kw in ["backup", "recovery", "disaster", "business continuity", "bcp", "dr ", "restore"]):
+        risk_category = "operational"
+        evidence_type = "procedure"
+        control_objective = "Ensure business continuity and recovery capabilities"
+    
+    elif any(kw in combined for kw in ["vulnerability", "scan", "patch", "pentest", "penetration test"]):
+        risk_category = "security"
+        evidence_type = "report"
+        control_objective = "Identify and remediate security vulnerabilities"
+    
+    elif any(kw in combined for kw in ["policy", "policies", "procedure", "governance", "strategy", "framework"]):
+        risk_category = "compliance"
+        evidence_type = "policy"
+        control_objective = "Establish governance and policy framework"
+    
+    elif any(kw in combined for kw in ["training", "awareness", "education"]):
+        risk_category = "compliance"
+        evidence_type = "record"
+        control_objective = "Ensure personnel understand security responsibilities"
+    
+    elif any(kw in combined for kw in ["vendor", "supplier", "third party", "outsource", "contract"]):
+        risk_category = "strategic"
+        evidence_type = "report"
+        control_objective = "Manage third-party and vendor security risks"
+    
+    elif any(kw in combined for kw in ["physical", "facility", "entry", "badge", "cctv", "environment"]):
+        risk_category = "security"
+        evidence_type = "record"
+        control_objective = "Protect physical assets and facilities"
+    
+    elif any(kw in combined for kw in ["malware", "antivirus", "anti-malware", "endpoint"]):
+        risk_category = "security"
+        evidence_type = "configuration"
+        control_objective = "Protect systems from malicious software"
+    
+    elif any(kw in combined for kw in ["configuration", "hardening", "baseline", "standard"]):
+        risk_category = "security"
+        evidence_type = "configuration"
+        control_objective = "Ensure secure system configurations"
+    
+    elif any(kw in combined for kw in ["change management", "change control"]):
+        risk_category = "operational"
+        evidence_type = "record"
+        control_objective = "Control and document system changes"
+    
+    elif any(kw in combined for kw in ["asset", "inventory", "classification", "cmdb"]):
+        risk_category = "operational"
+        evidence_type = "record"
+        control_objective = "Maintain accurate asset inventory and classification"
+    
+    elif any(kw in combined for kw in ["risk", "assessment", "treatment"]):
+        risk_category = "strategic"
+        evidence_type = "report"
+        control_objective = "Identify and manage security risks"
+    
+    elif any(kw in combined for kw in ["compliance", "audit", "review", "regulatory"]):
+        risk_category = "compliance"
+        evidence_type = "report"
+        control_objective = "Ensure regulatory and standards compliance"
+    
+    elif any(kw in combined for kw in ["development", "sdlc", "code", "application"]):
+        risk_category = "security"
+        evidence_type = "procedure"
+        control_objective = "Ensure secure software development practices"
+    
+    elif any(kw in combined for kw in ["board", "ciso", "committee", "management"]):
+        risk_category = "strategic"
+        evidence_type = "record"
+        control_objective = "Establish security leadership and oversight"
+    
+    elif any(kw in combined for kw in ["data", "pii", "privacy", "retention", "disposal"]):
+        risk_category = "compliance"
+        evidence_type = "procedure"
+        control_objective = "Protect sensitive data throughout its lifecycle"
+    
+    return risk_category, evidence_type, control_objective
+
+
 def seed_frameworks():
     """Seed all regulatory frameworks with complete normalized data structure."""
     db = SessionLocal()
@@ -246,6 +361,7 @@ def _seed_pci_dss(db):
         short_code="PCI_DSS",
         regulator="PCI Security Standards Council",
         jurisdiction="Global",
+        region="Global",
         version="4.0",
         description="The PCI DSS provides a framework for developing a robust payment card data security process including prevention, detection and appropriate reaction to security incidents.",
         is_mandatory=True,
@@ -454,6 +570,7 @@ def _seed_iso_27001(db):
         short_code="ISO_27001",
         regulator="International Organization for Standardization",
         jurisdiction="Global",
+        region="Global",
         version="2022",
         description="ISO/IEC 27001 is an international standard for managing information security. It specifies requirements for establishing, implementing, maintaining and continually improving an information security management system.",
         is_mandatory=False,
@@ -618,6 +735,7 @@ def _seed_iso_20000(db):
         short_code="ISO_20000",
         regulator="International Organization for Standardization",
         jurisdiction="Global",
+        region="Global",
         version="2018",
         description="ISO/IEC 20000-1 specifies requirements for an organization to establish, implement, maintain and continually improve a service management system (SMS).",
         is_mandatory=False,
@@ -776,6 +894,7 @@ def _seed_nist_csf(db):
         short_code="NIST_CSF",
         regulator="National Institute of Standards and Technology",
         jurisdiction="United States",
+        region="USA",
         version="2.0",
         description="The NIST Cybersecurity Framework provides a policy framework of computer security guidance for how organizations can assess and improve their ability to prevent, detect, and respond to cyber attacks.",
         is_mandatory=False,
@@ -960,6 +1079,7 @@ def _seed_swift_csp(db):
         short_code="SWIFT_CSF",
         regulator="SWIFT",
         jurisdiction="Global",
+        region="Global",
         version="2024",
         description="The SWIFT Customer Security Programme (CSP) establishes a common set of security controls for the user community. It is designed to address evolving cyber threats and help customers reinforce their security measures.",
         is_mandatory=True,
@@ -1067,6 +1187,7 @@ def _seed_cbb(db):
         short_code="CBB",
         regulator="Central Bank of Bahrain",
         jurisdiction="Bahrain",
+        region="Middle East",
         version="2023",
         description="The CBB Cyber Security Framework establishes minimum requirements for cybersecurity risk management for licensed financial institutions in the Kingdom of Bahrain.",
         is_mandatory=True,
@@ -1189,6 +1310,7 @@ def _seed_sama(db):
         short_code="SAMA",
         regulator="Saudi Arabian Monetary Authority",
         jurisdiction="Saudi Arabia",
+        region="Middle East",
         version="1.0",
         description="The SAMA Cyber Security Framework provides requirements for member organizations to protect their information assets from cyber threats and ensure secure operations.",
         is_mandatory=True,
@@ -1327,6 +1449,7 @@ def _seed_sbp(db):
         short_code="SBP",
         regulator="State Bank of Pakistan",
         jurisdiction="Pakistan",
+        region="South Asia",
         version="2023",
         description="The State Bank of Pakistan IT/IS Security Guidelines provide minimum requirements for information technology and information security controls in the banking sector.",
         is_mandatory=True,
@@ -1487,12 +1610,19 @@ def _create_framework_structure(db, framework, domains_data):
             db.flush()
             
             for ctrl_data in obj_data.get("controls", []):
+                risk_cat, ev_type, ctrl_obj = _determine_control_attributes(
+                    ctrl_data.get("name"), ctrl_data.get("statement")
+                )
+                
                 control = FrameworkControl(
                     objective_id=objective.id,
                     code=ctrl_data["code"],
                     name=ctrl_data["name"],
                     statement=ctrl_data.get("statement"),
+                    control_objective=ctrl_data.get("control_objective", ctrl_obj),
                     is_mandatory=ctrl_data.get("is_mandatory", True),
+                    risk_category=ctrl_data.get("risk_category", risk_cat),
+                    evidence_type=ctrl_data.get("evidence_type", ev_type),
                     implementation_guidance=ctrl_data.get("implementation_guidance"),
                     testing_guidance=ctrl_data.get("testing_guidance"),
                     order=ctrl_data.get("order", 0)
