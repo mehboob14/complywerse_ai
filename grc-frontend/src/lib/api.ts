@@ -116,6 +116,7 @@ export const assetsApi = {
   getAll: () => apiClient.get<ITAsset[]>('/assets'),
   getById: (id: number) => apiClient.get<ITAsset>(`/assets/${id}`),
   getDetail: (id: number) => apiClient.get(`/assets/${id}/detail`),
+  getDashboard: () => apiClient.get('/assets/dashboard'),
   create: (data: {
     name: string;
     description?: string;

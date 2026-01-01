@@ -55,6 +55,14 @@ export default function AssetsPage() {
     },
   });
 
+  const { data: dashboard } = useQuery({
+    queryKey: ['assets-dashboard'],
+    queryFn: async () => {
+      const response = await assetsApi.getDashboard();
+      return response.data;
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: (data: Parameters<typeof assetsApi.create>[0]) => assetsApi.create(data),
     onSuccess: () => {
@@ -194,6 +202,92 @@ export default function AssetsPage() {
           <Plus size={18} />
           Add Asset
         </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-primary-500/20 p-2">
+              <Server className="h-5 w-5 text-primary-400" />
+            </div>
+            <div>
+              <p className="text-sm text-slate-400">Total Assets</p>
+              <p className="text-2xl font-semibold text-white">{dashboard?.total_assets || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
+          <p className="text-sm text-slate-400 mb-2">By Type</p>
+          <div className="space-y-1">
+            {Object.entries(dashboard?.by_type || {}).map(([type, count]) => (
+              <div key={type} className="flex justify-between text-xs">
+                <span className="text-slate-300 capitalize">{type.replace('_', ' ')}</span>
+                <span className="text-white font-medium">{count as number}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
+          <p className="text-sm text-slate-400 mb-2">By Criticality</p>
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className="text-red-400">Critical</span>
+              <span className="text-white font-medium">{dashboard?.by_criticality?.critical || 0}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-orange-400">High</span>
+              <span className="text-white font-medium">{dashboard?.by_criticality?.high || 0}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-yellow-400">Medium</span>
+              <span className="text-white font-medium">{dashboard?.by_criticality?.medium || 0}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-green-400">Low</span>
+              <span className="text-white font-medium">{dashboard?.by_criticality?.low || 0}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-green-500/20 p-2">
+              <DollarSign className="h-5 w-5 text-green-400" />
+            </div>
+            <div>
+              <p className="text-sm text-slate-400">High Value</p>
+              <p className="text-2xl font-semibold text-white">{dashboard?.high_value_assets || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-yellow-500/20 p-2">
+              <AlertCircle className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-sm text-slate-400">Need Assessment</p>
+              <p className="text-2xl font-semibold text-white">{dashboard?.assets_needing_assessment || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-blue-500/20 p-2">
+              <Shield className="h-5 w-5 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-sm text-slate-400">Status</p>
+              <div className="flex gap-2 text-sm">
+                <span className="text-green-400">{dashboard?.by_status?.active || 0} active</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-4">
