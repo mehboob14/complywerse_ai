@@ -24,6 +24,205 @@ router = APIRouter(prefix="/certifications", tags=["Certifications"])
 UPLOAD_DIR = "backend/uploads/certification_evidence"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+EVIDENCE_TYPE_TEMPLATES = {
+    "policy_document": {
+        "title_template": "{control_topic} Policy",
+        "description_template": "Policy for {control_topic_lower}",
+        "type_label": "Policy",
+        "frequency": "annual",
+        "is_required": True
+    },
+    "procedure_document": {
+        "title_template": "{control_topic} Procedures",
+        "description_template": "Documented procedures for {control_topic_lower}",
+        "type_label": "Procedure",
+        "frequency": "annual",
+        "is_required": True
+    },
+    "audit_log": {
+        "title_template": "{control_topic} Audit Logs",
+        "description_template": "System audit logs showing {control_topic_lower} activity",
+        "type_label": "Log",
+        "frequency": "monthly",
+        "is_required": True
+    },
+    "configuration_export": {
+        "title_template": "{control_topic} Configuration",
+        "description_template": "System configuration settings for {control_topic_lower}",
+        "type_label": "Configuration",
+        "frequency": "quarterly",
+        "is_required": True
+    },
+    "screenshot": {
+        "title_template": "{control_topic} Screenshots",
+        "description_template": "Screenshot evidence of {control_topic_lower} implementation",
+        "type_label": "Screenshot",
+        "frequency": "quarterly",
+        "is_required": False
+    },
+    "training_record": {
+        "title_template": "{control_topic} Training Records",
+        "description_template": "Records of personnel training for {control_topic_lower}",
+        "type_label": "Training Record",
+        "frequency": "annual",
+        "is_required": True
+    },
+    "risk_assessment": {
+        "title_template": "{control_topic} Risk Assessment",
+        "description_template": "Risk assessment results for {control_topic_lower}",
+        "type_label": "Risk Assessment",
+        "frequency": "annual",
+        "is_required": True
+    },
+    "access_review": {
+        "title_template": "{control_topic} Access Review",
+        "description_template": "Periodic access review for {control_topic_lower}",
+        "type_label": "Access Review",
+        "frequency": "quarterly",
+        "is_required": True
+    },
+    "change_request": {
+        "title_template": "{control_topic} Change Records",
+        "description_template": "Records of {control_topic_lower} changes",
+        "type_label": "Log",
+        "frequency": "monthly",
+        "is_required": True
+    },
+    "incident_report": {
+        "title_template": "{control_topic} Incident Reports",
+        "description_template": "Security incident documentation for {control_topic_lower}",
+        "type_label": "Report",
+        "frequency": "as_needed",
+        "is_required": False
+    },
+    "backup_log": {
+        "title_template": "{control_topic} Backup Logs",
+        "description_template": "Backup verification logs for {control_topic_lower}",
+        "type_label": "Log",
+        "frequency": "monthly",
+        "is_required": True
+    },
+    "penetration_test_report": {
+        "title_template": "{control_topic} Penetration Test",
+        "description_template": "Penetration testing results for {control_topic_lower}",
+        "type_label": "Report",
+        "frequency": "annual",
+        "is_required": True
+    },
+    "vulnerability_scan": {
+        "title_template": "{control_topic} Vulnerability Scan",
+        "description_template": "Vulnerability scan results for {control_topic_lower}",
+        "type_label": "Report",
+        "frequency": "quarterly",
+        "is_required": True
+    },
+    "encryption_certificate": {
+        "title_template": "{control_topic} Encryption Certificate",
+        "description_template": "Valid encryption certificate for {control_topic_lower}",
+        "type_label": "Certificate",
+        "frequency": "annual",
+        "is_required": True
+    },
+    "contract": {
+        "title_template": "{control_topic} Agreements",
+        "description_template": "Signed agreements for {control_topic_lower}",
+        "type_label": "Contract",
+        "frequency": "as_needed",
+        "is_required": True
+    },
+    "register": {
+        "title_template": "{control_topic} Register",
+        "description_template": "Maintained register for {control_topic_lower}",
+        "type_label": "Register",
+        "frequency": "quarterly",
+        "is_required": True
+    },
+    "plan": {
+        "title_template": "{control_topic} Plan",
+        "description_template": "Management plan for {control_topic_lower}",
+        "type_label": "Plan",
+        "frequency": "annual",
+        "is_required": True
+    },
+    "matrix": {
+        "title_template": "{control_topic} Matrix",
+        "description_template": "Responsibility matrix for {control_topic_lower}",
+        "type_label": "Matrix",
+        "frequency": "annual",
+        "is_required": True
+    },
+    "meeting_minutes": {
+        "title_template": "{control_topic} Meeting Minutes",
+        "description_template": "Meeting records for {control_topic_lower}",
+        "type_label": "Report",
+        "frequency": "monthly",
+        "is_required": False
+    },
+    "inventory": {
+        "title_template": "{control_topic} Inventory",
+        "description_template": "Inventory listing for {control_topic_lower}",
+        "type_label": "Inventory",
+        "frequency": "quarterly",
+        "is_required": True
+    },
+    "acknowledgment": {
+        "title_template": "{control_topic} Acknowledgment Records",
+        "description_template": "Signed acknowledgments for {control_topic_lower}",
+        "type_label": "Record",
+        "frequency": "annual",
+        "is_required": True
+    },
+}
+
+def generate_evidence_requirements(control_name: str, evidence_recommendations: List[str]) -> List[dict]:
+    control_topic = control_name.replace("_", " ").strip()
+    if len(control_topic) > 40:
+        words = control_topic.split()
+        if len(words) > 3:
+            control_topic = " ".join(words[:3])
+    
+    requirements = []
+    seen_types = set()
+    
+    for rec in evidence_recommendations:
+        rec_key = rec.lower().replace("-", "_")
+        if rec_key in seen_types:
+            continue
+        seen_types.add(rec_key)
+        
+        template = EVIDENCE_TYPE_TEMPLATES.get(rec_key)
+        if template:
+            title = template["title_template"].format(
+                control_topic=control_topic,
+                control_topic_lower=control_topic.lower()
+            )
+            description = template["description_template"].format(
+                control_topic=control_topic,
+                control_topic_lower=control_topic.lower()
+            )
+            requirements.append({
+                "id": rec_key,
+                "title": title,
+                "description": description,
+                "type": rec_key,
+                "type_label": template["type_label"],
+                "frequency": template["frequency"],
+                "is_required": template["is_required"]
+            })
+        else:
+            formatted_name = rec.replace("_", " ").title()
+            requirements.append({
+                "id": rec_key,
+                "title": f"{control_topic} {formatted_name}",
+                "description": f"Documentation for {control_topic.lower()} {formatted_name.lower()}",
+                "type": rec_key,
+                "type_label": "Document",
+                "frequency": "annual",
+                "is_required": True
+            })
+    
+    return requirements
+
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
     user_tenants = get_user_tenants(user, db)
@@ -237,6 +436,7 @@ def list_journey_controls(
         domain = objective.domain if objective else None
         
         sub_controls_list = []
+        all_evidence_recs = []
         if control and control.sub_controls:
             for sub in control.sub_controls:
                 sub_controls_list.append({
@@ -247,6 +447,11 @@ def list_journey_controls(
                     "evidence_recommendations": sub.evidence_recommendations or [],
                     "ai_matching_keywords": sub.ai_matching_keywords or []
                 })
+                if sub.evidence_recommendations:
+                    all_evidence_recs.extend(sub.evidence_recommendations)
+        
+        control_name = control.name if control else "Control"
+        evidence_requirements = generate_evidence_requirements(control_name, all_evidence_recs)
         
         evidence_list = []
         for ev in impl.evidence_attachments:
@@ -278,9 +483,10 @@ def list_journey_controls(
             "is_applicable": impl.is_applicable,
             "priority": impl.priority,
             "sub_controls": sub_controls_list,
+            "evidence_requirements": evidence_requirements,
             "evidence": evidence_list,
             "evidence_count": len(evidence_list),
-            "required_evidence_count": len(sub_controls_list) * 2
+            "required_evidence_count": len(evidence_requirements)
         })
     
     return result

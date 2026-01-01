@@ -809,75 +809,80 @@ export default function CertificationJourneyPage() {
                   <FileCheck className="h-4 w-4 text-slate-400" />
                   Required Evidence for {control.control_code}
                 </h4>
-                {(() => {
-                  const allEvidence: EvidenceRequirement[] = [];
-                  control.sub_controls?.forEach((sub: SubControlWithEvidence) => {
-                    if (sub.evidence_recommendations?.length > 0) {
-                      const reqs = getEvidenceRequirements(control.control_name, sub.evidence_recommendations);
-                      allEvidence.push(...reqs);
-                    }
-                  });
-                  const uniqueEvidence = allEvidence.filter((ev, idx, arr) => 
-                    arr.findIndex(e => e.type === ev.type) === idx
-                  );
-                  
-                  if (uniqueEvidence.length > 0) {
-                    return (
-                      <div className="space-y-2">
-                        {uniqueEvidence.map((ev, idx) => (
-                          <div key={ev.id} className="rounded-lg bg-slate-900/50 p-3">
-                            <div className="flex items-start gap-3">
-                              <Radio className="h-4 w-4 text-primary-400 mt-1 flex-shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-white">{ev.title}</p>
-                                <p className="text-xs text-slate-400 mt-1">{ev.description}</p>
-                                <div className="mt-2 flex flex-wrap items-center gap-2">
-                                  <span className={`rounded px-1.5 py-0.5 text-xs ${ev.typeColor}`}>
-                                    {ev.typeLabel}
-                                  </span>
-                                  {ev.frequency !== 'as_needed' && (
-                                    <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400 flex items-center gap-1">
-                                      <Clock className="h-3 w-3" />
-                                      {ev.frequency}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className={`rounded px-2 py-1 text-xs ${ev.isRequired ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-400'}`}>
-                                  {ev.isRequired ? 'Required' : 'Optional'}
+                {control.evidence_requirements?.length > 0 ? (
+                  <div className="space-y-2">
+                    {control.evidence_requirements.map((ev: { id: string; title: string; description: string; type: string; type_label: string; frequency: string; is_required: boolean }, idx: number) => {
+                      const typeColors: Record<string, string> = {
+                        'Policy': 'bg-blue-500/20 text-blue-400',
+                        'Procedure': 'bg-purple-500/20 text-purple-400',
+                        'Log': 'bg-orange-500/20 text-orange-400',
+                        'Report': 'bg-pink-500/20 text-pink-400',
+                        'Screenshot': 'bg-cyan-500/20 text-cyan-400',
+                        'Training Record': 'bg-green-500/20 text-green-400',
+                        'Risk Assessment': 'bg-red-500/20 text-red-400',
+                        'Access Review': 'bg-yellow-500/20 text-yellow-400',
+                        'Configuration': 'bg-indigo-500/20 text-indigo-400',
+                        'Certificate': 'bg-emerald-500/20 text-emerald-400',
+                        'Contract': 'bg-amber-500/20 text-amber-400',
+                        'Register': 'bg-teal-500/20 text-teal-400',
+                        'Plan': 'bg-sky-500/20 text-sky-400',
+                        'Matrix': 'bg-violet-500/20 text-violet-400',
+                        'Inventory': 'bg-lime-500/20 text-lime-400',
+                        'Record': 'bg-fuchsia-500/20 text-fuchsia-400',
+                      };
+                      const typeColor = typeColors[ev.type_label] || 'bg-slate-500/20 text-slate-400';
+                      
+                      return (
+                        <div key={`${ev.id}-${idx}`} className="rounded-lg bg-slate-900/50 p-3">
+                          <div className="flex items-start gap-3">
+                            <Radio className="h-4 w-4 text-primary-400 mt-1 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-white">{ev.title}</p>
+                              <p className="text-xs text-slate-400 mt-1">{ev.description}</p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className={`rounded px-1.5 py-0.5 text-xs ${typeColor}`}>
+                                  {ev.type_label}
                                 </span>
-                                {showUpload && (
-                                  <label className="cursor-pointer">
-                                    <input
-                                      type="file"
-                                      className="hidden"
-                                      onChange={(e) => handleFileUpload(control.id, e)}
-                                      disabled={uploadingControlId === control.id}
-                                    />
-                                    <span className="flex items-center gap-1 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700">
-                                      {uploadingControlId === control.id ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <Upload className="h-3 w-3" />
-                                      )}
-                                    </span>
-                                  </label>
+                                {ev.frequency !== 'as_needed' && (
+                                  <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400 flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {ev.frequency}
+                                  </span>
                                 )}
                               </div>
                             </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className={`rounded px-2 py-1 text-xs ${ev.is_required ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-400'}`}>
+                                {ev.is_required ? 'Required' : 'Optional'}
+                              </span>
+                              {showUpload && (
+                                <label className="cursor-pointer">
+                                  <input
+                                    type="file"
+                                    className="hidden"
+                                    onChange={(e) => handleFileUpload(control.id, e)}
+                                    disabled={uploadingControlId === control.id}
+                                  />
+                                  <span className="flex items-center gap-1 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700">
+                                    {uploadingControlId === control.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Upload className="h-3 w-3" />
+                                    )}
+                                  </span>
+                                </label>
+                              )}
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    );
-                  } else {
-                    return (
-                      <div className="rounded-lg bg-slate-900/50 p-4 text-center">
-                        <p className="text-sm text-slate-400">No evidence requirements defined</p>
-                      </div>
-                    );
-                  }
-                })()}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-slate-900/50 p-4 text-center">
+                    <p className="text-sm text-slate-400">No evidence requirements defined</p>
+                  </div>
+                )}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-4">
