@@ -5,13 +5,15 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 
 from ..models import (
-    ITAsset, AssetControlLink, AssetRiskAssessment,
-    NormalizedControl, GRCUser, Tenant, get_db
+    ITAsset, AssetControlLink, AssetRiskAssessment, AssetFrameworkControlLink,
+    AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, GRCUser, Tenant, get_db
 )
 from ..schemas import (
     ITAssetCreate, ITAssetUpdate, ITAssetResponse,
     AssetValuation, AssetControlLinkCreate, AssetRiskAssessmentResponse,
-    AssetDashboard, AssetCoverage, MessageResponse
+    AssetDashboard, AssetCoverage, MessageResponse,
+    AssetFrameworkControlLinkCreate, AssetEvidenceLinkCreate,
+    AssetDetailResponse, AssetCoverageAnalysis
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -93,7 +95,11 @@ def create_asset(
         owner_id=asset.owner_id,
         criticality=asset.criticality,
         vendor=asset.vendor,
-        location=asset.location
+        location=asset.location,
+        confidentiality_rating=asset.confidentiality_rating,
+        integrity_rating=asset.integrity_rating,
+        availability_rating=asset.availability_rating,
+        valuation=asset.valuation
     )
     db.add(db_asset)
     db.commit()
@@ -474,5 +480,402 @@ def get_latest_assessment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No assessment found for this asset"
         )
+    
+    return assessment
+
+
+@router.get("/{asset_id}/detail", response_model=AssetDetailResponse)
+def get_asset_detail(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).options(
+        joinedload(ITAsset.control_links),
+        joinedload(ITAsset.risk_links),
+        joinedload(ITAsset.risk_assessments),
+        joinedload(ITAsset.framework_control_links),
+        joinedload(ITAsset.evidence_links),
+        joinedload(ITAsset.owner)
+    ).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+    
+    linked_controls = []
+    for link in asset.control_links:
+        control = db.query(NormalizedControl).filter(NormalizedControl.id == link.normalized_control_id).first()
+        if control:
+            linked_controls.append({
+                "id": link.id,
+                "control_id": control.id,
+                "code": control.code,
+                "name": control.name
+            })
+    
+    linked_framework_controls = []
+    for link in asset.framework_control_links:
+        fc = db.query(FrameworkControl).filter(FrameworkControl.id == link.framework_control_id).first()
+        if fc:
+            linked_framework_controls.append({
+                "id": link.id,
+                "framework_control_id": fc.id,
+                "code": fc.code,
+                "name": fc.name,
+                "coverage_status": link.coverage_status,
+                "notes": link.notes
+            })
+    
+    linked_risks = [{"risk_id": link.risk_id} for link in asset.risk_links]
+    
+    linked_evidence = []
+    for link in asset.evidence_links:
+        ev = db.query(Evidence).filter(Evidence.id == link.evidence_id).first()
+        if ev:
+            linked_evidence.append({
+                "id": link.id,
+                "evidence_id": ev.id,
+                "name": ev.name,
+                "relationship_type": link.relationship_type
+            })
+    
+    risk_assessments = []
+    for assessment in asset.risk_assessments:
+        risk_assessments.append({
+            "id": assessment.id,
+            "assessment_date": assessment.assessment_date.isoformat(),
+            "risk_score": assessment.risk_score,
+            "coverage_percentage": assessment.coverage_percentage,
+            "gaps": assessment.gaps
+        })
+    
+    total_controls = len(linked_controls) + len(linked_framework_controls)
+    coverage = min(total_controls * 10, 100) if total_controls > 0 else 0
+    
+    return AssetDetailResponse(
+        id=asset.id,
+        tenant_id=asset.tenant_id,
+        name=asset.name,
+        description=asset.description,
+        asset_type=asset.asset_type,
+        owner_id=asset.owner_id,
+        owner_name=asset.owner.display_name if asset.owner else None,
+        criticality=asset.criticality,
+        confidentiality_rating=asset.confidentiality_rating,
+        integrity_rating=asset.integrity_rating,
+        availability_rating=asset.availability_rating,
+        valuation=asset.valuation,
+        vendor=asset.vendor,
+        location=asset.location,
+        status=asset.status,
+        created_at=asset.created_at,
+        linked_controls=linked_controls,
+        linked_framework_controls=linked_framework_controls,
+        linked_risks=linked_risks,
+        linked_evidence=linked_evidence,
+        risk_assessments=risk_assessments,
+        coverage_percentage=float(coverage)
+    )
+
+
+@router.post("/{asset_id}/link-framework-control", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def link_asset_to_framework_control(
+    asset_id: int,
+    link: AssetFrameworkControlLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+    
+    control = db.query(FrameworkControl).filter(
+        FrameworkControl.id == link.framework_control_id
+    ).first()
+    if not control:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework control not found"
+        )
+    
+    existing = db.query(AssetFrameworkControlLink).filter(
+        AssetFrameworkControlLink.asset_id == asset_id,
+        AssetFrameworkControlLink.framework_control_id == link.framework_control_id
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link already exists"
+        )
+    
+    db_link = AssetFrameworkControlLink(
+        asset_id=asset_id,
+        framework_control_id=link.framework_control_id,
+        coverage_status=link.coverage_status,
+        notes=link.notes
+    )
+    db.add(db_link)
+    db.commit()
+    
+    return MessageResponse(message="Framework control linked successfully", id=db_link.id)
+
+
+@router.delete("/{asset_id}/link-framework-control/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_framework_control_link(
+    asset_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+    
+    link = db.query(AssetFrameworkControlLink).filter(
+        AssetFrameworkControlLink.id == link_id,
+        AssetFrameworkControlLink.asset_id == asset_id
+    ).first()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Link not found"
+        )
+    
+    db.delete(link)
+    db.commit()
+    return None
+
+
+@router.post("/{asset_id}/link-evidence", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def link_asset_to_evidence(
+    asset_id: int,
+    link: AssetEvidenceLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+    
+    evidence = db.query(Evidence).filter(
+        Evidence.id == link.evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
+    if not evidence:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence not found"
+        )
+    
+    existing = db.query(AssetEvidenceLink).filter(
+        AssetEvidenceLink.asset_id == asset_id,
+        AssetEvidenceLink.evidence_id == link.evidence_id
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link already exists"
+        )
+    
+    db_link = AssetEvidenceLink(
+        asset_id=asset_id,
+        evidence_id=link.evidence_id,
+        relationship_type=link.relationship_type
+    )
+    db.add(db_link)
+    db.commit()
+    
+    return MessageResponse(message="Evidence linked successfully", id=db_link.id)
+
+
+@router.delete("/{asset_id}/link-evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_evidence_link(
+    asset_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+    
+    link = db.query(AssetEvidenceLink).filter(
+        AssetEvidenceLink.id == link_id,
+        AssetEvidenceLink.asset_id == asset_id
+    ).first()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Link not found"
+        )
+    
+    db.delete(link)
+    db.commit()
+    return None
+
+
+@router.get("/{asset_id}/coverage-analysis", response_model=AssetCoverageAnalysis)
+def get_asset_coverage_analysis(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).options(
+        joinedload(ITAsset.control_links),
+        joinedload(ITAsset.framework_control_links),
+        joinedload(ITAsset.risk_assessments)
+    ).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+    
+    total_controls = len(asset.control_links) + len(asset.framework_control_links)
+    
+    full_coverage = sum(1 for link in asset.framework_control_links if link.coverage_status == "full")
+    partial_coverage = sum(1 for link in asset.framework_control_links if link.coverage_status == "partial")
+    covered_controls = len(asset.control_links) + full_coverage + (partial_coverage * 0.5)
+    
+    expected_controls = 10
+    coverage_percentage = min((covered_controls / expected_controls) * 100, 100) if expected_controls > 0 else 0
+    
+    gaps = []
+    if total_controls < 3:
+        gaps.append({"type": "insufficient_controls", "message": "Asset has fewer than 3 controls linked"})
+    if asset.criticality in ["high", "critical"] and total_controls < 5:
+        gaps.append({"type": "critical_asset_gap", "message": "Critical/high priority asset should have at least 5 controls"})
+    if not asset.framework_control_links:
+        gaps.append({"type": "no_framework_controls", "message": "No framework controls linked to this asset"})
+    
+    latest_assessment = None
+    risk_score = None
+    if asset.risk_assessments:
+        latest_assessment = sorted(asset.risk_assessments, key=lambda x: x.assessment_date, reverse=True)[0]
+        risk_score = latest_assessment.risk_score
+    
+    return AssetCoverageAnalysis(
+        asset_id=asset.id,
+        asset_name=asset.name,
+        total_controls=total_controls,
+        covered_controls=int(covered_controls),
+        coverage_percentage=round(coverage_percentage, 2),
+        gaps=gaps,
+        risk_score=risk_score
+    )
+
+
+@router.post("/{asset_id}/assess-risk", response_model=AssetRiskAssessmentResponse)
+def perform_risk_assessment(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).options(
+        joinedload(ITAsset.control_links),
+        joinedload(ITAsset.framework_control_links),
+        joinedload(ITAsset.evidence_links)
+    ).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+    
+    num_normalized_controls = len(asset.control_links)
+    num_framework_controls = len(asset.framework_control_links)
+    num_evidence = len(asset.evidence_links)
+    
+    total_controls = num_normalized_controls + num_framework_controls
+    coverage = min(total_controls * 10, 100)
+    
+    base_risk = 5
+    if asset.criticality == "critical":
+        base_risk = 9
+    elif asset.criticality == "high":
+        base_risk = 7
+    elif asset.criticality == "low":
+        base_risk = 3
+    
+    control_reduction = total_controls * 0.4
+    evidence_reduction = num_evidence * 0.2
+    risk_score = max(1, base_risk - control_reduction - evidence_reduction)
+    
+    gaps = {
+        "missing_controls": max(0, 10 - total_controls),
+        "missing_evidence": max(0, 5 - num_evidence),
+        "recommendations": []
+    }
+    if total_controls < 3:
+        gaps["recommendations"].append("Add more controls to improve coverage")
+    if asset.criticality in ["high", "critical"] and total_controls < 5:
+        gaps["recommendations"].append("Critical assets should have at least 5 controls")
+    if num_evidence < 2:
+        gaps["recommendations"].append("Add more evidence documentation")
+    if not asset.framework_control_links:
+        gaps["recommendations"].append("Link to framework controls for better compliance tracking")
+    
+    assessment = AssetRiskAssessment(
+        asset_id=asset_id,
+        risk_score=round(risk_score, 2),
+        coverage_percentage=float(coverage),
+        gaps=gaps,
+        assessor_id=current_user.id
+    )
+    db.add(assessment)
+    db.commit()
+    db.refresh(assessment)
     
     return assessment

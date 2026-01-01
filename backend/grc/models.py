@@ -401,6 +401,7 @@ class Evidence(Base):
     control_mappings = relationship("EvidenceControlMapping", back_populates="evidence", cascade="all, delete-orphan")
     ai_assessments = relationship("EvidenceAIAssessment", back_populates="evidence", cascade="all, delete-orphan")
     risk_links = relationship("RiskEvidenceLink", back_populates="evidence", cascade="all, delete-orphan")
+    asset_links = relationship("AssetEvidenceLink", back_populates="evidence", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_evidence_tenant_status", "tenant_id", "status"),
@@ -717,6 +718,8 @@ class ITAsset(Base):
     control_links = relationship("AssetControlLink", back_populates="asset", cascade="all, delete-orphan")
     risk_links = relationship("RiskAssetLink", back_populates="asset", cascade="all, delete-orphan")
     risk_assessments = relationship("AssetRiskAssessment", back_populates="asset", cascade="all, delete-orphan")
+    framework_control_links = relationship("AssetFrameworkControlLink", back_populates="asset", cascade="all, delete-orphan")
+    evidence_links = relationship("AssetEvidenceLink", back_populates="asset", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_it_asset_tenant_type", "tenant_id", "asset_type"),
@@ -736,6 +739,41 @@ class AssetControlLink(Base):
     
     __table_args__ = (
         Index("ix_asset_control_link", "asset_id", "normalized_control_id"),
+    )
+
+
+class AssetFrameworkControlLink(Base):
+    """Links assets to framework controls"""
+    __tablename__ = "grc_asset_framework_control_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=False, index=True)
+    coverage_status = Column(String(50), default="partial")
+    notes = Column(Text, nullable=True)
+    
+    asset = relationship("ITAsset", back_populates="framework_control_links")
+    framework_control = relationship("FrameworkControl")
+    
+    __table_args__ = (
+        UniqueConstraint("asset_id", "framework_control_id", name="uq_asset_framework_control"),
+    )
+
+
+class AssetEvidenceLink(Base):
+    """Links assets to evidence items"""
+    __tablename__ = "grc_asset_evidence_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
+    relationship_type = Column(String(50), default="supports")
+    
+    asset = relationship("ITAsset", back_populates="evidence_links")
+    evidence = relationship("Evidence", back_populates="asset_links")
+    
+    __table_args__ = (
+        UniqueConstraint("asset_id", "evidence_id", name="uq_asset_evidence"),
     )
 
 

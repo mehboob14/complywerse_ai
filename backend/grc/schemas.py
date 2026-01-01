@@ -694,7 +694,10 @@ class ITAssetBase(BaseModel):
 
 
 class ITAssetCreate(ITAssetBase):
-    pass
+    confidentiality_rating: Optional[int] = None
+    integrity_rating: Optional[int] = None
+    availability_rating: Optional[int] = None
+    valuation: Optional[float] = None
 
 
 class ITAssetUpdate(BaseModel):
@@ -738,6 +741,55 @@ class AssetValuation(BaseModel):
 
 class AssetControlLinkCreate(BaseModel):
     normalized_control_id: int
+
+
+class AssetFrameworkControlLinkCreate(BaseModel):
+    framework_control_id: int
+    coverage_status: str = "partial"
+    notes: Optional[str] = None
+
+
+class AssetEvidenceLinkCreate(BaseModel):
+    evidence_id: int
+    relationship_type: str = "supports"
+
+
+class AssetDetailResponse(BaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    description: Optional[str]
+    asset_type: str
+    owner_id: Optional[int]
+    owner_name: Optional[str] = None
+    criticality: str
+    confidentiality_rating: Optional[int]
+    integrity_rating: Optional[int]
+    availability_rating: Optional[int]
+    valuation: Optional[float]
+    vendor: Optional[str]
+    location: Optional[str]
+    status: str
+    created_at: datetime
+    linked_controls: List[dict] = []
+    linked_framework_controls: List[dict] = []
+    linked_risks: List[dict] = []
+    linked_evidence: List[dict] = []
+    risk_assessments: List[dict] = []
+    coverage_percentage: Optional[float] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class AssetCoverageAnalysis(BaseModel):
+    asset_id: int
+    asset_name: str
+    total_controls: int
+    covered_controls: int
+    coverage_percentage: float
+    gaps: List[dict] = []
+    risk_score: Optional[float] = None
 
 
 class AssetRiskAssessmentResponse(BaseModel):
