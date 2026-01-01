@@ -710,6 +710,40 @@ def unlink_risk_from_governance(
     return None
 
 
+@router.delete("/{risk_id}/controls/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_risk_from_control(
+    risk_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    link = db.query(RiskControlLink).filter(
+        RiskControlLink.id == link_id,
+        RiskControlLink.risk_id == risk_id
+    ).first()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Control link not found"
+        )
+    
+    db.delete(link)
+    db.commit()
+    return None
+
+
 @router.post("/{risk_id}/assets", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 def link_risk_to_asset(
     risk_id: int,
@@ -756,6 +790,40 @@ def link_risk_to_asset(
     return MessageResponse(message="Asset linked successfully")
 
 
+@router.delete("/{risk_id}/assets/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_risk_from_asset(
+    risk_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    link = db.query(RiskAssetLink).filter(
+        RiskAssetLink.id == link_id,
+        RiskAssetLink.risk_id == risk_id
+    ).first()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset link not found"
+        )
+    
+    db.delete(link)
+    db.commit()
+    return None
+
+
 @router.post("/{risk_id}/evidence", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 def link_risk_to_evidence(
     risk_id: int,
@@ -800,3 +868,37 @@ def link_risk_to_evidence(
     db.commit()
     
     return MessageResponse(message="Evidence linked successfully")
+
+
+@router.delete("/{risk_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_risk_from_evidence(
+    risk_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+    
+    link = db.query(RiskEvidenceLink).filter(
+        RiskEvidenceLink.id == link_id,
+        RiskEvidenceLink.risk_id == risk_id
+    ).first()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence link not found"
+        )
+    
+    db.delete(link)
+    db.commit()
+    return None
