@@ -7,6 +7,7 @@ from .reports import router as reports_router
 from .mitigation_actions import router as mitigation_actions_router
 from .mitigation_actions import risk_actions_router
 from .scales import router as scales_router
+from .appetite import router as appetite_router
 
 __all__ = [
     "risks_router",
@@ -17,5 +18,6 @@ __all__ = [
     "reports_router",
     "mitigation_actions_router",
     "risk_actions_router",
-    "scales_router"
+    "scales_router",
+    "appetite_router"
 ]

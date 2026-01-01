@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
-import { Risk, RiskCategory } from '@/types';
+import { RiskCategory } from '@/types';
 import {
   AlertTriangle,
   Loader2,
-  AlertCircle,
   Edit2,
   Save,
   Target,
@@ -15,28 +14,51 @@ import {
   BellOff,
   ExternalLink,
   TrendingUp,
+  Database,
 } from 'lucide-react';
 import Link from 'next/link';
 
-type AppetiteLevel = 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
+type AppetiteLevel = 'averse' | 'minimal' | 'cautious' | 'moderate' | 'open' | 'hungry';
 
-interface AppetiteConfig {
+interface AppetiteConfigWithStats {
   id: number;
+  tenant_id: number;
   category: RiskCategory;
   appetite_level: AppetiteLevel;
+  appetite_value: number;
+  max_acceptable_score: number;
   tolerance_threshold: number;
   escalation_owner_id: number | null;
-  escalation_owner_name: string | null;
-  alerts_enabled: boolean;
+  escalation_owner: { id: number; email: string; full_name: string } | null;
+  alert_enabled: boolean;
+  description: string | null;
+  risks_count: number;
+  exceeding_count: number;
+  tolerance_breaches: ToleranceBreachFromAPI[];
 }
 
-interface ToleranceBreach {
+interface ToleranceBreachFromAPI {
   risk_id: number;
   risk_title: string;
   category: RiskCategory;
   current_score: number;
-  tolerance_threshold: number;
-  days_over_tolerance: number;
+  tolerance: number;
+  days_over: number;
+}
+
+interface BreachesResponse {
+  total_breaches: number;
+  breaches: {
+    risk_id: number;
+    risk_title: string;
+    category: RiskCategory;
+    current_score: number;
+    tolerance: number;
+    excess: number;
+    days_over: number;
+    owner_id: number | null;
+    owner: { id: number; email: string; full_name: string } | null;
+  }[];
 }
 
 const RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string; borderColor: string }[] = [
@@ -49,33 +71,14 @@ const RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgCo
   { value: 'project_change', label: 'Project/Change', color: 'text-pink-400', bgColor: 'bg-pink-500/20', borderColor: 'border-pink-500' },
 ];
 
-const APPETITE_LEVELS: { value: AppetiteLevel; label: string; score: number }[] = [
-  { value: 'very_low', label: 'Very Low', score: 4 },
-  { value: 'low', label: 'Low', score: 8 },
-  { value: 'medium', label: 'Medium', score: 12 },
-  { value: 'high', label: 'High', score: 16 },
-  { value: 'very_high', label: 'Very High', score: 20 },
+const APPETITE_LEVELS: { value: AppetiteLevel; label: string }[] = [
+  { value: 'averse', label: 'Averse' },
+  { value: 'minimal', label: 'Minimal' },
+  { value: 'cautious', label: 'Cautious' },
+  { value: 'moderate', label: 'Moderate' },
+  { value: 'open', label: 'Open' },
+  { value: 'hungry', label: 'Hungry' },
 ];
-
-const MOCK_OWNERS = [
-  { id: 1, name: 'John Smith' },
-  { id: 2, name: 'Jane Doe' },
-  { id: 3, name: 'Bob Wilson' },
-  { id: 4, name: 'Alice Brown' },
-  { id: 5, name: 'Charlie Davis' },
-];
-
-const generateMockAppetiteConfig = (): AppetiteConfig[] => {
-  return RISK_CATEGORIES.map((cat, idx) => ({
-    id: idx + 1,
-    category: cat.value,
-    appetite_level: ['low', 'medium', 'low', 'very_low', 'medium', 'low', 'medium'][idx] as AppetiteLevel,
-    tolerance_threshold: [8, 12, 8, 6, 12, 8, 10][idx],
-    escalation_owner_id: MOCK_OWNERS[idx % MOCK_OWNERS.length].id,
-    escalation_owner_name: MOCK_OWNERS[idx % MOCK_OWNERS.length].name,
-    alerts_enabled: [true, true, true, true, false, true, false][idx],
-  }));
-};
 
 const getCategoryStyle = (category: RiskCategory) => {
   return RISK_CATEGORIES.find(c => c.value === category) || RISK_CATEGORIES[0];
@@ -87,114 +90,148 @@ const getAppetiteLevelLabel = (level: AppetiteLevel) => {
 
 const getAppetiteLevelColor = (level: AppetiteLevel) => {
   switch (level) {
-    case 'very_low': return 'text-green-400 bg-green-500/20';
-    case 'low': return 'text-emerald-400 bg-emerald-500/20';
-    case 'medium': return 'text-yellow-400 bg-yellow-500/20';
-    case 'high': return 'text-orange-400 bg-orange-500/20';
-    case 'very_high': return 'text-red-400 bg-red-500/20';
+    case 'averse': return 'text-green-400 bg-green-500/20';
+    case 'minimal': return 'text-emerald-400 bg-emerald-500/20';
+    case 'cautious': return 'text-yellow-400 bg-yellow-500/20';
+    case 'moderate': return 'text-orange-400 bg-orange-500/20';
+    case 'open': return 'text-red-400 bg-red-500/20';
+    case 'hungry': return 'text-rose-400 bg-rose-500/20';
     default: return 'text-slate-400 bg-slate-500/20';
   }
 };
 
 export default function RiskAppetitePage() {
-  const [appetiteConfig, setAppetiteConfig] = useState<AppetiteConfig[]>(generateMockAppetiteConfig());
+  const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [localChanges, setLocalChanges] = useState<Record<number, Partial<AppetiteConfigWithStats>>>({});
 
-  const { data: risks, isLoading: risksLoading } = useQuery({
-    queryKey: ['erm-risks'],
+  const { data: appetiteConfigs, isLoading: configsLoading, error: configsError } = useQuery({
+    queryKey: ['appetite-configs-with-stats'],
     queryFn: async () => {
-      const response = await ermApi.risks.getAll();
-      return response.data;
+      const response = await ermApi.appetite.getWithStats();
+      return response.data as AppetiteConfigWithStats[];
     },
   });
 
-  const toleranceBreaches = useMemo((): ToleranceBreach[] => {
-    if (!risks) return [];
-    
-    const breaches: ToleranceBreach[] = [];
-    
-    risks.forEach((risk: Risk) => {
-      const config = appetiteConfig.find(c => c.category === risk.risk_category);
-      if (!config) return;
-      
-      const currentScore = risk.residual_score || risk.inherent_score || 0;
-      if (currentScore > config.tolerance_threshold) {
-        const riskDate = new Date(risk.created_at);
-        const now = new Date();
-        const daysOver = Math.floor((now.getTime() - riskDate.getTime()) / (1000 * 60 * 60 * 24));
-        
-        breaches.push({
-          risk_id: risk.id,
-          risk_title: risk.title,
-          category: risk.risk_category,
-          current_score: currentScore,
-          tolerance_threshold: config.tolerance_threshold,
-          days_over_tolerance: Math.max(0, daysOver),
-        });
-      }
-    });
-    
-    return breaches.sort((a, b) => (b.current_score - b.tolerance_threshold) - (a.current_score - a.tolerance_threshold));
-  }, [risks, appetiteConfig]);
+  const { data: breachesData, isLoading: breachesLoading } = useQuery({
+    queryKey: ['appetite-breaches'],
+    queryFn: async () => {
+      const response = await ermApi.appetite.getBreaches();
+      return response.data as BreachesResponse;
+    },
+  });
 
-  const risksByCategory = useMemo(() => {
-    if (!risks) return {};
-    
-    const byCategory: Record<RiskCategory, { total: number; exceeding: number }> = {} as Record<RiskCategory, { total: number; exceeding: number }>;
-    
-    RISK_CATEGORIES.forEach(cat => {
-      byCategory[cat.value] = { total: 0, exceeding: 0 };
-    });
-    
-    risks.forEach((risk: Risk) => {
-      if (byCategory[risk.risk_category]) {
-        byCategory[risk.risk_category].total++;
-        
-        const config = appetiteConfig.find(c => c.category === risk.risk_category);
-        const currentScore = risk.residual_score || risk.inherent_score || 0;
-        if (config && currentScore > config.tolerance_threshold) {
-          byCategory[risk.risk_category].exceeding++;
-        }
-      }
-    });
-    
-    return byCategory;
-  }, [risks, appetiteConfig]);
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Record<string, unknown> }) => {
+      const response = await ermApi.appetite.update(id, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appetite-configs-with-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['appetite-breaches'] });
+    },
+  });
 
-  const handleConfigChange = (id: number, field: keyof AppetiteConfig, value: string | number | boolean) => {
-    setAppetiteConfig(prev => 
-      prev.map(config => {
-        if (config.id !== id) return config;
-        
-        const updated = { ...config, [field]: value };
-        
-        if (field === 'escalation_owner_id') {
-          const owner = MOCK_OWNERS.find(o => o.id === value);
-          updated.escalation_owner_name = owner?.name || null;
-        }
-        
-        return updated;
-      })
-    );
+  const seedMutation = useMutation({
+    mutationFn: async () => {
+      const response = await ermApi.appetite.seedDefaults(1);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appetite-configs-with-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['appetite-breaches'] });
+    },
+  });
+
+  const getConfigValue = (config: AppetiteConfigWithStats, field: keyof AppetiteConfigWithStats) => {
+    const changes = localChanges[config.id];
+    if (changes && field in changes) {
+      return changes[field as keyof typeof changes];
+    }
+    return config[field];
+  };
+
+  const handleConfigChange = (id: number, field: string, value: string | number | boolean) => {
+    setLocalChanges(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: value,
+      },
+    }));
   };
 
   const handleSave = async () => {
     setIsSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsSaving(false);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+    try {
+      const promises = Object.entries(localChanges).map(([id, changes]) => {
+        return updateMutation.mutateAsync({ id: parseInt(id), data: changes });
+      });
+      await Promise.all(promises);
+      setLocalChanges({});
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      console.error('Failed to save configurations:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  if (risksLoading) {
+  const handleSeedDefaults = async () => {
+    try {
+      await seedMutation.mutateAsync();
+    } catch (error) {
+      console.error('Failed to seed defaults:', error);
+    }
+  };
+
+  const hasChanges = Object.keys(localChanges).length > 0;
+
+  if (configsLoading || breachesLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
+
+  if (!appetiteConfigs || appetiteConfigs.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold text-white">Risk Appetite Management</h2>
+          <p className="text-sm text-slate-400">Configure risk appetite levels and monitor tolerance breaches</p>
+        </div>
+
+        <div className="rounded-xl border border-slate-700 bg-slate-800 p-8 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-700">
+            <Database className="h-8 w-8 text-slate-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-white mb-2">No Appetite Configurations Found</h3>
+          <p className="text-sm text-slate-400 mb-6">
+            Get started by seeding default risk appetite configurations for all risk categories.
+          </p>
+          <button
+            onClick={handleSeedDefaults}
+            disabled={seedMutation.isPending}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {seedMutation.isPending ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Database className="h-5 w-5" />
+            )}
+            Seed Default Configurations
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const toleranceBreaches = breachesData?.breaches || [];
 
   return (
     <div className="space-y-6">
@@ -209,7 +246,7 @@ export default function RiskAppetitePage() {
           )}
           <button
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || !hasChanges}
             className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
           >
             {isSaving ? (
@@ -223,20 +260,19 @@ export default function RiskAppetitePage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {RISK_CATEGORIES.map(cat => {
-          const config = appetiteConfig.find(c => c.category === cat.value);
-          const stats = risksByCategory[cat.value] || { total: 0, exceeding: 0 };
+        {appetiteConfigs.map(config => {
+          const catStyle = getCategoryStyle(config.category);
           
           return (
             <div
-              key={cat.value}
+              key={config.id}
               className={`rounded-xl border border-slate-700 bg-slate-800 overflow-hidden`}
             >
-              <div className={`px-4 py-3 ${cat.bgColor} border-b ${cat.borderColor}`}>
+              <div className={`px-4 py-3 ${catStyle.bgColor} border-b ${catStyle.borderColor}`}>
                 <div className="flex items-center justify-between">
-                  <h3 className={`font-semibold ${cat.color}`}>{cat.label}</h3>
+                  <h3 className={`font-semibold ${catStyle.color}`}>{catStyle.label}</h3>
                   <button
-                    onClick={() => setEditingId(editingId === config?.id ? null : config?.id || null)}
+                    onClick={() => setEditingId(editingId === config.id ? null : config.id)}
                     className="p-1 rounded hover:bg-slate-700/50 text-slate-300 hover:text-white transition-colors"
                   >
                     <Edit2 className="h-4 w-4" />
@@ -247,28 +283,26 @@ export default function RiskAppetitePage() {
               <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Appetite Level</span>
-                  {config && (
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getAppetiteLevelColor(config.appetite_level)}`}>
-                      {getAppetiteLevelLabel(config.appetite_level)}
-                    </span>
-                  )}
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${getAppetiteLevelColor(getConfigValue(config, 'appetite_level') as AppetiteLevel)}`}>
+                    {getAppetiteLevelLabel(getConfigValue(config, 'appetite_level') as AppetiteLevel)}
+                  </span>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Tolerance Threshold</span>
-                  <span className="text-white font-medium">{config?.tolerance_threshold || '-'}</span>
+                  <span className="text-white font-medium">{getConfigValue(config, 'tolerance_threshold') || '-'}</span>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Risks Exceeding</span>
-                  <span className={`font-bold ${stats.exceeding > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                    {stats.exceeding} / {stats.total}
+                  <span className={`font-bold ${config.exceeding_count > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    {config.exceeding_count} / {config.risks_count}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Alerts</span>
-                  {config?.alerts_enabled ? (
+                  {getConfigValue(config, 'alert_enabled') ? (
                     <Bell className="h-4 w-4 text-green-400" />
                   ) : (
                     <BellOff className="h-4 w-4 text-slate-500" />
@@ -319,12 +353,12 @@ export default function RiskAppetitePage() {
                       <p className="font-medium">
                         <span className="text-red-400">{breach.current_score}</span>
                         <span className="text-slate-500"> / </span>
-                        <span className="text-slate-300">{breach.tolerance_threshold}</span>
+                        <span className="text-slate-300">{breach.tolerance}</span>
                       </p>
                     </div>
                     <div className="text-center">
                       <p className="text-slate-400">Days Over</p>
-                      <p className="font-medium text-orange-400">{breach.days_over_tolerance}</p>
+                      <p className="font-medium text-orange-400">{breach.days_over}</p>
                     </div>
                     <Link
                       href={`/erm/risks?id=${breach.risk_id}`}
@@ -375,7 +409,7 @@ export default function RiskAppetitePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {appetiteConfig.map(config => {
+              {appetiteConfigs.map(config => {
                 const catStyle = getCategoryStyle(config.category);
                 return (
                   <tr key={config.id} className="hover:bg-slate-700/30">
@@ -387,7 +421,7 @@ export default function RiskAppetitePage() {
                     </td>
                     <td className="px-6 py-4">
                       <select
-                        value={config.appetite_level}
+                        value={getConfigValue(config, 'appetite_level') as string}
                         onChange={(e) => handleConfigChange(config.id, 'appetite_level', e.target.value)}
                         className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
                       >
@@ -401,33 +435,26 @@ export default function RiskAppetitePage() {
                         type="number"
                         min="1"
                         max="25"
-                        value={config.tolerance_threshold}
-                        onChange={(e) => handleConfigChange(config.id, 'tolerance_threshold', parseInt(e.target.value) || 0)}
+                        value={getConfigValue(config, 'tolerance_threshold') as number}
+                        onChange={(e) => handleConfigChange(config.id, 'tolerance_threshold', parseFloat(e.target.value) || 0)}
                         className="w-24 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
                       />
                     </td>
                     <td className="px-6 py-4">
-                      <select
-                        value={config.escalation_owner_id || ''}
-                        onChange={(e) => handleConfigChange(config.id, 'escalation_owner_id', parseInt(e.target.value) || null)}
-                        className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
-                      >
-                        <option value="">Select owner...</option>
-                        {MOCK_OWNERS.map(owner => (
-                          <option key={owner.id} value={owner.id}>{owner.name}</option>
-                        ))}
-                      </select>
+                      <span className="text-sm text-slate-300">
+                        {config.escalation_owner?.full_name || config.escalation_owner?.email || 'Not assigned'}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <button
-                        onClick={() => handleConfigChange(config.id, 'alerts_enabled', !config.alerts_enabled)}
+                        onClick={() => handleConfigChange(config.id, 'alert_enabled', !(getConfigValue(config, 'alert_enabled') as boolean))}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          config.alerts_enabled ? 'bg-primary-600' : 'bg-slate-600'
+                          getConfigValue(config, 'alert_enabled') ? 'bg-primary-600' : 'bg-slate-600'
                         }`}
                       >
                         <span
                           className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            config.alerts_enabled ? 'translate-x-6' : 'translate-x-1'
+                            getConfigValue(config, 'alert_enabled') ? 'translate-x-6' : 'translate-x-1'
                           }`}
                         />
                       </button>

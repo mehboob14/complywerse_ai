@@ -336,10 +336,14 @@ export const ermApi = {
   },
   appetite: {
     getAll: () => apiClient.get('/erm/appetite'),
+    getWithStats: () => apiClient.get('/erm/appetite/with-stats'),
+    getBreaches: () => apiClient.get('/erm/appetite/breaches'),
     update: (id: number, data: Record<string, unknown>) => 
       apiClient.put(`/erm/appetite/${id}`, data),
-    create: (data: Record<string, unknown>) => 
-      apiClient.post('/erm/appetite', data),
+    create: (tenantId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/erm/appetite?tenant_id=${tenantId}`, data),
+    seedDefaults: (tenantId: number) => 
+      apiClient.post(`/erm/appetite/seed-defaults?tenant_id=${tenantId}`),
   },
 };
 

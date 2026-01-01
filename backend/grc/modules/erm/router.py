@@ -8,7 +8,8 @@ from .routers import (
     reports_router,
     mitigation_actions_router,
     risk_actions_router,
-    scales_router
+    scales_router,
+    appetite_router
 )
 
 router = APIRouter(prefix="/erm", tags=["ERM Module"])
@@ -22,6 +23,7 @@ router.include_router(reports_router)
 router.include_router(mitigation_actions_router, tags=["ERM Mitigation Actions"])
 router.include_router(risk_actions_router, tags=["ERM Mitigation Actions"])
 router.include_router(scales_router, tags=["ERM Scales"])
+router.include_router(appetite_router, tags=["ERM Risk Appetite"])
 
 
 @router.get("")
@@ -37,6 +39,7 @@ def erm_module_info():
             "/dependencies",
             "/reports",
             "/mitigation-actions",
-            "/scales"
+            "/scales",
+            "/appetite"
         ]
     }

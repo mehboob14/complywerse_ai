@@ -12,7 +12,7 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - PostgreSQL database
 
 ## System Architecture
-The platform features a multi-tenant architecture with complete tenant isolation and row-level security. It supports 8 pre-seeded regulatory frameworks through a normalized control model, allowing for cross-framework mappings. Evidence management includes upload, versioning, and review workflows with AI assessment stubs. Enterprise Risk Management (ERM) covers 6 risk categories, scoring matrices, and treatment tracking, including a 5x5 risk heatmap. Governance orchestration manages compliance programs, objectives, exceptions, and issues. Policy and document management include versioning, approval workflows, and categorization. An IT asset inventory classifies assets, assigns CIA ratings, values assets, and links them to controls. The system utilizes Role-Based Access Control (RBAC) with fine-grained permissions per tenant.
+The platform features a multi-tenant architecture with complete tenant isolation and row-level security. It supports 8 pre-seeded regulatory frameworks through a normalized control model, allowing for cross-framework mappings. Evidence management includes upload, versioning, and review workflows with AI assessment stubs. Enterprise Risk Management (ERM) covers 7 risk categories with sub-categories, configurable scoring matrices, treatment tracking with mitigation actions, risk appetite management with tolerance thresholds, and a 5x5 risk heatmap. Governance orchestration manages compliance programs, objectives, exceptions, and issues. Policy and document management include versioning, approval workflows, and categorization. An IT asset inventory classifies assets, assigns CIA ratings, values assets, and links them to controls. The system utilizes Role-Based Access Control (RBAC) with fine-grained permissions per tenant.
 
 **Technical Implementations:**
 - **Backend**: Python 3.11, FastAPI, SQLAlchemy, PostgreSQL.
@@ -39,47 +39,58 @@ The ERM (Enterprise Risk Management) module is organized as a standalone module:
 ### Backend (`/grc/erm/*`)
 ```
 backend/grc/modules/erm/
-├── router.py          # Main ERM router
+├── router.py              # Main ERM router
 └── routers/
-    ├── risks.py       # Risk register CRUD, heatmap, dashboard
-    ├── kris.py        # Key Risk Indicators
-    ├── incidents.py   # Risk incidents
-    ├── reviews.py     # Review workflow
-    ├── dependencies.py # Risk dependencies
-    └── reports.py     # Reporting & analytics
+    ├── risks.py           # Risk register CRUD, heatmap, dashboard, close/reopen, aging
+    ├── kris.py            # Key Risk Indicators
+    ├── incidents.py       # Risk incidents
+    ├── reviews.py         # Review workflow
+    ├── dependencies.py    # Risk dependencies
+    ├── reports.py         # Reporting & analytics
+    ├── mitigation_actions.py  # Mitigation action tracking
+    ├── scales.py          # Configurable likelihood/impact scales
+    └── appetite.py        # Risk appetite management & tolerance breaches
 ```
 
 ### Frontend (`/erm/*`)
 ```
 grc-frontend/src/app/(dashboard)/erm/
-├── layout.tsx         # Shared layout with tab navigation
-├── page.tsx           # ERM overview dashboard
-├── risks/page.tsx     # Risk register
-├── kris/page.tsx      # Key Risk Indicators
-├── incidents/page.tsx # Incidents
-├── reviews/page.tsx   # Review workflow
-├── dependencies/page.tsx # Dependencies
-└── reports/page.tsx   # Reporting
+├── layout.tsx              # Shared layout with tab navigation
+├── page.tsx                # ERM overview dashboard
+├── risks/page.tsx          # Risk register (with sub-categories, business owner, departments)
+├── mitigation-actions/page.tsx  # Mitigation action tracking & status
+├── appetite/page.tsx       # Risk appetite config & tolerance breaches
+├── kris/page.tsx           # Key Risk Indicators
+├── incidents/page.tsx      # Incidents
+├── reviews/page.tsx        # Review workflow
+├── dependencies/page.tsx   # Dependencies
+└── reports/page.tsx        # Reporting
 ```
 
 ### ERM API Endpoints
 - `GET /grc/erm` - Module info
-- **Risks**: `/grc/erm/risks/*` - CRUD, dashboard, heatmap, linking
+- **Risks**: `/grc/erm/risks/*` - CRUD, dashboard, heatmap, linking, close/reopen, aging
+- **Mitigation Actions**: `/grc/erm/mitigation-actions/*` - CRUD, complete, overdue tracking
+- **Appetite**: `/grc/erm/appetite/*` - Config, with-stats, breaches, seed-defaults
 - **KRIs**: `/grc/erm/kris/*` - Create, measure, alerts, trends
 - **Incidents**: `/grc/erm/incidents/*` - CRUD, dashboard
 - **Reviews**: `/grc/erm/reviews/*` - Schedule, approve, overdue
 - **Dependencies**: `/grc/erm/dependencies/*` - Cascade analysis
 - **Reports**: `/grc/erm/reports/*` - Executive, board, department, audit
+- **Scales**: `/grc/erm/scales/*` - Configurable likelihood/impact scales
 
 ### ERM Database Tables
-- `grc_risks` - Risk register
+- `grc_risks` - Risk register (with sub_category, business_owner, departments, closure workflow)
+- `grc_risk_mitigation_actions` - Mitigation action tracking
+- `grc_risk_audit_finding_links` - Links between risks and audit findings
+- `grc_likelihood_impact_scales` - Configurable scoring scales
 - `grc_risk_kris` - Key Risk Indicators
 - `grc_risk_kri_measurements` - KRI measurement history
 - `grc_risk_incidents` - Risk incidents/events
 - `grc_risk_reviews` - Review workflow
 - `grc_risk_score_history` - Score change history
 - `grc_risk_dependencies` - Risk-to-risk dependencies
-- `grc_risk_appetite_config` - Risk appetite configuration
+- `grc_risk_appetite_config` - Risk appetite configuration (with tolerance thresholds)
 - `grc_risk_reports` - Generated reports
 
 ## External Dependencies
