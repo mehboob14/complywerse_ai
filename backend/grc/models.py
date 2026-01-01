@@ -471,7 +471,10 @@ class Risk(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     category = Column(String(50), nullable=False)  # strategic, operational, financial, compliance, technology, third_party
+    risk_category = Column(String(50), default="operational")  # strategic, operational, financial, compliance, technology, third_party
     owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    due_date = Column(DateTime, nullable=True)
+    review_date = Column(DateTime, nullable=True)
     inherent_likelihood = Column(Integer, nullable=True)
     inherent_impact = Column(Integer, nullable=True)
     inherent_score = Column(Float, nullable=True)
@@ -489,6 +492,8 @@ class Risk(Base):
     control_links = relationship("RiskControlLink", back_populates="risk", cascade="all, delete-orphan")
     asset_links = relationship("RiskAssetLink", back_populates="risk", cascade="all, delete-orphan")
     evidence_links = relationship("RiskEvidenceLink", back_populates="risk", cascade="all, delete-orphan")
+    framework_control_links = relationship("RiskFrameworkControlLink", back_populates="risk", cascade="all, delete-orphan")
+    governance_links = relationship("RiskGovernanceLink", back_populates="risk", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_risk_tenant_category", "tenant_id", "category"),
@@ -538,6 +543,41 @@ class RiskEvidenceLink(Base):
     
     __table_args__ = (
         Index("ix_risk_evidence_link", "risk_id", "evidence_id"),
+    )
+
+
+class RiskFrameworkControlLink(Base):
+    """Links risks to framework controls"""
+    __tablename__ = "grc_risk_framework_control_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=False, index=True)
+    mitigation_effectiveness = Column(String(50), default="partial")  # full, partial, minimal, none
+    notes = Column(Text, nullable=True)
+    
+    risk = relationship("Risk", back_populates="framework_control_links")
+    framework_control = relationship("FrameworkControl")
+    
+    __table_args__ = (
+        UniqueConstraint("risk_id", "framework_control_id", name="uq_risk_framework_control"),
+    )
+
+
+class RiskGovernanceLink(Base):
+    """Links risks to governance objectives"""
+    __tablename__ = "grc_risk_governance_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    governance_objective_id = Column(Integer, ForeignKey("grc_governance_objectives.id"), nullable=False, index=True)
+    impact_level = Column(String(50), default="medium")  # high, medium, low
+    
+    risk = relationship("Risk", back_populates="governance_links")
+    governance_objective = relationship("GovernanceObjective")
+    
+    __table_args__ = (
+        UniqueConstraint("risk_id", "governance_objective_id", name="uq_risk_governance"),
     )
 
 

@@ -503,6 +503,55 @@ class RiskHeatmapCell(BaseModel):
     risks: List[int]
 
 
+class RiskFrameworkControlLinkCreate(BaseModel):
+    framework_control_id: int
+    mitigation_effectiveness: str = "partial"
+    notes: Optional[str] = None
+
+
+class RiskGovernanceLinkCreate(BaseModel):
+    governance_objective_id: int
+    impact_level: str = "medium"
+
+
+class RiskDetailResponse(BaseModel):
+    id: int
+    tenant_id: int
+    title: str
+    description: Optional[str]
+    risk_category: str
+    inherent_likelihood: Optional[int]
+    inherent_impact: Optional[int]
+    inherent_score: Optional[float]
+    residual_likelihood: Optional[int]
+    residual_impact: Optional[int]
+    residual_score: Optional[float]
+    risk_appetite: Optional[str]
+    status: str
+    treatment_plan: Optional[str]
+    owner_id: Optional[int]
+    owner_name: Optional[str] = None
+    due_date: Optional[datetime] = None
+    review_date: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    linked_controls: List[dict] = []
+    linked_framework_controls: List[dict] = []
+    linked_assets: List[dict] = []
+    linked_evidence: List[dict] = []
+    linked_governance: List[dict] = []
+    
+    class Config:
+        from_attributes = True
+
+
+class RiskHeatmapData(BaseModel):
+    likelihood: int
+    impact: int
+    count: int
+    risks: List[dict] = []
+
+
 class GovernanceObjectiveBase(BaseModel):
     name: str
     description: Optional[str] = None
