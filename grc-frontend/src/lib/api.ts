@@ -115,7 +115,7 @@ export const documentsApi = {
 export const assetsApi = {
   getAll: () => apiClient.get<ITAsset[]>('/assets'),
   getById: (id: number) => apiClient.get<ITAsset>(`/assets/${id}`),
-  getDetail: (id: number) => apiClient.get(`/grc/assets/${id}/detail`),
+  getDetail: (id: number) => apiClient.get(`/assets/${id}/detail`),
   create: (data: {
     name: string;
     description?: string;
@@ -132,15 +132,15 @@ export const assetsApi = {
   update: (id: number, data: Partial<ITAsset>) => apiClient.put<ITAsset>(`/assets/${id}`, data),
   delete: (id: number) => apiClient.delete(`/assets/${id}`),
   linkFrameworkControl: (id: number, data: {framework_control_id: number, coverage_status?: string}) => 
-    apiClient.post(`/grc/assets/${id}/link-framework-control`, data),
+    apiClient.post(`/assets/${id}/link-framework-control`, data),
   unlinkFrameworkControl: (id: number, linkId: number) => 
-    apiClient.delete(`/grc/assets/${id}/link-framework-control/${linkId}`),
+    apiClient.delete(`/assets/${id}/link-framework-control/${linkId}`),
   linkEvidence: (id: number, data: {evidence_id: number, relationship_type?: string}) => 
-    apiClient.post(`/grc/assets/${id}/link-evidence`, data),
+    apiClient.post(`/assets/${id}/link-evidence`, data),
   unlinkEvidence: (id: number, linkId: number) => 
-    apiClient.delete(`/grc/assets/${id}/link-evidence/${linkId}`),
-  getCoverageAnalysis: (id: number) => apiClient.get(`/grc/assets/${id}/coverage-analysis`),
-  assessRisk: (id: number) => apiClient.post(`/grc/assets/${id}/assess-risk`),
+    apiClient.delete(`/assets/${id}/link-evidence/${linkId}`),
+  getCoverageAnalysis: (id: number) => apiClient.get(`/assets/${id}/coverage-analysis`),
+  assessRisk: (id: number) => apiClient.post(`/assets/${id}/assess`),
 };
 
 export const certificationsApi = {
