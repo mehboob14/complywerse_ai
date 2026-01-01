@@ -14,6 +14,28 @@ import {
   ITAsset,
   NormalizedControl,
   ControlMapping,
+  RiskKRI,
+  RiskKRICreate,
+  RiskKRIUpdate,
+  RiskKRIMeasurement,
+  RiskIncident,
+  RiskIncidentCreate,
+  RiskIncidentUpdate,
+  RiskReview,
+  RiskReviewCreate,
+  RiskReviewUpdate,
+  RiskDependency,
+  RiskDependencyCreate,
+  CascadeAnalysis,
+  RiskReport,
+  RiskReportCreate,
+  ExecutiveDashboard,
+  BoardReportData,
+  DepartmentRiskSummary,
+  AggregatedRiskView,
+  AppetiteBreach,
+  RiskTrendData,
+  IncidentDashboard,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
@@ -198,6 +220,71 @@ export const certificationsApi = {
   
   getProgress: (id: number) => apiClient.get(`/certifications/${id}/progress`),
   getGaps: (id: number) => apiClient.get(`/certifications/${id}/gaps`),
+};
+
+export const advancedErmApi = {
+  // KRI endpoints
+  getKRIs: (params?: { risk_id?: number; status_filter?: string; is_active?: boolean }) => 
+    apiClient.get<RiskKRI[]>('/advanced-erm/kris', { params }),
+  getKRI: (id: number) => apiClient.get<RiskKRI>(`/advanced-erm/kris/${id}`),
+  createKRI: (data: RiskKRICreate) => apiClient.post<RiskKRI>('/advanced-erm/kris', data),
+  updateKRI: (id: number, data: RiskKRIUpdate) => apiClient.put<RiskKRI>(`/advanced-erm/kris/${id}`, data),
+  deleteKRI: (id: number) => apiClient.delete(`/advanced-erm/kris/${id}`),
+  measureKRI: (id: number, data: { value: number; notes?: string }) => 
+    apiClient.post<RiskKRIMeasurement>(`/advanced-erm/kris/${id}/measure`, data),
+  getKRITrend: (id: number, days?: number) => 
+    apiClient.get<RiskKRIMeasurement[]>(`/advanced-erm/kris/${id}/trend`, { params: { days } }),
+  getKRIAlerts: () => apiClient.get<RiskKRI[]>('/advanced-erm/kris/alerts'),
+
+  // Incident endpoints
+  getIncidents: (params?: { risk_id?: number; severity?: string; status_filter?: string; start_date?: string; end_date?: string }) => 
+    apiClient.get<RiskIncident[]>('/advanced-erm/incidents', { params }),
+  getIncident: (id: number) => apiClient.get<RiskIncident>(`/advanced-erm/incidents/${id}`),
+  createIncident: (data: RiskIncidentCreate) => apiClient.post<RiskIncident>('/advanced-erm/incidents', data),
+  updateIncident: (id: number, data: RiskIncidentUpdate) => apiClient.put<RiskIncident>(`/advanced-erm/incidents/${id}`, data),
+  deleteIncident: (id: number) => apiClient.delete(`/advanced-erm/incidents/${id}`),
+  getIncidentDashboard: () => apiClient.get<IncidentDashboard>('/advanced-erm/incidents/dashboard'),
+
+  // Review endpoints
+  getReviews: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number }) => 
+    apiClient.get<RiskReview[]>('/advanced-erm/reviews', { params }),
+  getReview: (id: number) => apiClient.get<RiskReview>(`/advanced-erm/reviews/${id}`),
+  createReview: (data: RiskReviewCreate) => apiClient.post<RiskReview>('/advanced-erm/reviews', data),
+  updateReview: (id: number, data: RiskReviewUpdate) => apiClient.put<RiskReview>(`/advanced-erm/reviews/${id}`, data),
+  completeReview: (id: number, data: { findings?: string; recommendations?: string; new_inherent_score?: number; new_residual_score?: number }) => 
+    apiClient.post<RiskReview>(`/advanced-erm/reviews/${id}/complete`, data),
+  getPendingReviews: () => apiClient.get<RiskReview[]>('/advanced-erm/reviews/pending'),
+  getOverdueReviews: () => apiClient.get<RiskReview[]>('/advanced-erm/reviews/overdue'),
+
+  // Dependency endpoints
+  getDependencies: (params?: { risk_id?: number }) => 
+    apiClient.get<RiskDependency[]>('/advanced-erm/dependencies', { params }),
+  createDependency: (data: RiskDependencyCreate) => apiClient.post<RiskDependency>('/advanced-erm/dependencies', data),
+  deleteDependency: (id: number) => apiClient.delete(`/advanced-erm/dependencies/${id}`),
+  getCascadeAnalysis: (riskId: number) => apiClient.get<CascadeAnalysis>(`/advanced-erm/dependencies/${riskId}/cascade`),
+  getDependencyGraph: (riskId?: number) => 
+    apiClient.get(`/advanced-erm/dependencies/graph`, { params: { risk_id: riskId } }),
+
+  // Report endpoints
+  getReports: (params?: { report_type?: string; status?: string }) => 
+    apiClient.get<RiskReport[]>('/advanced-erm/reports', { params }),
+  getReport: (id: number) => apiClient.get<RiskReport>(`/advanced-erm/reports/${id}`),
+  generateReport: (data: RiskReportCreate) => apiClient.post<RiskReport>('/advanced-erm/reports', data),
+  deleteReport: (id: number) => apiClient.delete(`/advanced-erm/reports/${id}`),
+  getExecutiveDashboard: () => apiClient.get<ExecutiveDashboard>('/advanced-erm/reports/executive-dashboard'),
+  getBoardSummary: (params?: { period?: string }) => 
+    apiClient.get<BoardReportData>('/advanced-erm/reports/board-summary', { params }),
+  getDepartmentSummary: (departmentId: number) => 
+    apiClient.get<DepartmentRiskSummary>(`/advanced-erm/reports/department/${departmentId}`),
+
+  // Analytics endpoints
+  getAggregatedView: (groupBy?: string) => 
+    apiClient.get<AggregatedRiskView[]>('/advanced-erm/analytics/aggregated', { params: { group_by: groupBy } }),
+  getAppetiteBreaches: () => apiClient.get<AppetiteBreach[]>('/advanced-erm/analytics/appetite-breaches'),
+  getRiskTrends: (days?: number) => 
+    apiClient.get<RiskTrendData[]>('/advanced-erm/analytics/trends', { params: { days } }),
+  getScoreHistory: (riskId: number, days?: number) => 
+    apiClient.get(`/advanced-erm/risks/${riskId}/score-history`, { params: { days } }),
 };
 
 export default apiClient;

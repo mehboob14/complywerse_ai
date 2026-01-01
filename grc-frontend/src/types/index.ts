@@ -429,3 +429,314 @@ export interface CertificationControl {
   evidence_count: number;
   required_evidence_count: number;
 }
+
+// Advanced ERM Types
+export type KRIMetricType = 'percentage' | 'count' | 'currency' | 'ratio' | 'score' | 'custom';
+export type KRIThresholdDirection = 'higher_is_better' | 'lower_is_better';
+export type KRIFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annually';
+export type KRIStatus = 'green' | 'amber' | 'red' | 'unknown';
+
+export interface RiskKRI {
+  id: number;
+  risk_id: number;
+  name: string;
+  description?: string;
+  metric_type: KRIMetricType;
+  unit?: string;
+  green_threshold?: number;
+  amber_threshold?: number;
+  threshold_direction: KRIThresholdDirection;
+  frequency: KRIFrequency;
+  data_source?: string;
+  owner_id?: number;
+  current_value?: number;
+  last_measured_at?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  current_status?: KRIStatus;
+  risk_title?: string;
+  measurements?: RiskKRIMeasurement[];
+}
+
+export interface RiskKRIMeasurement {
+  id: number;
+  kri_id: number;
+  value: number;
+  status: KRIStatus;
+  measured_at: string;
+  measured_by?: number;
+  notes?: string;
+}
+
+export interface RiskKRICreate {
+  risk_id: number;
+  name: string;
+  description?: string;
+  metric_type: KRIMetricType;
+  unit?: string;
+  green_threshold?: number;
+  amber_threshold?: number;
+  threshold_direction?: KRIThresholdDirection;
+  frequency?: KRIFrequency;
+  data_source?: string;
+  owner_id?: number;
+}
+
+export interface RiskKRIUpdate {
+  name?: string;
+  description?: string;
+  metric_type?: KRIMetricType;
+  unit?: string;
+  green_threshold?: number;
+  amber_threshold?: number;
+  threshold_direction?: KRIThresholdDirection;
+  frequency?: KRIFrequency;
+  data_source?: string;
+  owner_id?: number;
+  is_active?: boolean;
+}
+
+export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type IncidentStatus = 'open' | 'investigating' | 'mitigating' | 'resolved' | 'closed';
+
+export interface RiskIncident {
+  id: number;
+  tenant_id: number;
+  risk_id?: number;
+  risk_title?: string;
+  title: string;
+  description?: string;
+  incident_date: string;
+  discovered_date?: string;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  financial_impact?: number;
+  operational_impact?: string;
+  root_cause?: string;
+  corrective_actions?: string;
+  lessons_learned?: string;
+  reported_by?: number;
+  assigned_to?: number;
+  resolved_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RiskIncidentCreate {
+  risk_id?: number;
+  title: string;
+  description?: string;
+  incident_date: string;
+  severity: IncidentSeverity;
+  financial_impact?: number;
+  operational_impact?: string;
+  root_cause?: string;
+  corrective_actions?: string;
+  assigned_to?: number;
+}
+
+export interface RiskIncidentUpdate {
+  title?: string;
+  description?: string;
+  severity?: IncidentSeverity;
+  status?: IncidentStatus;
+  financial_impact?: number;
+  operational_impact?: string;
+  root_cause?: string;
+  corrective_actions?: string;
+  lessons_learned?: string;
+  assigned_to?: number;
+}
+
+export type ReviewCycle = 'monthly' | 'quarterly' | 'semi_annual' | 'annual';
+export type ReviewType = 'periodic' | 'triggered' | 'ad_hoc' | 'audit';
+export type ReviewStatus = 'pending' | 'in_review' | 'completed' | 'skipped' | 'overdue';
+
+export interface RiskReview {
+  id: number;
+  risk_id: number;
+  risk_title?: string;
+  review_cycle: ReviewCycle;
+  review_type: ReviewType;
+  status: ReviewStatus;
+  due_date: string;
+  started_at?: string;
+  completed_at?: string;
+  reviewer_id?: number;
+  findings?: string;
+  recommendations?: string;
+  previous_inherent_score?: number;
+  previous_residual_score?: number;
+  new_inherent_score?: number;
+  new_residual_score?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RiskReviewCreate {
+  risk_id: number;
+  review_cycle?: ReviewCycle;
+  review_type?: ReviewType;
+  due_date: string;
+  reviewer_id?: number;
+}
+
+export interface RiskReviewUpdate {
+  status?: ReviewStatus;
+  findings?: string;
+  recommendations?: string;
+  new_inherent_score?: number;
+  new_residual_score?: number;
+}
+
+export type DependencyType = 'causes' | 'caused_by' | 'related' | 'amplifies' | 'mitigates';
+
+export interface RiskDependency {
+  id: number;
+  source_risk_id: number;
+  target_risk_id: number;
+  dependency_type: DependencyType;
+  strength: number;
+  description?: string;
+  source_risk_title?: string;
+  target_risk_title?: string;
+  created_at: string;
+}
+
+export interface RiskDependencyCreate {
+  source_risk_id: number;
+  target_risk_id: number;
+  dependency_type: DependencyType;
+  strength?: number;
+  description?: string;
+}
+
+export interface CascadeAnalysis {
+  risk_id: number;
+  risk_title: string;
+  direct_impacts: Array<{id: number; title: string; type: string; strength: number}>;
+  indirect_impacts: Array<{id: number; title: string; path: number[]; cumulative_strength: number}>;
+  total_cascade_score: number;
+}
+
+export type ReportType = 'executive' | 'board' | 'department' | 'audit' | 'trend' | 'custom';
+export type ReportFormat = 'pdf' | 'xlsx' | 'json';
+export type ReportStatus = 'draft' | 'generating' | 'ready' | 'failed';
+
+export interface RiskReport {
+  id: number;
+  tenant_id: number;
+  name: string;
+  description?: string;
+  report_type: ReportType;
+  format: ReportFormat;
+  status: ReportStatus;
+  parameters?: Record<string, unknown>;
+  file_path?: string;
+  generated_at?: string;
+  generated_by?: number;
+  created_at: string;
+}
+
+export interface RiskReportCreate {
+  name: string;
+  description?: string;
+  report_type: ReportType;
+  format?: ReportFormat;
+  parameters?: Record<string, unknown>;
+}
+
+export interface ExecutiveDashboard {
+  summary: {
+    total_risks: number;
+    critical_risks: number;
+    high_risks: number;
+    risks_within_appetite: number;
+    risks_exceeding_appetite: number;
+    avg_risk_score: number;
+    risk_score_trend: number;
+  };
+  top_risks: Array<{id: number; title: string; score: number; trend: string}>;
+  kri_alerts: Array<{id: number; name: string; status: string; value: number}>;
+  recent_incidents: Array<{id: number; title: string; severity: string; date: string}>;
+  upcoming_reviews: Array<{id: number; risk_title: string; due_date: string}>;
+}
+
+export interface BoardReportData {
+  period: string;
+  risk_profile_summary: {
+    total_risks: number;
+    by_category: Record<string, number>;
+    by_status: Record<string, number>;
+    new_risks: number;
+    closed_risks: number;
+  };
+  key_risk_changes: Array<{
+    risk_id: number;
+    title: string;
+    previous_score: number;
+    current_score: number;
+    change: number;
+    reason: string;
+  }>;
+  control_effectiveness: {
+    effective: number;
+    partially_effective: number;
+    ineffective: number;
+  };
+  emerging_risks: string[];
+  recommendations: string[];
+}
+
+export interface DepartmentRiskSummary {
+  department_id: number;
+  department_name: string;
+  total_risks: number;
+  by_category: Record<string, number>;
+  by_status: Record<string, number>;
+  avg_risk_score: number;
+  top_risks: Array<{id: number; title: string; score: number}>;
+  kri_summary: {green: number; amber: number; red: number};
+  pending_reviews: number;
+  open_incidents: number;
+}
+
+export interface RiskTrendData {
+  date: string;
+  total_risks: number;
+  avg_inherent_score: number;
+  avg_residual_score: number;
+  open_risks: number;
+  critical_risks: number;
+}
+
+export interface AggregatedRiskView {
+  category: string;
+  total_count: number;
+  total_inherent_exposure: number;
+  total_residual_exposure: number;
+  avg_inherent_score: number;
+  avg_residual_score: number;
+  top_risk: {id: number; title: string; score: number} | null;
+}
+
+export interface AppetiteBreach {
+  risk_id: number;
+  risk_title: string;
+  category: string;
+  appetite_threshold: number;
+  current_score: number;
+  breach_percentage: number;
+  days_in_breach: number;
+}
+
+export interface IncidentDashboard {
+  total_incidents: number;
+  by_severity: Record<string, number>;
+  by_status: Record<string, number>;
+  total_financial_impact: number;
+  open_incidents: number;
+  avg_resolution_time_days: number;
+  recent_incidents: Array<{id: number; title: string; severity: string; status: string}>;
+}

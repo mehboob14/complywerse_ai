@@ -19,8 +19,10 @@ import {
   Trash2,
   Upload,
   FileSpreadsheet,
-  CheckCircle
+  CheckCircle,
+  BarChart3
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRef } from 'react';
 
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
@@ -295,6 +297,13 @@ export default function RisksPage() {
           <p className="text-slate-400">Identify, assess, and manage organizational risks</p>
         </div>
         <div className="flex gap-2">
+          <Link
+            href="/risks/advanced"
+            className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2 font-medium text-white hover:from-purple-700 hover:to-indigo-700"
+          >
+            <BarChart3 size={18} />
+            Advanced ERM
+          </Link>
           <input
             type="file"
             ref={fileInputRef}
