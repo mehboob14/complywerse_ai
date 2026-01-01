@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, ForeignKey, Boolean, 
-    Float, DateTime, JSON, Index, Table
+    Float, DateTime, JSON, Index, Table, UniqueConstraint
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -823,6 +823,7 @@ class CertificationJourney(Base):
     
     __table_args__ = (
         Index("ix_cert_journey_tenant_framework", "tenant_id", "framework_id"),
+        UniqueConstraint("tenant_id", "framework_id", name="uq_cert_journey_tenant_framework"),
     )
 
 
