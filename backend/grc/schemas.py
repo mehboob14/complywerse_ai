@@ -862,7 +862,7 @@ class ProgressSummary(BaseModel):
     not_applicable_count: int
     completion_percentage: float
     by_status: Dict[str, int]
-    by_domain: Dict[str, Dict[str, Any]]
+    by_domain: List[Dict[str, Any]]
 
 
 class GapAnalysis(BaseModel):

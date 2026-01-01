@@ -522,7 +522,7 @@ def get_progress_summary(
     
     total = len(implementations)
     by_status = {}
-    by_domain = {}
+    by_domain_dict = {}
     
     for impl in implementations:
         status = impl.status
@@ -530,14 +530,27 @@ def get_progress_summary(
         
         control = impl.framework_control
         if control and control.objective and control.objective.domain:
-            domain_name = control.objective.domain.name
-            if domain_name not in by_domain:
-                by_domain[domain_name] = {"total": 0, "implemented": 0, "verified": 0}
-            by_domain[domain_name]["total"] += 1
+            domain = control.objective.domain
+            domain_id = domain.id
+            domain_name = domain.name
+            if domain_id not in by_domain_dict:
+                by_domain_dict[domain_id] = {
+                    "domain_id": domain_id,
+                    "domain_name": domain_name,
+                    "total": 0,
+                    "completed": 0,
+                    "in_progress": 0,
+                    "not_started": 0
+                }
+            by_domain_dict[domain_id]["total"] += 1
             if impl.status in ["implemented", "verified"]:
-                by_domain[domain_name]["implemented"] += 1
-            if impl.status == "verified":
-                by_domain[domain_name]["verified"] += 1
+                by_domain_dict[domain_id]["completed"] += 1
+            elif impl.status == "in_progress":
+                by_domain_dict[domain_id]["in_progress"] += 1
+            else:
+                by_domain_dict[domain_id]["not_started"] += 1
+    
+    by_domain = list(by_domain_dict.values())
     
     implemented_count = by_status.get("implemented", 0) + by_status.get("verified", 0)
     verified_count = by_status.get("verified", 0)
