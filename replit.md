@@ -152,9 +152,19 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - `GET /gaps` - Gap detection
 
 ### Risks (/grc/risks)
-- Risk register CRUD
-- `GET /dashboard` - Risk dashboard
-- `GET /heatmap` - Risk heatmap data
+- Full risk register CRUD with 6 categories (strategic, operational, financial, compliance, technology, third_party)
+- `GET /dashboard` - Aggregated risk statistics by category, status, score range
+- `GET /heatmap` - 5x5 likelihood vs impact heatmap data (toggle inherent/residual)
+- `GET /{id}/detail` - Full risk detail with all linked items
+- `POST /{id}/link-framework-control` - Link risk to framework control with mitigation effectiveness
+- `DELETE /{id}/link-framework-control/{link_id}` - Unlink framework control
+- `POST /{id}/link-governance` - Link risk to governance objective with impact level
+- `DELETE /{id}/link-governance/{link_id}` - Unlink governance objective
+- `POST /{id}/controls`, `DELETE /{id}/controls/{link_id}` - Link/unlink normalized controls
+- `POST /{id}/assets`, `DELETE /{id}/assets/{link_id}` - Link/unlink IT assets
+- `POST /{id}/evidence`, `DELETE /{id}/evidence/{link_id}` - Link/unlink evidence
+- `POST /{id}/treatment` - Update treatment plan
+- `POST /{id}/assess` - Perform risk assessment
 
 ### Governance (/grc/governance)
 - Objectives, exceptions, issues, programs
@@ -217,6 +227,17 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - Coverage: PCI DSS (8 categories), ISO 27001 (12 categories), NIST CSF (5 categories)
 - Evidence linked to sub-controls for precise control-evidence mapping
 - Frontend displays evidence with type badges, frequency, and format guidance
+
+### Enterprise Risk Management (Jan 1, 2026)
+- 6 risk categories: strategic, operational, financial, compliance, technology, third_party
+- Inherent and residual risk scoring (likelihood × impact, 1-5 scale)
+- 5x5 risk heatmap visualization with toggle between inherent/residual
+- Treatment plans with status tracking (open, in_treatment, mitigated, accepted, closed)
+- Link risks to normalized controls, framework controls, IT assets, evidence, governance objectives
+- Risk dashboard with aggregated stats by category, status, score range
+- Risk detail page with 6 tabs and comprehensive linking modals
+- New models: RiskFrameworkControlLink, RiskGovernanceLink
+- 15+ API endpoints for complete ERM functionality
 
 ### IT Asset Inventory & Valuation (Jan 1, 2026)
 - 5 asset types: application, infrastructure, data, cloud, third_party
