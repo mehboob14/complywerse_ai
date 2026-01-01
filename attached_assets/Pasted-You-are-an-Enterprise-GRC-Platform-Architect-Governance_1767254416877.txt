@@ -1,0 +1,130 @@
+You are an Enterprise GRC Platform Architect, Governance Risk and Compliance Subject Matter Expert, and Senior Full Stack Engineer.
+
+You are tasked with designing and generating an enterprise-scale Governance Risk and Compliance platform with the following requirements:
+
+1. Technical Architecture Requirements
+
+Backend: Python, integrated into an existing server.
+
+Modularity: All backend functionality must be implemented as separate routers for each domain (frameworks, controls, evidence, risks, governance, documents, assets).
+
+Frontend: Next.js + Tailwind CSS, written in TypeScript.
+
+API Communication: Centralized through a configurable base URL stored in a .env file.
+
+Audit & Security: All actions must be logged and auditable; system must enforce tenant isolation and role-based access control at tenant, business unit, and functional levels.
+
+2. Compliance & Regulatory Frameworks
+
+Implement certification and regulatory frameworks including:
+PCI DSS, ISO 27001, ISO 20000, NIST CSF, SWIFT Customer Security Framework, Central Bank of Bahrain Technology & Cybersecurity Requirements, SAMA Technical & Financial Regulatory Requirements, State Bank of Pakistan Governance & Risk Framework, and any custom institutional frameworks.
+
+3. Framework Normalization
+
+Each framework must be normalized into a standardized structure:
+
+Framework Metadata:
+
+Name, Regulator / Authority, Jurisdiction
+
+Mandatory vs Recommended Controls
+
+Enforcement Expectations
+
+Domains / Control Families:
+
+Domains, Control Objectives, Controls, Sub-Controls
+
+Convert principle-based or category-based frameworks into explicit, auditable controls
+
+Standardized Control Objects:
+
+Control Statement, Control Objective, Control Owner
+
+AI-driven Required Evidences
+
+Implementation Guidance, Testing Guidance
+
+Mapping to ISO 27001, PCI DSS, NIST CSF, ISO 20000, SWIFT CSP, CBB, SAMA, SBP, and custom frameworks
+
+4. Normalized Control Model
+
+Create a single source of truth for controls
+
+Map multiple framework-specific controls to a single normalized control
+
+Include required evidences, testing procedures, assessment results, and maturity indicators
+
+Enable cross-framework control reuse
+
+5. Evidence Management with AI
+
+Users can upload, manage, and version evidences
+
+AI assesses evidence quality and relevance
+
+Evidence can be mapped to single or multiple controls across frameworks
+
+Provide confidence scoring, gap detection, and audit readiness indicators
+
+Reusable evidence across frameworks and controls
+
+6. IT Asset Inventory & Valuation
+
+Register and classify IT assets (applications, infrastructure, data, cloud resources, third-party systems)
+
+Assign ownership, criticality, confidentiality, integrity, availability, and valuation
+
+Link IT assets to normalized controls, framework controls, risks, evidences, and compliance requirements
+
+Support asset-level risk assessment and coverage analysis
+
+7. Enterprise Risk Management
+
+Support strategic, operational, financial, compliance, technology, and third-party risks
+
+Inherent and residual risk scoring, treatment plans, and continuous monitoring
+
+Link risks to normalized controls, framework controls, IT assets, evidences, and governance objects
+
+8. Governance Module
+
+Central orchestration of policies, procedures, controls, risks, issues, IT assets, evidences, and compliance programs
+
+Support management oversight, exception handling, accountability tracking, and audit traceability
+
+9. Policy & Document Management
+
+Policy/procedure authoring, versioning, approvals, lifecycle management
+
+Link documents to controls, risks, IT assets, and evidences
+
+Enable periodic review cycles and audit-ready traceability
+
+10. Compliance Initiation & Custom Framework Support
+
+Users can initiate compliance programs for any supported framework
+
+Upload and manage custom frameworks with same normalization, mapping, evidence workflows, and reporting
+
+11. Reporting & Dashboards
+
+Framework-level compliance posture, control coverage, evidence mapping, high-risk gaps
+
+Enterprise-wide risk dashboards and maturity metrics
+
+Executive/board-ready dashboards with audit traceability
+
+Instructions for Replit AI
+
+Generate a full modular backend structure: routers for frameworks, controls, evidence, risks, governance, documents, and assets
+
+Generate Next.js + Tailwind + TypeScript frontend components for each module, including pages, dashboards, and forms
+
+Implement a centralized API service layer consuming the base URL from .env
+
+Include stubs for AI-driven evidence assessment with hooks for frontend display
+
+Include example normalized framework, controls, risks, evidence, and IT assets to illustrate data structure
+
+The output should be a complete platform skeleton, not a simple task list

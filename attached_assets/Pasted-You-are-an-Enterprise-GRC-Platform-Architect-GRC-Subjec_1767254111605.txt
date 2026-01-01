@@ -1,0 +1,113 @@
+You are an Enterprise GRC Platform Architect, GRC Subject Matter Expert, and Senior Full Stack Engineer.
+
+You are tasked with implementing a full enterprise Governance Risk and Compliance platform, including certification-based standards, regulatory requirements, normalized controls, IT asset inventory with valuation, evidence management, AI-driven evidence assessment, and full governance oversight.
+
+The backend must be in Python and integrated into an existing server. All new functionality must be implemented as separate routers for modularity and maintainability.
+
+The frontend must be in Next.js + Tailwind CSS, written in TypeScript, with all backend API calls centralized through a base URL in a .env file.
+
+Your implementation must include:
+
+1. Multi-Tenancy and Role-Based Access Control
+
+Enforce tenant isolation
+
+Role-based permissions at tenant, business unit, and functional levels
+
+Full audit trail for all actions
+
+2. Compliance and Regulatory Frameworks
+
+PCI DSS, ISO 27001, ISO 20000, NIST CSF
+
+SWIFT Customer Security Framework
+
+Central Bank of Bahrain Technology and Cybersecurity Regulatory Requirements
+
+SAMA Technical and Financial Regulatory Requirements
+
+State Bank of Pakistan Governance and Risk Framework
+
+Custom institutional frameworks
+
+3. Framework Normalization
+
+Metadata: Name, regulator, jurisdiction, mandatory/recommended, enforcement
+
+Domains and Control Families: Domains, objectives, controls, sub-controls
+
+Standardized Control Objects: Statement, objective, owner, AI-driven required evidences, implementation guidance, testing guidance
+
+Mapping controls across all frameworks
+
+4. Normalized Control Model
+
+Unified control definitions
+
+Mapped controls across frameworks
+
+Evidence and testing procedures
+
+Reuse to prevent duplication
+
+5. Evidence Management with AI
+
+Upload and manage evidence
+
+AI-driven assessment of evidence quality
+
+Map evidence to single or multiple controls across any standard or framework
+
+Provide confidence scoring, gaps, and audit readiness
+
+Evidence reuse across controls and frameworks
+
+6. Enterprise Risk Management
+
+Strategic, operational, financial, compliance, technology, third party risks
+
+Risk scoring, treatment plans, monitoring
+
+Link risks to controls, IT assets, evidence, and compliance requirements
+
+7. Governance Module
+
+Central orchestration of objectives, policies, standards, procedures, controls, risks, issues, assets, evidences, and compliance programs
+
+Oversight, exception handling, accountability tracking
+
+8. Policy and Document Management
+
+Authoring, versioning, approval workflows, lifecycle states
+
+Link documents to controls, risks, IT assets, and evidences
+
+9. IT Asset Inventory and Valuation
+
+Register and classify IT assets
+
+Assign ratings and valuation based on criticality, confidentiality, integrity, availability, and regulatory impact
+
+Link assets to controls, risks, evidences, and compliance requirements
+
+Support asset-level risk assessment
+
+10. Compliance Initiation and Custom Frameworks
+
+Enable users to start compliance for any framework
+
+Upload and manage custom frameworks with the same normalization, mapping, and evidence logic
+
+Instructions for Replit AI:
+
+Generate backend Python modules with clearly separated routers for each domain: frameworks, controls, evidence, risks, governance, documents, assets
+
+Generate frontend Next.js pages, components, and services in TypeScript using Tailwind
+
+Include centralized API service layer using .env base URL
+
+Include AI evidence assessment logic as backend service stubs with hooks for frontend display
+
+Include examples of normalized framework, control, risk, evidence, and asset data
+
+The goal is to generate a complete modular platform structure, not a simple to-do list. Output full backend and frontend skeletons with routers, API endpoints, state management, and page structure, ready for iterative development.
