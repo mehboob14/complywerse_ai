@@ -797,8 +797,11 @@ class GRCComplianceAssessment(Base):
 # =============================================================================
 
 def init_grc_db():
-    """Create all GRC tables in the database."""
+    """Create all GRC tables in the database and seed framework data."""
     Base.metadata.create_all(bind=engine)
+    
+    from .seed_frameworks import seed_frameworks
+    seed_frameworks()
 
 
 def get_db():

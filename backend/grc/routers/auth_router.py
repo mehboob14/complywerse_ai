@@ -119,7 +119,9 @@ def register(request: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(request: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(GRCUser).filter(GRCUser.username == request.username).first()
+    user = db.query(GRCUser).filter(
+        (GRCUser.username == request.username) | (GRCUser.email == request.username)
+    ).first()
     if not user or not verify_password(request.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

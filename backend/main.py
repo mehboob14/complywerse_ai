@@ -4,6 +4,7 @@ from router import router
 from models import init_db
 from seed_data import seed_database
 from grc.main import app as grc_app
+from grc.models import init_grc_db
 
 app = FastAPI(title="PCI DSS Lifecycle API", version="1.0.0")
 
@@ -24,6 +25,7 @@ app.mount("/grc", grc_app)
 def on_startup():
     init_db()
     seed_database()
+    init_grc_db()
 
 
 @app.get("/")
