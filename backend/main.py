@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from router import router
 from models import init_db
 from seed_data import seed_database
+from grc.main import app as grc_app
 
 app = FastAPI(title="PCI DSS Lifecycle API", version="1.0.0")
 
@@ -16,6 +17,8 @@ app.add_middleware(
 
 app.include_router(router)
 
+app.mount("/grc", grc_app)
+
 
 @app.on_event("startup")
 def on_startup():
@@ -25,7 +28,7 @@ def on_startup():
 
 @app.get("/")
 def root():
-    return {"message": "PCI DSS Lifecycle API", "version": "1.0.0"}
+    return {"message": "PCI DSS Lifecycle API", "version": "1.0.0", "grc_api": "/grc"}
 
 
 if __name__ == "__main__":

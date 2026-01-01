@@ -1,0 +1,411 @@
+from typing import List, Optional
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session, joinedload
+
+from ..models import (
+    Document, DocumentVersion, DocumentApprovalWorkflow, DocumentControlLink,
+    NormalizedControl, GRCUser, Tenant, get_db
+)
+from ..schemas import (
+    DocumentCreate, DocumentUpdate, DocumentResponse,
+    DocumentVersionResponse, DocumentApprovalRequest, DocumentApprovalResponse,
+    DocumentControlLinkCreate, MessageResponse
+)
+from .auth_router import require_auth
+
+router = APIRouter(prefix="/documents", tags=["Documents"])
+
+
+@router.get("", response_model=List[DocumentResponse])
+def list_documents(
+    tenant_id: Optional[int] = None,
+    doc_type: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    query = db.query(Document)
+    
+    if tenant_id:
+        query = query.filter(Document.tenant_id == tenant_id)
+    if doc_type:
+        query = query.filter(Document.doc_type == doc_type)
+    if status_filter:
+        query = query.filter(Document.status == status_filter)
+    
+    documents = query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
+    return documents
+
+
+@router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+def create_document(
+    document: DocumentCreate,
+    tenant_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found"
+        )
+    
+    db_document = Document(
+        tenant_id=tenant_id,
+        title=document.title,
+        content=document.content,
+        doc_type=document.doc_type,
+        owner_id=document.owner_id or current_user.id,
+        review_cycle_months=document.review_cycle_months,
+        next_review_date=datetime.utcnow() + timedelta(days=document.review_cycle_months * 30)
+    )
+    db.add(db_document)
+    db.commit()
+    db.refresh(db_document)
+    return db_document
+
+
+@router.get("/pending-approval", response_model=List[DocumentResponse])
+def list_pending_approval(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    query = db.query(Document).filter(Document.status == "pending_approval")
+    
+    if tenant_id:
+        query = query.filter(Document.tenant_id == tenant_id)
+    
+    documents = query.order_by(Document.created_at.desc()).all()
+    return documents
+
+
+@router.get("/review-due", response_model=List[DocumentResponse])
+def list_review_due(
+    tenant_id: Optional[int] = None,
+    days_ahead: int = 30,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    cutoff_date = datetime.utcnow() + timedelta(days=days_ahead)
+    
+    query = db.query(Document).filter(
+        Document.next_review_date <= cutoff_date,
+        Document.status == "approved"
+    )
+    
+    if tenant_id:
+        query = query.filter(Document.tenant_id == tenant_id)
+    
+    documents = query.order_by(Document.next_review_date).all()
+    return documents
+
+
+@router.get("/{document_id}", response_model=dict)
+def get_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    document = db.query(Document).options(
+        joinedload(Document.versions),
+        joinedload(Document.control_links)
+    ).filter(Document.id == document_id).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    return {
+        "id": document.id,
+        "tenant_id": document.tenant_id,
+        "title": document.title,
+        "content": document.content,
+        "doc_type": document.doc_type,
+        "version": document.version,
+        "status": document.status,
+        "owner_id": document.owner_id,
+        "created_at": document.created_at.isoformat(),
+        "approved_by": document.approved_by,
+        "approved_at": document.approved_at.isoformat() if document.approved_at else None,
+        "review_cycle_months": document.review_cycle_months,
+        "next_review_date": document.next_review_date.isoformat() if document.next_review_date else None,
+        "versions": [
+            {
+                "id": v.id,
+                "version_number": v.version_number,
+                "created_at": v.created_at.isoformat(),
+                "created_by": v.created_by,
+                "change_summary": v.change_summary
+            }
+            for v in sorted(document.versions, key=lambda x: x.version_number, reverse=True)
+        ],
+        "control_links": [
+            {"id": link.id, "normalized_control_id": link.normalized_control_id}
+            for link in document.control_links
+        ]
+    }
+
+
+@router.put("/{document_id}", response_model=DocumentResponse)
+def update_document(
+    document_id: int,
+    document_update: DocumentUpdate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    version_parts = document.version.split(".")
+    new_version = f"{version_parts[0]}.{int(version_parts[1]) + 1}"
+    
+    db_version = DocumentVersion(
+        document_id=document_id,
+        version_number=document.version,
+        content=document.content,
+        created_by=current_user.id,
+        change_summary=document_update.change_summary
+    )
+    db.add(db_version)
+    
+    update_data = document_update.model_dump(exclude_unset=True, exclude={"change_summary"})
+    for field, value in update_data.items():
+        setattr(document, field, value)
+    
+    document.version = new_version
+    
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    db.delete(document)
+    db.commit()
+    return None
+
+
+@router.get("/{document_id}/versions", response_model=List[DocumentVersionResponse])
+def get_document_versions(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    versions = db.query(DocumentVersion).filter(
+        DocumentVersion.document_id == document_id
+    ).order_by(DocumentVersion.version_number.desc()).all()
+    return versions
+
+
+@router.get("/{document_id}/versions/{version}", response_model=DocumentVersionResponse)
+def get_document_version(
+    document_id: int,
+    version: str,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    doc_version = db.query(DocumentVersion).filter(
+        DocumentVersion.document_id == document_id,
+        DocumentVersion.version_number == version
+    ).first()
+    
+    if not doc_version:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Version not found"
+        )
+    
+    return doc_version
+
+
+@router.post("/{document_id}/submit-approval", response_model=MessageResponse)
+def submit_for_approval(
+    document_id: int,
+    approval_request: DocumentApprovalRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    approver = db.query(GRCUser).filter(GRCUser.id == approval_request.approver_id).first()
+    if not approver:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Approver not found"
+        )
+    
+    workflow = DocumentApprovalWorkflow(
+        document_id=document_id,
+        approver_id=approval_request.approver_id
+    )
+    db.add(workflow)
+    
+    document.status = "pending_approval"
+    
+    db.commit()
+    
+    return MessageResponse(message="Document submitted for approval")
+
+
+@router.post("/{document_id}/approve", response_model=DocumentResponse)
+def approve_document(
+    document_id: int,
+    response: DocumentApprovalResponse,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    if document.status != "pending_approval":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Document is not pending approval"
+        )
+    
+    workflow = db.query(DocumentApprovalWorkflow).filter(
+        DocumentApprovalWorkflow.document_id == document_id,
+        DocumentApprovalWorkflow.approver_id == current_user.id,
+        DocumentApprovalWorkflow.status == "pending"
+    ).first()
+    
+    if workflow:
+        workflow.status = "approved"
+        workflow.approved_at = datetime.utcnow()
+        workflow.comments = response.comments
+    
+    document.status = "approved"
+    document.approved_by = current_user.id
+    document.approved_at = datetime.utcnow()
+    document.next_review_date = datetime.utcnow() + timedelta(days=document.review_cycle_months * 30)
+    
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+@router.post("/{document_id}/reject", response_model=DocumentResponse)
+def reject_document(
+    document_id: int,
+    response: DocumentApprovalResponse,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    if document.status != "pending_approval":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Document is not pending approval"
+        )
+    
+    workflow = db.query(DocumentApprovalWorkflow).filter(
+        DocumentApprovalWorkflow.document_id == document_id,
+        DocumentApprovalWorkflow.approver_id == current_user.id,
+        DocumentApprovalWorkflow.status == "pending"
+    ).first()
+    
+    if workflow:
+        workflow.status = "rejected"
+        workflow.approved_at = datetime.utcnow()
+        workflow.comments = response.comments
+    
+    document.status = "draft"
+    
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+@router.post("/{document_id}/controls", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def link_document_to_control(
+    document_id: int,
+    link: DocumentControlLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    control = db.query(NormalizedControl).filter(
+        NormalizedControl.id == link.normalized_control_id
+    ).first()
+    if not control:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Control not found"
+        )
+    
+    existing = db.query(DocumentControlLink).filter(
+        DocumentControlLink.document_id == document_id,
+        DocumentControlLink.normalized_control_id == link.normalized_control_id
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link already exists"
+        )
+    
+    db_link = DocumentControlLink(
+        document_id=document_id,
+        normalized_control_id=link.normalized_control_id
+    )
+    db.add(db_link)
+    db.commit()
+    
+    return MessageResponse(message="Control linked successfully")
