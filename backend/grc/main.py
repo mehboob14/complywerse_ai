@@ -15,6 +15,7 @@ from .routers import (
     certification_router,
     advanced_erm_router
 )
+from .modules.erm import erm_router
 
 app = FastAPI(
     title="Enterprise GRC Platform API",
@@ -44,6 +45,7 @@ app.include_router(assets_router)
 app.include_router(dashboard_router)
 app.include_router(certification_router)
 app.include_router(advanced_erm_router)
+app.include_router(erm_router)
 
 
 @app.on_event("startup")
@@ -65,7 +67,8 @@ def root():
             "documents",
             "assets",
             "certifications",
-            "advanced-erm"
+            "advanced-erm",
+            "erm"
         ]
     }
 
