@@ -165,8 +165,15 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - Approval workflow management
 
 ### Assets (/grc/assets)
-- IT asset inventory
-- Control linkage, risk assessments
+- IT asset inventory (5 asset types: application, infrastructure, data, cloud, third_party)
+- `GET /dashboard` - Asset statistics and metrics
+- `GET /{id}/detail` - Full asset detail with linked items
+- `POST /{id}/link-framework-control` - Link asset to framework control
+- `DELETE /{id}/link-framework-control/{link_id}` - Remove framework control link
+- `POST /{id}/link-evidence` - Link asset to evidence
+- `DELETE /{id}/link-evidence/{link_id}` - Remove evidence link
+- `GET /{id}/coverage-analysis` - Coverage analysis with gaps
+- `POST /{id}/assess-risk` - Perform risk assessment
 
 ## Security Features
 - Cookie-based JWT with Secure/SameSite/HttpOnly flags
@@ -210,6 +217,18 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - Coverage: PCI DSS (8 categories), ISO 27001 (12 categories), NIST CSF (5 categories)
 - Evidence linked to sub-controls for precise control-evidence mapping
 - Frontend displays evidence with type badges, frequency, and format guidance
+
+### IT Asset Inventory & Valuation (Jan 1, 2026)
+- 5 asset types: application, infrastructure, data, cloud, third_party
+- CIA ratings (1-5 scale): Confidentiality, Integrity, Availability
+- Asset valuation in USD with criticality classification
+- Link assets to normalized controls, framework controls, evidence, and risks
+- Asset detail page with tabs: Details, Controls, Evidence, Risks, Assessments
+- Coverage analysis showing control gaps
+- Risk assessment with scoring algorithm
+- Dashboard with 6 stat cards: Total, By Type, By Criticality, High Value, Need Assessment, Status
+- New models: AssetFrameworkControlLink, AssetEvidenceLink
+- 7 new API endpoints for linking and coverage analysis
 
 ## User Preferences
 - Backend in Python only
