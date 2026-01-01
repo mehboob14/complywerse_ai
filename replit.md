@@ -77,13 +77,13 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 
 ### Framework Normalization
 - `grc_frameworks` - 8 regulatory frameworks
-- `grc_framework_domains` - 36 domains
-- `grc_control_objectives` - 65 control objectives
-- `grc_framework_controls` - 180 framework-specific controls
-- `grc_framework_sub_controls` - 30 sub-controls
-- `grc_normalized_controls` - 20 unified controls
-- `grc_control_mappings` - 160 cross-framework mappings
-- `grc_required_evidence` - 51 evidence requirements
+- `grc_framework_domains` - 47 domains
+- `grc_control_objectives` - 236 control objectives
+- `grc_framework_controls` - 510 framework-specific controls (comprehensive)
+- `grc_framework_sub_controls` - Sub-controls per framework
+- `grc_normalized_controls` - Unified controls
+- `grc_control_mappings` - Cross-framework mappings
+- `grc_required_evidence` - Evidence requirements per control
 
 ### Evidence Management
 - `grc_evidence` - Uploaded evidence items
