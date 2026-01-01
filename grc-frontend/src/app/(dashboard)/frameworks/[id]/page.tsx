@@ -811,26 +811,19 @@ export default function CertificationJourneyPage() {
                 </h4>
                 {control.evidence_requirements?.length > 0 ? (
                   <div className="space-y-2">
-                    {control.evidence_requirements.map((ev: { id: string; title: string; description: string; type: string; type_label: string; frequency: string; is_required: boolean }, idx: number) => {
+                    {control.evidence_requirements.map((ev: { id: number; title: string; description: string; artifact_type: string; format_guidance?: string; frequency: string; is_required: boolean; sub_control_id: number }, idx: number) => {
                       const typeColors: Record<string, string> = {
-                        'Policy': 'bg-blue-500/20 text-blue-400',
-                        'Procedure': 'bg-purple-500/20 text-purple-400',
-                        'Log': 'bg-orange-500/20 text-orange-400',
-                        'Report': 'bg-pink-500/20 text-pink-400',
-                        'Screenshot': 'bg-cyan-500/20 text-cyan-400',
-                        'Training Record': 'bg-green-500/20 text-green-400',
-                        'Risk Assessment': 'bg-red-500/20 text-red-400',
-                        'Access Review': 'bg-yellow-500/20 text-yellow-400',
-                        'Configuration': 'bg-indigo-500/20 text-indigo-400',
-                        'Certificate': 'bg-emerald-500/20 text-emerald-400',
-                        'Contract': 'bg-amber-500/20 text-amber-400',
-                        'Register': 'bg-teal-500/20 text-teal-400',
-                        'Plan': 'bg-sky-500/20 text-sky-400',
-                        'Matrix': 'bg-violet-500/20 text-violet-400',
-                        'Inventory': 'bg-lime-500/20 text-lime-400',
-                        'Record': 'bg-fuchsia-500/20 text-fuchsia-400',
+                        'policy': 'bg-blue-500/20 text-blue-400',
+                        'procedure': 'bg-purple-500/20 text-purple-400',
+                        'log': 'bg-orange-500/20 text-orange-400',
+                        'report': 'bg-pink-500/20 text-pink-400',
+                        'screenshot': 'bg-cyan-500/20 text-cyan-400',
+                        'record': 'bg-green-500/20 text-green-400',
+                        'configuration': 'bg-indigo-500/20 text-indigo-400',
+                        'certificate': 'bg-emerald-500/20 text-emerald-400',
                       };
-                      const typeColor = typeColors[ev.type_label] || 'bg-slate-500/20 text-slate-400';
+                      const typeColor = typeColors[ev.artifact_type] || 'bg-slate-500/20 text-slate-400';
+                      const typeLabel = ev.artifact_type.charAt(0).toUpperCase() + ev.artifact_type.slice(1);
                       
                       return (
                         <div key={`${ev.id}-${idx}`} className="rounded-lg bg-slate-900/50 p-3">
@@ -839,9 +832,12 @@ export default function CertificationJourneyPage() {
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white">{ev.title}</p>
                               <p className="text-xs text-slate-400 mt-1">{ev.description}</p>
+                              {ev.format_guidance && (
+                                <p className="text-xs text-slate-500 mt-1 italic">Format: {ev.format_guidance}</p>
+                              )}
                               <div className="mt-2 flex flex-wrap items-center gap-2">
                                 <span className={`rounded px-1.5 py-0.5 text-xs ${typeColor}`}>
-                                  {ev.type_label}
+                                  {typeLabel}
                                 </span>
                                 {ev.frequency !== 'as_needed' && (
                                   <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400 flex items-center gap-1">

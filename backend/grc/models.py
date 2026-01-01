@@ -307,6 +307,7 @@ class FrameworkSubControl(Base):
     ai_matching_keywords = Column(JSON, default=[])
     
     control = relationship("FrameworkControl", back_populates="sub_controls")
+    curated_evidence_items = relationship("CuratedEvidenceItem", back_populates="sub_control", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_sub_control_control", "control_id", "code"),
@@ -875,6 +876,27 @@ class ImplementationEvidence(Base):
     reviewer = relationship("GRCUser", foreign_keys=[reviewed_by])
 
 
+class CuratedEvidenceItem(Base):
+    """Curated, specific evidence requirements for sub-controls"""
+    __tablename__ = "grc_curated_evidence_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    sub_control_id = Column(Integer, ForeignKey("grc_framework_sub_controls.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    artifact_type = Column(String(50), nullable=False)  # policy, configuration, log, screenshot, report, record, certificate
+    format_guidance = Column(Text, nullable=True)
+    frequency = Column(String(50), default="annual")  # one_time, monthly, quarterly, annual, as_needed
+    is_required = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    sub_control = relationship("FrameworkSubControl", back_populates="curated_evidence_items")
+    
+    __table_args__ = (
+        Index("ix_curated_evidence_sub_control", "sub_control_id"),
+    )
+
+
 # =============================================================================
 # Database Initialization Functions
 # =============================================================================
@@ -888,6 +910,9 @@ def init_grc_db():
     
     from .seed_subcontrols import seed_subcontrols
     seed_subcontrols()
+    
+    from .seed_evidence_items import seed_curated_evidence_items
+    seed_curated_evidence_items()
 
 
 def get_db():
