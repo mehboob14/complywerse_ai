@@ -202,6 +202,15 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - Custom framework creation modal for institutional frameworks
 - Progress tracking by domain with real-time completion percentages
 
+### Curated Evidence Library (Jan 1, 2026)
+- Added CuratedEvidenceItem model for control-specific evidence requirements
+- Created seed_evidence_items.py with 3,688 curated evidence items
+- Evidence items have specific titles like "Password Policy GPO Export", "ASV Scan Attestation"
+- Each item includes: title, description, artifact_type, format_guidance, frequency, is_required
+- Coverage: PCI DSS (8 categories), ISO 27001 (12 categories), NIST CSF (5 categories)
+- Evidence linked to sub-controls for precise control-evidence mapping
+- Frontend displays evidence with type badges, frequency, and format guidance
+
 ## User Preferences
 - Backend in Python only
 - Modular routers in separate files
