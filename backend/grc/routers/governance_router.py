@@ -13,9 +13,18 @@ from ..schemas import (
     IssueCreate, IssueUpdate, IssueResponse,
     GovernanceDashboard, MessageResponse
 )
-from .auth_router import require_auth
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/governance", tags=["Governance"])
+
+
+def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
+    user_tenants = get_user_tenants(user, db)
+    if tenant_id not in user_tenants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this tenant's data"
+        )
 
 
 @router.get("/objectives", response_model=List[GovernanceObjectiveResponse])
@@ -27,9 +36,14 @@ def list_objectives(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(GovernanceObjective)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(GovernanceObjective).filter(GovernanceObjective.tenant_id.in_(user_tenants))
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(GovernanceObjective.tenant_id == tenant_id)
     if status_filter:
         query = query.filter(GovernanceObjective.status == status_filter)
@@ -41,10 +55,20 @@ def list_objectives(
 @router.post("/objectives", response_model=GovernanceObjectiveResponse, status_code=status.HTTP_201_CREATED)
 def create_objective(
     objective: GovernanceObjectiveCreate,
-    tenant_id: int = Query(...),
+    tenant_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    else:
+        tenant_id = get_user_primary_tenant(current_user, db)
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is not assigned to any tenant"
+            )
+    
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
@@ -71,8 +95,11 @@ def get_objective(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    
     objective = db.query(GovernanceObjective).filter(
-        GovernanceObjective.id == objective_id
+        GovernanceObjective.id == objective_id,
+        GovernanceObjective.tenant_id.in_(user_tenants)
     ).first()
     if not objective:
         raise HTTPException(
@@ -89,8 +116,11 @@ def update_objective(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    
     objective = db.query(GovernanceObjective).filter(
-        GovernanceObjective.id == objective_id
+        GovernanceObjective.id == objective_id,
+        GovernanceObjective.tenant_id.in_(user_tenants)
     ).first()
     if not objective:
         raise HTTPException(
@@ -113,8 +143,11 @@ def delete_objective(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    
     objective = db.query(GovernanceObjective).filter(
-        GovernanceObjective.id == objective_id
+        GovernanceObjective.id == objective_id,
+        GovernanceObjective.tenant_id.in_(user_tenants)
     ).first()
     if not objective:
         raise HTTPException(
@@ -136,9 +169,14 @@ def list_exceptions(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(Exception)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(Exception).filter(Exception.tenant_id.in_(user_tenants))
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Exception.tenant_id == tenant_id)
     if status_filter:
         query = query.filter(Exception.status == status_filter)
@@ -150,10 +188,20 @@ def list_exceptions(
 @router.post("/exceptions", response_model=ExceptionResponse, status_code=status.HTTP_201_CREATED)
 def create_exception(
     exception: ExceptionCreate,
-    tenant_id: int = Query(...),
+    tenant_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    else:
+        tenant_id = get_user_primary_tenant(current_user, db)
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is not assigned to any tenant"
+            )
+    
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
@@ -191,7 +239,12 @@ def update_exception(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    exception = db.query(Exception).filter(Exception.id == exception_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    exception = db.query(Exception).filter(
+        Exception.id == exception_id,
+        Exception.tenant_id.in_(user_tenants)
+    ).first()
     if not exception:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -214,7 +267,12 @@ def approve_exception(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    exception = db.query(Exception).filter(Exception.id == exception_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    exception = db.query(Exception).filter(
+        Exception.id == exception_id,
+        Exception.tenant_id.in_(user_tenants)
+    ).first()
     if not exception:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -243,9 +301,14 @@ def list_issues(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(Issue)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(Issue).filter(Issue.tenant_id.in_(user_tenants))
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Issue.tenant_id == tenant_id)
     if status_filter:
         query = query.filter(Issue.status == status_filter)
@@ -259,10 +322,20 @@ def list_issues(
 @router.post("/issues", response_model=IssueResponse, status_code=status.HTTP_201_CREATED)
 def create_issue(
     issue: IssueCreate,
-    tenant_id: int = Query(...),
+    tenant_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    else:
+        tenant_id = get_user_primary_tenant(current_user, db)
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is not assigned to any tenant"
+            )
+    
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
@@ -291,7 +364,12 @@ def update_issue(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    issue = db.query(Issue).filter(
+        Issue.id == issue_id,
+        Issue.tenant_id.in_(user_tenants)
+    ).first()
     if not issue:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -313,7 +391,12 @@ def close_issue(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    issue = db.query(Issue).filter(
+        Issue.id == issue_id,
+        Issue.tenant_id.in_(user_tenants)
+    ).first()
     if not issue:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -333,11 +416,26 @@ def get_governance_dashboard(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    obj_query = db.query(GovernanceObjective)
-    exc_query = db.query(Exception)
-    issue_query = db.query(Issue)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return GovernanceDashboard(
+            total_objectives=0,
+            objectives_by_status={},
+            total_exceptions=0,
+            exceptions_by_status={},
+            pending_exceptions=0,
+            total_issues=0,
+            issues_by_status={},
+            issues_by_severity={},
+            open_issues=0
+        )
+    
+    obj_query = db.query(GovernanceObjective).filter(GovernanceObjective.tenant_id.in_(user_tenants))
+    exc_query = db.query(Exception).filter(Exception.tenant_id.in_(user_tenants))
+    issue_query = db.query(Issue).filter(Issue.tenant_id.in_(user_tenants))
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         obj_query = obj_query.filter(GovernanceObjective.tenant_id == tenant_id)
         exc_query = exc_query.filter(Exception.tenant_id == tenant_id)
         issue_query = issue_query.filter(Issue.tenant_id == tenant_id)

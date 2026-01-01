@@ -13,9 +13,18 @@ from ..schemas import (
     AssetValuation, AssetControlLinkCreate, AssetRiskAssessmentResponse,
     AssetDashboard, AssetCoverage, MessageResponse
 )
-from .auth_router import require_auth
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/assets", tags=["IT Assets"])
+
+
+def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
+    user_tenants = get_user_tenants(user, db)
+    if tenant_id not in user_tenants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this tenant's data"
+        )
 
 
 @router.get("", response_model=List[ITAssetResponse])
@@ -30,9 +39,14 @@ def list_assets(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(ITAsset)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(ITAsset).filter(ITAsset.tenant_id.in_(user_tenants))
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(ITAsset.tenant_id == tenant_id)
     if asset_type:
         query = query.filter(ITAsset.asset_type == asset_type)
@@ -50,10 +64,20 @@ def list_assets(
 @router.post("", response_model=ITAssetResponse, status_code=status.HTTP_201_CREATED)
 def create_asset(
     asset: ITAssetCreate,
-    tenant_id: int = Query(...),
+    tenant_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    else:
+        tenant_id = get_user_primary_tenant(current_user, db)
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is not assigned to any tenant"
+            )
+    
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
@@ -83,8 +107,20 @@ def get_asset_dashboard(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(ITAsset)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return AssetDashboard(
+            total_assets=0,
+            by_type={},
+            by_criticality={},
+            by_status={},
+            high_value_assets=0,
+            assets_needing_assessment=0
+        )
+    
+    query = db.query(ITAsset).filter(ITAsset.tenant_id.in_(user_tenants))
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(ITAsset.tenant_id == tenant_id)
     
     assets = query.all()
@@ -123,8 +159,18 @@ def get_asset_coverage(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(ITAsset).options(joinedload(ITAsset.control_links))
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return AssetCoverage(
+            total_assets=0,
+            assets_with_controls=0,
+            coverage_percentage=0.0,
+            by_criticality={}
+        )
+    
+    query = db.query(ITAsset).options(joinedload(ITAsset.control_links)).filter(ITAsset.tenant_id.in_(user_tenants))
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(ITAsset.tenant_id == tenant_id)
     
     assets = query.all()
@@ -163,11 +209,16 @@ def get_asset(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    
     asset = db.query(ITAsset).options(
         joinedload(ITAsset.control_links),
         joinedload(ITAsset.risk_links),
         joinedload(ITAsset.risk_assessments)
-    ).filter(ITAsset.id == asset_id).first()
+    ).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
     
     if not asset:
         raise HTTPException(
@@ -216,7 +267,12 @@ def update_asset(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    asset = db.query(ITAsset).filter(ITAsset.id == asset_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -238,7 +294,12 @@ def delete_asset(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    asset = db.query(ITAsset).filter(ITAsset.id == asset_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -257,7 +318,12 @@ def update_asset_valuation(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    asset = db.query(ITAsset).filter(ITAsset.id == asset_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -284,7 +350,12 @@ def link_asset_to_control(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    asset = db.query(ITAsset).filter(ITAsset.id == asset_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -326,9 +397,14 @@ def assess_asset(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    
     asset = db.query(ITAsset).options(
         joinedload(ITAsset.control_links)
-    ).filter(ITAsset.id == asset_id).first()
+    ).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
     
     if not asset:
         raise HTTPException(
@@ -377,7 +453,12 @@ def get_latest_assessment(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    asset = db.query(ITAsset).filter(ITAsset.id == asset_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

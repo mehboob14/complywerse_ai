@@ -16,12 +16,21 @@ from ..schemas import (
     EvidenceControlMappingCreate, EvidenceControlMappingResponse,
     AIAssessmentResponse, EvidenceReview, MessageResponse
 )
-from .auth_router import require_auth
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/evidence", tags=["Evidence"])
 
 UPLOAD_DIR = "backend/uploads/evidence"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
+    user_tenants = get_user_tenants(user, db)
+    if tenant_id not in user_tenants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this tenant's data"
+        )
 
 
 @router.get("", response_model=List[EvidenceResponse])
@@ -34,9 +43,14 @@ def list_evidence(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(Evidence)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(Evidence).filter(Evidence.tenant_id.in_(user_tenants))
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Evidence.tenant_id == tenant_id)
     if status_filter:
         query = query.filter(Evidence.status == status_filter)
@@ -51,11 +65,21 @@ def list_evidence(
 async def upload_evidence(
     name: str = Form(...),
     description: Optional[str] = Form(None),
-    tenant_id: int = Form(...),
+    tenant_id: Optional[int] = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    else:
+        tenant_id = get_user_primary_tenant(current_user, db)
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is not assigned to any tenant"
+            )
+    
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
@@ -93,9 +117,17 @@ def list_pending_review(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(Evidence).filter(Evidence.status == "pending_review")
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(Evidence).filter(
+        Evidence.status == "pending_review",
+        Evidence.tenant_id.in_(user_tenants)
+    )
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Evidence.tenant_id == tenant_id)
     
     evidence_list = query.order_by(Evidence.uploaded_at.desc()).all()
@@ -108,10 +140,15 @@ def get_evidence(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    
     evidence = db.query(Evidence).options(
         joinedload(Evidence.ai_assessments),
         joinedload(Evidence.control_mappings)
-    ).filter(Evidence.id == evidence_id).first()
+    ).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
     
     if not evidence:
         raise HTTPException(
@@ -163,7 +200,12 @@ def update_evidence(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
     if not evidence:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -185,7 +227,12 @@ def delete_evidence(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
     if not evidence:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -206,7 +253,12 @@ def get_evidence_versions(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
     if not evidence:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -227,7 +279,12 @@ async def create_evidence_version(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
     if not evidence:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -269,7 +326,12 @@ def trigger_ai_assessment(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
     if not evidence:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -303,7 +365,12 @@ def get_latest_assessment(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
     if not evidence:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -330,7 +397,12 @@ def map_evidence_to_control(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
     if not evidence:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -365,6 +437,18 @@ def remove_control_mapping(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
+    if not evidence:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence not found"
+        )
+    
     mapping = db.query(EvidenceControlMapping).filter(
         EvidenceControlMapping.evidence_id == evidence_id,
         EvidenceControlMapping.normalized_control_id == control_id
@@ -388,7 +472,12 @@ def review_evidence(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
     if not evidence:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

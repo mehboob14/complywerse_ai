@@ -14,13 +14,22 @@ from ..schemas import (
     RiskControlLinkCreate, RiskAssetLinkCreate, RiskEvidenceLinkCreate,
     RiskDashboard, RiskHeatmapCell, MessageResponse
 )
-from .auth_router import require_auth
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/risks", tags=["Risk Management"])
 
 
 def calculate_risk_score(likelihood: int, impact: int) -> float:
     return likelihood * impact
+
+
+def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
+    user_tenants = get_user_tenants(user, db)
+    if tenant_id not in user_tenants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this tenant's data"
+        )
 
 
 @router.get("", response_model=List[RiskResponse])
@@ -35,9 +44,14 @@ def list_risks(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(Risk)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Risk.tenant_id == tenant_id)
     if category:
         query = query.filter(Risk.category == category)
@@ -55,10 +69,20 @@ def list_risks(
 @router.post("", response_model=RiskResponse, status_code=status.HTTP_201_CREATED)
 def create_risk(
     risk: RiskCreate,
-    tenant_id: int = Query(...),
+    tenant_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    else:
+        tenant_id = get_user_primary_tenant(current_user, db)
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is not assigned to any tenant"
+            )
+    
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
@@ -85,8 +109,21 @@ def get_risk_dashboard(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(Risk)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return RiskDashboard(
+            total_risks=0,
+            by_category={},
+            by_status={},
+            by_score_range={"high": 0, "medium": 0, "low": 0},
+            high_risks=0,
+            medium_risks=0,
+            low_risks=0
+        )
+    
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Risk.tenant_id == tenant_id)
     
     risks = query.all()
@@ -131,11 +168,17 @@ def get_risk_heatmap(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"cells": []}
+    
     query = db.query(Risk).filter(
         Risk.inherent_likelihood.isnot(None),
-        Risk.inherent_impact.isnot(None)
+        Risk.inherent_impact.isnot(None),
+        Risk.tenant_id.in_(user_tenants)
     )
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Risk.tenant_id == tenant_id)
     
     risks = query.all()
@@ -162,11 +205,16 @@ def get_risk(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    
     risk = db.query(Risk).options(
         joinedload(Risk.control_links),
         joinedload(Risk.asset_links),
         joinedload(Risk.evidence_links)
-    ).filter(Risk.id == risk_id).first()
+    ).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
     
     if not risk:
         raise HTTPException(
@@ -205,7 +253,12 @@ def update_risk(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    risk = db.query(Risk).filter(Risk.id == risk_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -228,7 +281,12 @@ def delete_risk(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    risk = db.query(Risk).filter(Risk.id == risk_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -247,7 +305,12 @@ def assess_risk(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    risk = db.query(Risk).filter(Risk.id == risk_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -285,7 +348,12 @@ def add_treatment_plan(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    risk = db.query(Risk).filter(Risk.id == risk_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -307,7 +375,12 @@ def link_risk_to_control(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    risk = db.query(Risk).filter(Risk.id == risk_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -350,14 +423,22 @@ def link_risk_to_asset(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    risk = db.query(Risk).filter(Risk.id == risk_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Risk not found"
         )
     
-    asset = db.query(ITAsset).filter(ITAsset.id == link.asset_id).first()
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == link.asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -388,14 +469,22 @@ def link_risk_to_evidence(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    risk = db.query(Risk).filter(Risk.id == risk_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    risk = db.query(Risk).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Risk not found"
         )
     
-    evidence = db.query(Evidence).filter(Evidence.id == link.evidence_id).first()
+    evidence = db.query(Evidence).filter(
+        Evidence.id == link.evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
     if not evidence:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

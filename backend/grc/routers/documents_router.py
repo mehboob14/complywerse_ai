@@ -12,9 +12,18 @@ from ..schemas import (
     DocumentVersionResponse, DocumentApprovalRequest, DocumentApprovalResponse,
     DocumentControlLinkCreate, MessageResponse
 )
-from .auth_router import require_auth
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
+
+
+def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
+    user_tenants = get_user_tenants(user, db)
+    if tenant_id not in user_tenants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this tenant's data"
+        )
 
 
 @router.get("", response_model=List[DocumentResponse])
@@ -27,9 +36,14 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(Document)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(Document).filter(Document.tenant_id.in_(user_tenants))
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Document.tenant_id == tenant_id)
     if doc_type:
         query = query.filter(Document.doc_type == doc_type)
@@ -43,10 +57,20 @@ def list_documents(
 @router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 def create_document(
     document: DocumentCreate,
-    tenant_id: int = Query(...),
+    tenant_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    else:
+        tenant_id = get_user_primary_tenant(current_user, db)
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is not assigned to any tenant"
+            )
+    
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
@@ -75,9 +99,17 @@ def list_pending_approval(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    query = db.query(Document).filter(Document.status == "pending_approval")
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(Document).filter(
+        Document.status == "pending_approval",
+        Document.tenant_id.in_(user_tenants)
+    )
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Document.tenant_id == tenant_id)
     
     documents = query.order_by(Document.created_at.desc()).all()
@@ -91,14 +123,20 @@ def list_review_due(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
     cutoff_date = datetime.utcnow() + timedelta(days=days_ahead)
     
     query = db.query(Document).filter(
         Document.next_review_date <= cutoff_date,
-        Document.status == "approved"
+        Document.status == "approved",
+        Document.tenant_id.in_(user_tenants)
     )
     
     if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Document.tenant_id == tenant_id)
     
     documents = query.order_by(Document.next_review_date).all()
@@ -111,10 +149,15 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
+    
     document = db.query(Document).options(
         joinedload(Document.versions),
         joinedload(Document.control_links)
-    ).filter(Document.id == document_id).first()
+    ).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
     
     if not document:
         raise HTTPException(
@@ -160,7 +203,12 @@ def update_document(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -196,7 +244,12 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -214,7 +267,12 @@ def get_document_versions(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -234,7 +292,12 @@ def get_document_version(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -262,7 +325,12 @@ def submit_for_approval(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -296,7 +364,12 @@ def approve_document(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -337,7 +410,12 @@ def reject_document(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -375,7 +453,12 @@ def link_document_to_control(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -1,191 +1,201 @@
-# PCI DSS Lifecycle Application
+# Enterprise GRC Platform
 
 ## Overview
-A comprehensive, fully dynamic PCI DSS (Payment Card Industry Data Security Standard) compliance lifecycle management application. The application enables organizations to track, manage, and demonstrate compliance with PCI DSS v4.0 requirements through a 7-phase workflow with real-time evidence collection and validation.
+A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platform with multi-tenancy support. The platform supports 8 regulatory frameworks with a normalized control model, evidence management, enterprise risk management, governance orchestration, policy management, and IT asset inventory.
 
 ## Key Features
-- **Dynamic Compliance Tracking**: Real-time compliance percentage based on evidence status
-- **Evidence Upload Workflow**: IT/Security uploads evidence → Auditor reviews → Accept/Reject
-- **Auto-Generated Findings**: Rejected evidence automatically creates compliance findings
-- **Risk Management**: Business owners can approve/reject residual compliance risks
-- **Role-Based Views**: Different views for IT/Security Team, QSA Auditor, and Business Owner
-- **User Authentication**: Login/Register with JWT-based session management
-- **Admin Panel**: Full CRUD management for phases, tasks, deliverables, requirements, sub-requirements, required evidence, and users
-- **Evidence Comparison**: Visual dashboard showing required vs uploaded evidence with filtering
+- **Multi-Tenancy**: Complete tenant isolation with row-level security
+- **Multi-Framework Support**: 8 pre-seeded regulatory frameworks (PCI DSS, ISO 27001, ISO 20000, NIST CSF, SWIFT CSP, CBB, SAMA, SBP)
+- **Normalized Control Model**: Single source of truth with cross-framework mappings
+- **Evidence Management**: Upload, versioning, review workflow with AI assessment stubs
+- **Enterprise Risk Management**: 6 risk categories, scoring matrix, treatment tracking
+- **Governance Orchestration**: Compliance programs, objectives, exceptions, issues
+- **Policy/Document Management**: Versioning, approval workflows, categorization
+- **IT Asset Inventory**: Classification, CIA ratings, valuation, control linkage
+- **Role-Based Access Control**: Fine-grained permissions per tenant
 
 ## Project Structure
 ```
-├── backend/              # Python FastAPI backend
-│   ├── main.py          # Application entry point
-│   ├── models.py        # SQLAlchemy database models
-│   ├── router.py        # All API endpoints (single file per user requirement)
-│   └── seed_data.py     # Database seeding with 130 evidence items
-├── frontend/             # React + Vite frontend
+├── backend/
+│   ├── main.py              # Main FastAPI app (mounts PCI DSS + GRC)
+│   ├── models.py            # PCI DSS SQLAlchemy models
+│   ├── router.py            # PCI DSS API endpoints
+│   └── grc/                  # Enterprise GRC Platform
+│       ├── main.py          # GRC FastAPI sub-app
+│       ├── models.py        # 37+ SQLAlchemy models
+│       ├── schemas.py       # Pydantic schemas
+│       ├── seed_frameworks.py # Framework seeding data
+│       └── routers/         # Modular API routers
+│           ├── auth_router.py
+│           ├── tenants_router.py
+│           ├── frameworks_router.py
+│           ├── controls_router.py
+│           ├── evidence_router.py
+│           ├── risks_router.py
+│           ├── governance_router.py
+│           ├── documents_router.py
+│           ├── assets_router.py
+│           └── dashboard_router.py
+├── grc-frontend/            # Next.js 14 frontend
 │   └── src/
-│       ├── pages/       # Dashboard, Requirements, Findings, RiskRegister
-│       ├── App.jsx      # Main app with routing
-│       └── App.css      # Dark theme styling
-└── uploads/             # Evidence file storage
+│       ├── app/            # App router pages
+│       │   ├── (dashboard)/ # Protected dashboard routes
+│       │   │   ├── dashboard/
+│       │   │   ├── frameworks/
+│       │   │   ├── controls/
+│       │   │   ├── evidence/
+│       │   │   ├── risks/
+│       │   │   ├── governance/
+│       │   │   ├── documents/
+│       │   │   └── assets/
+│       │   └── login/
+│       ├── components/     # React components
+│       ├── lib/           # API service layer
+│       └── types/         # TypeScript types
+└── frontend/              # Legacy React/Vite frontend (PCI DSS)
 ```
 
 ## Tech Stack
-- **Backend**: Python, FastAPI, SQLAlchemy, PostgreSQL/SQLite
-- **Frontend**: React, Vite, React Router, Axios
-- **Styling**: CSS with GitHub-inspired dark theme (#0d1117 background)
+- **Backend**: Python 3.11, FastAPI, SQLAlchemy, PostgreSQL
+- **Frontend**: Next.js 14, TypeScript, Tailwind CSS, React Query
+- **Database**: PostgreSQL with multi-tenant schema
+- **Authentication**: Cookie-based JWT with Secure/SameSite/HttpOnly flags
 
-## Database Models
-- **Phase**: 7 lifecycle phases with tasks and deliverables
-- **Requirement**: 12 PCI DSS v4.0 requirements
-- **SubRequirement**: 63 sub-requirements across all 12 requirements
-- **RequiredEvidence**: 130 evidence items (policies, configs, logs, screenshots)
-- **EvidenceSubmission**: User-uploaded evidence with review status
-- **Finding**: Auto-created from rejected evidence
-- **Risk**: Residual risks requiring business approval
-- **CDESystem**: 24 in-scope Cardholder Data Environment systems
-- **SecurityScan**: ASV scans, penetration tests, vulnerability scans
-- **ComplianceAssessment**: Self-assessments and QSA audits
+## Database Schema (37+ Tables)
 
-## Compliance Workflow
+### Multi-Tenancy
+- `grc_tenants` - Tenant organizations
+- `grc_tenant_users` - User-tenant associations
+- `grc_business_units` - Hierarchical business units
 
-### Evidence Collection Flow
-1. IT/Security team views required evidence per sub-requirement
-2. IT/Security uploads evidence files
-3. Evidence status = "pending_review"
-4. QSA Auditor reviews and accepts/rejects evidence
-5. If accepted → sub-requirement status improves
-6. If rejected → Finding auto-created for remediation
+### RBAC
+- `grc_users` - User accounts
+- `grc_roles` - Roles (system and tenant-specific)
+- `grc_permissions` - Resource-action permissions
+- `grc_role_permissions` - Role-permission mappings
+- `grc_user_roles` - User role assignments
 
-### Compliance Calculation
-- Sub-requirement status based on evidence acceptance:
-  - **Compliant**: All required evidence accepted
-  - **Partial**: Some evidence accepted
-  - **Not Started**: No evidence accepted
-- Overall compliance = weighted average across all sub-requirements
+### Framework Normalization
+- `grc_frameworks` - 8 regulatory frameworks
+- `grc_framework_domains` - 36 domains
+- `grc_control_objectives` - 65 control objectives
+- `grc_framework_controls` - 180 framework-specific controls
+- `grc_framework_sub_controls` - 30 sub-controls
+- `grc_normalized_controls` - 20 unified controls
+- `grc_control_mappings` - 160 cross-framework mappings
+- `grc_required_evidence` - 51 evidence requirements
 
-### Phase Approval Workflow (Governance Enforced)
-Phases are strictly sequential and require Admin or Business Owner approval before advancing:
+### Evidence Management
+- `grc_evidence` - Uploaded evidence items
+- `grc_evidence_versions` - Version history
+- `grc_evidence_control_mapping` - Control linkage
+- `grc_evidence_ai_assessment` - AI confidence scores
 
-1. **Complete Tasks**: Check off all tasks in the current phase
-2. **Auto-Request Approval**: When all tasks complete, approval_status changes to "pending_approval"
-3. **Evidence Gate**: Approval blocked until all linked requirements have accepted evidence
-4. **Admin/Business Owner Approval**: Only Admin or Business Owner can approve phases (separation of duties)
-5. **Advance**: After approval, "Advance to Next Phase" button appears
-6. **Task Regression**: If any task is unchecked after approval, approval is revoked
+### Risk Management
+- `grc_risks` - Risk register
+- `grc_risk_control_link` - Control linkage
+- `grc_risk_evidence_link` - Evidence linkage
 
-**Phase Fields**:
-- `approval_status`: not_required | pending_approval | approved
-- `approved_by`: Name of approver
-- `approved_at`: Timestamp of approval
+### Governance
+- `grc_governance_objectives` - Business objectives
+- `grc_exceptions` - Control exceptions
+- `grc_issues` - Compliance issues
+- `grc_compliance_programs` - Framework adoption
 
-**PhaseRequirement Model**: Links phases to requirements. Admins can configure which requirements must have accepted evidence before a phase can be approved.
+### Documents
+- `grc_documents` - Policies/procedures/standards
+- `grc_document_versions` - Version history
+- `grc_document_approval_workflow` - Approval chain
+- `grc_document_control_link` - Control linkage
 
-**Deliverables**: Each phase has deliverables shown when tasks are complete
+### Assets
+- `grc_it_assets` - IT asset inventory
+- `grc_asset_control_link` - Control coverage
+- `grc_asset_risk_assessment` - Risk assessments
 
-## API Endpoints (Single router.py)
+## Supported Frameworks
+1. **PCI DSS v4.0** - Payment Card Industry Data Security Standard
+2. **ISO 27001:2022** - Information Security Management System
+3. **ISO 20000-1:2018** - IT Service Management
+4. **NIST CSF 2.0** - Cybersecurity Framework
+5. **SWIFT CSP 2024** - Customer Security Programme
+6. **CBB 2023** - Central Bank of Bahrain Cyber Security Framework
+7. **SAMA 1.0** - Saudi Arabian Monetary Authority Framework
+8. **SBP 2023** - State Bank of Pakistan IT/IS Guidelines
 
-### Phases
-- `GET /api/phases` - List all phases with approval status
-- `GET /api/phases/current` - Get current phase
-- `PATCH /api/phases/{id}/set-current` - Set active phase
-- `POST /api/phases/{id}/request-approval` - Request approval (auto-triggered when tasks complete)
-- `POST /api/phases/{id}/approve` - Approve phase (Admin/Business Owner only, requires linked evidence accepted)
-- `POST /api/phases/{id}/advance` - Advance to next phase (requires approval)
+## API Endpoints
 
-### Requirements & Evidence
-- `GET /api/requirements` - List requirements with sub-reqs and evidence
-- `GET /api/requirements/{id}` - Get single requirement details
-- `GET /api/sub-requirements/{id}` - Get sub-requirement with evidence
-- `POST /api/evidence/{id}/upload` - Upload evidence file
-- `GET /api/evidence/pending` - List evidence pending review
-- `POST /api/evidence/{id}/review` - Accept/reject evidence
+### Authentication (/grc/auth)
+- `POST /register` - User registration
+- `POST /login` - User login (sets secure cookie)
+- `POST /logout` - User logout
+- `GET /me` - Current user info (auto-refreshes token)
+- `POST /refresh` - Manual token refresh
 
-### Dashboard
-- `GET /api/dashboard/stats` - Dynamic compliance statistics
+### Dashboard (/grc/dashboard)
+- `GET /stats` - Real-time compliance statistics
+- `GET /compliance/{framework_id}` - Framework compliance details
 
-### Findings
-- `GET /api/findings` - List all findings
-- `PATCH /api/findings/{id}` - Update finding status/notes
+### Frameworks (/grc/frameworks)
+- Full CRUD for frameworks, domains, objectives, controls, sub-controls
+- `POST /import` - Bulk framework import
+- `GET /{id}/controls` - Hierarchical control view
 
-### Risks
-- `GET /api/risks` - List all risks
-- `POST /api/risks` - Create new risk
-- `PATCH /api/risks/{id}/approve` - Approve/reject risk
+### Controls (/grc/controls)
+- Normalized controls CRUD
+- `GET /mappings` - Cross-framework mappings
+- `POST /mappings` - Create control mapping
 
-## 7-Phase Compliance Lifecycle
-1. PCI Scope Definition
-2. Gap Assessment (Current)
-3. Control Implementation
-4. Evidence Collection
-5. Vulnerability & Penetration Testing
-6. Compliance Validation
-7. Continuous Compliance
+### Evidence (/grc/evidence)
+- Upload, versioning, review workflow
+- `POST /assess` - AI assessment (stub)
+- `GET /gaps` - Gap detection
+
+### Risks (/grc/risks)
+- Risk register CRUD
+- `GET /dashboard` - Risk dashboard
+- `GET /heatmap` - Risk heatmap data
+
+### Governance (/grc/governance)
+- Objectives, exceptions, issues, programs
+- `GET /dashboard` - Governance dashboard
+
+### Documents (/grc/documents)
+- Policy/document CRUD with versioning
+- Approval workflow management
+
+### Assets (/grc/assets)
+- IT asset inventory
+- Control linkage, risk assessments
+
+## Security Features
+- Cookie-based JWT with Secure/SameSite/HttpOnly flags
+- Required SESSION_SECRET environment variable
+- Token refresh mechanism (6-hour refresh window)
+- Multi-tenant data isolation
+- Tenant scoping on all queries
+
+## Running the Application
+- Backend: `cd backend && python main.py` (port 8000)
+- Frontend: `cd grc-frontend && npm run dev` (port 5000)
+
+## Environment Variables
+- `DATABASE_URL` - PostgreSQL connection string
+- `SESSION_SECRET` - Required JWT signing key (must be set)
+
+## Recent Changes (Jan 1, 2026)
+- Created enterprise GRC platform with multi-tenancy
+- Added 8 regulatory frameworks with full control hierarchy
+- Implemented normalized control model with cross-framework mappings
+- Built Next.js frontend with TypeScript and Tailwind CSS
+- Added security hardening (cookie security, tenant isolation)
+- Real-time compliance scoring based on evidence coverage
+- 10 modular API routers with 100+ endpoints
 
 ## User Preferences
 - Backend in Python only
-- All endpoints in single router.py file
+- Modular routers in separate files
 - Separate backend and frontend folders
-- Dark theme UI with GitHub-style design
-- Fully dynamic, database-driven (no static data)
-
-## Running the Application
-- Backend: port 8000 (FastAPI/Uvicorn)
-- Frontend: port 5000 (Vite dev server with proxy to backend)
-
-## Recent Changes (Dec 30, 2025)
-- Implemented dynamic evidence-based compliance workflow
-- Added 130 required evidence items across 63 sub-requirements
-- Created evidence upload/review workflow
-- Auto-generation of findings from rejected evidence
-- Added risk register with business owner approval workflow
-- Dynamic compliance calculation based on accepted evidence
-- Role-based views for different user types
-- Redesigned Dashboard with new layout matching reference design:
-  - Circular compliance gauge with dynamic percentage
-  - Current Phase, CDE Systems, and Open Vulnerabilities metrics
-  - Tabbed navigation (Guided Workflow, Overview, Phases, Requirements, CDE Scoping, Security Testing)
-  - Left sidebar with certification phases and progress bars
-  - Main content showing actual phase tasks with completion status
-  - Related requirements preview with evidence progress
-  - Generate ROC and QSA Portal action buttons
-
-### Latest Update
-- Added 100% dynamic data from backend - no static/hardcoded values
-- Linked Guided Workflow and Overview tabs - both use same data source
-- Added new database models: CDESystem (24 systems), SecurityScan, ComplianceAssessment
-- Dashboard stats now include:
-  - CDE Systems count (24 in-scope systems)
-  - ASV Scans: completed/required (0/4 quarterly)
-  - Pen Tests: completed/required (0/2 annual)
-  - Last Assessment date (dynamically fetched)
-  - Requirements Met: compliant/total
-- All metrics refresh in real-time when tasks completed or evidence reviewed
-
-### Requirements Page V2 (Evidence Upload)
-- Redesigned Requirements page matching reference design
-- Shows 12 PCI DSS requirements with "X/Y compliant" badges and progress bars
-- Expandable requirements showing sub-requirements with status badges:
-  - compliant (green), partial (yellow), non compliant (red)
-  - "X evidence needed" badge for incomplete items
-- Sub-requirement detail panel includes:
-  - Testing Procedures section with clickable items
-  - Required Evidence section with:
-    - Evidence cards with Upload button
-    - Examples (e.g., "Network Security Policy PDF", "Firewall rules export")
-    - Validation Criteria (e.g., "Document must be dated within 12 months")
-    - Uploaded evidence with Accept/Reject actions for auditors
-- Role-based view: IT/Security can upload, QSA Auditor can accept/reject
-- Phase filter: Filter by "Current Phase" to see only requirements linked to active phase
-
-### User Experience Improvements (Dec 30, 2025)
-- **Role Guide**: "My Role" button shows role-specific actions and quick links
-- **Evidence Gating Warning**: Dashboard shows evidence status when phase needs approval
-- **Phase-Requirement Linking**: Admin can link requirements to phases in Admin panel
-- **Cross-Navigation**: Quick links from Dashboard to Requirements, Findings, Risk Register
-- **Governance Enforcement**: Phase approval requires Admin or Business Owner only
-
-### Role Responsibilities
-- **Admin**: Manage all settings, approve phases, configure phase-requirement links (view-only on evidence)
-- **Business Owner**: Approve phases and residual risks, monitor compliance (view-only on evidence)
-- **Infosec Team**: Review and accept/reject evidence (rejection creates findings), manage findings
-- **IT Security**: Upload evidence for requirements, complete assigned phase tasks
-- **QSA Auditor**: View-only access to monitor compliance readiness and audit documentation
+- Dark theme UI (slate-900/slate-800)
+- Multi-tenant architecture
+- PostgreSQL database
