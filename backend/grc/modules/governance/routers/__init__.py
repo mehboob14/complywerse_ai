@@ -11,5 +11,5 @@ __all__ = [
     "workflows_router",
     "reviews_router",
     "mappings_router",
-    "dashboard_router"
+    "dashboard_router",
 ]

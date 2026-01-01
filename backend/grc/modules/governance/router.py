@@ -1,20 +1,13 @@
 from fastapi import APIRouter
-from .routers import (
-    documents_router,
-    versions_router,
-    workflows_router,
-    reviews_router,
-    mappings_router,
-    dashboard_router
-)
+from .routers import documents_router, versions_router, workflows_router, reviews_router, mappings_router, dashboard_router
 
 router = APIRouter(prefix="/governance", tags=["Governance Module"])
 
 router.include_router(documents_router, tags=["Governance Documents"])
-router.include_router(versions_router, tags=["Document Versions"])
-router.include_router(workflows_router, tags=["Approval Workflows"])
-router.include_router(reviews_router, tags=["Document Reviews"])
-router.include_router(mappings_router, tags=["Document Mappings"])
+router.include_router(versions_router, tags=["Governance Document Versions"])
+router.include_router(workflows_router, tags=["Governance Workflows"])
+router.include_router(reviews_router, tags=["Governance Reviews"])
+router.include_router(mappings_router, tags=["Governance Mappings"])
 router.include_router(dashboard_router, tags=["Governance Dashboard"])
 
 

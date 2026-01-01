@@ -1207,7 +1207,7 @@ class DocumentRegulatoryLink(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
-    framework_id = Column(Integer, ForeignKey("grc_regulatory_frameworks.id"), nullable=True, index=True)
+    framework_id = Column(Integer, ForeignKey("grc_frameworks.id"), nullable=True, index=True)
     framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=True, index=True)
     
     requirement_reference = Column(String(255), nullable=True)
@@ -1217,7 +1217,7 @@ class DocumentRegulatoryLink(Base):
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     
     document = relationship("GovernanceDocument", back_populates="regulatory_links")
-    framework = relationship("RegulatoryFramework")
+    framework = relationship("Framework")
     framework_control = relationship("FrameworkControl")
     
     __table_args__ = (
