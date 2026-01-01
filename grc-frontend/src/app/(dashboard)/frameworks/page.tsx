@@ -57,6 +57,14 @@ export default function FrameworksPage() {
     (c: CertificationJourney) => c.status === 'in_progress' || c.status === 'not_started'
   );
 
+  const activeCertificationFrameworkIds = new Set(
+    activeCertifications.map((c: CertificationJourney) => String(c.framework_id))
+  );
+
+  const availableFrameworks = (frameworks || []).filter(
+    (f: Framework) => !activeCertificationFrameworkIds.has(String(f.id))
+  );
+
   const getJourneyForFramework = (frameworkId: string) => {
     return (certifications as CertificationJourney[] || []).find(
       (c: CertificationJourney) => String(c.framework_id) === frameworkId
@@ -195,9 +203,7 @@ export default function FrameworksPage() {
           Available Frameworks
         </h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {frameworks?.map((framework: Framework) => {
-            const journey = getJourneyForFramework(framework.id);
-            const hasActiveJourney = !!journey;
+          {availableFrameworks?.map((framework: Framework) => {
             const domainCount = framework.domain_count || framework.domains?.length || 0;
             const controlCount = framework.control_count || countControls(framework);
             
@@ -235,23 +241,13 @@ export default function FrameworksPage() {
                 )}
 
                 <div className="mt-4 border-t border-slate-700 pt-4">
-                  {hasActiveJourney ? (
-                    <button
-                      onClick={() => router.push(`/frameworks/${journey.id}`)}
-                      className="btn-secondary flex w-full items-center justify-center gap-2"
-                    >
-                      <ArrowRight className="h-4 w-4" />
-                      View Journey
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleStartCertification(framework)}
-                      className="btn-primary flex w-full items-center justify-center gap-2"
-                    >
-                      <Play className="h-4 w-4" />
-                      Start Certification
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleStartCertification(framework)}
+                    className="btn-primary flex w-full items-center justify-center gap-2"
+                  >
+                    <Play className="h-4 w-4" />
+                    Start Certification
+                  </button>
                 </div>
               </div>
             );

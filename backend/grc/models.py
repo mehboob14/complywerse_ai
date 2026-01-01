@@ -301,7 +301,10 @@ class FrameworkSubControl(Base):
     code = Column(String(50), nullable=False)
     name = Column(String(255), nullable=False)
     statement = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
     order = Column(Integer, default=0)
+    evidence_recommendations = Column(JSON, default=[])
+    ai_matching_keywords = Column(JSON, default=[])
     
     control = relationship("FrameworkControl", back_populates="sub_controls")
     
@@ -882,6 +885,9 @@ def init_grc_db():
     
     from .seed_frameworks import seed_frameworks
     seed_frameworks()
+    
+    from .seed_subcontrols import seed_subcontrols
+    seed_subcontrols()
 
 
 def get_db():

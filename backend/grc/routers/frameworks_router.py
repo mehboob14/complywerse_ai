@@ -157,6 +157,9 @@ def get_framework(
                                         "code": sub.code,
                                         "name": sub.name,
                                         "statement": sub.statement,
+                                        "description": sub.description,
+                                        "evidence_recommendations": sub.evidence_recommendations or [],
+                                        "ai_matching_keywords": sub.ai_matching_keywords or [],
                                         "order": sub.order
                                     }
                                     for sub in ctrl.sub_controls

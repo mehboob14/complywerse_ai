@@ -237,6 +237,9 @@ class SubControlResponse(BaseModel):
     code: str
     name: str
     statement: Optional[str]
+    description: Optional[str] = None
+    evidence_recommendations: List[str] = []
+    ai_matching_keywords: List[str] = []
     order: int
 
     class Config:
