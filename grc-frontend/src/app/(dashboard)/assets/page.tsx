@@ -44,6 +44,7 @@ export default function AssetsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [criticalityFilter, setCriticalityFilter] = useState<CriticalityFilter>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<ITAsset | null>(null);
   const [expandedAsset, setExpandedAsset] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
@@ -71,12 +72,28 @@ export default function AssetsPage() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof assetsApi.create>[0] }) => 
+      assetsApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
+      queryClient.invalidateQueries({ queryKey: ['assets-dashboard'] });
+      setEditingAsset(null);
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => assetsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assets'] });
+      queryClient.invalidateQueries({ queryKey: ['assets-dashboard'] });
     },
   });
+  
+  const handleEdit = (e: React.MouseEvent, asset: ITAsset) => {
+    e.stopPropagation();
+    setEditingAsset(asset);
+  };
 
   const getAssetIcon = (type: string) => {
     const assetType = ASSET_TYPES.find(t => t.value === type);
@@ -389,7 +406,7 @@ export default function AssetsPage() {
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); }}
+                          onClick={(e) => handleEdit(e, asset)}
                           className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
                           title="Edit"
                         >
@@ -466,6 +483,15 @@ export default function AssetsPage() {
           isLoading={createMutation.isPending}
         />
       )}
+
+      {editingAsset && (
+        <AssetModal
+          onClose={() => setEditingAsset(null)}
+          onSave={(data) => updateMutation.mutate({ id: editingAsset.id, data })}
+          isLoading={updateMutation.isPending}
+          initialData={editingAsset}
+        />
+      )}
     </div>
   );
 }
@@ -474,28 +500,33 @@ function AssetModal({
   onClose,
   onSave,
   isLoading,
+  initialData,
 }: {
   onClose: () => void;
   onSave: (data: Parameters<typeof assetsApi.create>[0]) => void;
   isLoading: boolean;
+  initialData?: ITAsset | null;
 }) {
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    asset_type: 'application' as AssetType,
-    owner_id: null as number | null,
-    vendor: '',
-    location: '',
-    criticality: 'medium' as 'low' | 'medium' | 'high' | 'critical',
-    confidentiality_rating: 3,
-    integrity_rating: 3,
-    availability_rating: 3,
-    valuation: null as number | null,
+    name: initialData?.name || '',
+    description: initialData?.description || '',
+    asset_type: (initialData?.asset_type || 'application') as AssetType,
+    owner_id: initialData?.owner_id || null as number | null,
+    vendor: initialData?.vendor || '',
+    location: initialData?.location || '',
+    criticality: (initialData?.criticality || 'medium') as 'low' | 'medium' | 'high' | 'critical',
+    confidentiality_rating: initialData?.confidentiality_rating || 3,
+    integrity_rating: initialData?.integrity_rating || 3,
+    availability_rating: initialData?.availability_rating || 3,
+    valuation: initialData?.valuation || null as number | null,
+    status: (initialData?.status || 'active') as 'active' | 'inactive' | 'decommissioned',
   });
+  
+  const isEditMode = !!initialData;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
+    const submitData: any = {
       name: formData.name,
       description: formData.description || undefined,
       asset_type: formData.asset_type,
@@ -507,7 +538,11 @@ function AssetModal({
       integrity_rating: formData.integrity_rating,
       availability_rating: formData.availability_rating,
       valuation: formData.valuation || undefined,
-    });
+    };
+    if (isEditMode) {
+      submitData.status = formData.status;
+    }
+    onSave(submitData);
   };
 
   const RatingSelector = ({ 
@@ -546,7 +581,7 @@ function AssetModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg bg-slate-800 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Add Asset</h2>
+          <h2 className="text-lg font-semibold text-white">{isEditMode ? 'Edit Asset' : 'Add Asset'}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X size={20} />
           </button>
@@ -694,6 +729,21 @@ function AssetModal({
             </div>
           </div>
 
+          {isEditMode && (
+            <div className="border-t border-slate-700 pt-4">
+              <h3 className="text-sm font-medium text-slate-400 mb-3">Status</h3>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white focus:border-primary-500 focus:outline-none"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="decommissioned">Decommissioned</option>
+              </select>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
@@ -708,7 +758,7 @@ function AssetModal({
               className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              Add Asset
+              {isEditMode ? 'Save Changes' : 'Add Asset'}
             </button>
           </div>
         </form>
