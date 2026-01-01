@@ -192,6 +192,16 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - Real-time compliance scoring based on evidence coverage
 - 10 modular API routers with 100+ endpoints
 
+### Certification Journey System (Jan 1, 2026)
+- Added CertificationJourney, ControlImplementation, ImplementationEvidence models
+- Created certification_router.py with 13 endpoints for guided certification
+- Implemented guided implementation wizard with 6-phase stepper
+- Evidence upload with simulated AI confidence scoring (0-100%)
+- Multi-control evidence matching (one evidence can satisfy multiple controls)
+- Gap analysis endpoint showing missing evidence and pending controls
+- Custom framework creation modal for institutional frameworks
+- Progress tracking by domain with real-time completion percentages
+
 ## User Preferences
 - Backend in Python only
 - Modular routers in separate files
