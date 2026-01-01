@@ -172,7 +172,7 @@ class GRCUser(Base):
     audit_logs = relationship("AuditLog", back_populates="user")
     uploaded_evidence = relationship("Evidence", back_populates="uploader", foreign_keys="Evidence.uploaded_by")
     evidence_versions = relationship("EvidenceVersion", back_populates="creator")
-    owned_risks = relationship("Risk", back_populates="owner")
+    owned_risks = relationship("Risk", back_populates="owner", foreign_keys="Risk.owner_id")
     owned_objectives = relationship("GovernanceObjective", back_populates="owner")
     owned_issues = relationship("Issue", back_populates="owner")
     owned_documents = relationship("Document", back_populates="owner", foreign_keys="Document.owner_id")
@@ -471,9 +471,12 @@ class Risk(Base):
     business_unit_id = Column(Integer, ForeignKey("grc_business_units.id"), nullable=True, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    category = Column(String(50), nullable=False)  # strategic, operational, financial, compliance, technology, third_party
-    risk_category = Column(String(50), default="operational")  # strategic, operational, financial, compliance, technology, third_party
+    category = Column(String(50), nullable=False)  # strategic, operational, financial, compliance, technology, third_party, project_change
+    risk_category = Column(String(50), default="operational")  # strategic, operational, financial, compliance, technology, third_party, project_change
+    risk_sub_category = Column(String(100), nullable=True)
     owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    business_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    affected_department_ids = Column(JSON, default=[])
     due_date = Column(DateTime, nullable=True)
     review_date = Column(DateTime, nullable=True)
     inherent_likelihood = Column(Integer, nullable=True)
@@ -485,11 +488,17 @@ class Risk(Base):
     risk_appetite = Column(String(50), nullable=True)
     status = Column(String(50), default="open")
     treatment_plan = Column(Text, nullable=True)
+    closure_status = Column(String(50), nullable=True)  # null, pending_closure, closed
+    closed_at = Column(DateTime, nullable=True)
+    closed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    closure_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     tenant = relationship("Tenant", back_populates="risks")
-    owner = relationship("GRCUser", back_populates="owned_risks")
+    owner = relationship("GRCUser", back_populates="owned_risks", foreign_keys=[owner_id])
+    business_owner = relationship("GRCUser", foreign_keys=[business_owner_id])
+    closer = relationship("GRCUser", foreign_keys=[closed_by])
     business_unit = relationship("BusinessUnit")
     control_links = relationship("RiskControlLink", back_populates="risk", cascade="all, delete-orphan")
     asset_links = relationship("RiskAssetLink", back_populates="risk", cascade="all, delete-orphan")
@@ -500,6 +509,8 @@ class Risk(Base):
     incidents = relationship("RiskIncident", back_populates="risk", cascade="all, delete-orphan")
     reviews = relationship("RiskReview", back_populates="risk", cascade="all, delete-orphan")
     score_history = relationship("RiskScoreHistory", back_populates="risk", cascade="all, delete-orphan")
+    mitigation_actions = relationship("RiskMitigationAction", back_populates="risk", cascade="all, delete-orphan")
+    audit_finding_links = relationship("RiskAuditFindingLink", back_populates="risk", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_risk_tenant_category", "tenant_id", "category"),
@@ -761,13 +772,90 @@ class RiskAppetiteConfig(Base):
     category = Column(String(50), nullable=False)
     appetite_level = Column(String(50), default="moderate")  # averse, minimal, cautious, moderate, open, hungry
     max_acceptable_score = Column(Float, default=12.0)
+    tolerance_threshold = Column(Float, nullable=True)
+    escalation_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    alert_enabled = Column(Boolean, default=True)
     description = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     tenant = relationship("Tenant")
+    escalation_owner = relationship("GRCUser")
     
     __table_args__ = (
         UniqueConstraint("tenant_id", "category", name="uq_risk_appetite_tenant_category"),
+    )
+
+
+class RiskMitigationAction(Base):
+    """Risk mitigation actions - specific actions to treat risks"""
+    __tablename__ = "grc_risk_mitigation_actions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    action_type = Column(String(50), default="mitigate")  # mitigate, transfer, avoid, accept
+    status = Column(String(50), default="open")  # open, in_progress, completed, overdue, cancelled
+    priority = Column(String(20), default="medium")  # critical, high, medium, low
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    expected_residual_reduction = Column(Float, nullable=True)
+    actual_residual_reduction = Column(Float, nullable=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    risk = relationship("Risk", back_populates="mitigation_actions")
+    owner = relationship("GRCUser")
+    evidence = relationship("Evidence")
+    
+    __table_args__ = (
+        Index("ix_mitigation_action_risk", "risk_id"),
+        Index("ix_mitigation_action_status", "status"),
+    )
+
+
+class RiskAuditFindingLink(Base):
+    """Links risks to audit findings/issues"""
+    __tablename__ = "grc_risk_audit_finding_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
+    issue_id = Column(Integer, ForeignKey("grc_issues.id"), nullable=False, index=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    risk = relationship("Risk", back_populates="audit_finding_links")
+    issue = relationship("Issue")
+    
+    __table_args__ = (
+        UniqueConstraint("risk_id", "issue_id", name="uq_risk_audit_finding"),
+        Index("ix_audit_finding_risk", "risk_id"),
+    )
+
+
+class LikelihoodImpactScale(Base):
+    """Configurable likelihood and impact scales for risk scoring"""
+    __tablename__ = "grc_likelihood_impact_scales"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    scale_type = Column(String(20), nullable=False)  # likelihood, impact
+    level = Column(Integer, nullable=False)  # 1-5 (or custom range)
+    label = Column(String(100), nullable=False)  # e.g., "Rare", "Unlikely", etc.
+    description = Column(Text, nullable=True)
+    score_value = Column(Float, nullable=False)  # Numeric value for calculations
+    color = Column(String(20), nullable=True)  # For UI display
+    is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    
+    __table_args__ = (
+        Index("ix_likelihood_impact_scale_tenant", "tenant_id", "scale_type"),
+        UniqueConstraint("tenant_id", "scale_type", "level", name="uq_tenant_scale_level"),
     )
 
 

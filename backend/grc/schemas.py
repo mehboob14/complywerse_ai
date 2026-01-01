@@ -425,7 +425,10 @@ class RiskBase(BaseModel):
     description: Optional[str] = None
     category: str
     risk_category: Optional[str] = None
+    risk_sub_category: Optional[str] = None
     owner_id: Optional[int] = None
+    business_owner_id: Optional[int] = None
+    affected_department_ids: Optional[List[int]] = []
 
 
 class RiskCreate(RiskBase):
@@ -437,8 +440,13 @@ class RiskUpdate(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     risk_category: Optional[str] = None
+    risk_sub_category: Optional[str] = None
     owner_id: Optional[int] = None
+    business_owner_id: Optional[int] = None
+    affected_department_ids: Optional[List[int]] = None
     status: Optional[str] = None
+    closure_status: Optional[str] = None
+    closure_notes: Optional[str] = None
 
 
 class RiskResponse(BaseModel):
@@ -447,7 +455,10 @@ class RiskResponse(BaseModel):
     title: str
     description: Optional[str]
     category: str
+    risk_sub_category: Optional[str] = None
     owner_id: Optional[int]
+    business_owner_id: Optional[int] = None
+    affected_department_ids: Optional[List[int]] = []
     inherent_likelihood: Optional[int]
     inherent_impact: Optional[int]
     inherent_score: Optional[float]
@@ -457,6 +468,10 @@ class RiskResponse(BaseModel):
     risk_appetite: Optional[str]
     status: str
     treatment_plan: Optional[str]
+    closure_status: Optional[str] = None
+    closed_at: Optional[datetime] = None
+    closed_by: Optional[int] = None
+    closure_notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -522,6 +537,7 @@ class RiskDetailResponse(BaseModel):
     title: str
     description: Optional[str]
     risk_category: str
+    risk_sub_category: Optional[str] = None
     inherent_likelihood: Optional[int]
     inherent_impact: Optional[int]
     inherent_score: Optional[float]
@@ -533,8 +549,15 @@ class RiskDetailResponse(BaseModel):
     treatment_plan: Optional[str]
     owner_id: Optional[int]
     owner_name: Optional[str] = None
+    business_owner_id: Optional[int] = None
+    business_owner_name: Optional[str] = None
+    affected_department_ids: Optional[List[int]] = []
     due_date: Optional[datetime] = None
     review_date: Optional[datetime] = None
+    closure_status: Optional[str] = None
+    closed_at: Optional[datetime] = None
+    closed_by: Optional[int] = None
+    closure_notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     linked_controls: List[dict] = []
@@ -542,6 +565,8 @@ class RiskDetailResponse(BaseModel):
     linked_assets: List[dict] = []
     linked_evidence: List[dict] = []
     linked_governance: List[dict] = []
+    mitigation_actions: List[dict] = []
+    audit_finding_links: List[dict] = []
     
     class Config:
         from_attributes = True
@@ -1215,12 +1240,18 @@ class RiskAppetiteConfigCreate(BaseModel):
     category: str
     appetite_level: str = "moderate"
     max_acceptable_score: float = 12.0
+    tolerance_threshold: Optional[float] = None
+    escalation_owner_id: Optional[int] = None
+    alert_enabled: bool = True
     description: Optional[str] = None
 
 
 class RiskAppetiteConfigUpdate(BaseModel):
     appetite_level: Optional[str] = None
     max_acceptable_score: Optional[float] = None
+    tolerance_threshold: Optional[float] = None
+    escalation_owner_id: Optional[int] = None
+    alert_enabled: Optional[bool] = None
     description: Optional[str] = None
 
 
@@ -1230,6 +1261,9 @@ class RiskAppetiteConfigResponse(BaseModel):
     category: str
     appetite_level: str
     max_acceptable_score: float
+    tolerance_threshold: Optional[float] = None
+    escalation_owner_id: Optional[int] = None
+    alert_enabled: bool = True
     description: Optional[str]
     updated_at: datetime
 
@@ -1333,3 +1367,124 @@ class DepartmentRiskSummary(BaseModel):
 class ControlEffectivenessUpdate(BaseModel):
     effectiveness_rating: str
     notes: Optional[str] = None
+
+
+# =============================================================================
+# Risk Mitigation Action Schemas
+# =============================================================================
+
+class RiskMitigationActionBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    action_type: str = "mitigate"
+    priority: str = "medium"
+    owner_id: Optional[int] = None
+    due_date: Optional[datetime] = None
+    expected_residual_reduction: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class RiskMitigationActionCreate(RiskMitigationActionBase):
+    risk_id: int
+
+
+class RiskMitigationActionUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    action_type: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    owner_id: Optional[int] = None
+    due_date: Optional[datetime] = None
+    expected_residual_reduction: Optional[float] = None
+    actual_residual_reduction: Optional[float] = None
+    evidence_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class RiskMitigationActionResponse(BaseModel):
+    id: int
+    risk_id: int
+    title: str
+    description: Optional[str]
+    action_type: str
+    status: str
+    priority: str
+    owner_id: Optional[int]
+    due_date: Optional[datetime]
+    completed_at: Optional[datetime]
+    expected_residual_reduction: Optional[float]
+    actual_residual_reduction: Optional[float]
+    evidence_id: Optional[int]
+    notes: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    owner_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# =============================================================================
+# Risk Audit Finding Link Schemas
+# =============================================================================
+
+class RiskAuditFindingLinkCreate(BaseModel):
+    risk_id: int
+    issue_id: int
+    notes: Optional[str] = None
+
+
+class RiskAuditFindingLinkResponse(BaseModel):
+    id: int
+    risk_id: int
+    issue_id: int
+    notes: Optional[str]
+    created_at: datetime
+    issue_title: Optional[str] = None
+    issue_severity: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# =============================================================================
+# Likelihood Impact Scale Schemas
+# =============================================================================
+
+class LikelihoodImpactScaleBase(BaseModel):
+    scale_type: str
+    level: int
+    label: str
+    description: Optional[str] = None
+    score_value: float
+    color: Optional[str] = None
+    is_default: bool = False
+
+
+class LikelihoodImpactScaleCreate(LikelihoodImpactScaleBase):
+    pass
+
+
+class LikelihoodImpactScaleUpdate(BaseModel):
+    label: Optional[str] = None
+    description: Optional[str] = None
+    score_value: Optional[float] = None
+    color: Optional[str] = None
+    is_default: Optional[bool] = None
+
+
+class LikelihoodImpactScaleResponse(BaseModel):
+    id: int
+    tenant_id: int
+    scale_type: str
+    level: int
+    label: str
+    description: Optional[str]
+    score_value: float
+    color: Optional[str]
+    is_default: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
