@@ -14,6 +14,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  BarChart3,
 } from 'lucide-react';
 import { useState } from 'react';
 import { clsx } from 'clsx';
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Frameworks', href: '/frameworks', icon: FileStack },
   { name: 'Controls', href: '/controls', icon: Shield },
   { name: 'Evidence', href: '/evidence', icon: FileCheck },
+  { name: 'ERM', href: '/erm', icon: BarChart3 },
   { name: 'Risks', href: '/risks', icon: AlertTriangle },
   { name: 'Governance', href: '/governance', icon: Scale },
   { name: 'Documents', href: '/documents', icon: FileText },
