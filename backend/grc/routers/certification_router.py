@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session, joinedload
 from ..models import (
     CertificationJourney, ControlImplementation, ImplementationEvidence,
     Framework, FrameworkControl, FrameworkDomain, ControlObjective,
-    FrameworkSubControl, Evidence, GRCUser, Tenant, CuratedEvidenceItem, get_db
+    FrameworkSubControl, Evidence, GRCUser, Tenant, CuratedEvidenceItem, 
+    CertificationPhase, get_db
 )
 from ..schemas import (
     CertificationJourneyCreate, CertificationJourneyUpdate, CertificationJourneyResponse,
@@ -177,6 +178,22 @@ def get_certification(
         ControlImplementation.journey_id == journey_id
     ).all()
     
+    phases = db.query(CertificationPhase).filter(
+        CertificationPhase.framework_id == journey.framework_id
+    ).order_by(CertificationPhase.phase_number).all()
+    
+    phases_list = [
+        {
+            "id": phase.id,
+            "phase_number": phase.phase_number,
+            "name": phase.name,
+            "description": phase.description,
+            "key_tasks": phase.key_tasks or [],
+            "deliverables": phase.deliverables or []
+        }
+        for phase in phases
+    ]
+    
     total = len(implementations)
     implemented = sum(1 for i in implementations if i.status in ["implemented", "verified"])
     verified = sum(1 for i in implementations if i.status == "verified")
@@ -194,6 +211,7 @@ def get_certification(
         "status": journey.status,
         "current_phase": journey.current_phase,
         "notes": journey.notes,
+        "phases": phases_list,
         "progress": {
             "total_controls": total,
             "implemented": implemented,
@@ -707,3 +725,33 @@ def get_gap_analysis(
         evidence_pending_review=evidence_pending_review,
         high_priority_gaps=high_priority_gaps
     )
+
+
+@router.get("/frameworks/{framework_id}/phases", response_model=List[dict])
+def get_framework_phases(
+    framework_id: int,
+    db: Session = Depends(get_db)
+):
+    framework = db.query(Framework).filter(Framework.id == framework_id).first()
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework not found"
+        )
+    
+    phases = db.query(CertificationPhase).filter(
+        CertificationPhase.framework_id == framework_id
+    ).order_by(CertificationPhase.phase_number).all()
+    
+    return [
+        {
+            "id": phase.id,
+            "framework_id": phase.framework_id,
+            "phase_number": phase.phase_number,
+            "name": phase.name,
+            "description": phase.description,
+            "key_tasks": phase.key_tasks or [],
+            "deliverables": phase.deliverables or []
+        }
+        for phase in phases
+    ]

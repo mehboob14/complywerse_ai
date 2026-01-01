@@ -148,18 +148,6 @@ const getCategoryFromDomain = (domainName: string): string => {
 type CategoryFilter = 'all' | 'organizational' | 'people' | 'physical' | 'technological';
 type StatusFilter = 'all' | 'implemented' | 'not_implemented' | 'partial' | 'in_progress' | 'verified';
 
-const CERTIFICATION_PHASES = [
-  { id: 1, name: 'ISMS Scoping', description: 'Define the scope and boundaries of the ISMS', tasks: ['Define organizational scope', 'Identify key stakeholders', 'Document scope boundaries', 'Identify exclusions'], deliverables: ['Scope Statement', 'Stakeholder Register', 'Scope Boundaries Document'] },
-  { id: 2, name: 'Context of Organization', description: 'Understand internal and external context', tasks: ['Analyze internal context', 'Analyze external context', 'Identify interested parties', 'Determine requirements'], deliverables: ['Context Analysis', 'Interested Parties Register', 'Requirements Matrix'] },
-  { id: 3, name: 'Risk Assessment & Treatment', description: 'Identify and assess information security risks', tasks: ['Develop risk methodology', 'Identify assets and risks', 'Assess risk likelihood and impact', 'Develop treatment plan'], deliverables: ['Risk Methodology', 'Risk Register', 'Risk Treatment Plan'] },
-  { id: 4, name: 'Statement of Applicability', description: 'Define applicable controls from Annex A', tasks: ['Review all Annex A controls', 'Determine applicability', 'Document justifications', 'Map to existing controls'], deliverables: ['SoA Document', 'Control Mapping', 'Justification Records'] },
-  { id: 5, name: 'Control Implementation', description: 'Implement required security controls', tasks: ['Implement technical controls', 'Implement organizational controls', 'Develop policies and procedures', 'Collect implementation evidence'], deliverables: ['Policy Documents', 'Procedure Guides', 'Implementation Evidence'] },
-  { id: 6, name: 'Training & Awareness', description: 'Train staff on ISMS and security awareness', tasks: ['Develop training program', 'Conduct awareness sessions', 'Track completion', 'Assess effectiveness'], deliverables: ['Training Materials', 'Attendance Records', 'Competency Assessments'] },
-  { id: 7, name: 'Internal Audit', description: 'Conduct internal ISMS audit', tasks: ['Plan internal audit', 'Execute audit procedures', 'Document findings', 'Track corrective actions'], deliverables: ['Audit Plan', 'Audit Report', 'Corrective Action Log'] },
-  { id: 8, name: 'Management Review', description: 'Executive review of ISMS performance', tasks: ['Prepare review materials', 'Conduct review meeting', 'Document decisions', 'Assign action items'], deliverables: ['Review Agenda', 'Meeting Minutes', 'Action Items'] },
-  { id: 9, name: 'Certification Audit', description: 'External certification body audit', tasks: ['Stage 1 documentation review', 'Address Stage 1 findings', 'Stage 2 implementation audit', 'Address non-conformities'], deliverables: ['Stage 1 Report', 'Stage 2 Report', 'Certificate'] },
-  { id: 10, name: 'Surveillance & Improvement', description: 'Ongoing monitoring and continuous improvement', tasks: ['Schedule surveillance audits', 'Monitor ISMS performance', 'Implement improvements', 'Maintain certification'], deliverables: ['Surveillance Schedule', 'Performance Reports', 'Improvement Log'] },
-];
 
 const ANNEX_A_DOMAINS = [
   { id: 'A.5', name: 'Organizational Controls', controlCount: 37 },
@@ -244,6 +232,24 @@ export default function CertificationJourneyPage() {
     },
     enabled: !!journeyId,
   });
+
+  const { data: certificationPhases, isLoading: phasesLoading } = useQuery({
+    queryKey: ['framework-phases', journey?.framework_id],
+    queryFn: async () => {
+      if (!journey?.framework_id) return [];
+      const response = await certificationsApi.getFrameworkPhases(journey.framework_id);
+      return response.data;
+    },
+    enabled: !!journey?.framework_id,
+  });
+
+  const phases = (certificationPhases || []).map((phase: any) => ({
+    id: phase.phase_number,
+    name: phase.name,
+    description: phase.description,
+    tasks: phase.key_tasks || [],
+    deliverables: phase.deliverables || [],
+  }));
 
   useEffect(() => {
     if (progress?.by_domain?.length && !selectedDomain) {
@@ -415,7 +421,11 @@ export default function CertificationJourneyPage() {
             Certification Timeline
           </h3>
           <div className="space-y-2">
-            {CERTIFICATION_PHASES.map((phase) => {
+            {phases.length === 0 && phasesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+              </div>
+            ) : phases.map((phase) => {
               const isExpanded = expandedPhases.includes(phase.id);
               const isCurrent = journey.current_phase === phase.id;
               const isCompleted = journey.current_phase > phase.id;
@@ -539,11 +549,15 @@ export default function CertificationJourneyPage() {
       <div className="mb-6 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white">Certification Phases</h3>
         <span className="text-sm text-slate-400">
-          Phase {journey.current_phase} of 10
+          Phase {journey.current_phase} of {phases.length || '...'}
         </span>
       </div>
       <div className="space-y-3">
-        {CERTIFICATION_PHASES.map((phase) => {
+        {phases.length === 0 && phasesLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+          </div>
+        ) : phases.map((phase) => {
           const isExpanded = expandedPhases.includes(phase.id);
           const isCurrent = journey.current_phase === phase.id;
           const isCompleted = journey.current_phase > phase.id;
@@ -1295,7 +1309,7 @@ export default function CertificationJourneyPage() {
             </button>
             <div>
               <h1 className="text-2xl font-bold text-white">{journey.name}</h1>
-              <p className="text-slate-400">Information Security Management System certification lifecycle</p>
+              <p className="text-slate-400">{journey?.framework?.name || 'Framework'} certification lifecycle</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -1326,7 +1340,7 @@ export default function CertificationJourneyPage() {
               <div>
                 <p className="text-sm text-slate-400">Current Phase</p>
                 <p className="text-lg font-semibold text-white">Phase {journey.current_phase}</p>
-                <p className="text-sm text-primary-400">{CERTIFICATION_PHASES[journey.current_phase - 1]?.name}</p>
+                <p className="text-sm text-primary-400">{phases[journey.current_phase - 1]?.name || 'Loading...'}</p>
               </div>
             </div>
           </div>

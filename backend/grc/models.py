@@ -831,6 +831,25 @@ class CertificationJourney(Base):
     )
 
 
+class CertificationPhase(Base):
+    """Framework-specific certification phases"""
+    __tablename__ = "grc_certification_phases"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    framework_id = Column(Integer, ForeignKey("grc_frameworks.id"), nullable=False, index=True)
+    phase_number = Column(Integer, nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    key_tasks = Column(JSON, default=[])
+    deliverables = Column(JSON, default=[])
+    
+    framework = relationship("Framework")
+    
+    __table_args__ = (
+        UniqueConstraint("framework_id", "phase_number", name="uq_framework_phase"),
+    )
+
+
 class ControlImplementation(Base):
     """Tracks implementation status of each control in a certification journey"""
     __tablename__ = "grc_control_implementations"
@@ -925,6 +944,9 @@ def init_grc_db():
     
     from .seed_control_evidence import seed_control_evidence
     seed_control_evidence()
+    
+    from .seed_certification_phases import seed_certification_phases
+    seed_certification_phases()
 
 
 def get_db():
