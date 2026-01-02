@@ -12,11 +12,10 @@ import {
   FileText,
   Server,
   ArrowRight,
-  Clock,
   AlertCircle,
-  Activity,
 } from 'lucide-react';
 import Link from 'next/link';
+import apiClient from '@/lib/api';
 
 interface DashboardStats {
   stats: {
@@ -47,9 +46,8 @@ export default function DashboardPage() {
   const { data, isLoading, error } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
-      const res = await fetch('/api/dashboard/stats', { credentials: 'include' });
-      if (!res.ok) throw new Error('Failed to fetch stats');
-      return res.json();
+      const response = await apiClient.get('/dashboard/stats');
+      return response.data;
     },
   });
 
@@ -117,12 +115,21 @@ export default function DashboardPage() {
   }
 
   if (error) {
+    // The apiClient will redirect to login on 401, so just show loading state while redirecting
     return (
-      <div className="alert-danger">
-        <AlertCircle size={20} />
-        <div>
-          <p className="font-medium">Failed to load dashboard</p>
-          <p className="text-sm opacity-80">Please try logging in again.</p>
+      <div className="space-y-6">
+        <div className="page-header">
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-description">Redirecting to login...</p>
+        </div>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="stat-card">
+              <div className="skeleton h-12 w-12 rounded-xl mb-4" />
+              <div className="skeleton h-8 w-20 mb-2" />
+              <div className="skeleton h-4 w-32" />
+            </div>
+          ))}
         </div>
       </div>
     );
