@@ -17,6 +17,7 @@ from .routers import (
 )
 from .modules.erm import erm_router
 from .modules.governance import governance_module_router
+from .modules.framework_upload import framework_upload_router
 
 app = FastAPI(
     title="Enterprise GRC Platform API",
@@ -48,6 +49,7 @@ app.include_router(certification_router)
 app.include_router(advanced_erm_router)
 app.include_router(erm_router)
 app.include_router(governance_module_router)
+app.include_router(framework_upload_router)
 
 
 @app.on_event("startup")

@@ -386,6 +386,69 @@ export const ermApi = {
   },
 };
 
+export const frameworkUploadApi = {
+  uploadFramework: (formData: FormData) => 
+    apiClient.post('/framework-upload/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  getFrameworks: (params?: { status?: string; search?: string; skip?: number; limit?: number }) => 
+    apiClient.get('/framework-upload/upload', { params }),
+  getFramework: (id: number) => 
+    apiClient.get(`/framework-upload/upload/${id}`),
+  deleteFramework: (id: number) => 
+    apiClient.delete(`/framework-upload/upload/${id}`),
+  extractText: (id: number) => 
+    apiClient.post(`/framework-upload/upload/${id}/extract-text`),
+  parseFramework: (id: number) => 
+    apiClient.post(`/framework-upload/parser/${id}/parse`),
+  getParsedControls: (frameworkId: number, params?: { status?: string; category?: string; search?: string; skip?: number; limit?: number }) => 
+    apiClient.get(`/framework-upload/parser/${frameworkId}/controls`, { params }),
+  updateControl: (id: number, data: Record<string, unknown>) => 
+    apiClient.put(`/framework-upload/parser/controls/${id}`, data),
+  verifyControl: (id: number) => 
+    apiClient.post(`/framework-upload/parser/controls/${id}/verify`),
+  analyzeAlignment: (frameworkId: number) => 
+    apiClient.post(`/framework-upload/alignment/${frameworkId}/analyze`),
+  getAlignments: (frameworkId: number, params?: { alignment_type?: string; is_verified?: boolean; skip?: number; limit?: number }) => 
+    apiClient.get(`/framework-upload/alignment/${frameworkId}`, { params }),
+  getAlignmentSummary: (frameworkId: number) => 
+    apiClient.get(`/framework-upload/alignment/summary/${frameworkId}`),
+  confirmAlignment: (alignmentId: number) => 
+    apiClient.post(`/framework-upload/alignment/${alignmentId}/confirm`),
+  updateAlignment: (alignmentId: number, data: { alignment_type?: string; normalized_control_id?: number; framework_control_id?: number; match_reason?: string }) => 
+    apiClient.put(`/framework-upload/alignment/${alignmentId}`, data),
+  createNewControls: (frameworkId: number) => 
+    apiClient.post(`/framework-upload/alignment/${frameworkId}/create-new-controls`),
+  listFrameworks: (params?: { status?: string; search?: string; skip?: number; limit?: number }) => 
+    apiClient.get('/framework-upload/upload', { params }),
+  createAssessment: (data: { uploaded_framework_id: number; name: string; description?: string; target_completion_date?: string }) => 
+    apiClient.post('/framework-upload/assessment', data),
+  getAssessments: (params?: { uploaded_framework_id?: number; status?: string; skip?: number; limit?: number }) => 
+    apiClient.get('/framework-upload/assessment', { params }),
+  getAssessment: (id: number) => 
+    apiClient.get(`/framework-upload/assessment/${id}`),
+  getAssessmentItems: (assessmentId: number, params?: { status?: string; skip?: number; limit?: number }) => 
+    apiClient.get(`/framework-upload/assessment/${assessmentId}/items`, { params }),
+  updateAssessmentItem: (id: number, data: Record<string, unknown>) => 
+    apiClient.put(`/framework-upload/assessment/items/${id}`, data),
+  getAssessmentDashboard: (id: number) => 
+    apiClient.get(`/framework-upload/assessment/${id}/dashboard`),
+  uploadEvidence: (itemId: number, formData: FormData) => 
+    apiClient.post(`/framework-upload/evidence/item/${itemId}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  getItemEvidence: (itemId: number) => 
+    apiClient.get(`/framework-upload/evidence/item/${itemId}`),
+  getEvidenceTypes: () => 
+    apiClient.get('/framework-upload/evidence/types'),
+  updateAssessment: (id: number, data: Record<string, unknown>) => 
+    apiClient.put(`/framework-upload/assessment/${id}`, data),
+  createRemediation: (itemId: number, data: { title: string; description?: string; priority?: string; due_date?: string; owner_id?: number; estimated_effort?: string }) => 
+    apiClient.post(`/framework-upload/assessment/items/${itemId}/remediation`, data),
+  getRemediations: (itemId: number) => 
+    apiClient.get(`/framework-upload/assessment/items/${itemId}/remediation`),
+};
+
 export const advancedErmApi = {
   // KRI endpoints
   getKRIs: (params?: { risk_id?: number; status_filter?: string; is_active?: boolean }) => 

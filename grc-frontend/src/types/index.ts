@@ -901,3 +901,155 @@ export interface PendingApprovalItem {
   owner_name?: string;
   days_overdue?: number;
 }
+
+export type FrameworkUploadStatus = 'pending' | 'processing' | 'text_extracted' | 'parsed' | 'aligned' | 'completed' | 'failed';
+export type ParsedControlStatus = 'pending_review' | 'verified' | 'rejected';
+export type AssessmentStatus = 'draft' | 'in_progress' | 'completed' | 'archived';
+export type AssessmentItemStatus = 'not_started' | 'in_progress' | 'compliant' | 'partially_compliant' | 'non_compliant' | 'not_applicable';
+
+export interface UploadedFramework {
+  id: number;
+  tenant_id: number;
+  filename: string;
+  original_filename: string;
+  file_type: string;
+  file_size: number;
+  framework_name?: string;
+  framework_version?: string;
+  source?: string;
+  status: FrameworkUploadStatus;
+  extracted_text?: string;
+  extracted_text_length?: number;
+  control_count?: number;
+  alignment_count?: number;
+  error_message?: string;
+  uploaded_by?: number;
+  uploaded_at: string;
+  processed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ParsedFrameworkControl {
+  id: number;
+  uploaded_framework_id: number;
+  control_id: string;
+  control_title: string;
+  control_description?: string;
+  control_category?: string;
+  parent_control_id?: string;
+  hierarchy_level: number;
+  implementation_guidance?: string;
+  testing_procedures?: string;
+  evidence_requirements?: string;
+  control_type?: string;
+  is_mandatory: boolean;
+  status: ParsedControlStatus;
+  confidence_score?: number;
+  verified_by?: number;
+  verified_at?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ControlEvidenceMapping {
+  id: number;
+  parsed_control_id: number;
+  evidence_type: string;
+  evidence_description?: string;
+  is_required: boolean;
+  sample_evidence?: string;
+  created_at: string;
+}
+
+export interface FrameworkControlAlignment {
+  id: number;
+  uploaded_framework_id: number;
+  parsed_control_id: number;
+  existing_control_id?: number;
+  existing_control_code?: string;
+  existing_control_name?: string;
+  alignment_type: 'exact' | 'partial' | 'related' | 'no_match';
+  similarity_score?: number;
+  alignment_notes?: string;
+  is_verified: boolean;
+  verified_by?: number;
+  verified_at?: string;
+  created_at: string;
+  updated_at: string;
+  parsed_control?: ParsedFrameworkControl;
+}
+
+export interface FrameworkAssessment {
+  id: number;
+  tenant_id: number;
+  uploaded_framework_id: number;
+  name: string;
+  description?: string;
+  status: AssessmentStatus;
+  assessment_date?: string;
+  due_date?: string;
+  assessor_id?: number;
+  assessor_name?: string;
+  total_controls: number;
+  assessed_controls: number;
+  compliant_count: number;
+  partially_compliant_count: number;
+  non_compliant_count: number;
+  not_applicable_count: number;
+  completion_percentage: number;
+  overall_score?: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  uploaded_framework?: UploadedFramework;
+}
+
+export interface AssessmentItem {
+  id: number;
+  assessment_id: number;
+  parsed_control_id: number;
+  status: AssessmentItemStatus;
+  compliance_notes?: string;
+  gap_description?: string;
+  remediation_plan?: string;
+  remediation_due_date?: string;
+  remediation_owner_id?: number;
+  remediation_owner_name?: string;
+  evidence_count: number;
+  assessed_by?: number;
+  assessed_at?: string;
+  created_at: string;
+  updated_at: string;
+  parsed_control?: ParsedFrameworkControl;
+}
+
+export interface AssessmentEvidence {
+  id: number;
+  assessment_item_id: number;
+  filename: string;
+  original_filename: string;
+  file_type: string;
+  file_size: number;
+  description?: string;
+  uploaded_by?: number;
+  uploaded_at: string;
+  created_at: string;
+}
+
+export interface AssessmentRemediation {
+  id: number;
+  assessment_item_id: number;
+  title: string;
+  description?: string;
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  status: 'open' | 'in_progress' | 'completed' | 'cancelled';
+  owner_id?: number;
+  owner_name?: string;
+  due_date?: string;
+  completed_at?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
