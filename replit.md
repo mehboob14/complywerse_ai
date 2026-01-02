@@ -159,6 +159,60 @@ grc-frontend/src/app/(dashboard)/governance/
 - `grc_document_regulatory_links` - Links to regulatory requirements
 - `grc_document_asset_links` - Links to IT assets
 
+## Framework Upload Module Structure
+
+The Framework Upload module enables intelligent parsing of regulatory and standards documents (PDF/DOCX) using AI to extract structured controls.
+
+### Key Capabilities
+- **Document Upload** - Upload PDF/DOCX regulatory documents
+- **AI-Powered Parsing** - GPT extracts controls with domain, category, priority, mandatory flags
+- **Evidence Mapping** - Auto-suggests required evidence types per control
+- **Control Alignment** - Match parsed controls to existing control library (exact/partial/new)
+- **Compliance Assessment** - Full assessment workflow with status tracking
+- **Evidence Collection** - Upload and review evidence for each control
+- **Remediation Tracking** - Track gaps and remediation actions
+- **Multi-Tenant Sharing** - Frameworks can be shared across tenants
+
+### Backend (`/grc/framework-upload/*`)
+```
+backend/grc/modules/framework_upload/
+├── router.py              # Main framework upload router
+└── routers/
+    ├── upload.py          # File upload, text extraction
+    ├── parser.py          # AI-powered control extraction (OpenAI GPT)
+    ├── alignment.py       # Control matching/alignment
+    ├── assessment.py      # Compliance assessment management
+    └── evidence.py        # Evidence upload and linking
+```
+
+### Frontend (`/framework-upload/*`)
+```
+grc-frontend/src/app/(dashboard)/framework-upload/
+├── layout.tsx              # Tabbed navigation (Upload, Controls, Alignment, Assessment)
+├── page.tsx                # Drag-and-drop upload with frameworks list
+├── controls/page.tsx       # Parsed controls review with edit/verify
+├── alignment/page.tsx      # Control matching with confirm/create actions
+└── assessment/page.tsx     # Compliance assessment dashboard
+```
+
+### Framework Upload API Endpoints
+- `GET /grc/framework-upload` - Module info
+- **Upload**: `/grc/framework-upload/upload/*` - Upload, list, extract text
+- **Parser**: `/grc/framework-upload/parser/*` - AI parsing, CRUD for parsed controls
+- **Alignment**: `/grc/framework-upload/alignment/*` - Analyze, confirm, create new controls
+- **Assessment**: `/grc/framework-upload/assessment/*` - Create/manage assessments, items, remediations
+- **Evidence**: `/grc/framework-upload/evidence/*` - Upload, review evidence
+
+### Framework Upload Database Tables
+- `grc_uploaded_frameworks` - Uploaded document metadata with parsing status
+- `grc_parsed_framework_controls` - AI-extracted controls with domains/categories
+- `grc_control_evidence_mappings` - Expected evidence types per control
+- `grc_framework_control_alignments` - Links to existing control library
+- `grc_framework_assessments` - Compliance assessment records
+- `grc_assessment_items` - Individual control assessment status
+- `grc_assessment_evidence` - Uploaded evidence files
+- `grc_assessment_remediations` - Gap tracking and remediation actions
+
 ## External Dependencies
 - **PostgreSQL**: Primary database for all application data, including multi-tenant schemas.
 - **FastAPI**: Python web framework used for building the backend API.
@@ -167,3 +221,4 @@ grc-frontend/src/app/(dashboard)/governance/
 - **TypeScript**: Superset of JavaScript used for frontend development.
 - **Tailwind CSS**: Utility-first CSS framework for styling the frontend.
 - **React Query**: Library for data fetching, caching, and state management in React applications.
+- **OpenAI (via Replit AI Integrations)**: GPT-powered document parsing and control extraction.

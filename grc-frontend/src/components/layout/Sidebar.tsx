@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart3,
+  Upload,
 } from 'lucide-react';
 import { useState } from 'react';
 import { clsx } from 'clsx';
@@ -22,6 +23,7 @@ import { clsx } from 'clsx';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Frameworks', href: '/frameworks', icon: FileStack },
+  { name: 'Framework Upload', href: '/framework-upload', icon: Upload },
   { name: 'Controls', href: '/controls', icon: Shield },
   { name: 'Evidence', href: '/evidence', icon: FileCheck },
   { name: 'ERM', href: '/erm', icon: BarChart3 },
