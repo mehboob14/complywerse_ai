@@ -149,8 +149,6 @@ def parse_with_openai(text: str, framework_name: str) -> List[dict]:
             detail="OpenAI integration not configured"
         )
     
-    # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
-    # do not change this unless explicitly requested by the user
     client = OpenAI(
         api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
         base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
@@ -197,7 +195,7 @@ Return a JSON object with a "controls" array containing all extracted controls. 
 
     try:
         response = client.chat.completions.create(
-            model="gpt-5",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a compliance expert that extracts structured control requirements from regulatory documents. Always respond with valid JSON."},
                 {"role": "user", "content": prompt}
