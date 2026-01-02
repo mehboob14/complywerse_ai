@@ -39,6 +39,10 @@ import {
   RiskMitigationAction,
   RiskAuditFindingLink,
   LikelihoodImpactScale,
+  GovernanceDocument,
+  GovernanceDocumentVersion,
+  DocumentApprovalStep,
+  GovernanceDashboard,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
@@ -150,6 +154,41 @@ export const governanceApi = {
   
   getIssues: () => apiClient.get<Issue[]>('/governance/issues'),
   createIssue: (data: Partial<Issue>) => apiClient.post<Issue>('/governance/issues', data),
+
+  getDocuments: (params?: { doc_type?: string; status?: string; owner_id?: number; search?: string; sort_by?: string; sort_order?: string; skip?: number; limit?: number }) =>
+    apiClient.get<GovernanceDocument[]>('/governance/documents', { params }),
+  getDocument: (id: number) => apiClient.get<GovernanceDocument>(`/governance/documents/${id}`),
+  createDocument: (data: Partial<GovernanceDocument>) =>
+    apiClient.post<GovernanceDocument>('/governance/documents', data),
+  updateDocument: (id: number, data: Partial<GovernanceDocument>) =>
+    apiClient.put<GovernanceDocument>(`/governance/documents/${id}`, data),
+  deleteDocument: (id: number) => apiClient.delete(`/governance/documents/${id}`),
+  getDashboard: () => apiClient.get<GovernanceDashboard>('/governance/dashboard'),
+  getDashboardSummary: () => apiClient.get('/governance/dashboard/summary'),
+  getExpiringSoon: (days: number = 30) => apiClient.get(`/governance/dashboard/expiring-soon?days=${days}`),
+  getDashboardPendingApprovals: () => apiClient.get('/governance/dashboard/pending-approvals'),
+  getDashboardOverdueReviews: () => apiClient.get('/governance/dashboard/overdue-reviews'),
+  getRecentlyPublished: (limit: number = 10) => apiClient.get(`/governance/dashboard/recently-published?limit=${limit}`),
+  getDocumentVersions: (documentId: number) =>
+    apiClient.get<GovernanceDocumentVersion[]>(`/governance/versions/document/${documentId}`),
+  getPendingApprovals: (params?: { include_delegated?: boolean; skip?: number; limit?: number }) =>
+    apiClient.get('/governance/workflows/pending', { params }),
+  getWorkflowDashboard: () => apiClient.get('/governance/workflows/dashboard'),
+  getOverdueApprovals: (params?: { skip?: number; limit?: number }) =>
+    apiClient.get('/governance/workflows/overdue', { params }),
+  getUpcomingReviews: (params?: { days?: number; doc_type?: string }) => 
+    apiClient.get('/governance/reviews/upcoming', { params }),
+  getOverdueReviews: (params?: { doc_type?: string }) => 
+    apiClient.get('/governance/reviews/overdue', { params }),
+  getReviewStatistics: () => apiClient.get('/governance/reviews/statistics'),
+  completeReview: (documentId: number, data?: { notes?: string; next_review_date?: string }) => 
+    apiClient.post(`/governance/reviews/${documentId}/complete`, data || {}),
+  getReviewCalendar: (params?: { year?: number; month?: number; group_by?: string }) =>
+    apiClient.get('/governance/reviews/calendar', { params }),
+  approveStep: (stepId: number, comments?: string) =>
+    apiClient.post(`/governance/workflows/steps/${stepId}/approve`, { comments }),
+  rejectStep: (stepId: number, comments?: string) =>
+    apiClient.post(`/governance/workflows/steps/${stepId}/reject`, { comments }),
 };
 
 export const documentsApi = {

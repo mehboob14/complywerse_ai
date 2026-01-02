@@ -807,3 +807,97 @@ export interface IncidentDashboard {
   avg_resolution_time_days: number;
   recent_incidents: Array<{id: number; title: string; severity: string; status: string}>;
 }
+
+export type GovernanceDocumentType = 'policy' | 'procedure' | 'standard' | 'guideline' | 'template' | 'other';
+export type GovernanceDocumentStatus = 'draft' | 'pending_review' | 'pending_approval' | 'approved' | 'published' | 'retired' | 'archived';
+
+export interface GovernanceDocument {
+  id: number;
+  tenant_id: number;
+  title: string;
+  description?: string;
+  document_type: GovernanceDocumentType;
+  category?: string;
+  owner_id?: number;
+  owner_name?: string;
+  department?: string;
+  status: GovernanceDocumentStatus;
+  version_number: string;
+  effective_date?: string;
+  next_review_date?: string;
+  review_frequency_months?: number;
+  content?: string;
+  file_path?: string;
+  is_mandatory: boolean;
+  requires_acknowledgment: boolean;
+  acknowledgment_count?: number;
+  approval_workflow_id?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GovernanceDocumentVersion {
+  id: number;
+  document_id: number;
+  version_number: string;
+  changes_summary?: string;
+  content?: string;
+  file_path?: string;
+  created_by?: number;
+  created_by_name?: string;
+  approved_by?: number;
+  approved_at?: string;
+  is_current: boolean;
+  created_at: string;
+}
+
+export interface DocumentApprovalStep {
+  id: number;
+  workflow_id: number;
+  step_order: number;
+  approver_id?: number;
+  approver_name?: string;
+  approver_role?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'skipped';
+  comments?: string;
+  decided_at?: string;
+  due_date?: string;
+  document_id?: number;
+  document_title?: string;
+  created_at: string;
+}
+
+export interface GovernanceDashboard {
+  total_documents: number;
+  by_type: Record<string, number>;
+  by_status: Record<string, number>;
+  pending_approvals: number;
+  overdue_reviews: number;
+  upcoming_reviews: number;
+  recently_updated: Array<{id: number; title: string; updated_at: string}>;
+  expiring_soon: Array<{id: number; title: string; next_review_date: string}>;
+}
+
+export interface WorkflowDashboard {
+  pending_my_approval: number;
+  pending_all: number;
+  overdue: number;
+  approved_today: number;
+  rejected_today: number;
+  documents_awaiting_approval: number;
+}
+
+export interface PendingApprovalItem {
+  step_id: number;
+  document_id: number;
+  document_title: string;
+  document_code?: string;
+  doc_type: string;
+  step_sequence: number;
+  step_name: string;
+  requested_at?: string;
+  due_date?: string;
+  is_overdue: boolean;
+  owner_name?: string;
+  days_overdue?: number;
+}

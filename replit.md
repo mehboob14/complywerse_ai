@@ -93,6 +93,72 @@ grc-frontend/src/app/(dashboard)/erm/
 - `grc_risk_appetite_config` - Risk appetite configuration (with tolerance thresholds)
 - `grc_risk_reports` - Generated reports
 
+## Governance Module Structure
+
+The Governance module provides full lifecycle management for governance artifacts with version control, approval workflows, and cross-module integration.
+
+### Governance Document Types
+- **Policy** - High-level organizational directives
+- **Standard** - Technical or operational requirements
+- **Procedure** - Step-by-step instructions
+- **Guideline** - Recommended practices
+- **Charter** - Committee/team authorization documents
+- **Framework** - Structural governance documents
+
+### Governance Document Statuses
+- `draft` - Initial creation
+- `pending_review` - Under review
+- `pending_approval` - Awaiting approval
+- `approved` - Approved by designated approvers
+- `published` - Published and effective
+- `expired` - Past expiry date
+- `archived` - No longer active
+- `exception_applied` - Has exception applied
+
+### Backend (`/grc/governance/*`)
+```
+backend/grc/modules/governance/
+├── router.py              # Main governance router
+└── routers/
+    ├── documents.py       # Document CRUD, filtering, hierarchy, bulk operations
+    ├── versions.py        # Version control, compare, rollback
+    ├── workflows.py       # Approval workflow management
+    ├── reviews.py         # Review scheduling, overdue tracking
+    ├── mappings.py        # Cross-module links (risks, controls, assets)
+    └── dashboard.py       # Executive KPIs, stats, analytics
+```
+
+### Frontend (`/governance/*`)
+```
+grc-frontend/src/app/(dashboard)/governance/
+├── layout.tsx              # Tabbed navigation (Overview, Documents, Workflows, Reviews)
+├── page.tsx                # Executive dashboard with KPIs
+├── documents/page.tsx      # Document library with filters, CRUD
+├── workflows/page.tsx      # Pending approvals, approve/reject actions
+└── reviews/page.tsx        # Review calendar, overdue alerts
+```
+
+### Governance API Endpoints
+- `GET /grc/governance` - Module info
+- **Documents**: `/grc/governance/documents/*` - CRUD, filtering, hierarchy, bulk operations
+- **Type-specific**: `/grc/governance/documents/policies`, `/standards`, `/procedures`, `/guidelines`, `/charters`, `/frameworks`
+- **Versions**: `/grc/governance/versions/*` - Version history, compare, rollback
+- **Workflows**: `/grc/governance/workflows/*` - Pending approvals, approve, reject, delegate
+- **Reviews**: `/grc/governance/reviews/*` - Upcoming, overdue, complete review
+- **Mappings**: `/grc/governance/mappings/*` - Link to risks, controls, assets, regulatory
+- **Dashboard**: `/grc/governance/dashboard/*` - Summary stats, KPIs
+
+### Governance Database Tables
+- `grc_governance_documents` - Document library with hierarchy, lifecycle, regulatory scope
+- `grc_governance_document_versions` - Version history with change tracking
+- `grc_document_reviewers` - Assigned reviewers/approvers
+- `grc_document_approval_steps` - Multi-step approval workflow
+- `grc_document_audit_logs` - Complete audit trail
+- `grc_document_control_links` - Links to normalized controls
+- `grc_document_risk_links` - Links to risks
+- `grc_document_regulatory_links` - Links to regulatory requirements
+- `grc_document_asset_links` - Links to IT assets
+
 ## External Dependencies
 - **PostgreSQL**: Primary database for all application data, including multi-tenant schemas.
 - **FastAPI**: Python web framework used for building the backend API.
