@@ -18,6 +18,7 @@ import {
   File,
   ChevronDown,
   ChevronUp,
+  CloudUpload,
 } from 'lucide-react';
 
 interface UploadedFramework {
@@ -58,13 +59,13 @@ const FRAMEWORK_TYPES = [
   { value: 'internal', label: 'Internal' },
 ];
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: React.ComponentType<{ className?: string }> }> = {
-  uploaded: { label: 'Uploaded', color: 'text-blue-400', bgColor: 'bg-blue-500/20', icon: Clock },
-  text_extracted: { label: 'Text Extracted', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20', icon: FileText },
-  parsing: { label: 'Parsing...', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20', icon: Loader2 },
-  parsed: { label: 'Parsed', color: 'text-green-400', bgColor: 'bg-green-500/20', icon: CheckCircle },
-  failed: { label: 'Failed', color: 'text-red-400', bgColor: 'bg-red-500/20', icon: XCircle },
-  extraction_failed: { label: 'Extraction Failed', color: 'text-red-400', bgColor: 'bg-red-500/20', icon: XCircle },
+const STATUS_CONFIG: Record<string, { label: string; badgeClass: string; icon: React.ComponentType<{ className?: string }> }> = {
+  uploaded: { label: 'Uploaded', badgeClass: 'badge-info', icon: Clock },
+  text_extracted: { label: 'Text Extracted', badgeClass: 'badge-info', icon: FileText },
+  parsing: { label: 'Parsing...', badgeClass: 'badge-warning', icon: Loader2 },
+  parsed: { label: 'Parsed', badgeClass: 'badge-success', icon: CheckCircle },
+  failed: { label: 'Failed', badgeClass: 'badge-danger', icon: XCircle },
+  extraction_failed: { label: 'Extraction Failed', badgeClass: 'badge-danger', icon: XCircle },
 };
 
 export default function FrameworkUploadPage() {
@@ -203,7 +204,7 @@ export default function FrameworkUploadPage() {
     const config = STATUS_CONFIG[status] || STATUS_CONFIG.uploaded;
     const IconComponent = config.icon;
     return (
-      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${config.bgColor} ${config.color}`}>
+      <span className={`${config.badgeClass}`}>
         <IconComponent className={`h-3.5 w-3.5 ${status === 'parsing' ? 'animate-spin' : ''}`} />
         {config.label}
       </span>
@@ -214,29 +215,42 @@ export default function FrameworkUploadPage() {
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-400">
-        <AlertCircle className="h-12 w-12" />
-        <p>Failed to load uploaded frameworks</p>
+      <div className="alert-danger">
+        <AlertCircle className="h-5 w-5" />
+        <div>
+          <p className="font-medium">Failed to load uploaded frameworks</p>
+          <p className="text-sm opacity-80">Please try refreshing the page.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-slate-700 bg-slate-800 p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">Upload New Framework</h2>
+    <div className="space-y-8">
+      <div className="page-header">
+        <h1 className="page-title">Framework Upload</h1>
+        <p className="page-description">Upload and parse regulatory framework documents</p>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">Upload New Framework</h2>
+            <p className="card-description">Upload PDF or DOCX files for AI-powered parsing</p>
+          </div>
+        </div>
         
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`mb-4 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors ${
+          className={`group relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 transition-all duration-200 ${
             isDragging
-              ? 'border-primary-500 bg-primary-500/10'
+              ? 'border-primary-500 bg-primary-500/10 shadow-lg shadow-primary-500/10'
               : selectedFile
-              ? 'border-green-500 bg-green-500/10'
-              : 'border-slate-600 hover:border-slate-500 hover:bg-slate-700/50'
+              ? 'border-emerald-500 bg-emerald-500/10'
+              : 'border-slate-600 hover:border-primary-500/50 hover:bg-slate-800/50'
           }`}
         >
           <input
@@ -247,46 +261,60 @@ export default function FrameworkUploadPage() {
             className="hidden"
           />
           {selectedFile ? (
-            <>
-              <File className="mb-2 h-12 w-12 text-green-400" />
-              <p className="text-center text-white">{selectedFile.name}</p>
-              <p className="text-sm text-slate-400">{formatFileSize(selectedFile.size)}</p>
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-emerald-500/20">
+                <File className="h-8 w-8 text-emerald-400" />
+              </div>
+              <p className="text-lg font-medium text-white">{selectedFile.name}</p>
+              <p className="mt-1 text-sm text-slate-400">{formatFileSize(selectedFile.size)}</p>
               <button
                 onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
-                className="mt-2 text-sm text-red-400 hover:text-red-300"
+                className="mt-3 text-sm font-medium text-rose-400 hover:text-rose-300 transition-colors"
               >
-                Remove
+                Remove file
               </button>
-            </>
+            </div>
           ) : (
-            <>
-              <Upload className="mb-2 h-12 w-12 text-slate-400" />
-              <p className="text-center text-white">Drag and drop a file here, or click to browse</p>
-              <p className="mt-1 text-sm text-slate-400">Supported formats: PDF, DOCX</p>
-            </>
+            <div className="text-center">
+              <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl transition-colors ${
+                isDragging ? 'bg-primary-500/20' : 'bg-slate-800 group-hover:bg-slate-700'
+              }`}>
+                <CloudUpload className={`h-8 w-8 transition-colors ${
+                  isDragging ? 'text-primary-400' : 'text-slate-400 group-hover:text-primary-400'
+                }`} />
+              </div>
+              <p className="text-lg font-medium text-white">
+                {isDragging ? 'Drop your file here' : 'Drag and drop a file here'}
+              </p>
+              <p className="mt-1 text-sm text-slate-400">or click to browse</p>
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <span className="badge-neutral">PDF</span>
+                <span className="badge-neutral">DOCX</span>
+              </div>
+            </div>
           )}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-300">
-              Framework Name <span className="text-red-400">*</span>
+            <label className="label">
+              Framework Name <span className="text-rose-400">*</span>
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., ISO 27001:2022"
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="input"
             />
           </div>
           
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-300">Framework Type</label>
+            <label className="label">Framework Type</label>
             <select
               value={formData.framework_type}
               onChange={(e) => setFormData({ ...formData, framework_type: e.target.value })}
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="select"
             >
               {FRAMEWORK_TYPES.map((type) => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -295,47 +323,47 @@ export default function FrameworkUploadPage() {
           </div>
           
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-300">Source Organization</label>
+            <label className="label">Source Organization</label>
             <input
               type="text"
               value={formData.source_organization}
               onChange={(e) => setFormData({ ...formData, source_organization: e.target.value })}
               placeholder="e.g., ISO, NIST, PCI SSC"
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="input"
             />
           </div>
           
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-300">Version</label>
+            <label className="label">Version</label>
             <input
               type="text"
               value={formData.version}
               onChange={(e) => setFormData({ ...formData, version: e.target.value })}
               placeholder="e.g., 4.0, 2022"
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="input"
             />
           </div>
           
           <div className="md:col-span-2">
-            <label className="mb-1.5 block text-sm font-medium text-slate-300">Description</label>
+            <label className="label">Description</label>
             <input
               type="text"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Brief description of the framework"
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="input"
             />
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-6 flex items-center justify-between border-t border-slate-700/50 pt-6">
           <p className="text-sm text-slate-400">
-            <span className="text-red-400">*</span> Required field
+            <span className="text-rose-400">*</span> Required field
           </p>
           <button
             onClick={handleUpload}
             disabled={!selectedFile || !formData.name.trim() || uploadMutation.isPending}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-primary"
           >
             {uploadMutation.isPending ? (
               <>
@@ -352,18 +380,21 @@ export default function FrameworkUploadPage() {
         </div>
 
         {uploadMutation.isError && (
-          <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
-            Failed to upload framework. Please try again.
+          <div className="alert-danger mt-4">
+            <AlertCircle className="h-5 w-5 flex-shrink-0" />
+            <span>Failed to upload framework. Please try again.</span>
           </div>
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800">
-        <div className="border-b border-slate-700 p-4">
-          <h2 className="text-lg font-semibold text-white">Uploaded Frameworks</h2>
-          <p className="text-sm text-slate-400">
-            {frameworks.length} framework{frameworks.length !== 1 ? 's' : ''} uploaded
-          </p>
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">Uploaded Frameworks</h2>
+            <p className="card-description">
+              {frameworks.length} framework{frameworks.length !== 1 ? 's' : ''} uploaded
+            </p>
+          </div>
         </div>
 
         {isLoading ? (
@@ -371,51 +402,55 @@ export default function FrameworkUploadPage() {
             <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
           </div>
         ) : frameworks.length === 0 ? (
-          <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-400">
-            <FileText className="h-12 w-12" />
-            <p>No frameworks uploaded yet</p>
-            <p className="text-sm">Upload a framework document above to get started</p>
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <FileText className="h-8 w-8 text-slate-500" />
+            </div>
+            <p className="empty-state-title">No frameworks uploaded yet</p>
+            <p className="empty-state-description">
+              Upload a framework document above to get started with AI-powered parsing
+            </p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-700">
+          <div className="divide-y divide-slate-700/50">
             {frameworks.map((framework) => (
-              <div key={framework.id} className="p-4">
+              <div key={framework.id} className="p-4 transition-colors hover:bg-slate-800/30 first:rounded-t-lg last:rounded-b-lg">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex-1 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-medium text-white">{framework.name}</h3>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <h3 className="text-base font-semibold text-white truncate">{framework.name}</h3>
                       {getStatusBadge(framework.upload_status)}
                       {framework.framework_type && (
-                        <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                        <span className="badge-neutral">
                           {FRAMEWORK_TYPES.find(t => t.value === framework.framework_type)?.label || framework.framework_type}
                         </span>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
-                      <span>File: {framework.file_name}</span>
-                      <span>Type: {framework.file_type.toUpperCase()}</span>
-                      <span>Size: {formatFileSize(framework.file_size)}</span>
-                      <span>Uploaded: {formatDate(framework.created_at)}</span>
+                      <span className="flex items-center gap-1">
+                        <File className="h-3.5 w-3.5" />
+                        {framework.file_name}
+                      </span>
+                      <span>{framework.file_type.toUpperCase()}</span>
+                      <span>{formatFileSize(framework.file_size)}</span>
+                      <span>Uploaded {formatDate(framework.created_at)}</span>
                       {framework.parsed_controls_count > 0 && (
-                        <span className="text-green-400">
+                        <span className="text-emerald-400 font-medium">
                           {framework.parsed_controls_count} controls parsed
                         </span>
                       )}
                     </div>
                     {framework.description && (
-                      <p className="text-sm text-slate-400">{framework.description}</p>
+                      <p className="mt-2 text-sm text-slate-400">{framework.description}</p>
                     )}
                     {framework.parse_error && (
-                      <p className="text-sm text-red-400">Error: {framework.parse_error}</p>
+                      <p className="mt-2 text-sm text-rose-400">Error: {framework.parse_error}</p>
                     )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
                     {framework.upload_status === 'parsed' && framework.parsed_controls_count > 0 && (
-                      <Link
-                        href={`/framework-upload/controls?framework=${framework.id}`}
-                        className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700"
-                      >
+                      <Link href={`/framework-upload/controls?framework=${framework.id}`} className="btn-success btn-sm">
                         <Eye className="h-4 w-4" />
                         View Controls
                       </Link>
@@ -425,7 +460,7 @@ export default function FrameworkUploadPage() {
                       <button
                         onClick={() => extractTextMutation.mutate(framework.id)}
                         disabled={extractTextMutation.isPending}
-                        className="flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-cyan-700 disabled:opacity-50"
+                        className="btn bg-cyan-600 px-3 py-1.5 text-sm text-white hover:bg-cyan-500 focus:ring-cyan-500 disabled:opacity-50"
                       >
                         {extractTextMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -440,7 +475,7 @@ export default function FrameworkUploadPage() {
                       <button
                         onClick={() => parseMutation.mutate(framework.id)}
                         disabled={parseMutation.isPending}
-                        className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
+                        className="btn-primary btn-sm"
                       >
                         {parseMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -452,16 +487,16 @@ export default function FrameworkUploadPage() {
                     )}
 
                     {framework.upload_status === 'parsing' && (
-                      <div className="flex items-center gap-2 text-yellow-400">
+                      <div className="flex items-center gap-2 text-amber-400">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-sm">Parsing in progress...</span>
+                        <span className="text-sm font-medium">Parsing in progress...</span>
                       </div>
                     )}
 
                     <button
                       onClick={() => handleDelete(framework)}
                       disabled={deleteMutation.isPending}
-                      className="flex items-center gap-1.5 rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-red-600 hover:text-white disabled:opacity-50"
+                      className="btn-secondary btn-sm hover:bg-rose-600 hover:border-rose-600 hover:text-white"
                     >
                       <Trash2 className="h-4 w-4" />
                       Delete
@@ -473,7 +508,7 @@ export default function FrameworkUploadPage() {
                   <div className="mt-4">
                     <button
                       onClick={() => setExpandedTextPreview(expandedTextPreview === framework.id ? null : framework.id)}
-                      className="flex items-center gap-1 text-sm text-slate-400 hover:text-white"
+                      className="flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors"
                     >
                       {expandedTextPreview === framework.id ? (
                         <ChevronUp className="h-4 w-4" />
@@ -483,10 +518,10 @@ export default function FrameworkUploadPage() {
                       Extracted Text Preview
                     </button>
                     {expandedTextPreview === framework.id && (
-                      <div className="mt-2 max-h-64 overflow-y-auto rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
+                      <div className="mt-3 max-h-64 overflow-y-auto rounded-lg bg-slate-900/50 border border-slate-700/50 p-4 text-sm text-slate-300 scrollbar-thin">
                         <pre className="whitespace-pre-wrap font-mono text-xs">{textPreviews[framework.id]}</pre>
                         {textPreviews[framework.id].length >= 2000 && (
-                          <p className="mt-2 text-xs text-slate-500">...text truncated for preview</p>
+                          <p className="mt-3 text-xs text-slate-500 italic">...text truncated for preview</p>
                         )}
                       </div>
                     )}

@@ -9,10 +9,14 @@ import {
   TrendingUp,
   TrendingDown,
   CheckCircle,
-  Clock,
   FileText,
   Server,
+  ArrowRight,
+  Clock,
+  AlertCircle,
+  Activity,
 } from 'lucide-react';
+import Link from 'next/link';
 
 interface DashboardStats {
   stats: {
@@ -54,128 +58,167 @@ export default function DashboardPage() {
       name: 'Frameworks',
       value: data?.stats.frameworks ?? 0,
       icon: FileStack,
+      iconColor: 'text-primary-400',
+      bgColor: 'from-primary-500/20 to-primary-600/10',
       change: '+1',
       changeType: 'increase',
-      description: 'Active compliance frameworks',
+      href: '/frameworks',
     },
     {
       name: 'Controls',
       value: data?.stats.controls ?? 0,
       icon: Shield,
-      change: '100%',
+      iconColor: 'text-emerald-400',
+      bgColor: 'from-emerald-500/20 to-emerald-600/10',
+      change: '',
       changeType: 'neutral',
-      description: 'Normalized controls',
+      href: '/controls',
     },
     {
       name: 'Evidence Items',
       value: data?.stats.evidence ?? 0,
       icon: FileCheck,
+      iconColor: 'text-cyan-400',
+      bgColor: 'from-cyan-500/20 to-cyan-600/10',
       change: '',
       changeType: 'neutral',
-      description: 'Collected evidence',
+      href: '/evidence',
     },
     {
       name: 'Open Risks',
       value: data?.stats.open_risks ?? 0,
       icon: AlertTriangle,
+      iconColor: 'text-amber-400',
+      bgColor: 'from-amber-500/20 to-amber-600/10',
       change: '',
-      changeType: 'neutral',
-      description: 'Risks requiring attention',
+      changeType: data?.stats.open_risks && data.stats.open_risks > 5 ? 'warning' : 'neutral',
+      href: '/risks',
     },
   ];
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
+      <div className="space-y-6">
+        <div className="page-header">
+          <div className="skeleton h-8 w-48 mb-2" />
+          <div className="skeleton h-5 w-72" />
+        </div>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="stat-card">
+              <div className="skeleton h-12 w-12 rounded-xl mb-4" />
+              <div className="skeleton h-8 w-20 mb-2" />
+              <div className="skeleton h-4 w-32" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-lg bg-red-900/20 p-4 text-red-400">
-        <p>Failed to load dashboard data. Please try logging in again.</p>
+      <div className="alert-danger">
+        <AlertCircle size={20} />
+        <div>
+          <p className="font-medium">Failed to load dashboard</p>
+          <p className="text-sm opacity-80">Please try logging in again.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-slate-400">Welcome to your GRC command center</p>
+    <div className="space-y-8">
+      <div className="page-header">
+        <h1 className="page-title">Dashboard</h1>
+        <p className="page-description">Welcome to your GRC command center</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <div key={stat.name} className="card">
-            <div className="flex items-center justify-between">
-              <div className="rounded-lg bg-slate-700 p-3">
-                <stat.icon className="h-6 w-6 text-primary-400" />
+          <Link
+            key={stat.name}
+            href={stat.href}
+            className="stat-card group hover:border-slate-600 transition-all duration-200 hover:shadow-xl"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className={`rounded-xl bg-gradient-to-br ${stat.bgColor} p-3`}>
+                <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
               </div>
               {stat.change && (
                 <div className="flex items-center gap-1 text-sm">
                   {stat.changeType === 'increase' && (
-                    <TrendingUp className="h-4 w-4 text-green-400" />
+                    <>
+                      <TrendingUp className="h-4 w-4 text-emerald-400" />
+                      <span className="text-emerald-400">{stat.change}</span>
+                    </>
                   )}
                   {stat.changeType === 'decrease' && (
-                    <TrendingDown className="h-4 w-4 text-green-400" />
+                    <>
+                      <TrendingDown className="h-4 w-4 text-rose-400" />
+                      <span className="text-rose-400">{stat.change}</span>
+                    </>
                   )}
-                  <span
-                    className={
-                      stat.changeType === 'increase'
-                        ? 'text-green-400'
-                        : stat.changeType === 'decrease'
-                        ? 'text-green-400'
-                        : 'text-slate-400'
-                    }
-                  >
-                    {stat.change}
-                  </span>
                 </div>
               )}
             </div>
-            <div className="mt-4">
-              <p className="text-3xl font-bold text-white">{stat.value.toLocaleString()}</p>
-              <p className="text-sm text-slate-400">{stat.name}</p>
+            <p className="stat-value">{stat.value.toLocaleString()}</p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="stat-label">{stat.name}</p>
+              <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-primary-400 transition-colors" />
             </div>
-            <p className="mt-2 text-xs text-slate-500">{stat.description}</p>
-          </div>
+          </Link>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="card">
-          <h2 className="mb-4 text-lg font-semibold text-white">Compliance Overview</h2>
-          <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 card">
+          <div className="card-header">
+            <div>
+              <h2 className="card-title">Compliance Overview</h2>
+              <p className="card-description">Framework compliance status</p>
+            </div>
+            <Link href="/frameworks" className="btn-ghost btn-sm">
+              View all
+            </Link>
+          </div>
+          <div className="space-y-5">
             {data?.compliance_overview.map((item) => (
               <div key={item.short_code} className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-300">{item.short_code}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-white">{item.score}%</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center">
+                      <Shield className="h-5 w-5 text-slate-400" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-white">{item.short_code}</span>
+                      <p className="text-xs text-slate-500 truncate max-w-48">{item.framework}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg font-semibold text-white">{item.score}%</span>
                     <span
-                      className={`rounded px-2 py-0.5 text-xs font-medium ${
+                      className={
                         item.status === 'compliant'
-                          ? 'bg-green-900/50 text-green-400'
+                          ? 'badge-success'
                           : item.status === 'partial'
-                          ? 'bg-yellow-900/50 text-yellow-400'
-                          : 'bg-red-900/50 text-red-400'
-                      }`}
+                          ? 'badge-warning'
+                          : 'badge-danger'
+                      }
                     >
                       {item.status}
                     </span>
                   </div>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-700">
+                <div className="progress-bar">
                   <div
-                    className={`h-full rounded-full ${
+                    className={`progress-bar-fill ${
                       item.score >= 90
-                        ? 'bg-green-500'
+                        ? 'bg-emerald-500'
                         : item.score >= 70
-                        ? 'bg-yellow-500'
-                        : 'bg-red-500'
+                        ? 'bg-amber-500'
+                        : 'bg-rose-500'
                     }`}
                     style={{ width: `${item.score}%` }}
                   />
@@ -183,51 +226,73 @@ export default function DashboardPage() {
               </div>
             ))}
             {(!data?.compliance_overview || data.compliance_overview.length === 0) && (
-              <p className="text-sm text-slate-500">No compliance data available yet.</p>
+              <div className="empty-state py-8">
+                <div className="empty-state-icon">
+                  <Shield className="h-8 w-8 text-slate-500" />
+                </div>
+                <p className="empty-state-title">No frameworks yet</p>
+                <p className="empty-state-description text-sm">
+                  Upload your first regulatory framework to get started
+                </p>
+                <Link href="/framework-upload" className="btn-primary mt-4">
+                  Upload Framework
+                </Link>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="card">
-          <h2 className="mb-4 text-lg font-semibold text-white">Quick Stats</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg bg-slate-700/50 p-4">
-              <div className="flex items-center gap-3">
-                <FileText className="h-8 w-8 text-blue-400" />
-                <div>
+        <div className="space-y-6">
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">Quick Stats</h2>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 p-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <FileText className="h-5 w-5 text-blue-400" />
+                </div>
+                <div className="flex-1">
                   <p className="text-2xl font-bold text-white">{data?.stats.documents ?? 0}</p>
                   <p className="text-xs text-slate-400">Documents</p>
                 </div>
               </div>
-            </div>
-            <div className="rounded-lg bg-slate-700/50 p-4">
-              <div className="flex items-center gap-3">
-                <Server className="h-8 w-8 text-purple-400" />
-                <div>
+              <div className="flex items-center gap-4 p-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                  <Server className="h-5 w-5 text-purple-400" />
+                </div>
+                <div className="flex-1">
                   <p className="text-2xl font-bold text-white">{data?.stats.assets ?? 0}</p>
                   <p className="text-xs text-slate-400">IT Assets</p>
                 </div>
               </div>
             </div>
           </div>
-          <div className="mt-4 rounded-lg bg-slate-700/50 p-4">
-            <h3 className="mb-2 text-sm font-medium text-slate-300">Platform Features</h3>
-            <ul className="space-y-2 text-sm text-slate-400">
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-400" />
-                Multi-framework compliance tracking
+
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">Platform Status</h2>
+            </div>
+            <ul className="space-y-3">
+              <li className="flex items-center gap-3 text-sm">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-slate-300">Multi-framework compliance</span>
+                <CheckCircle className="h-4 w-4 text-emerald-400 ml-auto" />
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-400" />
-                Normalized control model
+              <li className="flex items-center gap-3 text-sm">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-slate-300">Normalized control model</span>
+                <CheckCircle className="h-4 w-4 text-emerald-400 ml-auto" />
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-400" />
-                Evidence management with AI assessment
+              <li className="flex items-center gap-3 text-sm">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-slate-300">AI-powered framework parsing</span>
+                <CheckCircle className="h-4 w-4 text-emerald-400 ml-auto" />
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-400" />
-                Enterprise risk management
+              <li className="flex items-center gap-3 text-sm">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-slate-300">Enterprise risk management</span>
+                <CheckCircle className="h-4 w-4 text-emerald-400 ml-auto" />
               </li>
             </ul>
           </div>
