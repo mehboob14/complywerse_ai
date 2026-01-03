@@ -189,6 +189,18 @@ export const governanceApi = {
     apiClient.post(`/governance/workflows/steps/${stepId}/approve`, { comments }),
   rejectStep: (stepId: number, comments?: string) =>
     apiClient.post(`/governance/workflows/steps/${stepId}/reject`, { comments }),
+  uploadDocumentWithFile: (formData: FormData) =>
+    apiClient.post('/governance/documents/upload-with-file', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  uploadFileToDocument: (documentId: number, formData: FormData) =>
+    apiClient.post(`/governance/documents/${documentId}/upload-file`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  downloadDocumentFile: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/download-file`, {
+      responseType: 'blob',
+    }),
 };
 
 export const documentsApi = {

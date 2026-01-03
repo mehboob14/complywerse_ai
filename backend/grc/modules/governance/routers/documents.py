@@ -1,6 +1,9 @@
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import os
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_
 from pydantic import BaseModel
@@ -10,6 +13,17 @@ from ....models import (
     DocumentApprovalStep, DocumentAuditLog, GRCUser, Tenant, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+
+GOVERNANCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "uploads", "governance")
+os.makedirs(GOVERNANCE_UPLOAD_DIR, exist_ok=True)
+
+ALLOWED_FILE_TYPES = {
+    'pdf': 'application/pdf',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'doc': 'application/msword',
+    'xls': 'application/vnd.ms-excel'
+}
 
 router = APIRouter(prefix="/documents", tags=["Governance - Documents"])
 
@@ -109,6 +123,10 @@ def serialize_document(doc: GovernanceDocument) -> dict:
         "title": doc.title,
         "description": doc.description,
         "content": doc.content,
+        "file_name": doc.file_name,
+        "file_size": doc.file_size,
+        "file_type": doc.file_type,
+        "has_file": doc.file_path is not None,
         "doc_type": doc.doc_type,
         "doc_sub_type": doc.doc_sub_type,
         "classification": doc.classification,
@@ -755,3 +773,271 @@ def get_document_audit_logs(
         }
         for log in logs
     ]
+
+
+@router.post("/{document_id}/upload-file")
+async def upload_document_file(
+    document_id: int,
+    file: UploadFile = File(...),
+    change_summary: Optional[str] = Form(None),
+    change_reason: Optional[str] = Form(None),
+    create_new_version: bool = Form(True),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Upload a file (PDF, Word, Excel) for an existing governance document"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No file provided"
+        )
+    
+    file_ext = file.filename.lower().split('.')[-1] if '.' in file.filename else ''
+    if file_ext not in ALLOWED_FILE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only PDF, Word (.doc, .docx), and Excel (.xls, .xlsx) files are supported"
+        )
+    
+    unique_id = str(uuid.uuid4())
+    safe_filename = f"{unique_id}_{file.filename}"
+    file_path = os.path.join(GOVERNANCE_UPLOAD_DIR, safe_filename)
+    
+    content = await file.read()
+    file_size = len(content)
+    
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    old_file_name = document.file_name
+    
+    current_ver = document.current_version or "1.0"
+    if create_new_version and document.file_name:
+        try:
+            version_parts = current_ver.split('.')
+            major = int(version_parts[0]) if version_parts else 1
+            minor = int(version_parts[1]) if len(version_parts) > 1 else 0
+            new_version = f"{major}.{minor + 1}"
+        except (ValueError, IndexError):
+            new_version = "1.1"
+        
+        existing_versions = db.query(GovernanceDocumentVersion).filter(
+            GovernanceDocumentVersion.document_id == document_id,
+            GovernanceDocumentVersion.status == "current"
+        ).all()
+        for v in existing_versions:
+            v.status = "superseded"
+        
+        version = GovernanceDocumentVersion(
+            document_id=document_id,
+            version_number=new_version,
+            change_type="minor",
+            title=document.title,
+            content=document.content,
+            file_name=file.filename,
+            file_path=file_path,
+            file_size=file_size,
+            file_type=file_ext,
+            change_summary=change_summary or f"File updated: {file.filename}",
+            change_reason=change_reason,
+            status="current",
+            created_by=current_user.id
+        )
+        db.add(version)
+        document.current_version = new_version
+    
+    document.file_name = file.filename
+    document.file_path = file_path
+    document.file_size = file_size
+    document.file_type = file_ext
+    document.updated_at = datetime.utcnow()
+    
+    create_audit_log(
+        db=db,
+        document_id=document.id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="file_uploaded",
+        action_details=f"File uploaded: {file.filename} ({file_size} bytes)",
+        field_changed="file_name",
+        old_value=old_file_name,
+        new_value=file.filename
+    )
+    
+    db.commit()
+    db.refresh(document)
+    
+    return {
+        "message": "File uploaded successfully",
+        "document": serialize_document(document)
+    }
+
+
+@router.get("/{document_id}/download-file")
+def download_document_file(
+    document_id: int,
+    version_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Download the attached file for a governance document"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    if version_id:
+        version = db.query(GovernanceDocumentVersion).filter(
+            GovernanceDocumentVersion.id == version_id,
+            GovernanceDocumentVersion.document_id == document_id
+        ).first()
+        
+        if not version:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Version not found"
+            )
+        
+        if not version.file_path or not os.path.exists(version.file_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="File not found for this version"
+            )
+        
+        return FileResponse(
+            path=version.file_path,
+            filename=version.file_name or f"document_{document_id}_v{version.version_number}",
+            media_type=ALLOWED_FILE_TYPES.get(version.file_type, "application/octet-stream")
+        )
+    
+    if not document.file_path or not os.path.exists(document.file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No file attached to this document"
+        )
+    
+    return FileResponse(
+        path=document.file_path,
+        filename=document.file_name or f"document_{document_id}",
+        media_type=ALLOWED_FILE_TYPES.get(document.file_type, "application/octet-stream")
+    )
+
+
+@router.post("/upload-with-file", status_code=status.HTTP_201_CREATED)
+async def create_document_with_file(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    doc_type: str = Form(...),
+    description: Optional[str] = Form(None),
+    document_code: Optional[str] = Form(None),
+    classification: str = Form("internal"),
+    owner_id: Optional[int] = Form(None),
+    tenant_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Create a new governance document with an attached file"""
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    else:
+        tenant_id = get_user_primary_tenant(current_user, db)
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is not assigned to any tenant"
+            )
+    
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No file provided"
+        )
+    
+    file_ext = file.filename.lower().split('.')[-1] if '.' in file.filename else ''
+    if file_ext not in ALLOWED_FILE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only PDF, Word (.doc, .docx), and Excel (.xls, .xlsx) files are supported"
+        )
+    
+    unique_id = str(uuid.uuid4())
+    safe_filename = f"{unique_id}_{file.filename}"
+    file_path = os.path.join(GOVERNANCE_UPLOAD_DIR, safe_filename)
+    
+    content = await file.read()
+    file_size = len(content)
+    
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    document = GovernanceDocument(
+        tenant_id=tenant_id,
+        title=title,
+        description=description,
+        document_code=document_code,
+        doc_type=doc_type,
+        classification=classification,
+        owner_id=owner_id or current_user.id,
+        author_id=current_user.id,
+        file_name=file.filename,
+        file_path=file_path,
+        file_size=file_size,
+        file_type=file_ext,
+        status="draft",
+        current_version="1.0"
+    )
+    db.add(document)
+    db.flush()
+    
+    version = GovernanceDocumentVersion(
+        document_id=document.id,
+        version_number="1.0",
+        change_type="major",
+        title=title,
+        file_name=file.filename,
+        file_path=file_path,
+        file_size=file_size,
+        file_type=file_ext,
+        change_summary="Initial version",
+        status="current",
+        created_by=current_user.id
+    )
+    db.add(version)
+    
+    create_audit_log(
+        db=db,
+        document_id=document.id,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        action="created",
+        action_details=f"Document created with file: {file.filename}"
+    )
+    
+    db.commit()
+    db.refresh(document)
+    
+    return {
+        "message": "Document created successfully",
+        "document": serialize_document(document)
+    }

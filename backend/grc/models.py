@@ -970,6 +970,11 @@ class GovernanceDocument(Base):
     description = Column(Text, nullable=True)
     content = Column(Text, nullable=True)
     
+    file_name = Column(String(255), nullable=True)
+    file_path = Column(String(500), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    file_type = Column(String(50), nullable=True)  # pdf, docx, xlsx
+    
     doc_type = Column(String(50), nullable=False)  # policy, standard, procedure, guideline, charter, framework
     doc_sub_type = Column(String(100), nullable=True)
     classification = Column(String(50), default="internal")  # public, internal, confidential, restricted
@@ -1040,6 +1045,12 @@ class GovernanceDocumentVersion(Base):
     
     title = Column(String(500), nullable=False)
     content = Column(Text, nullable=True)
+    
+    file_name = Column(String(255), nullable=True)
+    file_path = Column(String(500), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    file_type = Column(String(50), nullable=True)
+    
     change_summary = Column(Text, nullable=True)
     change_reason = Column(Text, nullable=True)
     
