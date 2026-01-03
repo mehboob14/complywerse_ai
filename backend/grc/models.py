@@ -1603,9 +1603,11 @@ class UploadedFramework(Base):
     file_size = Column(Integer, nullable=True)
     file_type = Column(String(50), nullable=False)  # pdf, docx
     
-    upload_status = Column(String(50), default="uploaded")  # uploaded, parsing, parsed, failed
+    upload_status = Column(String(50), default="uploaded")  # uploaded, parsing, parsed, published, failed
     parse_error = Column(Text, nullable=True)
     parsed_at = Column(DateTime, nullable=True)
+    published_framework_id = Column(Integer, ForeignKey("grc_frameworks.id"), nullable=True, index=True)
+    published_at = Column(DateTime, nullable=True)
     
     framework_type = Column(String(100), nullable=True)  # regulatory, industry_standard, internal
     source_organization = Column(String(255), nullable=True)

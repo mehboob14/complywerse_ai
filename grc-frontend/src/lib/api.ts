@@ -447,6 +447,12 @@ export const frameworkUploadApi = {
     apiClient.post(`/framework-upload/assessment/items/${itemId}/remediation`, data),
   getRemediations: (itemId: number) => 
     apiClient.get(`/framework-upload/assessment/items/${itemId}/remediation`),
+  getPublishStatus: (frameworkId: number) => 
+    apiClient.get(`/framework-upload/publish/${frameworkId}/status`),
+  publishFramework: (frameworkId: number, data: { short_code: string; regulator?: string; jurisdiction?: string; region?: string; is_mandatory?: boolean; enforcement_type?: string }) => 
+    apiClient.post(`/framework-upload/publish/${frameworkId}`, data),
+  unpublishFramework: (frameworkId: number) => 
+    apiClient.delete(`/framework-upload/publish/${frameworkId}/unpublish`),
 };
 
 export const advancedErmApi = {

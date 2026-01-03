@@ -19,6 +19,8 @@ import {
   ChevronDown,
   ChevronUp,
   CloudUpload,
+  Send,
+  X,
 } from 'lucide-react';
 
 interface UploadedFramework {
@@ -33,6 +35,8 @@ interface UploadedFramework {
   upload_status: string;
   parse_error: string | null;
   parsed_at: string | null;
+  published_framework_id: number | null;
+  published_at: string | null;
   framework_type: string | null;
   source_organization: string | null;
   version: string | null;
@@ -64,6 +68,7 @@ const STATUS_CONFIG: Record<string, { label: string; badgeClass: string; icon: R
   text_extracted: { label: 'Text Extracted', badgeClass: 'badge-info', icon: FileText },
   parsing: { label: 'Parsing...', badgeClass: 'badge-warning', icon: Loader2 },
   parsed: { label: 'Parsed', badgeClass: 'badge-success', icon: CheckCircle },
+  published: { label: 'Published', badgeClass: 'badge-success', icon: Send },
   failed: { label: 'Failed', badgeClass: 'badge-danger', icon: XCircle },
   extraction_failed: { label: 'Extraction Failed', badgeClass: 'badge-danger', icon: XCircle },
 };
@@ -80,6 +85,15 @@ export default function FrameworkUploadPage() {
   });
   const [expandedTextPreview, setExpandedTextPreview] = useState<number | null>(null);
   const [textPreviews, setTextPreviews] = useState<Record<number, string>>({});
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [frameworkToPublish, setFrameworkToPublish] = useState<UploadedFramework | null>(null);
+  const [publishFormData, setPublishFormData] = useState({
+    short_code: '',
+    regulator: '',
+    jurisdiction: '',
+    region: 'Global',
+    is_mandatory: false,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -137,6 +151,56 @@ export default function FrameworkUploadPage() {
       queryClient.invalidateQueries({ queryKey: ['uploaded-frameworks'] });
     },
   });
+
+  const publishMutation = useMutation({
+    mutationFn: (data: { frameworkId: number; short_code: string; regulator?: string; jurisdiction?: string; region?: string; is_mandatory?: boolean }) => 
+      frameworkUploadApi.publishFramework(data.frameworkId, {
+        short_code: data.short_code,
+        regulator: data.regulator,
+        jurisdiction: data.jurisdiction,
+        region: data.region,
+        is_mandatory: data.is_mandatory,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['uploaded-frameworks'] });
+      queryClient.invalidateQueries({ queryKey: ['frameworks'] });
+      setPublishModalOpen(false);
+      setFrameworkToPublish(null);
+      setPublishFormData({ short_code: '', regulator: '', jurisdiction: '', region: 'Global', is_mandatory: false });
+    },
+  });
+
+  const generateShortCode = (name: string) => {
+    const words = name.toUpperCase().split(/\s+/);
+    if (words.length >= 2) {
+      return words.slice(0, 3).map(w => w[0]).join('');
+    }
+    return name.slice(0, 5).toUpperCase().replace(/\s/g, '');
+  };
+
+  const openPublishModal = (framework: UploadedFramework) => {
+    setFrameworkToPublish(framework);
+    setPublishFormData({
+      short_code: generateShortCode(framework.name),
+      regulator: framework.source_organization || '',
+      jurisdiction: '',
+      region: 'Global',
+      is_mandatory: false,
+    });
+    setPublishModalOpen(true);
+  };
+
+  const handlePublish = () => {
+    if (!frameworkToPublish || !publishFormData.short_code.trim()) return;
+    publishMutation.mutate({
+      frameworkId: frameworkToPublish.id,
+      short_code: publishFormData.short_code,
+      regulator: publishFormData.regulator || undefined,
+      jurisdiction: publishFormData.jurisdiction || undefined,
+      region: publishFormData.region || 'Global',
+      is_mandatory: publishFormData.is_mandatory,
+    });
+  };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -449,10 +513,27 @@ export default function FrameworkUploadPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {framework.upload_status === 'parsed' && framework.parsed_controls_count > 0 && (
+                    {(framework.upload_status === 'parsed' || framework.upload_status === 'published') && framework.parsed_controls_count > 0 && (
                       <Link href={`/framework-upload/controls?framework=${framework.id}`} className="btn-success btn-sm">
                         <Eye className="h-4 w-4" />
                         View Controls
+                      </Link>
+                    )}
+                    
+                    {framework.upload_status === 'parsed' && framework.parsed_controls_count > 0 && !framework.published_framework_id && (
+                      <button
+                        onClick={() => openPublishModal(framework)}
+                        className="btn bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500 focus:ring-indigo-500"
+                      >
+                        <Send className="h-4 w-4" />
+                        Publish to Frameworks
+                      </button>
+                    )}
+
+                    {framework.upload_status === 'published' && framework.published_framework_id && (
+                      <Link href="/frameworks" className="btn bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500">
+                        <CheckCircle className="h-4 w-4" />
+                        View in Frameworks
                       </Link>
                     )}
                     
@@ -532,6 +613,139 @@ export default function FrameworkUploadPage() {
           </div>
         )}
       </div>
+
+      {publishModalOpen && frameworkToPublish && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl bg-slate-800 border border-slate-700 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Publish to Frameworks</h3>
+                <p className="text-sm text-slate-400 mt-0.5">Add "{frameworkToPublish.name}" to the main frameworks library</p>
+              </div>
+              <button
+                onClick={() => setPublishModalOpen(false)}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="label">
+                  Short Code <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={publishFormData.short_code}
+                  onChange={(e) => setPublishFormData({ ...publishFormData, short_code: e.target.value.toUpperCase() })}
+                  placeholder="e.g., ISO27001, PCIDSS, NIST"
+                  className="input"
+                  maxLength={20}
+                />
+                <p className="text-xs text-slate-500 mt-1">Unique identifier for the framework (e.g., ISO27001, PCIDSS)</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Regulator/Source</label>
+                  <input
+                    type="text"
+                    value={publishFormData.regulator}
+                    onChange={(e) => setPublishFormData({ ...publishFormData, regulator: e.target.value })}
+                    placeholder="e.g., ISO, NIST, PCI SSC"
+                    className="input"
+                  />
+                </div>
+                
+                <div>
+                  <label className="label">Jurisdiction</label>
+                  <input
+                    type="text"
+                    value={publishFormData.jurisdiction}
+                    onChange={(e) => setPublishFormData({ ...publishFormData, jurisdiction: e.target.value })}
+                    placeholder="e.g., USA, EU, Global"
+                    className="input"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Region</label>
+                  <select
+                    value={publishFormData.region}
+                    onChange={(e) => setPublishFormData({ ...publishFormData, region: e.target.value })}
+                    className="select"
+                  >
+                    <option value="Global">Global</option>
+                    <option value="North America">North America</option>
+                    <option value="Europe">Europe</option>
+                    <option value="Asia Pacific">Asia Pacific</option>
+                    <option value="Middle East">Middle East</option>
+                    <option value="Africa">Africa</option>
+                    <option value="South America">South America</option>
+                  </select>
+                </div>
+                
+                <div className="flex items-center pt-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={publishFormData.is_mandatory}
+                      onChange={(e) => setPublishFormData({ ...publishFormData, is_mandatory: e.target.checked })}
+                      className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-slate-300">Mandatory compliance</span>
+                  </label>
+                </div>
+              </div>
+              
+              <div className="rounded-lg bg-slate-900/50 border border-slate-700/50 p-4 mt-4">
+                <h4 className="text-sm font-medium text-white mb-2">What will be created:</h4>
+                <ul className="text-sm text-slate-400 space-y-1">
+                  <li>• New framework entry in the Frameworks section</li>
+                  <li>• {frameworkToPublish.parsed_controls_count} controls organized by domain/category</li>
+                  <li>• Framework will be marked as custom/uploaded</li>
+                </ul>
+              </div>
+
+              {publishMutation.isError && (
+                <div className="alert-danger">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  <span className="text-sm">Failed to publish framework. The short code may already exist.</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex items-center justify-end gap-3 border-t border-slate-700 px-6 py-4">
+              <button
+                onClick={() => setPublishModalOpen(false)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePublish}
+                disabled={!publishFormData.short_code.trim() || publishMutation.isPending}
+                className="btn-primary"
+              >
+                {publishMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Publishing...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Publish Framework
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

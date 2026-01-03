@@ -77,6 +77,8 @@ def serialize_framework(framework: UploadedFramework, controls_count: int = 0) -
         "upload_status": framework.upload_status,
         "parse_error": framework.parse_error,
         "parsed_at": framework.parsed_at.isoformat() if framework.parsed_at else None,
+        "published_framework_id": framework.published_framework_id,
+        "published_at": framework.published_at.isoformat() if framework.published_at else None,
         "framework_type": framework.framework_type,
         "source_organization": framework.source_organization,
         "version": framework.version,
