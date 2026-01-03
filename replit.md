@@ -141,12 +141,22 @@ grc-frontend/src/app/(dashboard)/governance/
 ### Governance API Endpoints
 - `GET /grc/governance` - Module info
 - **Documents**: `/grc/governance/documents/*` - CRUD, filtering, hierarchy, bulk operations
+- **File Upload**: `/grc/governance/documents/upload-with-file` - Create document with attached file
+- **File Upload to Existing**: `/grc/governance/documents/{id}/upload-file` - Attach file to existing document
+- **File Download**: `/grc/governance/documents/{id}/download-file` - Download attached file
 - **Type-specific**: `/grc/governance/documents/policies`, `/standards`, `/procedures`, `/guidelines`, `/charters`, `/frameworks`
 - **Versions**: `/grc/governance/versions/*` - Version history, compare, rollback
 - **Workflows**: `/grc/governance/workflows/*` - Pending approvals, approve, reject, delegate
 - **Reviews**: `/grc/governance/reviews/*` - Upcoming, overdue, complete review
 - **Mappings**: `/grc/governance/mappings/*` - Link to risks, controls, assets, regulatory
 - **Dashboard**: `/grc/governance/dashboard/*` - Summary stats, KPIs
+
+### Document File Upload
+The Governance module supports attaching files (PDF, Word, Excel) to documents with full lifecycle management:
+- **Supported formats**: PDF (.pdf), Word (.doc, .docx), Excel (.xls, .xlsx)
+- **Version tracking**: New file uploads automatically create a new document version
+- **Storage**: Files stored in `backend/grc/uploads/governance/`
+- **Workflow**: Draft → Pending Review → Pending Approval → Approved → Published
 
 ### Governance Database Tables
 - `grc_governance_documents` - Document library with hierarchy, lifecycle, regulatory scope
