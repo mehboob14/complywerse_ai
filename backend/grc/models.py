@@ -1023,6 +1023,8 @@ class GovernanceDocument(Base):
     risk_links = relationship("DocumentRiskLink", back_populates="document", cascade="all, delete-orphan")
     regulatory_links = relationship("DocumentRegulatoryLink", back_populates="document", cascade="all, delete-orphan")
     asset_links = relationship("DocumentAssetLink", back_populates="document", cascade="all, delete-orphan")
+    policy_statements = relationship("PolicyStatement", back_populates="document", cascade="all, delete-orphan")
+    workflow_instance = relationship("DocumentWorkflowInstance", back_populates="document", uselist=False, cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_gov_doc_tenant_type", "tenant_id", "doc_type"),
@@ -1876,6 +1878,263 @@ class AssessmentRemediation(Base):
     __table_args__ = (
         Index("ix_remediation_item", "assessment_item_id"),
         Index("ix_remediation_status", "status"),
+    )
+
+
+# =============================================================================
+# 15. Policy Statement Compliance Models
+# =============================================================================
+
+class PolicyStatement(Base):
+    """Parsed policy statements extracted from governance documents"""
+    __tablename__ = "grc_policy_statements"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
+    document_version_id = Column(Integer, ForeignKey("grc_governance_document_versions.id"), nullable=True, index=True)
+    
+    statement_code = Column(String(50), nullable=True)  # Auto-generated code like PS-001
+    statement_text = Column(Text, nullable=False)
+    statement_summary = Column(String(500), nullable=True)  # AI-generated summary
+    
+    category = Column(String(100), nullable=True)  # security, privacy, operational, etc.
+    sub_category = Column(String(100), nullable=True)
+    priority = Column(String(20), default="medium")  # critical, high, medium, low
+    is_mandatory = Column(Boolean, default=True)
+    
+    # AI parsing metadata
+    ai_confidence = Column(Float, nullable=True)  # 0.0 to 1.0
+    ai_extracted_keywords = Column(JSON, default=[])
+    ai_suggested_controls = Column(JSON, default=[])  # Suggested control IDs
+    
+    # Section reference in original document
+    source_section = Column(String(255), nullable=True)
+    source_page = Column(Integer, nullable=True)
+    
+    # Status tracking
+    status = Column(String(50), default="active")  # active, deprecated, superseded
+    effective_date = Column(DateTime, nullable=True)
+    review_date = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    # Relationships
+    tenant = relationship("Tenant")
+    document = relationship("GovernanceDocument", back_populates="policy_statements")
+    document_version = relationship("GovernanceDocumentVersion")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    compliance_records = relationship("PolicyStatementCompliance", back_populates="statement", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_policy_statement_tenant_doc", "tenant_id", "document_id"),
+        Index("ix_policy_statement_category", "category"),
+        Index("ix_policy_statement_status", "status"),
+    )
+
+
+class PolicyStatementCompliance(Base):
+    """Compliance tracking for policy statements"""
+    __tablename__ = "grc_policy_statement_compliance"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    statement_id = Column(Integer, ForeignKey("grc_policy_statements.id"), nullable=False, index=True)
+    
+    compliance_status = Column(String(50), default="not_assessed")  # compliant, partially_compliant, non_compliant, not_assessed, not_applicable
+    compliance_score = Column(Float, nullable=True)  # 0-100 score
+    
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    department = Column(String(100), nullable=True)
+    
+    assessment_date = Column(DateTime, nullable=True)
+    assessed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    next_assessment_date = Column(DateTime, nullable=True)
+    
+    findings = Column(Text, nullable=True)
+    remediation_notes = Column(Text, nullable=True)
+    remediation_due_date = Column(DateTime, nullable=True)
+    
+    evidence_ids = Column(JSON, default=[])  # Links to evidence records
+    control_ids = Column(JSON, default=[])  # Links to control implementations
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    tenant = relationship("Tenant")
+    statement = relationship("PolicyStatement", back_populates="compliance_records")
+    owner = relationship("GRCUser", foreign_keys=[owner_id])
+    assessor = relationship("GRCUser", foreign_keys=[assessed_by])
+    
+    __table_args__ = (
+        Index("ix_policy_compliance_tenant", "tenant_id"),
+        Index("ix_policy_compliance_status", "compliance_status"),
+        Index("ix_policy_compliance_owner", "owner_id"),
+    )
+
+
+# =============================================================================
+# 16. Customizable Workflow Models
+# =============================================================================
+
+class WorkflowTemplate(Base):
+    """Tenant-configurable workflow templates for governance documents"""
+    __tablename__ = "grc_workflow_templates"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Applicability
+    doc_types = Column(JSON, default=[])  # Which document types this applies to: policy, standard, etc.
+    is_default = Column(Boolean, default=False)  # Default template for tenant
+    is_active = Column(Boolean, default=True)
+    
+    # Settings
+    allow_skip = Column(Boolean, default=False)  # Allow skipping optional steps
+    require_all_approvers = Column(Boolean, default=False)  # Require all approvers or just one
+    auto_publish_on_complete = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    # Relationships
+    tenant = relationship("Tenant")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    steps = relationship("WorkflowStep", back_populates="template", cascade="all, delete-orphan", order_by="WorkflowStep.sequence")
+    document_instances = relationship("DocumentWorkflowInstance", back_populates="template")
+    
+    __table_args__ = (
+        Index("ix_workflow_template_tenant", "tenant_id"),
+        Index("ix_workflow_template_active", "tenant_id", "is_active"),
+    )
+
+
+class WorkflowStep(Base):
+    """Individual steps within a workflow template"""
+    __tablename__ = "grc_workflow_steps"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey("grc_workflow_templates.id"), nullable=False, index=True)
+    
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    sequence = Column(Integer, nullable=False)  # Order of execution
+    
+    step_type = Column(String(50), default="approval")  # approval, review, notification, auto
+    approval_mode = Column(String(50), default="any")  # any (one approver), all (all approvers), sequential
+    
+    is_required = Column(Boolean, default=True)
+    timeout_days = Column(Integer, nullable=True)  # Auto-escalate after N days
+    
+    # Actions on completion
+    on_approve_status = Column(String(50), nullable=True)  # Status to set on approval
+    on_reject_action = Column(String(50), default="return_to_draft")  # return_to_draft, return_to_previous, cancel
+    
+    # Notification settings
+    notify_on_pending = Column(Boolean, default=True)
+    notify_on_complete = Column(Boolean, default=True)
+    reminder_days = Column(Integer, nullable=True)  # Send reminder after N days
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    template = relationship("WorkflowTemplate", back_populates="steps")
+    approvers = relationship("WorkflowStepApprover", back_populates="step", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_workflow_step_template_seq", "template_id", "sequence"),
+    )
+
+
+class WorkflowStepApprover(Base):
+    """Approvers assigned to workflow steps"""
+    __tablename__ = "grc_workflow_step_approvers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    step_id = Column(Integer, ForeignKey("grc_workflow_steps.id"), nullable=False, index=True)
+    
+    approver_type = Column(String(50), nullable=False)  # user, role, document_owner, department_head
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    role_id = Column(Integer, ForeignKey("grc_roles.id"), nullable=True, index=True)
+    
+    is_required = Column(Boolean, default=True)
+    sequence = Column(Integer, default=1)  # For sequential approval mode
+    
+    # Relationships
+    step = relationship("WorkflowStep", back_populates="approvers")
+    user = relationship("GRCUser")
+    role = relationship("Role")
+    
+    __table_args__ = (
+        Index("ix_step_approver_step", "step_id"),
+    )
+
+
+class DocumentWorkflowInstance(Base):
+    """Runtime workflow instance for a specific document"""
+    __tablename__ = "grc_document_workflow_instances"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
+    template_id = Column(Integer, ForeignKey("grc_workflow_templates.id"), nullable=False, index=True)
+    
+    current_step_id = Column(Integer, ForeignKey("grc_workflow_steps.id"), nullable=True, index=True)
+    current_step_sequence = Column(Integer, default=1)
+    
+    status = Column(String(50), default="active")  # active, completed, cancelled, on_hold
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    
+    started_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    # Relationships
+    document = relationship("GovernanceDocument", back_populates="workflow_instance")
+    template = relationship("WorkflowTemplate", back_populates="document_instances")
+    current_step = relationship("WorkflowStep")
+    initiator = relationship("GRCUser", foreign_keys=[started_by])
+    actions = relationship("DocumentWorkflowAction", back_populates="instance", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_doc_workflow_instance", "document_id"),
+        Index("ix_doc_workflow_status", "status"),
+    )
+
+
+class DocumentWorkflowAction(Base):
+    """Audit trail for workflow actions"""
+    __tablename__ = "grc_document_workflow_actions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    instance_id = Column(Integer, ForeignKey("grc_document_workflow_instances.id"), nullable=False, index=True)
+    step_id = Column(Integer, ForeignKey("grc_workflow_steps.id"), nullable=False, index=True)
+    
+    action = Column(String(50), nullable=False)  # approve, reject, delegate, skip, escalate, comment
+    action_by = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    action_at = Column(DateTime, default=datetime.utcnow)
+    
+    comments = Column(Text, nullable=True)
+    delegated_to = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    # Snapshot of step state at action time
+    step_sequence = Column(Integer, nullable=True)
+    step_name = Column(String(255), nullable=True)
+    
+    # Relationships
+    instance = relationship("DocumentWorkflowInstance", back_populates="actions")
+    step = relationship("WorkflowStep")
+    actor = relationship("GRCUser", foreign_keys=[action_by])
+    delegate = relationship("GRCUser", foreign_keys=[delegated_to])
+    
+    __table_args__ = (
+        Index("ix_workflow_action_instance", "instance_id"),
+        Index("ix_workflow_action_actor", "action_by"),
     )
 
 

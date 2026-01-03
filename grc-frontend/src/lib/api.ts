@@ -201,6 +201,34 @@ export const governanceApi = {
     apiClient.get(`/governance/documents/${documentId}/download-file`, {
       responseType: 'blob',
     }),
+  parsePolicy: (documentId: number) =>
+    apiClient.post(`/governance/documents/${documentId}/parse-policy`),
+  getDocumentPolicyStatements: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/policy-statements`),
+  getWorkflowTemplates: (params?: { tenant_id?: number; is_active?: boolean; doc_type?: string; skip?: number; limit?: number }) =>
+    apiClient.get('/governance/workflows/templates', { params }),
+  getWorkflowTemplate: (id: number) =>
+    apiClient.get(`/governance/workflows/templates/${id}`),
+  createWorkflowTemplate: (data: { tenant_id: number; name: string; description?: string; doc_types?: string[]; is_default?: boolean; is_active?: boolean; allow_skip?: boolean; require_all_approvers?: boolean; auto_publish_on_complete?: boolean }) =>
+    apiClient.post('/governance/workflows/templates', data, { params: { tenant_id: data.tenant_id } }),
+  updateWorkflowTemplate: (id: number, data: { name?: string; description?: string; doc_types?: string[]; is_default?: boolean; is_active?: boolean; allow_skip?: boolean; require_all_approvers?: boolean; auto_publish_on_complete?: boolean }) =>
+    apiClient.put(`/governance/workflows/templates/${id}`, data),
+  deleteWorkflowTemplate: (id: number) =>
+    apiClient.delete(`/governance/workflows/templates/${id}`),
+  createWorkflowStep: (templateId: number, data: { name: string; description?: string; sequence: number; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number }) =>
+    apiClient.post(`/governance/workflows/templates/${templateId}/steps`, data),
+  updateWorkflowStep: (templateId: number, stepId: number, data: { name?: string; description?: string; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number }) =>
+    apiClient.put(`/governance/workflows/templates/${templateId}/steps/${stepId}`, data),
+  deleteWorkflowStep: (templateId: number, stepId: number) =>
+    apiClient.delete(`/governance/workflows/templates/${templateId}/steps/${stepId}`),
+  reorderWorkflowSteps: (templateId: number, steps: { step_id: number; sequence: number }[]) =>
+    apiClient.put(`/governance/workflows/templates/${templateId}/steps/reorder`, { steps }),
+  addStepApprover: (templateId: number, stepId: number, data: { approver_type: string; user_id?: number; role_id?: number; is_required?: boolean; sequence?: number }) =>
+    apiClient.post(`/governance/workflows/templates/${templateId}/steps/${stepId}/approvers`, data),
+  removeStepApprover: (templateId: number, stepId: number, approverId: number) =>
+    apiClient.delete(`/governance/workflows/templates/${templateId}/steps/${stepId}/approvers/${approverId}`),
+  seedDefaultTemplates: (tenantId: number) =>
+    apiClient.post('/governance/workflows/templates/seed-defaults', null, { params: { tenant_id: tenantId } }),
 };
 
 export const documentsApi = {
@@ -465,6 +493,55 @@ export const frameworkUploadApi = {
     apiClient.post(`/framework-upload/publish/${frameworkId}`, data),
   unpublishFramework: (frameworkId: number) => 
     apiClient.delete(`/framework-upload/publish/${frameworkId}/unpublish`),
+};
+
+export const complianceApi = {
+  dashboard: {
+    getSummary: (params?: { tenant_id?: number; document_id?: number }) =>
+      apiClient.get('/compliance/policies/dashboard/summary', { params }),
+    getTrends: (params?: { tenant_id?: number; months?: number }) =>
+      apiClient.get('/compliance/policies/dashboard/trends', { params }),
+    getOverdue: (params?: { tenant_id?: number; limit?: number }) =>
+      apiClient.get('/compliance/policies/dashboard/overdue', { params }),
+    getByDocument: (params?: { tenant_id?: number; limit?: number }) =>
+      apiClient.get('/compliance/policies/dashboard/by-document', { params }),
+  },
+  statements: {
+    getAll: (params?: {
+      tenant_id?: number;
+      document_id?: number;
+      category?: string;
+      compliance_status?: string;
+      priority?: string;
+      statement_status?: string;
+      skip?: number;
+      limit?: number;
+    }) => apiClient.get('/compliance/policies/statements', { params }),
+    getById: (id: number) =>
+      apiClient.get(`/compliance/policies/statements/${id}`),
+    getByDocument: (documentId: number, params?: { category?: string; compliance_status?: string }) =>
+      apiClient.get(`/compliance/policies/statements/by-document/${documentId}`, { params }),
+    update: (id: number, data: {
+      category?: string;
+      sub_category?: string;
+      priority?: string;
+      status?: string;
+      is_mandatory?: boolean;
+      review_date?: string;
+    }) => apiClient.put(`/compliance/policies/statements/${id}`, data),
+    updateCompliance: (id: number, data: {
+      compliance_status: string;
+      compliance_score?: number;
+      findings?: string;
+      remediation_notes?: string;
+      remediation_due_date?: string;
+      next_assessment_date?: string;
+      owner_id?: number;
+      department?: string;
+    }) => apiClient.put(`/compliance/policies/statements/${id}/compliance`, data),
+    linkEvidence: (id: number, evidenceIds: number[]) =>
+      apiClient.post(`/compliance/policies/statements/${id}/evidence`, { evidence_ids: evidenceIds }),
+  },
 };
 
 export const advancedErmApi = {

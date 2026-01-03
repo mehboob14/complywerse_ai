@@ -27,6 +27,9 @@ import {
   FileSpreadsheet,
   File,
   Paperclip,
+  Wand2,
+  CheckCircle,
+  ExternalLink,
 } from 'lucide-react';
 
 interface DocumentItem {
@@ -66,6 +69,7 @@ interface DocumentItem {
   file_size: number | null;
   file_type: string | null;
   has_file: boolean;
+  policy_statement_count?: number;
 }
 
 interface DocumentListResponse {
@@ -162,6 +166,8 @@ export default function GovernanceDocumentsPage() {
   const [uploadingToDocumentId, setUploadingToDocumentId] = useState<number | null>(null);
   const [editingDocument, setEditingDocument] = useState<DocumentItem | null>(null);
   const [viewingDocument, setViewingDocument] = useState<DocumentItem | null>(null);
+  const [parsingDocumentId, setParsingDocumentId] = useState<number | null>(null);
+  const [parseResult, setParseResult] = useState<{ documentId: number; count: number } | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
@@ -247,6 +253,23 @@ export default function GovernanceDocumentsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
       setUploadingToDocumentId(null);
+    },
+  });
+
+  const parsePolicyMutation = useMutation({
+    mutationFn: (documentId: number) => governanceApi.parsePolicy(documentId),
+    onMutate: (documentId) => {
+      setParsingDocumentId(documentId);
+    },
+    onSuccess: (response, documentId) => {
+      const data = response.data as { total_statements: number };
+      setParseResult({ documentId, count: data.total_statements });
+      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      setParsingDocumentId(null);
+      setTimeout(() => setParseResult(null), 10000);
+    },
+    onError: () => {
+      setParsingDocumentId(null);
     },
   });
 
@@ -366,6 +389,39 @@ export default function GovernanceDocumentsPage() {
           </button>
         </div>
       </div>
+
+      {parseResult && (
+        <div className="flex items-center justify-between rounded-xl border border-green-500/30 bg-green-500/10 p-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-green-500/20 p-2">
+              <CheckCircle className="h-5 w-5 text-green-400" />
+            </div>
+            <div>
+              <p className="font-medium text-green-400">
+                {parseResult.count} policy statement{parseResult.count !== 1 ? 's' : ''} extracted successfully
+              </p>
+              <p className="text-sm text-slate-400">
+                View and manage compliance in the Compliance module
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href="/compliance/statements"
+              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View Statements
+            </a>
+            <button
+              onClick={() => setParseResult(null)}
+              className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -515,13 +571,34 @@ export default function GovernanceDocumentsPage() {
                               <Edit2 className="h-4 w-4" />
                             </button>
                             {doc.file_name ? (
-                              <button
-                                onClick={() => handleDownload(doc)}
-                                className="rounded p-1.5 text-slate-400 hover:bg-green-500/20 hover:text-green-400 transition-colors"
-                                title="Download File"
-                              >
-                                <Download className="h-4 w-4" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleDownload(doc)}
+                                  className="rounded p-1.5 text-slate-400 hover:bg-green-500/20 hover:text-green-400 transition-colors"
+                                  title="Download File"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => parsePolicyMutation.mutate(doc.id)}
+                                  className={`rounded p-1.5 transition-colors ${
+                                    doc.policy_statement_count && doc.policy_statement_count > 0
+                                      ? 'text-green-400 hover:bg-green-500/20'
+                                      : 'text-purple-400 hover:bg-purple-500/20 hover:text-purple-300'
+                                  }`}
+                                  title={doc.policy_statement_count && doc.policy_statement_count > 0 
+                                    ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
+                                    : 'Parse Policy Statements'
+                                  }
+                                  disabled={parsingDocumentId === doc.id}
+                                >
+                                  {parsingDocumentId === doc.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Wand2 className="h-4 w-4" />
+                                  )}
+                                </button>
+                              </>
                             ) : (
                               <button
                                 onClick={() => setUploadingToDocumentId(doc.id)}

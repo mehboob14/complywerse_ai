@@ -7,7 +7,9 @@ from pydantic import BaseModel
 
 from ....models import (
     GovernanceDocument, DocumentApprovalStep, DocumentReviewer,
-    DocumentAuditLog, GRCUser, get_db
+    DocumentAuditLog, GRCUser, get_db,
+    DocumentWorkflowInstance, DocumentWorkflowAction, WorkflowTemplate, WorkflowStep,
+    WorkflowStepApprover
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -793,4 +795,678 @@ def list_overdue_approvals(
         "total": total,
         "skip": skip,
         "limit": limit
+    }
+
+
+class StartWorkflowRequest(BaseModel):
+    template_id: Optional[int] = None
+
+
+class WorkflowActionRequest(BaseModel):
+    action: str  # approve, reject, delegate
+    comments: Optional[str] = None
+    delegate_to_user_id: Optional[int] = None
+
+
+class RollbackWorkflowRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class CancelWorkflowRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+def serialize_workflow_instance(instance: DocumentWorkflowInstance) -> dict:
+    return {
+        "id": instance.id,
+        "document_id": instance.document_id,
+        "template_id": instance.template_id,
+        "template_name": instance.template.name if instance.template else None,
+        "current_step_id": instance.current_step_id,
+        "current_step_sequence": instance.current_step_sequence,
+        "current_step_name": instance.current_step.name if instance.current_step else None,
+        "status": instance.status,
+        "started_at": instance.started_at.isoformat() if instance.started_at else None,
+        "completed_at": instance.completed_at.isoformat() if instance.completed_at else None,
+        "started_by": instance.started_by,
+        "initiator_name": instance.initiator.display_name if instance.initiator else None,
+    }
+
+
+def serialize_workflow_action(action: DocumentWorkflowAction) -> dict:
+    return {
+        "id": action.id,
+        "instance_id": action.instance_id,
+        "step_id": action.step_id,
+        "step_name": action.step_name,
+        "step_sequence": action.step_sequence,
+        "action": action.action,
+        "action_by": action.action_by,
+        "actor_name": action.actor.display_name if action.actor else None,
+        "action_at": action.action_at.isoformat() if action.action_at else None,
+        "comments": action.comments,
+        "delegated_to": action.delegated_to,
+        "delegate_name": action.delegate.display_name if action.delegate else None,
+    }
+
+
+def get_approvers_for_step(step: WorkflowStep, document: GovernanceDocument, db: Session) -> List[int]:
+    approver_user_ids = []
+    for approver in step.approvers:
+        if approver.approver_type == "user" and approver.user_id:
+            approver_user_ids.append(approver.user_id)
+        elif approver.approver_type == "document_owner" and document.owner_id:
+            approver_user_ids.append(document.owner_id)
+        elif approver.approver_type == "role" and approver.role_id:
+            from ....models import UserRole
+            role_users = db.query(UserRole).filter(
+                UserRole.role_id == approver.role_id,
+                UserRole.tenant_id == document.tenant_id
+            ).all()
+            for ru in role_users:
+                approver_user_ids.append(ru.user_id)
+    return list(set(approver_user_ids))
+
+
+def check_step_completion(instance: DocumentWorkflowInstance, db: Session) -> bool:
+    step = instance.current_step
+    if not step:
+        return True
+    
+    actions = db.query(DocumentWorkflowAction).filter(
+        DocumentWorkflowAction.instance_id == instance.id,
+        DocumentWorkflowAction.step_id == step.id,
+        DocumentWorkflowAction.action == "approve"
+    ).all()
+    
+    if step.approval_mode == "any":
+        return len(actions) >= 1
+    elif step.approval_mode == "all":
+        approver_ids = get_approvers_for_step(step, instance.document, db)
+        approved_by = {a.action_by for a in actions}
+        return all(uid in approved_by for uid in approver_ids)
+    elif step.approval_mode == "sequential":
+        required_approvers = [a for a in step.approvers if a.is_required]
+        required_approvers.sort(key=lambda x: x.sequence)
+        for idx, approver in enumerate(required_approvers):
+            if approver.user_id:
+                matching_action = next((a for a in actions if a.action_by == approver.user_id), None)
+                if not matching_action:
+                    return False
+        return True
+    return len(actions) >= 1
+
+
+@router.post("/documents/{document_id}/start")
+def start_workflow(
+    document_id: int,
+    request: StartWorkflowRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    existing_instance = db.query(DocumentWorkflowInstance).filter(
+        DocumentWorkflowInstance.document_id == document_id,
+        DocumentWorkflowInstance.status.in_(["active", "on_hold"])
+    ).first()
+    
+    if existing_instance:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Document already has an active workflow"
+        )
+    
+    if request.template_id:
+        template = db.query(WorkflowTemplate).options(
+            joinedload(WorkflowTemplate.steps)
+        ).filter(
+            WorkflowTemplate.id == request.template_id,
+            WorkflowTemplate.tenant_id == document.tenant_id,
+            WorkflowTemplate.is_active == True
+        ).first()
+    else:
+        template = db.query(WorkflowTemplate).options(
+            joinedload(WorkflowTemplate.steps)
+        ).filter(
+            WorkflowTemplate.tenant_id == document.tenant_id,
+            WorkflowTemplate.is_default == True,
+            WorkflowTemplate.is_active == True
+        ).first()
+        
+        if not template:
+            template = db.query(WorkflowTemplate).options(
+                joinedload(WorkflowTemplate.steps)
+            ).filter(
+                WorkflowTemplate.tenant_id == document.tenant_id,
+                WorkflowTemplate.is_active == True,
+                or_(
+                    WorkflowTemplate.doc_types == [],
+                    WorkflowTemplate.doc_types.contains([document.doc_type])
+                )
+            ).first()
+    
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No suitable workflow template found"
+        )
+    
+    if not template.steps:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Workflow template has no steps configured"
+        )
+    
+    sorted_steps = sorted(template.steps, key=lambda s: s.sequence)
+    first_step = sorted_steps[0]
+    
+    instance = DocumentWorkflowInstance(
+        document_id=document_id,
+        template_id=template.id,
+        current_step_id=first_step.id,
+        current_step_sequence=first_step.sequence,
+        status="active",
+        started_at=datetime.utcnow(),
+        started_by=current_user.id
+    )
+    db.add(instance)
+    
+    if first_step.on_approve_status:
+        old_status = document.status
+        document.status = first_step.on_approve_status
+    else:
+        old_status = document.status
+        document.status = "pending_approval"
+    
+    document.updated_at = datetime.utcnow()
+    
+    create_audit_log(
+        db=db,
+        document_id=document.id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="workflow_started",
+        action_details=f"Workflow started using template '{template.name}'. First step: {first_step.name}",
+        field_changed="status",
+        old_value=old_status,
+        new_value=document.status
+    )
+    
+    db.commit()
+    db.refresh(instance)
+    
+    return {
+        "message": "Workflow started successfully",
+        "instance": serialize_workflow_instance(instance),
+        "template_name": template.name,
+        "first_step": {
+            "id": first_step.id,
+            "name": first_step.name,
+            "sequence": first_step.sequence,
+            "approval_mode": first_step.approval_mode
+        }
+    }
+
+
+@router.get("/documents/{document_id}/status")
+def get_workflow_status(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    instance = db.query(DocumentWorkflowInstance).options(
+        joinedload(DocumentWorkflowInstance.template).joinedload(WorkflowTemplate.steps),
+        joinedload(DocumentWorkflowInstance.current_step).joinedload(WorkflowStep.approvers),
+        joinedload(DocumentWorkflowInstance.initiator),
+        joinedload(DocumentWorkflowInstance.actions).joinedload(DocumentWorkflowAction.actor)
+    ).filter(
+        DocumentWorkflowInstance.document_id == document_id
+    ).order_by(DocumentWorkflowInstance.started_at.desc()).first()
+    
+    if not instance:
+        return {
+            "has_workflow": False,
+            "document_id": document_id,
+            "document_status": document.status
+        }
+    
+    pending_approvers = []
+    if instance.current_step and instance.status == "active":
+        approver_ids = get_approvers_for_step(instance.current_step, document, db)
+        step_actions = [a for a in instance.actions if a.step_id == instance.current_step_id and a.action == "approve"]
+        approved_by_ids = {a.action_by for a in step_actions}
+        
+        for uid in approver_ids:
+            if uid not in approved_by_ids:
+                user = db.query(GRCUser).filter(GRCUser.id == uid).first()
+                if user:
+                    pending_approvers.append({
+                        "user_id": uid,
+                        "user_name": user.display_name,
+                        "email": user.email
+                    })
+    
+    return {
+        "has_workflow": True,
+        "document_id": document_id,
+        "document_status": document.status,
+        "instance": serialize_workflow_instance(instance),
+        "current_step": {
+            "id": instance.current_step.id,
+            "name": instance.current_step.name,
+            "sequence": instance.current_step.sequence,
+            "approval_mode": instance.current_step.approval_mode,
+            "step_type": instance.current_step.step_type
+        } if instance.current_step else None,
+        "pending_approvers": pending_approvers,
+        "completed_actions": [serialize_workflow_action(a) for a in instance.actions]
+    }
+
+
+@router.post("/documents/{document_id}/advance")
+def advance_workflow(
+    document_id: int,
+    request: WorkflowActionRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    instance = db.query(DocumentWorkflowInstance).options(
+        joinedload(DocumentWorkflowInstance.template).joinedload(WorkflowTemplate.steps),
+        joinedload(DocumentWorkflowInstance.current_step),
+        joinedload(DocumentWorkflowInstance.document)
+    ).filter(
+        DocumentWorkflowInstance.document_id == document_id,
+        DocumentWorkflowInstance.status == "active"
+    ).first()
+    
+    if not instance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active workflow found for this document"
+        )
+    
+    if request.action not in ["approve", "reject", "delegate"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid action. Must be 'approve', 'reject', or 'delegate'"
+        )
+    
+    current_step = instance.current_step
+    if not current_step:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Workflow has no current step"
+        )
+    
+    approver_ids = get_approvers_for_step(current_step, document, db)
+    if current_user.id not in approver_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to take action on this workflow step"
+        )
+    
+    if request.action == "delegate":
+        if not request.delegate_to_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="delegate_to_user_id is required for delegation"
+            )
+        delegate_user = db.query(GRCUser).filter(
+            GRCUser.id == request.delegate_to_user_id,
+            GRCUser.is_active == True
+        ).first()
+        if not delegate_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Delegate user not found or inactive"
+            )
+    
+    action = DocumentWorkflowAction(
+        instance_id=instance.id,
+        step_id=current_step.id,
+        action=request.action,
+        action_by=current_user.id,
+        action_at=datetime.utcnow(),
+        comments=request.comments,
+        delegated_to=request.delegate_to_user_id if request.action == "delegate" else None,
+        step_sequence=current_step.sequence,
+        step_name=current_step.name
+    )
+    db.add(action)
+    
+    result = {
+        "message": f"Action '{request.action}' recorded",
+        "action_id": None,
+        "step_completed": False,
+        "workflow_completed": False,
+        "next_step": None
+    }
+    
+    if request.action == "reject":
+        if current_step.on_reject_action == "return_to_draft":
+            document.status = "draft"
+        elif current_step.on_reject_action == "return_to_previous":
+            sorted_steps = sorted(instance.template.steps, key=lambda s: s.sequence)
+            current_idx = next((i for i, s in enumerate(sorted_steps) if s.id == current_step.id), 0)
+            if current_idx > 0:
+                prev_step = sorted_steps[current_idx - 1]
+                instance.current_step_id = prev_step.id
+                instance.current_step_sequence = prev_step.sequence
+                document.status = prev_step.on_approve_status or "pending_review"
+            else:
+                document.status = "draft"
+        else:
+            instance.status = "cancelled"
+            document.status = "draft"
+        
+        document.updated_at = datetime.utcnow()
+        
+        create_audit_log(
+            db=db,
+            document_id=document.id,
+            tenant_id=document.tenant_id,
+            user_id=current_user.id,
+            action="workflow_rejected",
+            action_details=f"Step '{current_step.name}' rejected. Comments: {request.comments or 'None'}"
+        )
+        
+        result["message"] = "Workflow step rejected"
+    
+    elif request.action == "delegate":
+        create_audit_log(
+            db=db,
+            document_id=document.id,
+            tenant_id=document.tenant_id,
+            user_id=current_user.id,
+            action="workflow_delegated",
+            action_details=f"Step '{current_step.name}' delegated to user {request.delegate_to_user_id}"
+        )
+        result["message"] = "Workflow step delegated"
+    
+    elif request.action == "approve":
+        db.flush()
+        
+        if check_step_completion(instance, db):
+            result["step_completed"] = True
+            
+            sorted_steps = sorted(instance.template.steps, key=lambda s: s.sequence)
+            current_idx = next((i for i, s in enumerate(sorted_steps) if s.id == current_step.id), -1)
+            
+            if current_idx < len(sorted_steps) - 1:
+                next_step = sorted_steps[current_idx + 1]
+                instance.current_step_id = next_step.id
+                instance.current_step_sequence = next_step.sequence
+                
+                if next_step.on_approve_status:
+                    document.status = next_step.on_approve_status
+                
+                result["next_step"] = {
+                    "id": next_step.id,
+                    "name": next_step.name,
+                    "sequence": next_step.sequence
+                }
+                result["message"] = f"Step completed. Advanced to '{next_step.name}'"
+                
+                create_audit_log(
+                    db=db,
+                    document_id=document.id,
+                    tenant_id=document.tenant_id,
+                    user_id=current_user.id,
+                    action="workflow_step_completed",
+                    action_details=f"Step '{current_step.name}' completed. Advanced to '{next_step.name}'"
+                )
+            else:
+                instance.status = "completed"
+                instance.completed_at = datetime.utcnow()
+                instance.current_step_id = None
+                
+                if instance.template.auto_publish_on_complete:
+                    document.status = "published"
+                    document.published_by = current_user.id
+                    document.published_at = datetime.utcnow()
+                else:
+                    document.status = "approved"
+                    document.approved_by = current_user.id
+                    document.approved_at = datetime.utcnow()
+                
+                result["workflow_completed"] = True
+                result["message"] = "Workflow completed successfully"
+                
+                create_audit_log(
+                    db=db,
+                    document_id=document.id,
+                    tenant_id=document.tenant_id,
+                    user_id=current_user.id,
+                    action="workflow_completed",
+                    action_details=f"Workflow completed. Final status: {document.status}"
+                )
+        else:
+            create_audit_log(
+                db=db,
+                document_id=document.id,
+                tenant_id=document.tenant_id,
+                user_id=current_user.id,
+                action="workflow_approved",
+                action_details=f"Approval recorded for step '{current_step.name}'. Waiting for additional approvers."
+            )
+            result["message"] = "Approval recorded. Waiting for additional approvers."
+    
+    document.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(action)
+    
+    result["action_id"] = action.id
+    result["document_status"] = document.status
+    result["workflow_status"] = instance.status
+    
+    return result
+
+
+@router.post("/documents/{document_id}/rollback")
+def rollback_workflow(
+    document_id: int,
+    request: RollbackWorkflowRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    instance = db.query(DocumentWorkflowInstance).options(
+        joinedload(DocumentWorkflowInstance.template).joinedload(WorkflowTemplate.steps),
+        joinedload(DocumentWorkflowInstance.current_step)
+    ).filter(
+        DocumentWorkflowInstance.document_id == document_id,
+        DocumentWorkflowInstance.status == "active"
+    ).first()
+    
+    if not instance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active workflow found for this document"
+        )
+    
+    current_step = instance.current_step
+    sorted_steps = sorted(instance.template.steps, key=lambda s: s.sequence)
+    current_idx = next((i for i, s in enumerate(sorted_steps) if s.id == current_step.id), 0) if current_step else 0
+    
+    old_step_name = current_step.name if current_step else "Unknown"
+    old_status = document.status
+    
+    if current_idx > 0:
+        prev_step = sorted_steps[current_idx - 1]
+        instance.current_step_id = prev_step.id
+        instance.current_step_sequence = prev_step.sequence
+        
+        if prev_step.on_approve_status:
+            document.status = prev_step.on_approve_status
+        else:
+            document.status = "pending_review"
+        
+        new_step_name = prev_step.name
+    else:
+        instance.current_step_id = sorted_steps[0].id if sorted_steps else None
+        instance.current_step_sequence = sorted_steps[0].sequence if sorted_steps else 1
+        document.status = "draft"
+        new_step_name = "Initial"
+    
+    action = DocumentWorkflowAction(
+        instance_id=instance.id,
+        step_id=current_step.id if current_step else sorted_steps[0].id,
+        action="rollback",
+        action_by=current_user.id,
+        action_at=datetime.utcnow(),
+        comments=request.reason,
+        step_sequence=current_step.sequence if current_step else 1,
+        step_name=old_step_name
+    )
+    db.add(action)
+    
+    document.updated_at = datetime.utcnow()
+    
+    create_audit_log(
+        db=db,
+        document_id=document.id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="workflow_rollback",
+        action_details=f"Workflow rolled back from '{old_step_name}' to '{new_step_name}'. Reason: {request.reason or 'None'}",
+        field_changed="status",
+        old_value=old_status,
+        new_value=document.status
+    )
+    
+    db.commit()
+    db.refresh(instance)
+    
+    return {
+        "message": "Workflow rolled back successfully",
+        "previous_step": old_step_name,
+        "current_step": new_step_name,
+        "document_status": document.status,
+        "instance": serialize_workflow_instance(instance)
+    }
+
+
+@router.post("/documents/{document_id}/cancel")
+def cancel_workflow(
+    document_id: int,
+    request: CancelWorkflowRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    instance = db.query(DocumentWorkflowInstance).options(
+        joinedload(DocumentWorkflowInstance.current_step)
+    ).filter(
+        DocumentWorkflowInstance.document_id == document_id,
+        DocumentWorkflowInstance.status.in_(["active", "on_hold"])
+    ).first()
+    
+    if not instance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active workflow found for this document"
+        )
+    
+    old_status = document.status
+    current_step = instance.current_step
+    
+    instance.status = "cancelled"
+    instance.completed_at = datetime.utcnow()
+    
+    document.status = "draft"
+    document.updated_at = datetime.utcnow()
+    
+    action = DocumentWorkflowAction(
+        instance_id=instance.id,
+        step_id=current_step.id if current_step else None,
+        action="cancel",
+        action_by=current_user.id,
+        action_at=datetime.utcnow(),
+        comments=request.reason,
+        step_sequence=current_step.sequence if current_step else None,
+        step_name=current_step.name if current_step else None
+    )
+    db.add(action)
+    
+    create_audit_log(
+        db=db,
+        document_id=document.id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="workflow_cancelled",
+        action_details=f"Workflow cancelled. Reason: {request.reason or 'None'}",
+        field_changed="status",
+        old_value=old_status,
+        new_value="draft"
+    )
+    
+    db.commit()
+    db.refresh(instance)
+    
+    return {
+        "message": "Workflow cancelled successfully",
+        "document_status": document.status,
+        "instance": serialize_workflow_instance(instance)
     }
