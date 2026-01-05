@@ -539,8 +539,23 @@ export default function FrameworkComparisonPage() {
           ) : !controlsData?.comparison_grid?.length ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <GitCompare className="mb-4 h-12 w-12 text-slate-600" />
-              <h3 className="text-lg font-medium text-white">No shared controls found</h3>
-              <p className="mt-1 text-slate-400">These frameworks don't have mapped controls in common groups</p>
+              <h3 className="text-lg font-medium text-white">No Common Control Groups Found</h3>
+              <p className="mt-2 max-w-md text-slate-400">
+                To compare controls across frameworks, you need to first create Common Control Groups 
+                that link similar controls together.
+              </p>
+              <div className="mt-6 flex flex-col items-center gap-4">
+                <a
+                  href="/control-library"
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+                >
+                  <Layers className="h-4 w-4" />
+                  Go to Control Groups
+                </a>
+                <p className="text-xs text-slate-500">
+                  Use "Auto-Group Similar Controls" to automatically create groups using AI
+                </p>
+              </div>
             </div>
           ) : (
             <>
