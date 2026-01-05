@@ -424,6 +424,31 @@ export const ermApi = {
     seedDefaults: (tenantId: number) => 
       apiClient.post(`/erm/appetite/seed-defaults?tenant_id=${tenantId}`),
   },
+  internalControls: {
+    getAll: (params?: { status_filter?: string; category?: string; department_id?: number; control_type?: string; is_key_control?: boolean }) =>
+      apiClient.get('/erm/internal-controls', { params }),
+    getById: (id: number) => apiClient.get(`/erm/internal-controls/${id}`),
+    getDashboard: () => apiClient.get('/erm/internal-controls/dashboard'),
+    create: (data: Record<string, unknown>) => apiClient.post('/erm/internal-controls', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/internal-controls/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/erm/internal-controls/${id}`),
+    submit: (id: number, comments?: string) => apiClient.post(`/erm/internal-controls/${id}/submit`, { comments }),
+    approve: (id: number, comments?: string) => apiClient.post(`/erm/internal-controls/${id}/approve`, { comments }),
+    reject: (id: number, comments?: string) => apiClient.post(`/erm/internal-controls/${id}/reject`, { comments }),
+    getTests: (id: number) => apiClient.get(`/erm/internal-controls/${id}/tests`),
+    createTest: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/internal-controls/${id}/tests`, data),
+    getRisks: (id: number) => apiClient.get(`/erm/internal-controls/${id}/risks`),
+    linkRisk: (id: number, data: { risk_id: number; link_type?: string; effectiveness_rating?: string }) => 
+      apiClient.post(`/erm/internal-controls/${id}/risks`, data),
+    unlinkRisk: (id: number, linkId: number) => apiClient.delete(`/erm/internal-controls/${id}/risks/${linkId}`),
+    getEscalations: (id: number) => apiClient.get(`/erm/internal-controls/${id}/escalations`),
+    createEscalation: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/internal-controls/${id}/escalations`, data),
+    deleteEscalation: (id: number, escId: number) => apiClient.delete(`/erm/internal-controls/${id}/escalations/${escId}`),
+    getWorkflowHistory: (id: number) => apiClient.get(`/erm/internal-controls/${id}/workflow-history`),
+    getFrameworkLinks: (id: number) => apiClient.get(`/erm/internal-controls/${id}/framework-links`),
+    createFrameworkLink: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/internal-controls/${id}/framework-links`, data),
+    deleteFrameworkLink: (id: number, linkId: number) => apiClient.delete(`/erm/internal-controls/${id}/framework-links/${linkId}`),
+  },
 };
 
 export const frameworkUploadApi = {
