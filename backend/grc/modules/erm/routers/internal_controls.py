@@ -138,7 +138,10 @@ def list_internal_controls(
     if not user_tenants:
         return []
     
-    query = db.query(InternalControl).filter(InternalControl.tenant_id.in_(user_tenants))
+    query = db.query(InternalControl).options(
+        joinedload(InternalControl.owner),
+        joinedload(InternalControl.department)
+    ).filter(InternalControl.tenant_id.in_(user_tenants))
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -155,25 +158,57 @@ def list_internal_controls(
         query = query.filter(InternalControl.is_key_control == is_key_control)
     
     controls = query.order_by(InternalControl.created_at.desc()).offset(skip).limit(limit).all()
-    return controls
+    
+    return [
+        InternalControlResponse(
+            id=c.id,
+            tenant_id=c.tenant_id,
+            control_id=c.control_id,
+            name=c.name,
+            description=c.description,
+            category=c.category,
+            sub_category=c.sub_category,
+            control_type=c.control_type,
+            control_nature=c.control_nature,
+            department_id=c.department_id,
+            owner_id=c.owner_id,
+            backup_owner_id=c.backup_owner_id,
+            frequency=c.frequency,
+            regulatory_source=c.regulatory_source,
+            effective_date=c.effective_date,
+            review_date=c.review_date,
+            status=c.status,
+            workflow_status=c.workflow_status,
+            design_effectiveness=c.design_effectiveness,
+            operating_effectiveness=c.operating_effectiveness,
+            last_tested_at=c.last_tested_at,
+            next_test_date=c.next_test_date,
+            priority=c.priority,
+            is_key_control=c.is_key_control,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+            created_by=c.created_by,
+            approved_by=c.approved_by,
+            approved_at=c.approved_at,
+            owner_name=c.owner.display_name if c.owner else None,
+            department_name=c.department.name if c.department else None
+        )
+        for c in controls
+    ]
 
 
 @router.post("", response_model=InternalControlResponse, status_code=status.HTTP_201_CREATED)
 def create_internal_control(
     control: InternalControlCreate,
-    tenant_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    if tenant_id:
-        validate_tenant_access(current_user, tenant_id, db)
-    else:
-        tenant_id = get_user_primary_tenant(current_user, db)
-        if not tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User is not assigned to any tenant"
-            )
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not assigned to any tenant"
+        )
     
     existing = db.query(InternalControl).filter(
         InternalControl.tenant_id == tenant_id,
@@ -709,6 +744,12 @@ def link_control_to_risk(
             detail="Risk not found"
         )
     
+    if risk.tenant_id != control.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Risk must belong to the same tenant as the control"
+        )
+    
     existing = db.query(InternalControlRiskLink).filter(
         InternalControlRiskLink.control_id == control_id,
         InternalControlRiskLink.risk_id == link_data.risk_id
@@ -1000,6 +1041,17 @@ def create_framework_link(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Normalized control not found"
             )
+    
+    existing_link = db.query(InternalControlFrameworkLink).filter(
+        InternalControlFrameworkLink.internal_control_id == control_id,
+        InternalControlFrameworkLink.framework_control_id == link_data.framework_control_id if link_data.framework_control_id else True,
+        InternalControlFrameworkLink.normalized_control_id == link_data.normalized_control_id if link_data.normalized_control_id else True
+    ).first()
+    if existing_link:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Framework link already exists"
+        )
     
     db_link = InternalControlFrameworkLink(
         internal_control_id=control_id,

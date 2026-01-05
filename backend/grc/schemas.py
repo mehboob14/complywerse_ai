@@ -1569,6 +1569,8 @@ class InternalControlResponse(BaseModel):
     created_by: Optional[int]
     approved_by: Optional[int]
     approved_at: Optional[datetime]
+    owner_name: Optional[str] = None
+    department_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -1605,6 +1607,7 @@ class InternalControlTestCreate(InternalControlTestBase):
 
 class InternalControlTestUpdate(BaseModel):
     test_type: Optional[str] = None
+    test_date: Optional[datetime] = None
     test_period_start: Optional[datetime] = None
     test_period_end: Optional[datetime] = None
     sample_size: Optional[int] = None

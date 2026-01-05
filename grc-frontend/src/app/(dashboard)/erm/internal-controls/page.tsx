@@ -46,15 +46,12 @@ interface InternalControl {
 }
 
 const CONTROL_CATEGORIES = [
-  'Access Control',
-  'Change Management',
-  'Data Protection',
-  'Financial',
-  'IT General',
   'Operations',
-  'Security',
-  'Compliance',
-  'Other',
+  'Financial',
+  'IT Security',
+  'AML/CFT',
+  'Credit Risk',
+  'Customer Service',
 ];
 
 const CONTROL_TYPES = [

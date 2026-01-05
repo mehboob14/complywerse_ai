@@ -97,6 +97,65 @@ grc-frontend/src/app/(dashboard)/control-library/
 - `grc_ai_evidence_recommendations` - AI-suggested evidence types
 - `grc_control_mapping_analysis` - AI analysis job tracking
 
+## Internal Control Register Module (ERM Sub-module)
+
+The Internal Control Register is a sub-module of Enterprise Risk Management that manages organization-specific internal controls independent of regulatory frameworks. Controls can optionally be mapped to framework controls when needed.
+
+### Key Capabilities
+- **Control Register** - Full CRUD for internal controls with unique IDs (IC-001, IC-002, etc.)
+- **Workflow Management** - Draft → Pending Approval → Active lifecycle with approval/rejection
+- **Control Testing** - Track design and operating effectiveness with test records
+- **Departmental Assignment** - Assign controls to departments and owners
+- **Escalation Rules** - Define escalation paths and triggers for control failures
+- **Risk Linking** - Connect controls to ERM risks they mitigate
+- **Framework Mapping** - Optionally map internal controls to framework controls
+- **Banking Sample Controls** - 22 pre-seeded real-world banking controls
+
+### Control Categories
+- Operations
+- Financial
+- IT Security
+- AML/CFT
+- Credit Risk
+- Customer Service
+
+### Backend (`/grc/erm/internal-controls/*`)
+```
+backend/grc/modules/erm/routers/internal_controls.py
+```
+
+### Frontend (`/erm/internal-controls/*`)
+```
+grc-frontend/src/app/(dashboard)/erm/internal-controls/
+├── page.tsx           # Control list with filters, dashboard stats
+└── [id]/page.tsx      # Control detail with tabs (Details, Testing, Risks, Escalations, Framework Mappings, Workflow)
+```
+
+### Internal Control API Endpoints
+- `GET /grc/erm/internal-controls` - List controls with filters
+- `POST /grc/erm/internal-controls` - Create new control
+- `GET /grc/erm/internal-controls/{id}` - Get control details
+- `PUT /grc/erm/internal-controls/{id}` - Update control
+- `DELETE /grc/erm/internal-controls/{id}` - Delete control
+- `POST /grc/erm/internal-controls/{id}/submit` - Submit for approval
+- `POST /grc/erm/internal-controls/{id}/approve` - Approve control
+- `POST /grc/erm/internal-controls/{id}/reject` - Reject control
+- `GET /grc/erm/internal-controls/{id}/tests` - List tests
+- `POST /grc/erm/internal-controls/{id}/tests` - Add test
+- `GET /grc/erm/internal-controls/{id}/risks` - List linked risks
+- `POST /grc/erm/internal-controls/{id}/risks` - Link to risk
+- `GET /grc/erm/internal-controls/{id}/escalations` - List escalation rules
+- `GET /grc/erm/internal-controls/{id}/framework-links` - Framework mappings
+- `GET /grc/erm/internal-controls/dashboard` - Dashboard statistics
+
+### Internal Control Database Tables
+- `grc_internal_controls` - Main control register
+- `grc_internal_control_tests` - Design/operating effectiveness tests
+- `grc_internal_control_risk_links` - Links to ERM risks
+- `grc_internal_control_framework_links` - Optional framework mappings
+- `grc_internal_control_escalations` - Escalation rules
+- `grc_internal_control_workflow_actions` - Workflow audit trail
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **FastAPI**: Backend API framework.

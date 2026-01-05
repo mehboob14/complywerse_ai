@@ -62,10 +62,10 @@ interface InternalControlDetail {
   owner_name?: string;
   backup_owner_name?: string;
   department_name?: string;
-  tests: ControlTest[];
-  risk_links: RiskLink[];
-  framework_links: FrameworkLink[];
-  escalations: Escalation[];
+  tests?: ControlTest[];
+  risk_links?: RiskLink[];
+  framework_links?: FrameworkLink[];
+  escalations?: Escalation[];
 }
 
 interface ControlTest {
@@ -449,21 +449,21 @@ export default function InternalControlDetailPage() {
                   <User className="mt-1 h-4 w-4 text-slate-400" />
                   <div>
                     <dt className="text-sm text-slate-400">Owner</dt>
-                    <dd className="text-white">{control.owner_name || '-'}</dd>
+                    <dd className="text-white">{control.owner_name || 'Not assigned'}</dd>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <User className="mt-1 h-4 w-4 text-slate-400" />
                   <div>
                     <dt className="text-sm text-slate-400">Backup Owner</dt>
-                    <dd className="text-white">{control.backup_owner_name || '-'}</dd>
+                    <dd className="text-white">{control.backup_owner_name || 'Not assigned'}</dd>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Building2 className="mt-1 h-4 w-4 text-slate-400" />
                   <div>
                     <dt className="text-sm text-slate-400">Department</dt>
-                    <dd className="text-white">{control.department_name || '-'}</dd>
+                    <dd className="text-white">{control.department_name || 'Not assigned'}</dd>
                   </div>
                 </div>
               </dl>
@@ -532,7 +532,7 @@ export default function InternalControlDetailPage() {
               Add Test
             </button>
           </div>
-          {control.tests.length === 0 ? (
+          {(!control.tests || control.tests.length === 0) ? (
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-12 text-center">
               <ClipboardCheck className="mx-auto h-12 w-12 text-slate-500" />
               <p className="mt-4 text-lg font-medium text-white">No tests recorded</p>
@@ -552,7 +552,7 @@ export default function InternalControlDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
-                  {control.tests.map((test) => {
+                  {control.tests?.map((test) => {
                     const resultStyle = TEST_RESULT_STYLES[test.result || ''] || {
                       bg: 'bg-slate-500/20',
                       text: 'text-slate-400',
@@ -595,15 +595,15 @@ export default function InternalControlDetailPage() {
               Link Risk
             </button>
           </div>
-          {control.risk_links.length === 0 ? (
+          {(!control.risk_links || control.risk_links.length === 0) ? (
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-12 text-center">
               <AlertTriangle className="mx-auto h-12 w-12 text-slate-500" />
-              <p className="mt-4 text-lg font-medium text-white">No linked risks</p>
+              <p className="mt-4 text-lg font-medium text-white">No risks linked</p>
               <p className="mt-1 text-sm text-slate-400">Link risks that this control mitigates</p>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {control.risk_links.map((link) => (
+              {control.risk_links?.map((link) => (
                 <div
                   key={link.id}
                   className="rounded-xl border border-slate-700 bg-slate-800 p-4 hover:border-slate-600"
@@ -656,7 +656,7 @@ export default function InternalControlDetailPage() {
               Add Escalation
             </button>
           </div>
-          {control.escalations.length === 0 ? (
+          {(!control.escalations || control.escalations.length === 0) ? (
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-12 text-center">
               <Shield className="mx-auto h-12 w-12 text-slate-500" />
               <p className="mt-4 text-lg font-medium text-white">No escalation rules</p>
@@ -664,7 +664,7 @@ export default function InternalControlDetailPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {control.escalations.map((esc) => (
+              {control.escalations?.map((esc) => (
                 <div
                   key={esc.id}
                   className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800 p-4"
@@ -708,7 +708,7 @@ export default function InternalControlDetailPage() {
       {activeTab === 'framework' && (
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-white">Framework Mappings</h3>
-          {control.framework_links.length === 0 ? (
+          {(!control.framework_links || control.framework_links.length === 0) ? (
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-12 text-center">
               <LinkIcon className="mx-auto h-12 w-12 text-slate-500" />
               <p className="mt-4 text-lg font-medium text-white">No framework mappings</p>
@@ -728,7 +728,7 @@ export default function InternalControlDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
-                  {control.framework_links.map((link) => (
+                  {control.framework_links?.map((link) => (
                     <tr key={link.id} className="hover:bg-slate-700/50">
                       <td className="px-4 py-3 text-white">
                         {link.framework_control_id ? 'Framework Control' : 'Normalized Control'}
