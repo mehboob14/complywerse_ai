@@ -150,11 +150,13 @@ export default function FrameworkComparisonPage() {
   const { data: matrixData, isLoading: matrixLoading } = useQuery({
     queryKey: ['comparison-matrix', selectedFrameworks],
     queryFn: async () => {
-      const params: Record<string, any> = {};
+      let url = '/control-library/comparison/matrix';
       if (selectedFrameworks.length >= 2) {
-        params.framework_ids = selectedFrameworks;
+        const searchParams = new URLSearchParams();
+        selectedFrameworks.forEach(id => searchParams.append('framework_ids', id.toString()));
+        url = `${url}?${searchParams.toString()}`;
       }
-      const response = await apiClient.get('/control-library/comparison/matrix', { params });
+      const response = await apiClient.get(url);
       return response.data as { frameworks: FrameworkInfo[]; matrix: MatrixRow[] };
     },
     enabled: selectedFrameworks.length >= 2 || selectedFrameworks.length === 0,
@@ -163,12 +165,11 @@ export default function FrameworkComparisonPage() {
   const { data: controlsData, isLoading: controlsLoading, refetch: refetchControls } = useQuery({
     queryKey: ['comparison-controls', selectedFrameworks, page, pageSize],
     queryFn: async () => {
-      const params: Record<string, any> = {
-        framework_ids: selectedFrameworks,
-        skip: page * pageSize,
-        limit: pageSize,
-      };
-      const response = await apiClient.get('/control-library/comparison/controls', { params });
+      const searchParams = new URLSearchParams();
+      selectedFrameworks.forEach(id => searchParams.append('framework_ids', id.toString()));
+      searchParams.append('skip', (page * pageSize).toString());
+      searchParams.append('limit', pageSize.toString());
+      const response = await apiClient.get(`/control-library/comparison/controls?${searchParams.toString()}`);
       return response.data as {
         total: number;
         frameworks: FrameworkInfo[];
