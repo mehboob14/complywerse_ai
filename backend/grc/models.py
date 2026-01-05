@@ -2700,6 +2700,9 @@ def init_grc_db():
     
     from .seed_certification_phases import seed_certification_phases
     seed_certification_phases()
+    
+    from .seed_internal_controls import seed_internal_controls
+    seed_internal_controls()
 
 
 def get_db():
