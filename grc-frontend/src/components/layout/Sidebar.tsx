@@ -24,6 +24,10 @@ import {
   ClipboardCheck,
   CheckCircle,
   Package,
+  Library,
+  GitCompare,
+  PieChart,
+  Lightbulb,
   type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -52,6 +56,17 @@ const navigation: (NavItem | NavCategory)[] = [
       { name: 'Frameworks', href: '/frameworks', icon: FileStack },
       { name: 'Framework Upload', href: '/framework-upload', icon: Upload },
       { name: 'Controls', href: '/controls', icon: Shield },
+    ],
+  },
+  {
+    name: 'Control Library',
+    icon: Library,
+    items: [
+      { name: 'Control Groups', href: '/control-library', icon: Library },
+      { name: 'Gap Analysis', href: '/control-library/gaps', icon: AlertTriangle },
+      { name: 'Framework Comparison', href: '/control-library/compare', icon: GitCompare },
+      { name: 'Coverage Matrix', href: '/control-library/coverage', icon: PieChart },
+      { name: 'Evidence Suggestions', href: '/control-library/evidence', icon: Lightbulb },
     ],
   },
   {
