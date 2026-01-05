@@ -6,6 +6,7 @@ from .reviews import router as reviews_router
 from .mappings import router as mappings_router
 from .dashboard import router as dashboard_router
 from .policy_parser import router as policy_parser_router
+from .document_workflow import router as document_workflow_router
 
 __all__ = [
     "documents_router",
@@ -16,4 +17,5 @@ __all__ = [
     "mappings_router",
     "dashboard_router",
     "policy_parser_router",
+    "document_workflow_router",
 ]

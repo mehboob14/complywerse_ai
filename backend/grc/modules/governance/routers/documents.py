@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from ....models import (
     GovernanceDocument, GovernanceDocumentVersion, DocumentReviewer,
-    DocumentApprovalStep, DocumentAuditLog, GRCUser, Tenant, get_db
+    DocumentApprovalStep, DocumentAuditLog, GRCUser, Tenant, PolicyStatement, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -115,8 +115,8 @@ def create_audit_log(
     return audit_log
 
 
-def serialize_document(doc: GovernanceDocument) -> dict:
-    return {
+def serialize_document(doc: GovernanceDocument, db: Session = None) -> dict:
+    result = {
         "id": doc.id,
         "tenant_id": doc.tenant_id,
         "document_code": doc.document_code,
@@ -154,6 +154,32 @@ def serialize_document(doc: GovernanceDocument) -> dict:
         "created_at": doc.created_at.isoformat() if doc.created_at else None,
         "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
     }
+    
+    if db:
+        policy_count = db.query(PolicyStatement).filter(
+            PolicyStatement.document_id == doc.id
+        ).count()
+        result["policy_statement_count"] = policy_count
+    else:
+        result["policy_statement_count"] = len(doc.policy_statements) if hasattr(doc, 'policy_statements') and doc.policy_statements else 0
+    
+    if hasattr(doc, 'workflow_instance') and doc.workflow_instance:
+        wf = doc.workflow_instance
+        result["workflow_instance"] = {
+            "id": wf.id,
+            "template_id": wf.template_id,
+            "template_name": wf.template.name if wf.template else None,
+            "current_step_id": wf.current_step_id,
+            "current_step_sequence": wf.current_step_sequence,
+            "current_step_name": wf.current_step.name if wf.current_step else None,
+            "status": wf.status,
+            "started_at": wf.started_at.isoformat() if wf.started_at else None,
+            "completed_at": wf.completed_at.isoformat() if wf.completed_at else None,
+        }
+    else:
+        result["workflow_instance"] = None
+    
+    return result
 
 
 @router.get("")
@@ -220,7 +246,7 @@ def list_documents(
     documents = query.offset(skip).limit(limit).all()
     
     return {
-        "items": [serialize_document(doc) for doc in documents],
+        "items": [serialize_document(doc, db) for doc in documents],
         "total": total,
         "skip": skip,
         "limit": limit
@@ -300,7 +326,7 @@ def create_document(
     db.commit()
     db.refresh(db_document)
     
-    return serialize_document(db_document)
+    return serialize_document(db_document, db)
 
 
 @router.get("/policies")
@@ -432,7 +458,7 @@ def get_document_hierarchy(
     documents = query.order_by(GovernanceDocument.doc_type, GovernanceDocument.title).all()
     
     def build_hierarchy(doc):
-        result = serialize_document(doc)
+        result = serialize_document(doc, db)
         children = db.query(GovernanceDocument).filter(
             GovernanceDocument.parent_document_id == doc.id
         ).all()
@@ -469,7 +495,7 @@ def get_document(
             detail="Document not found"
         )
     
-    result = serialize_document(document)
+    result = serialize_document(document, db)
     
     result["versions"] = [
         {
@@ -594,7 +620,7 @@ def update_document(
     db.commit()
     db.refresh(document)
     
-    return serialize_document(document)
+    return serialize_document(document, db)
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -882,7 +908,7 @@ async def upload_document_file(
     
     return {
         "message": "File uploaded successfully",
-        "document": serialize_document(document)
+        "document": serialize_document(document, db)
     }
 
 
@@ -1039,5 +1065,5 @@ async def create_document_with_file(
     
     return {
         "message": "Document created successfully",
-        "document": serialize_document(document)
+        "document": serialize_document(document, db)
     }

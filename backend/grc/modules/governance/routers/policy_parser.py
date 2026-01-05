@@ -249,17 +249,18 @@ def parse_policy_document(
                 "total_statements": 0
             }
         
-        db.query(PolicyStatementCompliance).filter(
-            PolicyStatementCompliance.statement_id.in_(
-                db.query(PolicyStatement.id).filter(
-                    PolicyStatement.document_id == document_id
-                )
-            )
-        ).delete(synchronize_session=False)
-        
-        db.query(PolicyStatement).filter(
+        existing_statement_ids = [s.id for s in db.query(PolicyStatement.id).filter(
             PolicyStatement.document_id == document_id
-        ).delete(synchronize_session=False)
+        ).all()]
+        
+        if existing_statement_ids:
+            db.query(PolicyStatementCompliance).filter(
+                PolicyStatementCompliance.statement_id.in_(existing_statement_ids)
+            ).delete(synchronize_session='fetch')
+            
+            db.query(PolicyStatement).filter(
+                PolicyStatement.id.in_(existing_statement_ids)
+            ).delete(synchronize_session='fetch')
         
         created_statements = []
         for idx, statement_data in enumerate(parsed_statements_data, start=1):
