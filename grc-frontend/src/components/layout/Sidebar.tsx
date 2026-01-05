@@ -23,6 +23,7 @@ import {
   GitBranch,
   ClipboardCheck,
   CheckCircle,
+  Package,
   type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -51,7 +52,15 @@ const navigation: (NavItem | NavCategory)[] = [
       { name: 'Frameworks', href: '/frameworks', icon: FileStack },
       { name: 'Framework Upload', href: '/framework-upload', icon: Upload },
       { name: 'Controls', href: '/controls', icon: Shield },
-      { name: 'Evidence', href: '/evidence', icon: FileCheck },
+    ],
+  },
+  {
+    name: 'Evidence',
+    icon: FileCheck,
+    items: [
+      { name: 'Evidence Library', href: '/evidence', icon: FileCheck },
+      { name: 'Coverage Dashboard', href: '/evidence/coverage', icon: BarChart3 },
+      { name: 'Audit Packages', href: '/evidence/audit-packages', icon: Package },
     ],
   },
   {
