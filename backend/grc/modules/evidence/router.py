@@ -1,10 +1,11 @@
 from fastapi import APIRouter
-from .routers import evidence_router, control_links_router
+from .routers import evidence_router, control_links_router, ocr_router
 
 router = APIRouter(prefix="/evidence-mgmt", tags=["Evidence Module"])
 
 router.include_router(evidence_router, tags=["Evidence CRUD"])
 router.include_router(control_links_router, tags=["Evidence Control Links"])
+router.include_router(ocr_router, tags=["Evidence OCR"])
 
 
 @router.get("")
