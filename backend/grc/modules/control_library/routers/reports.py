@@ -44,15 +44,36 @@ class ExecutiveSummaryRequest(BaseModel):
     focus_areas: Optional[List[str]] = None
 
 
+def check_ai_available() -> bool:
+    """Check if OpenAI API key is configured."""
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return False
+    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+        return False
+    return True
+
+
+def raise_ai_unavailable(fallback_available: bool = False):
+    """Raise HTTP 503 error when AI features are unavailable."""
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "error": "AI features unavailable",
+            "message": "OpenAI API key is not configured. Please add OPENAI_API_KEY to enable AI features.",
+            "fallback_available": fallback_available
+        }
+    )
+
+
 def get_openai_client() -> OpenAI:
-    if not AI_INTEGRATIONS_OPENAI_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI integration not configured"
-        )
+    if not check_ai_available():
+        raise_ai_unavailable(fallback_available=False)
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     return OpenAI(
-        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
-        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+        api_key=api_key,
+        base_url=base_url
     )
 
 
@@ -961,6 +982,17 @@ def generate_executive_summary(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    if not check_ai_available():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "AI features unavailable",
+                "message": "OpenAI API key is not configured. Please add OPENAI_API_KEY to enable AI-generated executive summaries.",
+                "fallback_available": True,
+                "fallback_suggestion": "Use the 'Harmonization Report' or 'Audit Ready Summary' endpoints for data-driven reports without AI analysis."
+            }
+        )
+    
     tenant_id = get_user_tenant_id(current_user, db)
     
     summary = calculate_summary_stats(db, tenant_id)

@@ -36,6 +36,66 @@ The platform utilizes a multi-tenant architecture with complete tenant isolation
 - **IT Asset Inventory**: Asset classification, valuation, and linking to GRC elements.
 - **Role-Based Access Control (RBAC)**: Fine-grained permissions per tenant.
 - **Framework Upload Module**: AI-powered parsing of regulatory documents (PDF/DOCX) for control extraction and alignment.
+- **Unified Control Library**: AI-powered control mapping across frameworks with evidence recommendations and gap analysis.
+
+## Unified Control Library Module
+
+The Unified Control Library provides AI-powered control mapping across regulatory frameworks, enabling organizations to identify similar controls, reduce compliance overhead, and optimize evidence collection.
+
+### Key Capabilities
+- **Common Control Groups** - Cluster similar controls across frameworks into unified groups
+- **AI Similarity Analysis** - Use OpenAI GPT-4o to calculate control similarity scores
+- **Control Inheritance** - Track when satisfying one control automatically satisfies others
+- **Evidence Recommendations** - AI-suggested evidence types for each control/group
+- **Gap Analysis** - Identify unmapped controls, missing evidence, and coverage gaps
+- **Framework Comparison** - Side-by-side comparison with AI difference analysis
+- **Coverage Matrix** - Visual heatmap of evidence coverage across frameworks
+- **Harmonization Reports** - Exportable reports for auditors (Excel/CSV)
+
+### Backend (`/grc/control-library/*`)
+```
+backend/grc/modules/control_library/
+├── router.py              # Main control library router
+└── routers/
+    ├── groups.py          # Common control groups CRUD, auto-grouping
+    ├── ai_mapping.py      # AI similarity analysis, batch processing
+    ├── inheritance.py     # Control inheritance relationships
+    ├── evidence_recs.py   # AI evidence recommendations
+    ├── gap_analysis.py    # Gap identification and dashboard
+    ├── comparison.py      # Framework comparison, side-by-side
+    ├── coverage.py        # Coverage matrix, heatmap data
+    └── reports.py         # Harmonization reports, export
+```
+
+### Frontend (`/control-library/*`)
+```
+grc-frontend/src/app/(dashboard)/control-library/
+├── page.tsx                # Control groups list with AI actions
+├── [id]/page.tsx           # Group detail with controls, evidence recs
+├── gaps/page.tsx           # Gap analysis dashboard
+├── compare/page.tsx        # Framework comparison view
+├── coverage/page.tsx       # Coverage matrix heatmap
+└── evidence/page.tsx       # Evidence suggestions and reuse metrics
+```
+
+### Control Library API Endpoints
+- `GET /grc/control-library` - Module info
+- **Groups**: `/grc/control-library/groups/*` - CRUD, auto-group, generate summary
+- **AI Mapping**: `/grc/control-library/ai/*` - Analyze, similarities, suggestions
+- **Inheritance**: `/grc/control-library/inheritance/*` - Parent/child relationships
+- **Evidence Recs**: `/grc/control-library/evidence-recs/*` - Generate, bulk, priority
+- **Gap Analysis**: `/grc/control-library/gaps/*` - Dashboard, unmapped, evidence gaps
+- **Comparison**: `/grc/control-library/comparison/*` - Frameworks, side-by-side, differences
+- **Coverage**: `/grc/control-library/coverage/*` - Matrix, heatmap, audit savings
+- **Reports**: `/grc/control-library/reports/*` - Harmonization, export, executive summary
+
+### Control Library Database Tables
+- `grc_common_control_groups` - Unified control clusters with AI summary
+- `grc_common_control_group_mappings` - Links controls to groups with confidence
+- `grc_control_similarity_mappings` - AI-calculated similarity between controls
+- `grc_control_inheritance` - Control inheritance relationships
+- `grc_ai_evidence_recommendations` - AI-suggested evidence types
+- `grc_control_mapping_analysis` - AI analysis job tracking
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.

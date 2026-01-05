@@ -46,15 +46,36 @@ class ExportComparisonRequest(BaseModel):
     format: str = "csv"
 
 
+def check_ai_available() -> bool:
+    """Check if OpenAI API key is configured."""
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return False
+    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+        return False
+    return True
+
+
+def raise_ai_unavailable(fallback_available: bool = False):
+    """Raise HTTP 503 error when AI features are unavailable."""
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "error": "AI features unavailable",
+            "message": "OpenAI API key is not configured. Please add OPENAI_API_KEY to enable AI features.",
+            "fallback_available": fallback_available
+        }
+    )
+
+
 def get_openai_client() -> OpenAI:
-    if not AI_INTEGRATIONS_OPENAI_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI integration not configured"
-        )
+    if not check_ai_available():
+        raise_ai_unavailable(fallback_available=False)
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     return OpenAI(
-        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
-        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+        api_key=api_key,
+        base_url=base_url
     )
 
 
@@ -585,19 +606,29 @@ def compare_control_with_equivalents(
                 "difference_highlights": difference_highlights
             })
     
+    tenant_group_ids = db.query(CommonControlGroup.id).filter(
+        or_(
+            CommonControlGroup.tenant_id.in_(user_tenants),
+            CommonControlGroup.tenant_id.is_(None)
+        )
+    ).subquery()
+    
     if control_type == "framework":
         group_mappings = db.query(CommonControlGroupMapping).filter(
-            CommonControlGroupMapping.framework_control_id == control_id
+            CommonControlGroupMapping.framework_control_id == control_id,
+            CommonControlGroupMapping.group_id.in_(tenant_group_ids)
         ).all()
     else:
         group_mappings = db.query(CommonControlGroupMapping).filter(
-            CommonControlGroupMapping.normalized_control_id == control_id
+            CommonControlGroupMapping.normalized_control_id == control_id,
+            CommonControlGroupMapping.group_id.in_(tenant_group_ids)
         ).all()
     
     for gm in group_mappings:
         related_mappings = db.query(CommonControlGroupMapping).filter(
             CommonControlGroupMapping.group_id == gm.group_id,
-            CommonControlGroupMapping.id != gm.id
+            CommonControlGroupMapping.id != gm.id,
+            CommonControlGroupMapping.group_id.in_(tenant_group_ids)
         ).all()
         
         for rm in related_mappings:
@@ -645,6 +676,8 @@ def get_side_by_side_comparison(
             detail="At least one control pair is required"
         )
     
+    ai_available = check_ai_available()
+    
     comparisons = []
     for pair in request.control_pairs:
         control1 = get_control_details(pair.control1_type, pair.control1_id, db)
@@ -659,14 +692,42 @@ def get_side_by_side_comparison(
                 "error": "One or both controls not found",
                 "control1": control1,
                 "control2": control2,
-                "comparison": None
+                "comparison": None,
+                "ai_analysis": False
             })
             continue
         
         text1 = get_control_text(pair.control1_type, pair.control1_id, db)
         text2 = get_control_text(pair.control2_type, pair.control2_id, db)
         
-        differences = get_control_differences(text1 or "", text2 or "")
+        if ai_available:
+            differences = get_control_differences(text1 or "", text2 or "")
+            comparison_data = {
+                "similarity_score": differences.get("similarity_score", 0),
+                "common_keywords": differences.get("common_keywords", []),
+                "differences": differences.get("differences", []),
+                "control1_unique": differences.get("control1_unique", []),
+                "control2_unique": differences.get("control2_unique", []),
+                "control1_stricter": differences.get("control1_stricter", []),
+                "control2_stricter": differences.get("control2_stricter", [])
+            }
+            ai_analyzed = True
+        else:
+            words1 = set((text1 or "").lower().split())
+            words2 = set((text2 or "").lower().split())
+            common = words1 & words2
+            unique1 = words1 - words2
+            unique2 = words2 - words1
+            comparison_data = {
+                "similarity_score": len(common) / max(len(words1 | words2), 1),
+                "common_keywords": list(common)[:20],
+                "differences": ["AI analysis unavailable - showing basic text comparison"],
+                "control1_unique": list(unique1)[:15],
+                "control2_unique": list(unique2)[:15],
+                "control1_stricter": [],
+                "control2_stricter": []
+            }
+            ai_analyzed = False
         
         comparisons.append({
             "pair": {
@@ -681,18 +742,15 @@ def get_side_by_side_comparison(
                 **control2,
                 "control_text": text2
             },
-            "comparison": {
-                "similarity_score": differences.get("similarity_score", 0),
-                "common_keywords": differences.get("common_keywords", []),
-                "differences": differences.get("differences", []),
-                "control1_unique": differences.get("control1_unique", []),
-                "control2_unique": differences.get("control2_unique", []),
-                "control1_stricter": differences.get("control1_stricter", []),
-                "control2_stricter": differences.get("control2_stricter", [])
-            }
+            "comparison": comparison_data,
+            "ai_analysis": ai_analyzed
         })
     
-    return {"comparisons": comparisons}
+    return {
+        "comparisons": comparisons,
+        "ai_available": ai_available,
+        "ai_unavailable_message": None if ai_available else "OpenAI API key is not configured. Enable AI features for detailed comparison analysis."
+    }
 
 
 @router.get("/differences/{control_type}/{control_id}")
@@ -704,6 +762,7 @@ def get_ai_analyzed_differences(
 ):
     user_tenants = get_user_tenants(current_user, db)
     tenant_id = get_user_primary_tenant(current_user, db)
+    ai_available = check_ai_available()
     
     if control_type not in ["normalized", "framework"]:
         raise HTTPException(
@@ -723,19 +782,29 @@ def get_ai_analyzed_differences(
     equivalent_texts = []
     equivalent_controls = []
     
+    tenant_group_ids = db.query(CommonControlGroup.id).filter(
+        or_(
+            CommonControlGroup.tenant_id.in_(user_tenants),
+            CommonControlGroup.tenant_id.is_(None)
+        )
+    ).subquery()
+    
     if control_type == "framework":
         group_mappings = db.query(CommonControlGroupMapping).filter(
-            CommonControlGroupMapping.framework_control_id == control_id
+            CommonControlGroupMapping.framework_control_id == control_id,
+            CommonControlGroupMapping.group_id.in_(tenant_group_ids)
         ).all()
     else:
         group_mappings = db.query(CommonControlGroupMapping).filter(
-            CommonControlGroupMapping.normalized_control_id == control_id
+            CommonControlGroupMapping.normalized_control_id == control_id,
+            CommonControlGroupMapping.group_id.in_(tenant_group_ids)
         ).all()
     
     for gm in group_mappings:
         related_mappings = db.query(CommonControlGroupMapping).filter(
             CommonControlGroupMapping.group_id == gm.group_id,
-            CommonControlGroupMapping.id != gm.id
+            CommonControlGroupMapping.id != gm.id,
+            CommonControlGroupMapping.group_id.in_(tenant_group_ids)
         ).limit(10).all()
         
         for rm in related_mappings:
@@ -793,7 +862,35 @@ def get_ai_analyzed_differences(
                 "gaps": [],
                 "summary": "No equivalent controls found for comparison"
             },
-            "equivalents": []
+            "equivalents": [],
+            "ai_analysis": False
+        }
+    
+    if not ai_available:
+        main_words = set((main_text or "").lower().split())
+        all_equiv_words = set()
+        for eq_text in equivalent_texts:
+            all_equiv_words.update(eq_text.lower().split())
+        common_words = main_words & all_equiv_words
+        unique_to_main = main_words - all_equiv_words
+        
+        return {
+            "control": main_control,
+            "equivalent_count": len(equivalent_controls),
+            "analysis": {
+                "common_requirements": [],
+                "unique_requirements": [],
+                "stricter_aspects": [],
+                "gaps": [],
+                "summary": "AI analysis unavailable. Basic text comparison shows the controls share common terminology."
+            },
+            "equivalents": equivalent_controls[:10],
+            "ai_analysis": False,
+            "basic_comparison": {
+                "common_keywords": list(common_words)[:20],
+                "unique_keywords": list(unique_to_main)[:20]
+            },
+            "ai_unavailable_message": "OpenAI API key is not configured. Enable AI features for detailed analysis."
         }
     
     analysis = analyze_control_with_equivalents(main_text or "", equivalent_texts)
@@ -808,7 +905,8 @@ def get_ai_analyzed_differences(
             "gaps": analysis.get("gaps", []),
             "summary": analysis.get("summary", "")
         },
-        "equivalents": equivalent_controls[:10]
+        "equivalents": equivalent_controls[:10],
+        "ai_analysis": True
     }
 
 

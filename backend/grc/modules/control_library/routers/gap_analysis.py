@@ -26,12 +26,21 @@ class ExportRequest(BaseModel):
 
 
 def get_unmapped_control_count(db: Session, tenant_id: int, framework_id: Optional[int] = None) -> int:
+    tenant_group_ids = db.query(CommonControlGroup.id).filter(
+        or_(
+            CommonControlGroup.tenant_id == tenant_id,
+            CommonControlGroup.tenant_id.is_(None)
+        )
+    ).subquery()
+    
     mapped_normalized_ids = db.query(CommonControlGroupMapping.normalized_control_id).filter(
-        CommonControlGroupMapping.normalized_control_id.isnot(None)
+        CommonControlGroupMapping.normalized_control_id.isnot(None),
+        CommonControlGroupMapping.group_id.in_(tenant_group_ids)
     ).distinct()
     
     mapped_framework_ids = db.query(CommonControlGroupMapping.framework_control_id).filter(
-        CommonControlGroupMapping.framework_control_id.isnot(None)
+        CommonControlGroupMapping.framework_control_id.isnot(None),
+        CommonControlGroupMapping.group_id.in_(tenant_group_ids)
     ).distinct()
     
     normalized_count = db.query(NormalizedControl).filter(
@@ -154,12 +163,21 @@ def get_unmapped_controls(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
+    tenant_group_ids = db.query(CommonControlGroup.id).filter(
+        or_(
+            CommonControlGroup.tenant_id.in_(user_tenants),
+            CommonControlGroup.tenant_id.is_(None)
+        )
+    ).subquery()
+    
     mapped_normalized_ids = db.query(CommonControlGroupMapping.normalized_control_id).filter(
-        CommonControlGroupMapping.normalized_control_id.isnot(None)
+        CommonControlGroupMapping.normalized_control_id.isnot(None),
+        CommonControlGroupMapping.group_id.in_(tenant_group_ids)
     ).distinct()
     
     mapped_framework_ids = db.query(CommonControlGroupMapping.framework_control_id).filter(
-        CommonControlGroupMapping.framework_control_id.isnot(None)
+        CommonControlGroupMapping.framework_control_id.isnot(None),
+        CommonControlGroupMapping.group_id.in_(tenant_group_ids)
     ).distinct()
     
     controls = []
@@ -421,12 +439,21 @@ def get_unmapped_summary(
     user_tenants = get_user_tenants(current_user, db)
     tenant_id = get_user_primary_tenant(current_user, db)
     
+    tenant_group_ids = db.query(CommonControlGroup.id).filter(
+        or_(
+            CommonControlGroup.tenant_id.in_(user_tenants),
+            CommonControlGroup.tenant_id.is_(None)
+        )
+    ).subquery()
+    
     mapped_normalized_ids = db.query(CommonControlGroupMapping.normalized_control_id).filter(
-        CommonControlGroupMapping.normalized_control_id.isnot(None)
+        CommonControlGroupMapping.normalized_control_id.isnot(None),
+        CommonControlGroupMapping.group_id.in_(tenant_group_ids)
     ).distinct()
     
     mapped_framework_ids = db.query(CommonControlGroupMapping.framework_control_id).filter(
-        CommonControlGroupMapping.framework_control_id.isnot(None)
+        CommonControlGroupMapping.framework_control_id.isnot(None),
+        CommonControlGroupMapping.group_id.in_(tenant_group_ids)
     ).distinct()
     
     total_normalized_unmapped = db.query(NormalizedControl).filter(
@@ -628,8 +655,16 @@ def get_framework_gaps(
             detail="Framework not found"
         )
     
+    tenant_group_ids = db.query(CommonControlGroup.id).filter(
+        or_(
+            CommonControlGroup.tenant_id.in_(user_tenants),
+            CommonControlGroup.tenant_id.is_(None)
+        )
+    ).subquery()
+    
     mapped_framework_ids = db.query(CommonControlGroupMapping.framework_control_id).filter(
-        CommonControlGroupMapping.framework_control_id.isnot(None)
+        CommonControlGroupMapping.framework_control_id.isnot(None),
+        CommonControlGroupMapping.group_id.in_(tenant_group_ids)
     ).distinct()
     
     tenant_evidence_ids = db.query(Evidence.id).filter(
@@ -803,11 +838,20 @@ def get_gap_analysis_dashboard(
     total_framework = db.query(FrameworkControl).count()
     total_controls = total_normalized + total_framework
     
+    tenant_group_ids = db.query(CommonControlGroup.id).filter(
+        or_(
+            CommonControlGroup.tenant_id.in_(user_tenants),
+            CommonControlGroup.tenant_id.is_(None)
+        )
+    ).subquery()
+    
     mapped_normalized_ids = db.query(CommonControlGroupMapping.normalized_control_id).filter(
-        CommonControlGroupMapping.normalized_control_id.isnot(None)
+        CommonControlGroupMapping.normalized_control_id.isnot(None),
+        CommonControlGroupMapping.group_id.in_(tenant_group_ids)
     ).distinct()
     mapped_framework_ids = db.query(CommonControlGroupMapping.framework_control_id).filter(
-        CommonControlGroupMapping.framework_control_id.isnot(None)
+        CommonControlGroupMapping.framework_control_id.isnot(None),
+        CommonControlGroupMapping.group_id.in_(tenant_group_ids)
     ).distinct()
     
     mapped_normalized = db.query(NormalizedControl).filter(
