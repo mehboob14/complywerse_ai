@@ -1,7 +1,7 @@
 # Enterprise GRC Platform
 
 ## Overview
-A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platform with multi-tenancy support. The platform integrates 8 regulatory frameworks with a normalized control model, evidence management, enterprise risk management, governance orchestration, policy management, and IT asset inventory. Its purpose is to streamline GRC processes, provide a single source of truth for compliance, and enable real-time risk assessment and management for enterprises.
+A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platform with multi-tenancy support. It integrates 8 regulatory frameworks with a normalized control model, evidence management, enterprise risk management, governance orchestration, policy management, and IT asset inventory. The platform aims to streamline GRC processes, provide a single source of truth for compliance, and enable real-time risk assessment and management for enterprises, offering significant market potential.
 
 ## User Preferences
 - Backend in Python only
@@ -12,223 +12,37 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - PostgreSQL database
 
 ## System Architecture
-The platform features a multi-tenant architecture with complete tenant isolation and row-level security. It supports 8 pre-seeded regulatory frameworks through a normalized control model, allowing for cross-framework mappings. Evidence management includes upload, versioning, and review workflows with AI assessment stubs. Enterprise Risk Management (ERM) covers 7 risk categories with sub-categories, configurable scoring matrices, treatment tracking with mitigation actions, risk appetite management with tolerance thresholds, and a 5x5 risk heatmap. Governance orchestration manages compliance programs, objectives, exceptions, and issues. Policy and document management include versioning, approval workflows, and categorization. An IT asset inventory classifies assets, assigns CIA ratings, values assets, and links them to controls. The system utilizes Role-Based Access Control (RBAC) with fine-grained permissions per tenant.
+The platform utilizes a multi-tenant architecture with complete tenant isolation and row-level security. It supports 8 pre-seeded regulatory frameworks through a normalized control model for cross-framework mappings. Key modules include Evidence Management (upload, versioning, AI assessment stubs), Enterprise Risk Management (7 risk categories, configurable scoring, mitigation tracking, 5x5 heatmap), Governance Orchestration (compliance programs, objectives, issues), Policy and Document Management (versioning, approval workflows), and IT Asset Inventory (classification, CIA ratings, control linking). Role-Based Access Control (RBAC) with fine-grained permissions ensures secure access.
+
+**UI/UX Decisions:**
+- Frontend built with Next.js 14, TypeScript, and Tailwind CSS.
+- Dark theme (slate-900/slate-800) implemented across the UI.
+- App Router for streamlined navigation.
 
 **Technical Implementations:**
-- **Backend**: Python 3.11, FastAPI, SQLAlchemy, PostgreSQL.
+- **Backend**: Python 3.11, FastAPI, SQLAlchemy.
 - **Frontend**: Next.js 14, TypeScript, Tailwind CSS, React Query.
-- **Database**: PostgreSQL with a multi-tenant schema (37+ tables).
+- **Database**: PostgreSQL with a multi-tenant schema.
 - **Authentication**: Cookie-based JWT with Secure/SameSite/HttpOnly flags.
-- **UI/UX**: Next.js 14 frontend with a dark theme (slate-900/slate-800) and an App Router for navigation.
 
-**Key Features:**
-- Multi-Tenancy
-- Multi-Framework Support (8 regulatory frameworks)
-- Normalized Control Model
-- Evidence Management
-- Enterprise Risk Management (ERM Module)
-- Governance Orchestration
-- Policy/Document Management
-- IT Asset Inventory
-- Role-Based Access Control
-
-## ERM Module Structure
-
-The ERM (Enterprise Risk Management) module is organized as a standalone module:
-
-### Backend (`/grc/erm/*`)
-```
-backend/grc/modules/erm/
-├── router.py              # Main ERM router
-└── routers/
-    ├── risks.py           # Risk register CRUD, heatmap, dashboard, close/reopen, aging
-    ├── kris.py            # Key Risk Indicators
-    ├── incidents.py       # Risk incidents
-    ├── reviews.py         # Review workflow
-    ├── dependencies.py    # Risk dependencies
-    ├── reports.py         # Reporting & analytics
-    ├── mitigation_actions.py  # Mitigation action tracking
-    ├── scales.py          # Configurable likelihood/impact scales
-    └── appetite.py        # Risk appetite management & tolerance breaches
-```
-
-### Frontend (`/erm/*`)
-```
-grc-frontend/src/app/(dashboard)/erm/
-├── layout.tsx              # Shared layout with tab navigation
-├── page.tsx                # ERM overview dashboard
-├── risks/page.tsx          # Risk register (with sub-categories, business owner, departments)
-├── mitigation-actions/page.tsx  # Mitigation action tracking & status
-├── appetite/page.tsx       # Risk appetite config & tolerance breaches
-├── kris/page.tsx           # Key Risk Indicators
-├── incidents/page.tsx      # Incidents
-├── reviews/page.tsx        # Review workflow
-├── dependencies/page.tsx   # Dependencies
-└── reports/page.tsx        # Reporting
-```
-
-### ERM API Endpoints
-- `GET /grc/erm` - Module info
-- **Risks**: `/grc/erm/risks/*` - CRUD, dashboard, heatmap, linking, close/reopen, aging
-- **Mitigation Actions**: `/grc/erm/mitigation-actions/*` - CRUD, complete, overdue tracking
-- **Appetite**: `/grc/erm/appetite/*` - Config, with-stats, breaches, seed-defaults
-- **KRIs**: `/grc/erm/kris/*` - Create, measure, alerts, trends
-- **Incidents**: `/grc/erm/incidents/*` - CRUD, dashboard
-- **Reviews**: `/grc/erm/reviews/*` - Schedule, approve, overdue
-- **Dependencies**: `/grc/erm/dependencies/*` - Cascade analysis
-- **Reports**: `/grc/erm/reports/*` - Executive, board, department, audit
-- **Scales**: `/grc/erm/scales/*` - Configurable likelihood/impact scales
-
-### ERM Database Tables
-- `grc_risks` - Risk register (with sub_category, business_owner, departments, closure workflow)
-- `grc_risk_mitigation_actions` - Mitigation action tracking
-- `grc_risk_audit_finding_links` - Links between risks and audit findings
-- `grc_likelihood_impact_scales` - Configurable scoring scales
-- `grc_risk_kris` - Key Risk Indicators
-- `grc_risk_kri_measurements` - KRI measurement history
-- `grc_risk_incidents` - Risk incidents/events
-- `grc_risk_reviews` - Review workflow
-- `grc_risk_score_history` - Score change history
-- `grc_risk_dependencies` - Risk-to-risk dependencies
-- `grc_risk_appetite_config` - Risk appetite configuration (with tolerance thresholds)
-- `grc_risk_reports` - Generated reports
-
-## Governance Module Structure
-
-The Governance module provides full lifecycle management for governance artifacts with version control, approval workflows, and cross-module integration.
-
-### Governance Document Types
-- **Policy** - High-level organizational directives
-- **Standard** - Technical or operational requirements
-- **Procedure** - Step-by-step instructions
-- **Guideline** - Recommended practices
-- **Charter** - Committee/team authorization documents
-- **Framework** - Structural governance documents
-
-### Governance Document Statuses
-- `draft` - Initial creation
-- `pending_review` - Under review
-- `pending_approval` - Awaiting approval
-- `approved` - Approved by designated approvers
-- `published` - Published and effective
-- `expired` - Past expiry date
-- `archived` - No longer active
-- `exception_applied` - Has exception applied
-
-### Backend (`/grc/governance/*`)
-```
-backend/grc/modules/governance/
-├── router.py              # Main governance router
-└── routers/
-    ├── documents.py       # Document CRUD, filtering, hierarchy, bulk operations
-    ├── versions.py        # Version control, compare, rollback
-    ├── workflows.py       # Approval workflow management
-    ├── reviews.py         # Review scheduling, overdue tracking
-    ├── mappings.py        # Cross-module links (risks, controls, assets)
-    └── dashboard.py       # Executive KPIs, stats, analytics
-```
-
-### Frontend (`/governance/*`)
-```
-grc-frontend/src/app/(dashboard)/governance/
-├── layout.tsx              # Tabbed navigation (Overview, Documents, Workflows, Reviews)
-├── page.tsx                # Executive dashboard with KPIs
-├── documents/page.tsx      # Document library with filters, CRUD
-├── workflows/page.tsx      # Pending approvals, approve/reject actions
-└── reviews/page.tsx        # Review calendar, overdue alerts
-```
-
-### Governance API Endpoints
-- `GET /grc/governance` - Module info
-- **Documents**: `/grc/governance/documents/*` - CRUD, filtering, hierarchy, bulk operations
-- **File Upload**: `/grc/governance/documents/upload-with-file` - Create document with attached file
-- **File Upload to Existing**: `/grc/governance/documents/{id}/upload-file` - Attach file to existing document
-- **File Download**: `/grc/governance/documents/{id}/download-file` - Download attached file
-- **Type-specific**: `/grc/governance/documents/policies`, `/standards`, `/procedures`, `/guidelines`, `/charters`, `/frameworks`
-- **Versions**: `/grc/governance/versions/*` - Version history, compare, rollback
-- **Workflows**: `/grc/governance/workflows/*` - Pending approvals, approve, reject, delegate
-- **Reviews**: `/grc/governance/reviews/*` - Upcoming, overdue, complete review
-- **Mappings**: `/grc/governance/mappings/*` - Link to risks, controls, assets, regulatory
-- **Dashboard**: `/grc/governance/dashboard/*` - Summary stats, KPIs
-
-### Document File Upload
-The Governance module supports attaching files (PDF, Word, Excel) to documents with full lifecycle management:
-- **Supported formats**: PDF (.pdf), Word (.doc, .docx), Excel (.xls, .xlsx)
-- **Version tracking**: New file uploads automatically create a new document version
-- **Storage**: Files stored in `backend/grc/uploads/governance/`
-- **Workflow**: Draft → Pending Review → Pending Approval → Approved → Published
-
-### Governance Database Tables
-- `grc_governance_documents` - Document library with hierarchy, lifecycle, regulatory scope
-- `grc_governance_document_versions` - Version history with change tracking
-- `grc_document_reviewers` - Assigned reviewers/approvers
-- `grc_document_approval_steps` - Multi-step approval workflow
-- `grc_document_audit_logs` - Complete audit trail
-- `grc_document_control_links` - Links to normalized controls
-- `grc_document_risk_links` - Links to risks
-- `grc_document_regulatory_links` - Links to regulatory requirements
-- `grc_document_asset_links` - Links to IT assets
-
-## Framework Upload Module Structure
-
-The Framework Upload module enables intelligent parsing of regulatory and standards documents (PDF/DOCX) using AI to extract structured controls.
-
-### Key Capabilities
-- **Document Upload** - Upload PDF/DOCX regulatory documents
-- **AI-Powered Parsing** - GPT extracts controls with domain, category, priority, mandatory flags
-- **Evidence Mapping** - Auto-suggests required evidence types per control
-- **Control Alignment** - Match parsed controls to existing control library (exact/partial/new)
-- **Compliance Assessment** - Full assessment workflow with status tracking
-- **Evidence Collection** - Upload and review evidence for each control
-- **Remediation Tracking** - Track gaps and remediation actions
-- **Multi-Tenant Sharing** - Frameworks can be shared across tenants
-
-### Backend (`/grc/framework-upload/*`)
-```
-backend/grc/modules/framework_upload/
-├── router.py              # Main framework upload router
-└── routers/
-    ├── upload.py          # File upload, text extraction
-    ├── parser.py          # AI-powered control extraction (OpenAI GPT)
-    ├── alignment.py       # Control matching/alignment
-    ├── assessment.py      # Compliance assessment management
-    └── evidence.py        # Evidence upload and linking
-```
-
-### Frontend (`/framework-upload/*`)
-```
-grc-frontend/src/app/(dashboard)/framework-upload/
-├── layout.tsx              # Tabbed navigation (Upload, Controls, Alignment, Assessment)
-├── page.tsx                # Drag-and-drop upload with frameworks list
-├── controls/page.tsx       # Parsed controls review with edit/verify
-├── alignment/page.tsx      # Control matching with confirm/create actions
-└── assessment/page.tsx     # Compliance assessment dashboard
-```
-
-### Framework Upload API Endpoints
-- `GET /grc/framework-upload` - Module info
-- **Upload**: `/grc/framework-upload/upload/*` - Upload, list, extract text
-- **Parser**: `/grc/framework-upload/parser/*` - AI parsing, CRUD for parsed controls
-- **Alignment**: `/grc/framework-upload/alignment/*` - Analyze, confirm, create new controls
-- **Assessment**: `/grc/framework-upload/assessment/*` - Create/manage assessments, items, remediations
-- **Evidence**: `/grc/framework-upload/evidence/*` - Upload, review evidence
-
-### Framework Upload Database Tables
-- `grc_uploaded_frameworks` - Uploaded document metadata with parsing status
-- `grc_parsed_framework_controls` - AI-extracted controls with domains/categories
-- `grc_control_evidence_mappings` - Expected evidence types per control
-- `grc_framework_control_alignments` - Links to existing control library
-- `grc_framework_assessments` - Compliance assessment records
-- `grc_assessment_items` - Individual control assessment status
-- `grc_assessment_evidence` - Uploaded evidence files
-- `grc_assessment_remediations` - Gap tracking and remediation actions
+**Feature Specifications:**
+- **Multi-Tenancy**: Complete isolation and row-level security.
+- **Multi-Framework Support**: Integration of 8 regulatory frameworks.
+- **Normalized Control Model**: For cross-framework control mapping.
+- **Evidence Management**: Upload, versioning, AI assessment, and linking to controls.
+- **Enterprise Risk Management (ERM)**: Risk register, mitigation actions, appetite management, KRIs, incidents, and reporting.
+- **Governance Orchestration**: Lifecycle management for policies, standards, and procedures with version control and approval workflows.
+- **Policy/Document Management**: Comprehensive document lifecycle, versioning, and approval.
+- **IT Asset Inventory**: Asset classification, valuation, and linking to GRC elements.
+- **Role-Based Access Control (RBAC)**: Fine-grained permissions per tenant.
+- **Framework Upload Module**: AI-powered parsing of regulatory documents (PDF/DOCX) for control extraction and alignment.
 
 ## External Dependencies
-- **PostgreSQL**: Primary database for all application data, including multi-tenant schemas.
-- **FastAPI**: Python web framework used for building the backend API.
-- **SQLAlchemy**: Python SQL toolkit and Object-Relational Mapper (ORM) for database interactions.
-- **Next.js 14**: React framework for the frontend application.
-- **TypeScript**: Superset of JavaScript used for frontend development.
-- **Tailwind CSS**: Utility-first CSS framework for styling the frontend.
-- **React Query**: Library for data fetching, caching, and state management in React applications.
-- **OpenAI (via Replit AI Integrations)**: GPT-powered document parsing and control extraction.
+- **PostgreSQL**: Primary database.
+- **FastAPI**: Backend API framework.
+- **SQLAlchemy**: Python ORM for database interactions.
+- **Next.js 14**: Frontend framework.
+- **TypeScript**: Frontend language.
+- **Tailwind CSS**: Frontend styling.
+- **React Query**: Frontend data management.
+- **OpenAI (via Replit AI Integrations)**: Used for AI-powered document parsing, control extraction, and evidence quality assessment (GPT-4o vision).
