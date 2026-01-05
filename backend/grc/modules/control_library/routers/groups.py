@@ -56,13 +56,14 @@ class GenerateSummaryRequest(BaseModel):
 
 
 def check_ai_available() -> bool:
-    """Check if OpenAI API key is configured."""
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        return False
-    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
-        return False
-    return True
+    """Check if OpenAI API is configured (Replit AI Integrations or direct API key)."""
+    ai_integration_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+    if ai_integration_key:
+        return True
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if api_key and not api_key.startswith("your-") and len(api_key) >= 20:
+        return True
+    return False
 
 
 def raise_ai_unavailable(fallback_available: bool = False):
@@ -71,7 +72,7 @@ def raise_ai_unavailable(fallback_available: bool = False):
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail={
             "error": "AI features unavailable",
-            "message": "OpenAI API key is not configured. Please add OPENAI_API_KEY to enable AI features.",
+            "message": "AI integration is not configured. The platform uses Replit AI Integrations or you can add OPENAI_API_KEY to enable AI features.",
             "fallback_available": fallback_available
         }
     )

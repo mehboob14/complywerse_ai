@@ -195,10 +195,12 @@ export default function ControlLibraryPage() {
 
   const [autoGroupResult, setAutoGroupResult] = useState<AutoGroupResult | null>(null);
   const [autoGroupLoading, setAutoGroupLoading] = useState(false);
+  const [autoGroupError, setAutoGroupError] = useState<string | null>(null);
 
   const autoGroupMutation = useMutation({
     mutationFn: async (frameworkIds: number[]) => {
       setAutoGroupLoading(true);
+      setAutoGroupError(null);
       const response = await apiClient.post('/control-library/groups/auto-group', {
         framework_ids: frameworkIds.length > 0 ? frameworkIds : null,
       });
@@ -209,17 +211,25 @@ export default function ControlLibraryPage() {
       setAutoGroupLoading(false);
       queryClient.invalidateQueries({ queryKey: ['control-groups'] });
     },
-    onError: () => {
+    onError: (error: any) => {
       setAutoGroupLoading(false);
+      const errorMessage = error?.response?.data?.detail?.message 
+        || error?.response?.data?.detail 
+        || error?.response?.data?.message 
+        || error?.message 
+        || 'An error occurred while auto-grouping controls';
+      setAutoGroupError(errorMessage);
     },
   });
 
   const [analysisResult, setAnalysisResult] = useState<Analysis | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const startAnalysisMutation = useMutation({
     mutationFn: async (frameworkIds: number[]) => {
       setAnalysisLoading(true);
+      setAnalysisError(null);
       const response = await apiClient.post('/control-library/ai-mapping/analyze', {
         framework_ids: frameworkIds.length > 0 ? frameworkIds : null,
       });
@@ -230,8 +240,14 @@ export default function ControlLibraryPage() {
       setAnalysisLoading(false);
       queryClient.invalidateQueries({ queryKey: ['latest-ai-analysis'] });
     },
-    onError: () => {
+    onError: (error: any) => {
       setAnalysisLoading(false);
+      const errorMessage = error?.response?.data?.detail?.message 
+        || error?.response?.data?.detail 
+        || error?.response?.data?.message 
+        || error?.message 
+        || 'An error occurred while analyzing controls';
+      setAnalysisError(errorMessage);
     },
   });
 
@@ -788,7 +804,38 @@ export default function ControlLibraryPage() {
               </button>
             </div>
 
-            {!autoGroupResult && !autoGroupLoading ? (
+            {autoGroupError ? (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <XCircle size={20} />
+                    <span className="font-medium">Auto-grouping failed</span>
+                  </div>
+                  <p className="mt-2 text-slate-300">{autoGroupError}</p>
+                </div>
+                <div className="flex justify-end gap-3 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowAutoGroupModal(false);
+                      setAutoGroupError(null);
+                    }}
+                    className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAutoGroupError(null);
+                      autoGroupMutation.mutate(selectedFrameworks);
+                    }}
+                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+                  >
+                    <RefreshCw size={16} />
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : !autoGroupResult && !autoGroupLoading ? (
               <div className="space-y-4">
                 <p className="text-slate-400">
                   Use AI to automatically analyze and group related controls across your frameworks.
@@ -898,7 +945,38 @@ export default function ControlLibraryPage() {
               </button>
             </div>
 
-            {!analysisResult && !analysisLoading ? (
+            {analysisError ? (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <XCircle size={20} />
+                    <span className="font-medium">Analysis failed</span>
+                  </div>
+                  <p className="mt-2 text-slate-300">{analysisError}</p>
+                </div>
+                <div className="flex justify-end gap-3 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowAnalysisModal(false);
+                      setAnalysisError(null);
+                    }}
+                    className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAnalysisError(null);
+                      startAnalysisMutation.mutate(selectedFrameworks);
+                    }}
+                    className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700"
+                  >
+                    <RefreshCw size={16} />
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : !analysisResult && !analysisLoading ? (
               <div className="space-y-4">
                 <p className="text-slate-400">
                   Run AI analysis to identify similar and related controls across your frameworks.
