@@ -21,6 +21,7 @@ from .modules.framework_upload import framework_upload_router
 from .modules.compliance import compliance_router
 from .modules.evidence import evidence_module_router
 from .modules.control_library import control_library_router
+from .modules.vuln_management import vuln_management_router
 
 app = FastAPI(
     title="Enterprise GRC Platform API",
@@ -56,6 +57,7 @@ app.include_router(framework_upload_router)
 app.include_router(compliance_router)
 app.include_router(evidence_module_router)
 app.include_router(control_library_router)
+app.include_router(vuln_management_router)
 
 
 @app.on_event("startup")
@@ -80,7 +82,8 @@ def root():
             "advanced-erm",
             "erm",
             "compliance",
-            "control-library"
+            "control-library",
+            "vuln-management"
         ]
     }
 

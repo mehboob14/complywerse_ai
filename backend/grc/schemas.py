@@ -1778,3 +1778,381 @@ class InternalControlDashboard(BaseModel):
     controls_needing_test: int
     effective_controls: int
     ineffective_controls: int
+
+
+# =============================================================================
+# Vulnerability Management Schemas
+# =============================================================================
+
+class VulnerabilityReportCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    report_type: str = "vulnerability_scan"
+    scan_tool: Optional[str] = None
+    scan_date: Optional[datetime] = None
+    scan_scope: Optional[str] = None
+    asset_scope_ids: Optional[List[int]] = []
+
+
+class VulnerabilityReportUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    report_type: Optional[str] = None
+    scan_tool: Optional[str] = None
+    scan_date: Optional[datetime] = None
+    scan_scope: Optional[str] = None
+    status: Optional[str] = None
+
+
+class VulnerabilityReportResponse(BaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    description: Optional[str]
+    report_type: str
+    file_path: Optional[str]
+    file_name: Optional[str]
+    file_type: Optional[str]
+    scan_tool: Optional[str]
+    scan_date: Optional[datetime]
+    scan_scope: Optional[str]
+    asset_scope_ids: List[int] = []
+    total_vulnerabilities: int
+    critical_count: int
+    high_count: int
+    medium_count: int
+    low_count: int
+    info_count: int
+    status: str
+    uploaded_by: Optional[int]
+    uploaded_at: datetime
+    created_at: datetime
+    updated_at: datetime
+    uploader_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class VulnerabilityCreate(BaseModel):
+    vuln_id: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    severity: str = "medium"
+    cvss_score: Optional[float] = None
+    cvss_vector: Optional[str] = None
+    cve_id: Optional[str] = None
+    cwe_id: Optional[str] = None
+    affected_component: Optional[str] = None
+    affected_host: Optional[str] = None
+    affected_port: Optional[int] = None
+    affected_url: Optional[str] = None
+    evidence: Optional[str] = None
+    reproduction_steps: Optional[str] = None
+    recommendation: Optional[str] = None
+    report_id: Optional[int] = None
+    discovered_at: Optional[datetime] = None
+    due_date: Optional[datetime] = None
+
+
+class VulnerabilityUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    severity: Optional[str] = None
+    cvss_score: Optional[float] = None
+    cvss_vector: Optional[str] = None
+    cve_id: Optional[str] = None
+    cwe_id: Optional[str] = None
+    affected_component: Optional[str] = None
+    affected_host: Optional[str] = None
+    affected_port: Optional[int] = None
+    affected_url: Optional[str] = None
+    evidence: Optional[str] = None
+    reproduction_steps: Optional[str] = None
+    recommendation: Optional[str] = None
+    status: Optional[str] = None
+    resolution_notes: Optional[str] = None
+    due_date: Optional[datetime] = None
+
+
+class VulnerabilityResponse(BaseModel):
+    id: int
+    tenant_id: int
+    report_id: Optional[int]
+    vuln_id: str
+    title: str
+    description: Optional[str]
+    severity: str
+    cvss_score: Optional[float]
+    cvss_vector: Optional[str]
+    cve_id: Optional[str]
+    cwe_id: Optional[str]
+    affected_component: Optional[str]
+    affected_host: Optional[str]
+    affected_port: Optional[int]
+    affected_url: Optional[str]
+    evidence: Optional[str]
+    reproduction_steps: Optional[str]
+    recommendation: Optional[str]
+    ai_recommendation: Optional[str]
+    ai_impact_assessment: Optional[str]
+    status: str
+    resolution_notes: Optional[str]
+    discovered_at: datetime
+    due_date: Optional[datetime]
+    resolved_at: Optional[datetime]
+    assigned_to: Optional[int]
+    verified_by: Optional[int]
+    verified_at: Optional[datetime]
+    is_exception: bool
+    exception_reason: Optional[str]
+    exception_approved_by: Optional[int]
+    exception_expiry: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    assignee_name: Optional[str] = None
+    verifier_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class VulnerabilityAssign(BaseModel):
+    user_id: int
+
+
+class VulnerabilityStatusChange(BaseModel):
+    status: str
+    resolution_notes: Optional[str] = None
+
+
+class VulnerabilityMitigationCreate(BaseModel):
+    action_title: str
+    action_description: Optional[str] = None
+    action_type: str = "remediate"
+    owner_id: Optional[int] = None
+    priority: str = "medium"
+    target_date: Optional[datetime] = None
+    effort_estimate: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class VulnerabilityMitigationUpdate(BaseModel):
+    action_title: Optional[str] = None
+    action_description: Optional[str] = None
+    action_type: Optional[str] = None
+    owner_id: Optional[int] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    target_date: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    effort_estimate: Optional[str] = None
+    actual_effort: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class VulnerabilityMitigationResponse(BaseModel):
+    id: int
+    vulnerability_id: int
+    tenant_id: int
+    action_title: str
+    action_description: Optional[str]
+    action_type: str
+    owner_id: Optional[int]
+    priority: str
+    status: str
+    target_date: Optional[datetime]
+    completed_at: Optional[datetime]
+    effort_estimate: Optional[str]
+    actual_effort: Optional[str]
+    notes: Optional[str]
+    erm_mitigation_id: Optional[int]
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[int]
+    owner_name: Optional[str] = None
+    creator_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class VulnerabilityAssetLinkCreate(BaseModel):
+    asset_id: int
+    impact_on_asset: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class VulnerabilityAssetLinkResponse(BaseModel):
+    id: int
+    vulnerability_id: int
+    asset_id: int
+    impact_on_asset: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+    created_by: Optional[int]
+    asset_name: Optional[str] = None
+    asset_type: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class VulnerabilityControlLinkCreate(BaseModel):
+    framework_control_id: Optional[int] = None
+    normalized_control_id: Optional[int] = None
+    internal_control_id: Optional[int] = None
+    compliance_impact: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class VulnerabilityControlLinkResponse(BaseModel):
+    id: int
+    vulnerability_id: int
+    framework_control_id: Optional[int]
+    normalized_control_id: Optional[int]
+    internal_control_id: Optional[int]
+    compliance_impact: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+    created_by: Optional[int]
+    framework_control_code: Optional[str] = None
+    framework_control_name: Optional[str] = None
+    normalized_control_code: Optional[str] = None
+    normalized_control_name: Optional[str] = None
+    internal_control_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class VulnerabilityRetestCreate(BaseModel):
+    result: str
+    findings: Optional[str] = None
+    evidence: Optional[str] = None
+    retest_date: Optional[datetime] = None
+
+
+class VulnerabilityRetestResponse(BaseModel):
+    id: int
+    vulnerability_id: int
+    tenant_id: int
+    retest_date: datetime
+    tester_id: Optional[int]
+    result: str
+    findings: Optional[str]
+    evidence: Optional[str]
+    created_at: datetime
+    tester_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class VulnerabilityAIJobResponse(BaseModel):
+    id: int
+    report_id: Optional[int]
+    vulnerability_id: Optional[int]
+    tenant_id: int
+    job_type: str
+    status: str
+    input_data: Dict[str, Any] = {}
+    output_data: Dict[str, Any] = {}
+    error_message: Optional[str]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    created_at: datetime
+    created_by: Optional[int]
+
+    class Config:
+        from_attributes = True
+
+
+class VulnerabilitySLAConfigCreate(BaseModel):
+    severity: str
+    remediation_days: int
+
+
+class VulnerabilitySLAConfigUpdate(BaseModel):
+    remediation_days: int
+
+
+class VulnerabilitySLAConfigResponse(BaseModel):
+    id: int
+    tenant_id: int
+    severity: str
+    remediation_days: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class VulnerabilityExceptionCreate(BaseModel):
+    exception_reason: str
+    exception_expiry: Optional[datetime] = None
+
+
+class VulnerabilityExceptionUpdate(BaseModel):
+    exception_reason: Optional[str] = None
+    exception_expiry: Optional[datetime] = None
+    is_exception: Optional[bool] = None
+
+
+class VulnerabilityExceptionResponse(BaseModel):
+    id: int
+    vuln_id: str
+    title: str
+    severity: str
+    is_exception: bool
+    exception_reason: Optional[str]
+    exception_approved_by: Optional[int]
+    exception_expiry: Optional[datetime]
+    exception_approver_name: Optional[str] = None
+    days_until_expiry: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class VulnerabilityDashboard(BaseModel):
+    total_vulnerabilities: int
+    by_severity: Dict[str, int]
+    by_status: Dict[str, int]
+    sla_compliance: Dict[str, Any]
+    overdue_count: int
+    mttr_days: Optional[float]
+    aging_buckets: Dict[str, int]
+    top_affected_assets: List[Dict[str, Any]] = []
+    recent_activities: List[Dict[str, Any]] = []
+
+
+class OverdueVulnerabilityResponse(BaseModel):
+    id: int
+    vuln_id: str
+    title: str
+    severity: str
+    status: str
+    due_date: datetime
+    days_overdue: int
+    assigned_to: Optional[int]
+    assignee_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AssetExposureResponse(BaseModel):
+    asset_id: int
+    asset_name: str
+    asset_type: Optional[str]
+    vulnerability_count: int
+    critical_count: int
+    high_count: int
+    medium_count: int
+    low_count: int
+
+    class Config:
+        from_attributes = True
