@@ -12,24 +12,19 @@ import {
   ChevronDown,
   ChevronRight,
   BarChart3,
-  Upload,
-  FileStack,
   AlertTriangle,
   Target,
-  Gauge,
   Activity,
   AlertCircle,
   FileText,
   GitBranch,
   ClipboardCheck,
-  CheckCircle,
-  Package,
   Library,
-  GitCompare,
-  PieChart,
-  Lightbulb,
   Bug,
   Clock,
+  Users,
+  BookOpen,
+  Layers,
   type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -41,53 +36,35 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-interface NavCategory {
+interface NavGroup {
   name: string;
   icon: LucideIcon;
   items: NavItem[];
   defaultOpen?: boolean;
 }
 
-const navigation: (NavItem | NavCategory)[] = [
+type NavEntry = NavItem | NavGroup;
+
+const navigation: NavEntry[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   {
-    name: 'Compliance & Frameworks',
+    name: 'Compliance',
     icon: Shield,
     defaultOpen: true,
     items: [
-      { name: 'Frameworks', href: '/frameworks', icon: FileStack },
-      { name: 'Framework Upload', href: '/framework-upload', icon: Upload },
+      { name: 'Frameworks', href: '/frameworks', icon: Layers },
       { name: 'Controls', href: '/controls', icon: Shield },
-    ],
-  },
-  {
-    name: 'Control Library',
-    icon: Library,
-    items: [
-      { name: 'Control Groups', href: '/control-library', icon: Library },
-      { name: 'Gap Analysis', href: '/control-library/gaps', icon: AlertTriangle },
-      { name: 'Framework Comparison', href: '/control-library/compare', icon: GitCompare },
-      { name: 'Coverage Matrix', href: '/control-library/coverage', icon: PieChart },
-      { name: 'Evidence Suggestions', href: '/control-library/evidence', icon: Lightbulb },
-    ],
-  },
-  {
-    name: 'Evidence',
-    icon: FileCheck,
-    items: [
-      { name: 'Evidence Library', href: '/evidence', icon: FileCheck },
-      { name: 'Coverage Dashboard', href: '/evidence/coverage', icon: BarChart3 },
-      { name: 'Audit Packages', href: '/evidence/audit-packages', icon: Package },
+      { name: 'Evidence', href: '/evidence', icon: FileCheck },
+      { name: 'Control Library', href: '/control-library', icon: Library },
     ],
   },
   {
     name: 'Risk Management',
-    icon: BarChart3,
+    icon: AlertTriangle,
     items: [
-      { name: 'ERM Dashboard', href: '/erm', icon: BarChart3 },
+      { name: 'ERM Overview', href: '/erm', icon: BarChart3 },
       { name: 'Risk Register', href: '/risks', icon: AlertTriangle },
-      { name: 'Mitigation Actions', href: '/erm/mitigation-actions', icon: Target },
-      { name: 'Risk Appetite', href: '/erm/appetite', icon: Gauge },
+      { name: 'Internal Controls', href: '/erm/internal-controls', icon: Target },
       { name: 'KRIs', href: '/erm/kris', icon: Activity },
       { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle },
     ],
@@ -106,53 +83,72 @@ const navigation: (NavItem | NavCategory)[] = [
     name: 'Governance',
     icon: Scale,
     items: [
-      { name: 'Overview', href: '/governance', icon: Scale },
+      { name: 'Policies', href: '/governance', icon: BookOpen },
       { name: 'Documents', href: '/governance/documents', icon: FileText },
       { name: 'Workflows', href: '/governance/workflows', icon: GitBranch },
       { name: 'Reviews', href: '/governance/reviews', icon: ClipboardCheck },
     ],
   },
   {
-    name: 'Compliance',
-    icon: CheckCircle,
+    name: 'Assets',
+    icon: Server,
     items: [
-      { name: 'Overview', href: '/compliance', icon: CheckCircle },
-      { name: 'Policy Statements', href: '/compliance/statements', icon: FileText },
+      { name: 'IT Assets', href: '/assets', icon: Server },
     ],
   },
-  { name: 'Assets', href: '/assets', icon: Server },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  {
+    name: 'Administration',
+    icon: Settings,
+    items: [
+      { name: 'Users', href: '/users', icon: Users },
+      { name: 'Settings', href: '/settings', icon: Settings },
+    ],
+  },
 ];
 
-function isCategory(item: NavItem | NavCategory): item is NavCategory {
+function isGroup(item: NavEntry): item is NavGroup {
   return 'items' in item;
 }
 
 function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const pathname = usePathname();
-  const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+  const isActive = pathname === item.href || 
+    (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
 
   return (
     <Link
       href={item.href}
       className={clsx(
-        'nav-link',
-        isActive && 'nav-link-active'
+        'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
+        'hover:bg-slate-800/80 hover:text-white',
+        isActive 
+          ? 'bg-primary-600/15 text-primary-400 border-l-[3px] border-primary-500 ml-0 pl-[calc(0.75rem-3px)]' 
+          : 'text-slate-400 border-l-[3px] border-transparent',
+        collapsed && 'justify-center px-2'
       )}
       title={collapsed ? item.name : undefined}
     >
-      <item.icon size={18} className="flex-shrink-0" />
-      {!collapsed && <span className="truncate">{item.name}</span>}
+      <item.icon 
+        size={18} 
+        className={clsx(
+          'flex-shrink-0 transition-transform duration-200',
+          'group-hover:scale-110'
+        )} 
+      />
+      {!collapsed && (
+        <span className="truncate transition-colors duration-200">{item.name}</span>
+      )}
     </Link>
   );
 }
 
-function NavCategoryGroup({ category, collapsed }: { category: NavCategory; collapsed: boolean }) {
+function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boolean }) {
   const pathname = usePathname();
-  const isAnyChildActive = category.items.some(
-    item => pathname === item.href || pathname.startsWith(item.href + '/')
+  const isAnyChildActive = group.items.some(
+    item => pathname === item.href || 
+    (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'))
   );
-  const [isOpen, setIsOpen] = useState(category.defaultOpen || isAnyChildActive);
+  const [isOpen, setIsOpen] = useState(group.defaultOpen || isAnyChildActive);
 
   useEffect(() => {
     if (isAnyChildActive && !isOpen) {
@@ -162,33 +158,40 @@ function NavCategoryGroup({ category, collapsed }: { category: NavCategory; coll
 
   if (collapsed) {
     return (
-      <div className="relative group">
+      <div className="relative group/nav">
         <button
           className={clsx(
-            'nav-category-btn w-full justify-center',
-            isAnyChildActive && 'nav-category-active'
+            'flex items-center justify-center w-full rounded-lg p-2.5 transition-all duration-200',
+            'hover:bg-slate-800/80',
+            isAnyChildActive 
+              ? 'text-primary-400 bg-primary-600/10' 
+              : 'text-slate-400 hover:text-white'
           )}
-          title={category.name}
+          title={group.name}
         >
-          <category.icon size={18} />
+          <group.icon size={18} />
         </button>
-        <div className="absolute left-full top-0 ml-2 hidden group-hover:block z-50">
-          <div className="bg-slate-800 border border-slate-600 rounded-lg shadow-xl py-2 min-w-48">
-            <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-700 mb-1">
-              {category.name}
+        <div className="absolute left-full top-0 ml-2 hidden group-hover/nav:block z-50">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 min-w-52 animate-fade-in">
+            <div className="px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-700/50 mb-1">
+              {group.name}
             </div>
-            {category.items.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            {group.items.map((item) => {
+              const isActive = pathname === item.href || 
+                (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
               return (
                 <Link
                   key={item.name}
                   href={item.href}
                   className={clsx(
-                    'flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors',
-                    isActive && 'bg-slate-700 text-white'
+                    'flex items-center gap-3 px-4 py-2.5 text-sm transition-all duration-150',
+                    'hover:bg-slate-700/50 hover:text-white',
+                    isActive 
+                      ? 'text-primary-400 bg-primary-600/10 border-l-2 border-primary-500' 
+                      : 'text-slate-300 border-l-2 border-transparent'
                   )}
                 >
-                  <item.icon size={16} />
+                  <item.icon size={16} className="flex-shrink-0" />
                   <span>{item.name}</span>
                 </Link>
               );
@@ -204,37 +207,56 @@ function NavCategoryGroup({ category, collapsed }: { category: NavCategory; coll
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={clsx(
-          'nav-category-btn w-full',
-          isAnyChildActive && 'nav-category-active'
+          'group flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-200',
+          'hover:bg-slate-800/60',
+          isAnyChildActive ? 'text-white' : 'text-slate-300 hover:text-white'
         )}
       >
-        <category.icon size={18} className="flex-shrink-0" />
-        <span className="flex-1 text-left truncate">{category.name}</span>
-        {isOpen ? (
-          <ChevronDown size={16} className="text-slate-400" />
-        ) : (
-          <ChevronRight size={16} className="text-slate-400" />
-        )}
+        <group.icon 
+          size={18} 
+          className={clsx(
+            'flex-shrink-0 transition-colors duration-200',
+            isAnyChildActive ? 'text-primary-400' : 'text-slate-500 group-hover:text-slate-400'
+          )} 
+        />
+        <span className="flex-1 text-left truncate">{group.name}</span>
+        <ChevronDown 
+          size={16} 
+          className={clsx(
+            'text-slate-500 transition-transform duration-200',
+            !isOpen && '-rotate-90'
+          )} 
+        />
       </button>
       <div
         className={clsx(
-          'overflow-hidden transition-all duration-200 ease-in-out',
-          isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+          'overflow-hidden transition-all duration-300 ease-out',
+          isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
         )}
       >
-        <div className="pl-4 space-y-0.5 py-1">
-          {category.items.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+        <div className="ml-3 pl-3 border-l border-slate-700/50 space-y-0.5 py-1">
+          {group.items.map((item) => {
+            const isActive = pathname === item.href || 
+              (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
             return (
               <Link
                 key={item.name}
                 href={item.href}
                 className={clsx(
-                  'nav-subitem',
-                  isActive && 'nav-subitem-active'
+                  'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+                  'hover:bg-slate-800/50 hover:text-white',
+                  isActive 
+                    ? 'text-primary-400 bg-primary-600/10 border-l-2 border-primary-500 -ml-[1px]' 
+                    : 'text-slate-400 border-l-2 border-transparent -ml-[1px]'
                 )}
               >
-                <item.icon size={16} className="flex-shrink-0" />
+                <item.icon 
+                  size={16} 
+                  className={clsx(
+                    'flex-shrink-0 transition-transform duration-200',
+                    'group-hover:scale-105'
+                  )} 
+                />
                 <span className="truncate">{item.name}</span>
               </Link>
             );
@@ -251,33 +273,33 @@ export default function Sidebar() {
   return (
     <aside
       className={clsx(
-        'sidebar flex flex-col transition-all duration-300',
-        collapsed ? 'w-16' : 'w-64'
+        'flex flex-col bg-slate-900 border-r border-slate-800 transition-all duration-300 ease-out',
+        collapsed ? 'w-[68px]' : 'w-64'
       )}
     >
-      <div className="sidebar-header">
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
-              <Shield size={18} className="text-white" />
-            </div>
-            <span className="text-lg font-bold text-white">GRC Platform</span>
-          </div>
-        )}
-        {collapsed && (
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center mx-auto">
+      <div className={clsx(
+        'h-16 flex items-center border-b border-slate-800 transition-all duration-300',
+        collapsed ? 'px-3 justify-center' : 'px-4'
+      )}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-lg shadow-primary-600/20">
             <Shield size={18} className="text-white" />
           </div>
-        )}
+          {!collapsed && (
+            <div className="overflow-hidden">
+              <span className="text-lg font-bold text-white whitespace-nowrap">GRC Platform</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
         {navigation.map((item) => {
-          if (isCategory(item)) {
+          if (isGroup(item)) {
             return (
-              <NavCategoryGroup
+              <NavGroupSection
                 key={item.name}
-                category={item}
+                group={item}
                 collapsed={collapsed}
               />
             );
@@ -292,17 +314,27 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="sidebar-footer">
+      <div className="p-3 border-t border-slate-800">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="sidebar-toggle-btn"
+          className={clsx(
+            'flex items-center gap-2 w-full px-3 py-2.5 rounded-lg',
+            'text-slate-400 hover:text-white hover:bg-slate-800 transition-all duration-200',
+            collapsed && 'justify-center px-2'
+          )}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+          <ChevronRight 
+            size={18} 
+            className={clsx(
+              'transition-transform duration-300',
+              !collapsed && 'rotate-180'
+            )}
+          />
           {!collapsed && <span className="text-sm">Collapse</span>}
         </button>
         {!collapsed && (
-          <div className="mt-3 text-xs text-slate-500">
+          <div className="mt-3 px-3 text-xs text-slate-600">
             Enterprise GRC v1.0
           </div>
         )}

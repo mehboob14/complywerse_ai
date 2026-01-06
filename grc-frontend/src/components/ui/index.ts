@@ -6,3 +6,5 @@ export { FilterBar, type FilterBarProps, type FilterConfig, type FilterOption, t
 export { SeverityBadge, type SeverityBadgeProps, type SeverityLevel } from './SeverityBadge';
 export { StatusBadge, type StatusBadgeProps, type StatusType } from './StatusBadge';
 export { DataCard, type DataCardProps } from './DataCard';
+export { Breadcrumb, type BreadcrumbProps, type BreadcrumbItem } from './Breadcrumb';
+export { PageHeader, type PageHeaderProps } from './PageHeader';
