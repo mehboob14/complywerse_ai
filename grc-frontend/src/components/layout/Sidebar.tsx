@@ -28,6 +28,8 @@ import {
   GitCompare,
   PieChart,
   Lightbulb,
+  Bug,
+  Clock,
   type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -88,6 +90,16 @@ const navigation: (NavItem | NavCategory)[] = [
       { name: 'Risk Appetite', href: '/erm/appetite', icon: Gauge },
       { name: 'KRIs', href: '/erm/kris', icon: Activity },
       { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle },
+    ],
+  },
+  {
+    name: 'Vulnerability Management',
+    icon: Bug,
+    items: [
+      { name: 'Dashboard', href: '/vulnerabilities/dashboard', icon: BarChart3 },
+      { name: 'Vulnerabilities', href: '/vulnerabilities', icon: Bug },
+      { name: 'Reports', href: '/vulnerabilities/reports', icon: FileText },
+      { name: 'SLA Config', href: '/vulnerabilities/sla', icon: Clock },
     ],
   },
   {

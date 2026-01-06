@@ -634,4 +634,90 @@ export const advancedErmApi = {
     apiClient.get(`/advanced-erm/risks/${riskId}/score-history`, { params: { days } }),
 };
 
+export const vulnManagementApi = {
+  reports: {
+    getAll: () => apiClient.get('/vuln-management/reports'),
+    create: (formData: FormData) => 
+      apiClient.post('/vuln-management/reports', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    getById: (id: number) => apiClient.get(`/vuln-management/reports/${id}`),
+    delete: (id: number) => apiClient.delete(`/vuln-management/reports/${id}`),
+  },
+  vulnerabilities: {
+    getAll: (params?: { status?: string; severity?: string; report_id?: number; search?: string }) => 
+      apiClient.get('/vuln-management/vulnerabilities', { params }),
+    getById: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}`),
+    create: (data: Record<string, unknown>) => 
+      apiClient.post('/vuln-management/vulnerabilities', data),
+    update: (id: number, data: Record<string, unknown>) => 
+      apiClient.put(`/vuln-management/vulnerabilities/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/vuln-management/vulnerabilities/${id}`),
+    assign: (id: number, userId: number) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/assign`, { user_id: userId }),
+    changeStatus: (id: number, status: string, notes?: string) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/status`, { status, notes }),
+  },
+  mitigations: {
+    list: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/mitigations`),
+    create: (vulnId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/mitigations`, data),
+    update: (vulnId: number, mitigationId: number, data: Record<string, unknown>) => 
+      apiClient.put(`/vuln-management/vulnerabilities/${vulnId}/mitigations/${mitigationId}`, data),
+    delete: (vulnId: number, mitigationId: number) => 
+      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/mitigations/${mitigationId}`),
+  },
+  assetLinks: {
+    list: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/assets`),
+    create: (vulnId: number, data: { asset_id: number; relationship_type?: string }) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/assets`, data),
+    delete: (vulnId: number, linkId: number) => 
+      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/assets/${linkId}`),
+  },
+  controlLinks: {
+    list: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/controls`),
+    create: (vulnId: number, data: { control_type: string; framework_control_id?: number; internal_control_id?: number }) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/controls`, data),
+    delete: (vulnId: number, linkId: number) => 
+      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/controls/${linkId}`),
+  },
+  retests: {
+    list: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/retests`),
+    create: (vulnId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/retests`, data),
+  },
+  ai: {
+    analyzeReport: (reportId: number) => 
+      apiClient.post(`/vuln-management/ai/analyze-report/${reportId}`),
+    suggestFix: (vulnId: number) => 
+      apiClient.post(`/vuln-management/ai/suggest-fix/${vulnId}`),
+    getJobs: () => apiClient.get('/vuln-management/ai/jobs'),
+    getJob: (jobId: string) => apiClient.get(`/vuln-management/ai/jobs/${jobId}`),
+  },
+  sla: {
+    get: () => apiClient.get('/vuln-management/sla'),
+    create: (data: Record<string, unknown>) => 
+      apiClient.post('/vuln-management/sla', data),
+    update: (id: number, data: Record<string, unknown>) => 
+      apiClient.put(`/vuln-management/sla/${id}`, data),
+  },
+  dashboard: {
+    get: () => apiClient.get('/vuln-management/dashboard'),
+    getOverdue: () => apiClient.get('/vuln-management/dashboard/overdue'),
+    getAssetExposure: () => apiClient.get('/vuln-management/dashboard/asset-exposure'),
+  },
+  exceptions: {
+    list: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/exceptions`),
+    create: (vulnId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/exceptions`, data),
+    update: (vulnId: number, exceptionId: number, data: Record<string, unknown>) => 
+      apiClient.put(`/vuln-management/vulnerabilities/${vulnId}/exceptions/${exceptionId}`, data),
+  },
+};
+
 export default apiClient;
