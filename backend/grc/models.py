@@ -2990,6 +2990,9 @@ def init_grc_db():
     
     from .seed_internal_controls import seed_internal_controls
     seed_internal_controls()
+    
+    from .seed_vulnerabilities import seed_vulnerability_data
+    seed_vulnerability_data()
 
 
 def get_db():
