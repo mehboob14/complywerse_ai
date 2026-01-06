@@ -57,13 +57,15 @@ def should_refresh_token(payload: dict) -> bool:
 
 
 def set_auth_cookie(response: JSONResponse, token: str) -> None:
+    is_production = os.environ.get("REPL_DEPLOYMENT", "") == "1"
     response.set_cookie(
         key="grc_auth_token",
         value=token,
         httponly=True,
-        secure=True,
+        secure=is_production,
         samesite="lax",
-        max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600
+        max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+        path="/"
     )
 
 

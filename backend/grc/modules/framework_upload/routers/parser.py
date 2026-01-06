@@ -10,7 +10,8 @@ from openai import OpenAI
 
 from ....models import (
     UploadedFramework, ParsedFrameworkControl, ControlEvidenceMapping,
-    GRCUser, get_db
+    FrameworkControlAlignment, AssessmentItem, AssessmentEvidence,
+    AssessmentRemediation, GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -265,12 +266,32 @@ def parse_framework_document(
             db.commit()
             return {"message": "No controls found", "controls": []}
         
+        parsed_control_ids = db.query(ParsedFrameworkControl.id).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework_id
+        ).subquery()
+        
+        assessment_item_ids = db.query(AssessmentItem.id).filter(
+            AssessmentItem.parsed_control_id.in_(parsed_control_ids)
+        ).subquery()
+        
+        db.query(AssessmentRemediation).filter(
+            AssessmentRemediation.assessment_item_id.in_(assessment_item_ids)
+        ).delete(synchronize_session=False)
+        
+        db.query(AssessmentEvidence).filter(
+            AssessmentEvidence.assessment_item_id.in_(assessment_item_ids)
+        ).delete(synchronize_session=False)
+        
+        db.query(AssessmentItem).filter(
+            AssessmentItem.parsed_control_id.in_(parsed_control_ids)
+        ).delete(synchronize_session=False)
+        
+        db.query(FrameworkControlAlignment).filter(
+            FrameworkControlAlignment.parsed_control_id.in_(parsed_control_ids)
+        ).delete(synchronize_session=False)
+        
         db.query(ControlEvidenceMapping).filter(
-            ControlEvidenceMapping.parsed_control_id.in_(
-                db.query(ParsedFrameworkControl.id).filter(
-                    ParsedFrameworkControl.uploaded_framework_id == framework_id
-                )
-            )
+            ControlEvidenceMapping.parsed_control_id.in_(parsed_control_ids)
         ).delete(synchronize_session=False)
         
         db.query(ParsedFrameworkControl).filter(
