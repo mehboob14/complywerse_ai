@@ -727,4 +727,9 @@ export const vulnManagementApi = {
   },
 };
 
+export const dashboardApi = {
+  getStats: () => apiClient.get('/dashboard/stats'),
+  getFrameworkCompliance: (frameworkId: number) => apiClient.get(`/dashboard/compliance/${frameworkId}`),
+};
+
 export default apiClient;
