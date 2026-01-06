@@ -646,7 +646,14 @@ export const vulnManagementApi = {
   },
   vulnerabilities: {
     getAll: (params?: { status?: string; severity?: string; report_id?: number; search?: string }) => 
-      apiClient.get('/vuln-management/vulnerabilities', { params }),
+      apiClient.get('/vuln-management/vulnerabilities', { 
+        params: params ? {
+          status_filter: params.status,
+          severity: params.severity,
+          report_id: params.report_id,
+          search: params.search
+        } : undefined 
+      }),
     getById: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}`),
     create: (data: Record<string, unknown>) => 
       apiClient.post('/vuln-management/vulnerabilities', data),
