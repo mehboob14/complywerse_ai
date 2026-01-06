@@ -156,6 +156,77 @@ grc-frontend/src/app/(dashboard)/erm/internal-controls/
 - `grc_internal_control_escalations` - Escalation rules
 - `grc_internal_control_workflow_actions` - Workflow audit trail
 
+## Vulnerability Management Module
+
+A standalone module for managing vulnerability and penetration testing reports with AI-powered fix recommendations, SLA tracking, and compliance mapping.
+
+### Key Capabilities
+- **Report Upload** - Upload Excel/CSV vulnerability scan reports with intelligent parsing
+- **Vulnerability Register** - Central list with CVSS scores, CVE/CWE tracking, severity levels
+- **AI-Powered Analysis** - OpenAI-powered fix recommendations and impact assessment
+- **SLA Management** - Configurable remediation SLAs by severity (Critical: 7d, High: 30d, Medium: 90d, Low: 180d)
+- **Status Workflow** - Open → In Progress → Resolved/Accepted/False Positive
+- **Mitigation Tracking** - Remediation tasks with owners, priorities, and due dates
+- **Retest Tracking** - Record retest results (Pass/Fail/Partial) after remediation
+- **Exception Management** - Risk acceptance with expiration tracking
+- **Asset Linking** - Connect vulnerabilities to affected IT assets
+- **Compliance Mapping** - Link vulnerabilities to framework and internal controls they violate
+- **Dashboard** - Severity breakdown, MTTR, SLA compliance, aging buckets, asset exposure
+
+### Backend (`/grc/vuln-management/*`)
+```
+backend/grc/modules/vuln_management/
+├── __init__.py
+├── router.py                # Main router with prefix="/vuln-management"
+└── routers/
+    ├── reports.py           # Report upload, Excel/CSV parsing
+    ├── vulnerabilities.py   # CRUD, assignment, status changes
+    ├── mitigations.py       # Remediation task management
+    ├── asset_links.py       # Link to IT assets
+    ├── control_links.py     # Link to framework/internal controls
+    ├── retests.py           # Retest tracking
+    ├── ai_analysis.py       # OpenAI fix recommendations
+    ├── sla.py               # SLA configuration
+    ├── dashboard.py         # Analytics and metrics
+    └── exceptions.py        # Risk exception management
+```
+
+### Frontend (`/vulnerabilities/*`)
+```
+grc-frontend/src/app/(dashboard)/vulnerabilities/
+├── page.tsx              # Vulnerability register with filters
+├── [id]/page.tsx         # Detail page with tabs (Overview, Mitigations, Assets, Controls, Retests, AI, Exception)
+├── reports/page.tsx      # Reports list with upload
+├── dashboard/page.tsx    # Dashboard with metrics and charts
+└── sla/page.tsx          # SLA configuration
+```
+
+### Vulnerability Management API Endpoints
+- `GET/POST /grc/vuln-management/reports` - List/upload reports
+- `GET/POST/PUT/DELETE /grc/vuln-management/vulnerabilities` - Full CRUD
+- `POST /grc/vuln-management/vulnerabilities/{id}/assign` - Assign to user
+- `POST /grc/vuln-management/vulnerabilities/{id}/status` - Change status
+- `GET/POST /grc/vuln-management/vulnerabilities/{id}/mitigations` - Mitigation tasks
+- `GET/POST /grc/vuln-management/vulnerabilities/{id}/assets` - Asset links
+- `GET/POST /grc/vuln-management/vulnerabilities/{id}/controls` - Control links
+- `GET/POST /grc/vuln-management/vulnerabilities/{id}/retests` - Retest records
+- `POST /grc/vuln-management/ai/analyze-report/{id}` - AI report analysis
+- `POST /grc/vuln-management/ai/suggest-fix/{id}` - AI fix recommendations
+- `GET/POST/PUT /grc/vuln-management/sla` - SLA configuration
+- `GET /grc/vuln-management/dashboard` - Dashboard metrics (MTTR, SLA %, aging)
+- `GET /grc/vuln-management/dashboard/overdue` - Overdue vulnerabilities
+- `GET /grc/vuln-management/dashboard/asset-exposure` - Assets with most vulnerabilities
+
+### Vulnerability Management Database Tables
+- `grc_vulnerability_reports` - Uploaded reports with severity counts
+- `grc_vulnerabilities` - Main vulnerability register
+- `grc_vulnerability_mitigations` - Remediation tasks
+- `grc_vulnerability_asset_links` - Links to IT assets
+- `grc_vulnerability_control_links` - Links to framework/internal controls
+- `grc_vulnerability_retests` - Retest records
+- `grc_vulnerability_ai_jobs` - AI analysis job tracking
+- `grc_vulnerability_sla_config` - SLA by severity
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **FastAPI**: Backend API framework.
@@ -164,4 +235,4 @@ grc-frontend/src/app/(dashboard)/erm/internal-controls/
 - **TypeScript**: Frontend language.
 - **Tailwind CSS**: Frontend styling.
 - **React Query**: Frontend data management.
-- **OpenAI (via Replit AI Integrations)**: Used for AI-powered document parsing, control extraction, and evidence quality assessment (GPT-4o vision).
+- **OpenAI (via Replit AI Integrations)**: Used for AI-powered document parsing, control extraction, evidence quality assessment, and vulnerability fix recommendations (GPT-4o).
