@@ -2679,6 +2679,293 @@ class InternalControlWorkflowAction(Base):
 
 
 # =============================================================================
+# 16. Vulnerability Management Module
+# =============================================================================
+
+class VulnerabilityReport(Base):
+    """Uploaded vulnerability/penetration test reports"""
+    __tablename__ = "grc_vulnerability_reports"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    report_type = Column(String(50), nullable=False)  # vulnerability_scan, penetration_test, code_review, configuration_audit
+    
+    file_path = Column(String(500), nullable=True)
+    file_name = Column(String(255), nullable=True)
+    file_type = Column(String(50), nullable=True)  # excel, csv, pdf, xml
+    
+    scan_tool = Column(String(100), nullable=True)  # nessus, qualys, burp_suite, owasp_zap, manual
+    scan_date = Column(DateTime, nullable=True)
+    scan_scope = Column(Text, nullable=True)  # Description of what was scanned
+    
+    asset_scope_ids = Column(JSON, default=[])  # List of asset IDs in scope
+    
+    total_vulnerabilities = Column(Integer, default=0)
+    critical_count = Column(Integer, default=0)
+    high_count = Column(Integer, default=0)
+    medium_count = Column(Integer, default=0)
+    low_count = Column(Integer, default=0)
+    info_count = Column(Integer, default=0)
+    
+    status = Column(String(50), default="uploaded")  # uploaded, parsing, parsed, analyzed, closed
+    
+    uploaded_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    uploader = relationship("GRCUser", foreign_keys=[uploaded_by])
+    vulnerabilities = relationship("Vulnerability", back_populates="report", cascade="all, delete-orphan")
+    ai_jobs = relationship("VulnerabilityAIJob", back_populates="report", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_vuln_report_tenant", "tenant_id"),
+        Index("ix_vuln_report_status", "status"),
+    )
+
+
+class Vulnerability(Base):
+    """Individual vulnerability findings"""
+    __tablename__ = "grc_vulnerabilities"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    report_id = Column(Integer, ForeignKey("grc_vulnerability_reports.id"), nullable=True, index=True)
+    
+    vuln_id = Column(String(50), nullable=False)  # VULN-001, VULN-002, etc.
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    severity = Column(String(20), nullable=False)  # critical, high, medium, low, info
+    cvss_score = Column(Float, nullable=True)  # 0.0 - 10.0
+    cvss_vector = Column(String(100), nullable=True)
+    
+    cve_id = Column(String(50), nullable=True)  # CVE-2024-XXXXX
+    cwe_id = Column(String(50), nullable=True)  # CWE-79, CWE-89, etc.
+    
+    affected_component = Column(String(255), nullable=True)  # System, application, URL, IP
+    affected_host = Column(String(255), nullable=True)
+    affected_port = Column(Integer, nullable=True)
+    affected_url = Column(String(500), nullable=True)
+    
+    evidence = Column(Text, nullable=True)  # Technical evidence/proof
+    reproduction_steps = Column(Text, nullable=True)
+    
+    recommendation = Column(Text, nullable=True)  # Manual recommendation
+    ai_recommendation = Column(Text, nullable=True)  # AI-generated fix
+    ai_impact_assessment = Column(Text, nullable=True)  # AI impact analysis
+    
+    status = Column(String(50), default="open")  # open, in_progress, resolved, accepted, false_positive
+    resolution_notes = Column(Text, nullable=True)
+    
+    discovered_at = Column(DateTime, default=datetime.utcnow)
+    due_date = Column(DateTime, nullable=True)  # Based on SLA
+    resolved_at = Column(DateTime, nullable=True)
+    
+    assigned_to = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    verified_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    verified_at = Column(DateTime, nullable=True)
+    
+    is_exception = Column(Boolean, default=False)
+    exception_reason = Column(Text, nullable=True)
+    exception_approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    exception_expiry = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    report = relationship("VulnerabilityReport", back_populates="vulnerabilities")
+    assignee = relationship("GRCUser", foreign_keys=[assigned_to])
+    verifier = relationship("GRCUser", foreign_keys=[verified_by])
+    exception_approver = relationship("GRCUser", foreign_keys=[exception_approved_by])
+    
+    mitigations = relationship("VulnerabilityMitigation", back_populates="vulnerability", cascade="all, delete-orphan")
+    asset_links = relationship("VulnerabilityAssetLink", back_populates="vulnerability", cascade="all, delete-orphan")
+    control_links = relationship("VulnerabilityControlLink", back_populates="vulnerability", cascade="all, delete-orphan")
+    retests = relationship("VulnerabilityRetest", back_populates="vulnerability", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "vuln_id", name="uq_vulnerability_tenant_id"),
+        Index("ix_vuln_tenant", "tenant_id"),
+        Index("ix_vuln_severity", "severity"),
+        Index("ix_vuln_status", "status"),
+        Index("ix_vuln_report", "report_id"),
+    )
+
+
+class VulnerabilityMitigation(Base):
+    """Remediation tasks for vulnerabilities"""
+    __tablename__ = "grc_vulnerability_mitigations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    vulnerability_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    action_title = Column(String(255), nullable=False)
+    action_description = Column(Text, nullable=True)
+    action_type = Column(String(50), default="remediate")  # remediate, mitigate, transfer, accept
+    
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    priority = Column(String(20), default="medium")  # critical, high, medium, low
+    
+    status = Column(String(50), default="pending")  # pending, in_progress, completed, cancelled
+    
+    target_date = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    
+    effort_estimate = Column(String(50), nullable=True)  # hours, days
+    actual_effort = Column(String(50), nullable=True)
+    
+    notes = Column(Text, nullable=True)
+    
+    erm_mitigation_id = Column(Integer, ForeignKey("grc_risk_mitigation_actions.id"), nullable=True)  # Link to ERM
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    vulnerability = relationship("Vulnerability", back_populates="mitigations")
+    owner = relationship("GRCUser", foreign_keys=[owner_id])
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    
+    __table_args__ = (
+        Index("ix_vuln_mitigation_vuln", "vulnerability_id"),
+        Index("ix_vuln_mitigation_status", "status"),
+    )
+
+
+class VulnerabilityAssetLink(Base):
+    """Links vulnerabilities to affected IT assets"""
+    __tablename__ = "grc_vulnerability_asset_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    vulnerability_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=False, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    
+    impact_on_asset = Column(String(50), nullable=True)  # confidentiality, integrity, availability
+    notes = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    vulnerability = relationship("Vulnerability", back_populates="asset_links")
+    asset = relationship("ITAsset")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    
+    __table_args__ = (
+        UniqueConstraint("vulnerability_id", "asset_id", name="uq_vuln_asset_link"),
+        Index("ix_vuln_asset_link", "vulnerability_id", "asset_id"),
+    )
+
+
+class VulnerabilityControlLink(Base):
+    """Links vulnerabilities to framework controls they violate"""
+    __tablename__ = "grc_vulnerability_control_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    vulnerability_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=False, index=True)
+    framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=True, index=True)
+    normalized_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=True, index=True)
+    internal_control_id = Column(Integer, ForeignKey("grc_internal_controls.id"), nullable=True, index=True)
+    
+    compliance_impact = Column(String(50), nullable=True)  # non_compliant, partial, at_risk
+    notes = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    vulnerability = relationship("Vulnerability", back_populates="control_links")
+    framework_control = relationship("FrameworkControl")
+    normalized_control = relationship("NormalizedControl")
+    internal_control = relationship("InternalControl")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    
+    __table_args__ = (
+        Index("ix_vuln_control_link", "vulnerability_id"),
+    )
+
+
+class VulnerabilityRetest(Base):
+    """Retest records after remediation"""
+    __tablename__ = "grc_vulnerability_retests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    vulnerability_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    retest_date = Column(DateTime, default=datetime.utcnow)
+    tester_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    
+    result = Column(String(50), nullable=False)  # pass, fail, partial
+    findings = Column(Text, nullable=True)
+    evidence = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    vulnerability = relationship("Vulnerability", back_populates="retests")
+    tester = relationship("GRCUser", foreign_keys=[tester_id])
+    
+    __table_args__ = (
+        Index("ix_vuln_retest_vuln", "vulnerability_id"),
+    )
+
+
+class VulnerabilityAIJob(Base):
+    """AI analysis job tracking for vulnerability reports"""
+    __tablename__ = "grc_vulnerability_ai_jobs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    report_id = Column(Integer, ForeignKey("grc_vulnerability_reports.id"), nullable=True, index=True)
+    vulnerability_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    job_type = Column(String(50), nullable=False)  # parse_report, analyze_vuln, suggest_fix, impact_assessment
+    status = Column(String(50), default="pending")  # pending, processing, completed, failed
+    
+    input_data = Column(JSON, default={})
+    output_data = Column(JSON, default={})
+    error_message = Column(Text, nullable=True)
+    
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    report = relationship("VulnerabilityReport", back_populates="ai_jobs")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    
+    __table_args__ = (
+        Index("ix_vuln_ai_job_report", "report_id"),
+        Index("ix_vuln_ai_job_status", "status"),
+    )
+
+
+class VulnerabilitySLAConfig(Base):
+    """SLA configuration by severity"""
+    __tablename__ = "grc_vulnerability_sla_config"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    severity = Column(String(20), nullable=False)  # critical, high, medium, low, info
+    remediation_days = Column(Integer, nullable=False)  # Days to remediate
+    
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "severity", name="uq_vuln_sla_tenant_severity"),
+        Index("ix_vuln_sla_tenant", "tenant_id"),
+    )
+
+
+# =============================================================================
 # Database Initialization Functions
 # =============================================================================
 
