@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import {
@@ -18,12 +18,27 @@ import {
   Upload,
   ChevronDown,
   BarChart3,
-  PieChart,
+  PieChart as PieChartIcon,
   Layers,
   FileText,
   ExternalLink,
+  TrendingDown,
+  Target,
 } from 'lucide-react';
 import Link from 'next/link';
+import { StatCard, ProgressRing, SeverityBadge, DataCard } from '@/components/ui';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 
 interface DashboardData {
   total_controls: number;
@@ -111,11 +126,20 @@ const TABS = [
   { id: 'evidence-gaps', label: 'Evidence Gaps', icon: AlertTriangle },
 ];
 
+const COLORS = {
+  critical: '#ef4444',
+  high: '#f97316',
+  medium: '#f59e0b',
+  low: '#3b82f6',
+  green: '#22c55e',
+  purple: '#a855f7',
+  cyan: '#06b6d4',
+};
+
 export default function GapAnalysisDashboardPage() {
   const [activeTab, setActiveTab] = useState('unmapped');
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<number | null>(null);
   const [showFrameworkDrillDown, setShowFrameworkDrillDown] = useState(false);
-  const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
@@ -165,6 +189,32 @@ export default function GapAnalysisDashboardPage() {
     },
     enabled: !!selectedFrameworkId && showFrameworkDrillDown,
   });
+
+  const gapSeverityData = useMemo(() => {
+    if (!dashboard?.critical_gaps) return [];
+    const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+    dashboard.critical_gaps.forEach(gap => {
+      const priority = gap.priority.toLowerCase() as keyof typeof counts;
+      if (priority in counts) counts[priority]++;
+    });
+    return [
+      { name: 'Critical', value: counts.critical, color: COLORS.critical },
+      { name: 'High', value: counts.high, color: COLORS.high },
+      { name: 'Medium', value: counts.medium, color: COLORS.medium },
+      { name: 'Low', value: counts.low, color: COLORS.low },
+    ].filter(d => d.value > 0);
+  }, [dashboard]);
+
+  const frameworkChartData = useMemo(() => {
+    if (!dashboard?.coverage_by_framework) return [];
+    return dashboard.coverage_by_framework.map(fw => ({
+      name: fw.framework_code,
+      fullName: fw.framework_name,
+      covered: fw.controls_with_evidence,
+      uncovered: fw.controls_without_evidence,
+      coverage: fw.coverage_percentage,
+    }));
+  }, [dashboard]);
 
   const exportMutation = useMutation({
     mutationFn: async (format: 'json' | 'csv') => {
@@ -217,19 +267,6 @@ export default function GapAnalysisDashboardPage() {
     return 'text-red-400';
   };
 
-  const getPriorityBadge = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case 'critical':
-        return 'badge-danger';
-      case 'high':
-        return 'badge-warning';
-      case 'medium':
-        return 'badge-neutral';
-      default:
-        return 'badge-success';
-    }
-  };
-
   if (dashboardLoading) {
     return (
       <div className="space-y-8">
@@ -258,49 +295,11 @@ export default function GapAnalysisDashboardPage() {
     );
   }
 
-  const stats = [
-    {
-      name: 'Total Controls',
-      value: dashboard?.total_controls || 0,
-      icon: Shield,
-      iconColor: 'text-primary-400',
-      bgColor: 'from-primary-500/20 to-primary-600/10',
-    },
-    {
-      name: 'Mapped Controls',
-      value: dashboard?.mapped_controls || 0,
-      percentage: dashboard?.mapping_percentage,
-      icon: CheckCircle,
-      iconColor: 'text-green-400',
-      bgColor: 'from-green-500/20 to-green-600/10',
-    },
-    {
-      name: 'Unmapped Controls',
-      value: dashboard?.unmapped_controls || 0,
-      percentage: dashboard?.total_controls ? Math.round((dashboard.unmapped_controls / dashboard.total_controls) * 100) : 0,
-      icon: XCircle,
-      iconColor: 'text-orange-400',
-      bgColor: 'from-orange-500/20 to-orange-600/10',
-    },
-    {
-      name: 'With Evidence',
-      value: dashboard?.controls_with_evidence || 0,
-      percentage: dashboard?.evidence_coverage_percentage,
-      icon: FileText,
-      iconColor: 'text-cyan-400',
-      bgColor: 'from-cyan-500/20 to-cyan-600/10',
-    },
-    {
-      name: 'Critical Gaps',
-      value: dashboard?.critical_gaps?.filter(g => g.priority === 'critical').length || 0,
-      icon: AlertTriangle,
-      iconColor: 'text-red-400',
-      bgColor: 'from-red-500/20 to-red-600/10',
-    },
-  ];
+  const criticalCount = dashboard?.critical_gaps?.filter(g => g.priority === 'critical').length || 0;
+  const highCount = dashboard?.critical_gaps?.filter(g => g.priority === 'high').length || 0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Gap Analysis Dashboard</h1>
@@ -341,31 +340,197 @@ export default function GapAnalysisDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
-        {stats.map((stat) => (
-          <div
-            key={stat.name}
-            className="stat-card"
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div className={`rounded-xl bg-gradient-to-br ${stat.bgColor} p-3`}>
-                <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
-              </div>
-              {stat.percentage !== undefined && (
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  stat.percentage >= 70 ? 'bg-green-500/20 text-green-400' :
-                  stat.percentage >= 40 ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-red-500/20 text-red-400'
-                }`}>
-                  {stat.percentage}%
-                </span>
-              )}
-            </div>
-            <p className="stat-value">{stat.value}</p>
-            <p className="stat-label">{stat.name}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard
+          title="Unmapped Controls"
+          value={dashboard?.unmapped_controls || 0}
+          icon={Layers}
+          variant="warning"
+          subtitle={`${dashboard?.mapping_percentage || 0}% mapped`}
+        />
+        <StatCard
+          title="Without Evidence"
+          value={dashboard?.controls_without_evidence || 0}
+          icon={FileWarning}
+          variant="danger"
+          subtitle={`${dashboard?.evidence_coverage_percentage || 0}% covered`}
+        />
+        <StatCard
+          title="Critical Gaps"
+          value={criticalCount}
+          icon={AlertTriangle}
+          variant="danger"
+          subtitle="Immediate attention"
+        />
+        <StatCard
+          title="High Priority"
+          value={highCount}
+          icon={TrendingDown}
+          variant="warning"
+          subtitle="Needs action soon"
+        />
+        <div className="rounded-xl border border-slate-700 bg-surface-800 p-4 flex items-center justify-center">
+          <ProgressRing
+            percentage={dashboard?.evidence_coverage_percentage || 0}
+            size={80}
+            color={dashboard && dashboard.evidence_coverage_percentage >= 67 ? 'success' : dashboard && dashboard.evidence_coverage_percentage >= 34 ? 'warning' : 'danger'}
+            label="Coverage"
+          />
+        </div>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <DataCard
+          title="Gap Severity Breakdown"
+          subtitle="Distribution of gaps by priority"
+          icon={PieChartIcon}
+          empty={gapSeverityData.length === 0}
+          emptyMessage="No gaps detected"
+        >
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={gapSeverityData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={2}
+                  dataKey="value"
+                  label={({ name, value }) => `${name}: ${value}`}
+                  labelLine={{ stroke: '#64748b' }}
+                >
+                  {gapSeverityData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ 
+                    backgroundColor: '#1e293b', 
+                    border: '1px solid #334155',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                />
+                <Legend 
+                  wrapperStyle={{ color: '#94a3b8' }}
+                  formatter={(value) => <span style={{ color: '#94a3b8' }}>{value}</span>}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </DataCard>
+
+        <DataCard
+          title="Framework Coverage"
+          subtitle="Evidence coverage by framework"
+          icon={BarChart3}
+          empty={frameworkChartData.length === 0}
+          emptyMessage="No framework data"
+        >
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={frameworkChartData} layout="vertical">
+                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#94a3b8' }} />
+                <YAxis dataKey="name" type="category" tick={{ fill: '#94a3b8' }} width={80} />
+                <Tooltip
+                  contentStyle={{ 
+                    backgroundColor: '#1e293b', 
+                    border: '1px solid #334155',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                  formatter={(value: number) => [`${value}%`, 'Coverage']}
+                />
+                <Bar dataKey="coverage" radius={[0, 4, 4, 0]}>
+                  {frameworkChartData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.coverage >= 80 ? COLORS.green : entry.coverage >= 50 ? COLORS.medium : COLORS.critical} 
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </DataCard>
+      </div>
+
+      {dashboard?.critical_gaps && dashboard.critical_gaps.length > 0 && (
+        <DataCard
+          title="Priority Gaps"
+          subtitle="Issues requiring immediate attention"
+          icon={Target}
+        >
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {dashboard.critical_gaps
+              .sort((a, b) => {
+                const priority = { critical: 0, high: 1, medium: 2, low: 3 };
+                return (priority[a.priority.toLowerCase() as keyof typeof priority] || 4) - 
+                       (priority[b.priority.toLowerCase() as keyof typeof priority] || 4);
+              })
+              .map((gap, index) => (
+              <div
+                key={index}
+                className={`flex items-start gap-4 rounded-lg border p-4 transition-all ${
+                  gap.priority === 'critical'
+                    ? 'border-red-500/30 bg-red-500/10 hover:border-red-500/50'
+                    : gap.priority === 'high'
+                    ? 'border-amber-500/30 bg-amber-500/10 hover:border-amber-500/50'
+                    : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                }`}
+              >
+                <div className={`rounded-lg p-2 ${
+                  gap.priority === 'critical' ? 'bg-red-500/20' :
+                  gap.priority === 'high' ? 'bg-amber-500/20' : 'bg-slate-700'
+                }`}>
+                  <AlertTriangle className={`h-5 w-5 ${
+                    gap.priority === 'critical' ? 'text-red-400' :
+                    gap.priority === 'high' ? 'text-amber-400' : 'text-slate-400'
+                  }`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <SeverityBadge severity={gap.priority.toLowerCase() as any} size="sm" />
+                    <span className="text-xs text-slate-500 capitalize">
+                      {gap.type.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <p className="text-white">{gap.description}</p>
+                  {gap.details && (
+                    <p className="mt-1 text-sm text-slate-400">
+                      {gap.details.controls_without_evidence !== undefined && (
+                        <span>{gap.details.controls_without_evidence} of {gap.details.total_controls} controls without evidence</span>
+                      )}
+                      {gap.details.evidence_type && (
+                        <span>Missing: {gap.details.evidence_type}</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {gap.framework_id && (
+                    <button
+                      onClick={() => handleFrameworkClick(gap.framework_id!)}
+                      className="btn-ghost btn-sm"
+                    >
+                      View
+                    </button>
+                  )}
+                  <Link
+                    href={gap.framework_id ? `/evidence?framework=${gap.framework_id}` : '/evidence'}
+                    className="btn-primary btn-sm flex items-center gap-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Fix Gap
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DataCard>
+      )}
 
       <div className="card">
         <div className="card-header">
@@ -417,15 +582,12 @@ export default function GapAnalysisDashboardPage() {
                     <td className="px-4 py-3 text-center text-red-400">{fw.controls_without_evidence}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
-                        <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-700">
-                          <div
-                            className={`h-full transition-all ${getCoverageColor(fw.coverage_percentage)}`}
-                            style={{ width: `${fw.coverage_percentage}%` }}
-                          />
-                        </div>
-                        <span className={`text-sm font-medium ${getCoverageTextColor(fw.coverage_percentage)}`}>
-                          {fw.coverage_percentage}%
-                        </span>
+                        <ProgressRing
+                          percentage={fw.coverage_percentage}
+                          size={40}
+                          strokeWidth={4}
+                          color={fw.coverage_percentage >= 80 ? 'success' : fw.coverage_percentage >= 50 ? 'warning' : 'danger'}
+                        />
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -442,68 +604,6 @@ export default function GapAnalysisDashboardPage() {
         )}
       </div>
 
-      {dashboard?.critical_gaps && dashboard.critical_gaps.length > 0 && (
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h2 className="card-title">Critical Gaps</h2>
-              <p className="card-description">Priority issues requiring immediate attention</p>
-            </div>
-          </div>
-          <div className="space-y-3">
-            {dashboard.critical_gaps.map((gap, index) => (
-              <div
-                key={index}
-                className={`flex items-start gap-4 rounded-lg border p-4 transition-all ${
-                  gap.priority === 'critical'
-                    ? 'border-red-500/30 bg-red-500/10 hover:border-red-500/50'
-                    : gap.priority === 'high'
-                    ? 'border-amber-500/30 bg-amber-500/10 hover:border-amber-500/50'
-                    : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
-                }`}
-              >
-                <div className={`rounded-lg p-2 ${
-                  gap.priority === 'critical' ? 'bg-red-500/20' :
-                  gap.priority === 'high' ? 'bg-amber-500/20' : 'bg-slate-700'
-                }`}>
-                  <AlertTriangle className={`h-5 w-5 ${
-                    gap.priority === 'critical' ? 'text-red-400' :
-                    gap.priority === 'high' ? 'text-amber-400' : 'text-slate-400'
-                  }`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={getPriorityBadge(gap.priority)}>{gap.priority}</span>
-                    <span className="text-xs text-slate-500">
-                      {gap.type.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                  <p className="text-white">{gap.description}</p>
-                  {gap.details && (
-                    <p className="mt-1 text-sm text-slate-400">
-                      {gap.details.controls_without_evidence !== undefined && (
-                        <span>{gap.details.controls_without_evidence} of {gap.details.total_controls} controls without evidence</span>
-                      )}
-                      {gap.details.evidence_type && (
-                        <span>Missing: {gap.details.evidence_type}</span>
-                      )}
-                    </p>
-                  )}
-                </div>
-                {gap.framework_id && (
-                  <button
-                    onClick={() => handleFrameworkClick(gap.framework_id!)}
-                    className="btn-ghost btn-sm"
-                  >
-                    View Details
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="card">
         <div className="border-b border-slate-700">
           <div className="flex flex-wrap items-center gap-1 px-4">
@@ -519,6 +619,16 @@ export default function GapAnalysisDashboardPage() {
               >
                 <tab.icon className="h-4 w-4" />
                 {tab.label}
+                {tab.id === 'unmapped' && unmappedControls?.total ? (
+                  <span className="ml-1 rounded-full bg-orange-500/20 px-2 py-0.5 text-xs text-orange-400">
+                    {unmappedControls.total}
+                  </span>
+                ) : null}
+                {tab.id === 'no-evidence' && controlsWithoutEvidence?.total ? (
+                  <span className="ml-1 rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
+                    {controlsWithoutEvidence.total}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -598,10 +708,10 @@ export default function GapAnalysisDashboardPage() {
                           <td className="px-4 py-3 text-right">
                             <Link
                               href={`/control-library?map=${control.id}`}
-                              className="btn-ghost btn-sm inline-flex items-center gap-1"
+                              className="btn-primary btn-sm inline-flex items-center gap-1"
                             >
                               <Plus className="h-3 w-3" />
-                              Add to Group
+                              Map Control
                             </Link>
                           </td>
                         </tr>
@@ -670,7 +780,7 @@ export default function GapAnalysisDashboardPage() {
                           <td className="px-4 py-3 text-right">
                             <Link
                               href={`/evidence?control=${control.id}`}
-                              className="btn-ghost btn-sm inline-flex items-center gap-1"
+                              className="btn-primary btn-sm inline-flex items-center gap-1"
                             >
                               <Upload className="h-3 w-3" />
                               Add Evidence
@@ -743,12 +853,10 @@ export default function GapAnalysisDashboardPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className={getPriorityBadge(missing.priority)}>
-                                {missing.priority}
-                              </span>
+                              <SeverityBadge severity={missing.priority.toLowerCase() as any} size="sm" />
                               <Link
                                 href={`/evidence?control=${control.id}&type=${missing.evidence_type}`}
-                                className="btn-ghost btn-sm inline-flex items-center gap-1"
+                                className="btn-primary btn-sm inline-flex items-center gap-1"
                               >
                                 <Upload className="h-3 w-3" />
                                 Upload
@@ -798,54 +906,40 @@ export default function GapAnalysisDashboardPage() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 text-center">
-                    <p className="text-2xl font-bold text-white">{frameworkGaps.total_controls}</p>
-                    <p className="text-sm text-slate-400">Total Controls</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 text-center">
-                    <p className="text-2xl font-bold text-orange-400">{frameworkGaps.summary.unmapped_controls_count}</p>
-                    <p className="text-sm text-slate-400">Unmapped</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 text-center">
-                    <p className="text-2xl font-bold text-red-400">{frameworkGaps.summary.no_evidence_count}</p>
-                    <p className="text-sm text-slate-400">No Evidence</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 text-center">
-                    <p className="text-2xl font-bold text-amber-400">{frameworkGaps.summary.low_coverage_count}</p>
-                    <p className="text-sm text-slate-400">Low Coverage</p>
-                  </div>
+                  <StatCard
+                    title="Total Controls"
+                    value={frameworkGaps.total_controls}
+                    icon={Shield}
+                    variant="info"
+                  />
+                  <StatCard
+                    title="Unmapped"
+                    value={frameworkGaps.summary.unmapped_controls_count}
+                    icon={Layers}
+                    variant="warning"
+                  />
+                  <StatCard
+                    title="No Evidence"
+                    value={frameworkGaps.summary.no_evidence_count}
+                    icon={FileWarning}
+                    variant="danger"
+                  />
+                  <StatCard
+                    title="Low Coverage"
+                    value={frameworkGaps.summary.low_coverage_count}
+                    icon={AlertTriangle}
+                    variant="warning"
+                  />
                 </div>
 
                 <div className="flex items-center justify-center">
-                  <div className="relative h-48 w-48">
-                    <svg className="h-full w-full" viewBox="0 0 100 100">
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="none"
-                        stroke="#334155"
-                        strokeWidth="20"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="none"
-                        stroke="#22c55e"
-                        strokeWidth="20"
-                        strokeDasharray={`${((frameworkGaps.total_controls - frameworkGaps.summary.no_evidence_count) / frameworkGaps.total_controls) * 251.2} 251.2`}
-                        strokeDashoffset="0"
-                        transform="rotate(-90 50 50)"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <p className="text-2xl font-bold text-white">
-                        {Math.round(((frameworkGaps.total_controls - frameworkGaps.summary.no_evidence_count) / frameworkGaps.total_controls) * 100)}%
-                      </p>
-                      <p className="text-xs text-slate-400">Coverage</p>
-                    </div>
-                  </div>
+                  <ProgressRing
+                    percentage={Math.round(((frameworkGaps.total_controls - frameworkGaps.summary.no_evidence_count) / frameworkGaps.total_controls) * 100)}
+                    size={120}
+                    strokeWidth={10}
+                    color={((frameworkGaps.total_controls - frameworkGaps.summary.no_evidence_count) / frameworkGaps.total_controls) * 100 >= 67 ? 'success' : 'warning'}
+                    label="Coverage"
+                  />
                 </div>
 
                 {frameworkGaps.unmapped_controls.length > 0 && (
@@ -855,7 +949,12 @@ export default function GapAnalysisDashboardPage() {
                       {frameworkGaps.unmapped_controls.map((ctrl) => (
                         <div key={ctrl.id} className="flex items-center justify-between rounded bg-slate-800 px-3 py-2">
                           <span className="text-sm text-white">{ctrl.code} - {ctrl.name}</span>
-                          <span className="text-xs text-orange-400">Unmapped</span>
+                          <Link
+                            href={`/control-library?map=${ctrl.id}`}
+                            className="btn-ghost btn-sm text-primary-400"
+                          >
+                            Map
+                          </Link>
                         </div>
                       ))}
                     </div>
@@ -869,7 +968,12 @@ export default function GapAnalysisDashboardPage() {
                       {frameworkGaps.no_evidence_controls.map((ctrl) => (
                         <div key={ctrl.id} className="flex items-center justify-between rounded bg-slate-800 px-3 py-2">
                           <span className="text-sm text-white">{ctrl.code} - {ctrl.name}</span>
-                          <span className="text-xs text-red-400">No Evidence</span>
+                          <Link
+                            href={`/evidence?control=${ctrl.id}`}
+                            className="btn-ghost btn-sm text-primary-400"
+                          >
+                            Add Evidence
+                          </Link>
                         </div>
                       ))}
                     </div>

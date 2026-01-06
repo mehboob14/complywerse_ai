@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient, { frameworksApi } from '@/lib/api';
 import { Framework } from '@/types';
@@ -26,9 +26,12 @@ import {
   Clock,
   XCircle,
   BarChart3,
-  Play
+  Play,
+  Grid3X3,
+  TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
+import { StatCard, ProgressRing, DataCard } from '@/components/ui';
 
 interface ControlGroup {
   id: number;
@@ -92,6 +95,7 @@ export default function ControlLibraryPage() {
   const [showEmptyGroups, setShowEmptyGroups] = useState(true);
   const [page, setPage] = useState(0);
   const [pageSize] = useState(20);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAutoGroupModal, setShowAutoGroupModal] = useState(false);
@@ -152,6 +156,18 @@ export default function ControlLibraryPage() {
     queryFn: async () => {
       try {
         const response = await apiClient.get('/control-library/ai-mapping/similarities', { params: { limit: 1 } });
+        return response.data;
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  const { data: gapDashboard } = useQuery({
+    queryKey: ['gap-analysis-dashboard'],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get('/control-library/gap-analysis/dashboard');
         return response.data;
       } catch {
         return null;
@@ -259,13 +275,28 @@ export default function ControlLibraryPage() {
 
   const totalGroups = groupsData?.total || 0;
   const totalControls = groupsData?.items?.reduce((sum, g) => sum + g.total_control_count, 0) || 0;
-  const uniqueFrameworks = new Set(groupsData?.items?.flatMap(g => [g.category, g.domain]).filter(Boolean)).size;
 
   const filteredGroups = showEmptyGroups
     ? groupsData?.items
     : groupsData?.items?.filter(g => g.total_control_count > 0);
 
   const totalPages = Math.ceil((groupsData?.total || 0) / pageSize);
+
+  const getGroupCompletionPercent = (group: ControlGroup) => {
+    if (group.total_control_count === 0) return 0;
+    const hasDescription = group.description ? 20 : 0;
+    const hasCategory = group.category ? 20 : 0;
+    const hasDomain = group.domain ? 20 : 0;
+    const hasKeywords = (group.keywords?.length || 0) > 0 ? 20 : 0;
+    const hasControls = group.total_control_count > 0 ? 20 : 0;
+    return hasDescription + hasCategory + hasDomain + hasKeywords + hasControls;
+  };
+
+  const averageCompletion = useMemo(() => {
+    if (!groupsData?.items?.length) return 0;
+    const sum = groupsData.items.reduce((acc, g) => acc + getGroupCompletionPercent(g), 0);
+    return Math.round(sum / groupsData.items.length);
+  }, [groupsData]);
 
   return (
     <div className="space-y-6">
@@ -305,48 +336,79 @@ export default function ControlLibraryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <Library className="h-6 w-6 text-primary-400" />
-            </div>
-          </div>
-          <p className="stat-value">{groupsLoading ? '-' : totalGroups}</p>
-          <p className="stat-label">Total Control Groups</p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard
+          title="Total Control Groups"
+          value={groupsLoading ? '-' : totalGroups}
+          icon={Library}
+          variant="default"
+          subtitle="Organized control sets"
+        />
+        <StatCard
+          title="Total Mapped Controls"
+          value={groupsLoading ? '-' : totalControls}
+          icon={GitMerge}
+          variant="info"
+          subtitle="Across all groups"
+        />
+        <StatCard
+          title="Frameworks Covered"
+          value={groupsLoading ? '-' : frameworks?.length || 0}
+          icon={Layers}
+          variant="success"
+          subtitle="Active frameworks"
+        />
+        <StatCard
+          title="Evidence Coverage"
+          value={`${gapDashboard?.evidence_coverage_percentage || 0}%`}
+          icon={TrendingUp}
+          variant={gapDashboard?.evidence_coverage_percentage >= 70 ? 'success' : gapDashboard?.evidence_coverage_percentage >= 40 ? 'warning' : 'danger'}
+          subtitle="Controls with evidence"
+        />
+        <div className="rounded-xl border border-slate-700 bg-surface-800 p-4 flex items-center justify-center">
+          <ProgressRing
+            percentage={averageCompletion}
+            size={80}
+            color={averageCompletion >= 70 ? 'success' : averageCompletion >= 40 ? 'warning' : 'danger'}
+            label="Completion"
+          />
         </div>
+      </div>
 
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Link href="/control-library/coverage" className="card hover:border-primary-500/50 transition-colors group">
+          <div className="flex items-center gap-4">
             <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
-              <GitMerge className="h-6 w-6 text-blue-400" />
+              <Grid3X3 className="h-6 w-6 text-blue-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white group-hover:text-primary-400 transition-colors">Coverage Matrix</h3>
+              <p className="text-sm text-slate-400">View evidence coverage heatmap</p>
             </div>
           </div>
-          <p className="stat-value">{groupsLoading ? '-' : totalControls}</p>
-          <p className="stat-label">Total Mapped Controls</p>
-        </div>
-
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/10 p-3">
-              <Layers className="h-6 w-6 text-green-400" />
+        </Link>
+        <Link href="/control-library/gaps" className="card hover:border-primary-500/50 transition-colors group">
+          <div className="flex items-center gap-4">
+            <div className="rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 p-3">
+              <AlertCircle className="h-6 w-6 text-orange-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white group-hover:text-primary-400 transition-colors">Gap Analysis</h3>
+              <p className="text-sm text-slate-400">Identify and address control gaps</p>
             </div>
           </div>
-          <p className="stat-value">{groupsLoading ? '-' : frameworks?.length || 0}</p>
-          <p className="stat-label">Frameworks Covered</p>
-        </div>
-
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
+        </Link>
+        <Link href="/control-library/compare" className="card hover:border-primary-500/50 transition-colors group">
+          <div className="flex items-center gap-4">
             <div className="rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-3">
-              <Brain className="h-6 w-6 text-purple-400" />
+              <BarChart3 className="h-6 w-6 text-purple-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white group-hover:text-primary-400 transition-colors">Compare Controls</h3>
+              <p className="text-sm text-slate-400">Side-by-side control comparison</p>
             </div>
           </div>
-          <p className="stat-value text-base">
-            {latestAnalysis?.total ? `${latestAnalysis.total} mappings` : 'Ready'}
-          </p>
-          <p className="stat-label">AI Analysis Status</p>
-        </div>
+        </Link>
       </div>
 
       <div className="card">
@@ -396,6 +458,28 @@ export default function ControlLibraryPage() {
               />
               Show empty groups
             </label>
+            <div className="flex rounded-lg border border-slate-700 overflow-hidden">
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                  viewMode === 'cards' 
+                    ? 'bg-primary-600 text-white' 
+                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <Grid3X3 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                  viewMode === 'table' 
+                    ? 'bg-primary-600 text-white' 
+                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <FileText className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -434,24 +518,120 @@ export default function ControlLibraryPage() {
             </button>
           </div>
         </div>
-      ) : (
+      ) : viewMode === 'cards' ? (
         <>
-          <div className="overflow-hidden rounded-lg border border-slate-700">
-            <table className="w-full">
-              <thead className="bg-slate-800/50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Code</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Category</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Domain</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Controls</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Breakdown</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Keywords</th>
-                  <th className="w-32 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700 bg-slate-800">
-                {filteredGroups?.map((group) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredGroups?.map((group) => {
+              const completion = getGroupCompletionPercent(group);
+              return (
+                <div
+                  key={group.id}
+                  className="card hover:border-slate-600 transition-all group"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-primary-500/20 p-2">
+                        <Shield className="h-5 w-5 text-primary-400" />
+                      </div>
+                      <div>
+                        <span className="font-mono text-xs text-primary-400">{group.code}</span>
+                        <h3 className="font-medium text-white line-clamp-1">{group.name}</h3>
+                      </div>
+                    </div>
+                    <ProgressRing
+                      percentage={completion}
+                      size={40}
+                      strokeWidth={3}
+                      color={completion >= 70 ? 'success' : completion >= 40 ? 'warning' : 'danger'}
+                      showPercentage={false}
+                    />
+                  </div>
+
+                  {group.description && (
+                    <p className="text-sm text-slate-400 line-clamp-2 mb-3">{group.description}</p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {group.category && (
+                      <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                        {group.category}
+                      </span>
+                    )}
+                    {group.domain && (
+                      <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-400">
+                        {group.domain}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-700 pt-3">
+                    <div className="flex items-center gap-4 text-sm">
+                      <div className="flex items-center gap-1">
+                        <Shield className="h-4 w-4 text-slate-400" />
+                        <span className="text-white font-medium">{group.total_control_count}</span>
+                        <span className="text-slate-500">controls</span>
+                      </div>
+                      {group.normalized_control_count > 0 && (
+                        <span className="text-xs text-green-400">
+                          {group.normalized_control_count} normalized
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Link
+                        href={`/control-library/${group.id}`}
+                        title="View Details"
+                        className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
+                      >
+                        <Eye size={14} />
+                      </Link>
+                      <button
+                        title="Edit"
+                        onClick={() => setEditingGroup(group)}
+                        className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        title="Generate AI Summary"
+                        onClick={() => generateSummaryMutation.mutate(group.id)}
+                        disabled={generateSummaryMutation.isPending}
+                        className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-primary-400"
+                      >
+                        <Sparkles size={14} />
+                      </button>
+                      <button
+                        title="Delete"
+                        onClick={() => handleDeleteGroup(group)}
+                        className="rounded p-1.5 text-slate-400 hover:bg-red-900/50 hover:text-red-400"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-slate-700">
+          <table className="w-full">
+            <thead className="bg-slate-800/50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Code</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Category</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Domain</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Controls</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Completion</th>
+                <th className="w-32 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-700 bg-slate-800">
+              {filteredGroups?.map((group) => {
+                const completion = getGroupCompletionPercent(group);
+                return (
                   <tr key={group.id} className="hover:bg-slate-700/50">
                     <td className="px-4 py-3">
                       <span className="font-mono text-sm font-medium text-primary-400">{group.code}</span>
@@ -489,32 +669,16 @@ export default function ControlLibraryPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {group.normalized_control_count > 0 && (
-                          <span className="rounded bg-green-500/20 px-1.5 py-0.5 text-xs text-green-400">
-                            {group.normalized_control_count} normalized
-                          </span>
-                        )}
-                        {group.framework_control_count > 0 && (
-                          <span className="rounded bg-orange-500/20 px-1.5 py-0.5 text-xs text-orange-400">
-                            {group.framework_control_count} framework
-                          </span>
-                        )}
-                        {group.total_control_count === 0 && (
-                          <span className="text-xs text-slate-500">No controls</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1 max-w-[150px]">
-                        {group.keywords?.slice(0, 3).map((kw, idx) => (
-                          <span key={idx} className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300">
-                            {kw}
-                          </span>
-                        ))}
-                        {(group.keywords?.length || 0) > 3 && (
-                          <span className="text-xs text-slate-500">+{group.keywords!.length - 3}</span>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-700">
+                          <div
+                            className={`h-full transition-all ${
+                              completion >= 70 ? 'bg-green-500' : completion >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+                            }`}
+                            style={{ width: `${completion}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-slate-400">{completion}%</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -551,38 +715,38 @@ export default function ControlLibraryPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-700 pt-4">
-              <div className="text-sm text-slate-400">
-                Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, groupsData?.total || 0)} of {groupsData?.total || 0} results
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                  className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <span className="px-3 text-sm text-slate-400">
-                  Page {page + 1} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                  className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-slate-700 pt-4">
+          <div className="text-sm text-slate-400">
+            Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, groupsData?.total || 0)} of {groupsData?.total || 0} results
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span className="px-3 text-sm text-slate-400">
+              Page {page + 1} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
 
       {showCreateModal && (
@@ -1021,7 +1185,7 @@ export default function ControlLibraryPage() {
                     className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700"
                   >
                     <Brain size={16} />
-                    Run Analysis
+                    Start Analysis
                   </button>
                 </div>
               </div>
@@ -1029,59 +1193,44 @@ export default function ControlLibraryPage() {
               <div className="flex flex-col items-center justify-center py-8">
                 <Loader2 className="mb-4 h-12 w-12 animate-spin text-purple-400" />
                 <p className="text-white">Running AI similarity analysis...</p>
-                <p className="mt-1 text-sm text-slate-400">Analyzing control relationships</p>
+                <p className="mt-1 text-sm text-slate-400">This may take a moment</p>
               </div>
             ) : analysisResult ? (
               <div className="space-y-4">
-                <div className={`rounded-lg p-4 ${
-                  analysisResult.status === 'completed' 
-                    ? 'bg-green-500/10 border border-green-500/30' 
-                    : analysisResult.status === 'failed'
-                    ? 'bg-red-500/10 border border-red-500/30'
-                    : 'bg-blue-500/10 border border-blue-500/30'
-                }`}>
-                  <div className={`flex items-center gap-2 ${
-                    analysisResult.status === 'completed' ? 'text-green-400' :
-                    analysisResult.status === 'failed' ? 'text-red-400' : 'text-blue-400'
-                  }`}>
-                    {analysisResult.status === 'completed' ? <CheckCircle size={20} /> :
-                     analysisResult.status === 'failed' ? <XCircle size={20} /> :
-                     <RefreshCw size={20} className="animate-spin" />}
-                    <span className="font-medium capitalize">{analysisResult.status}</span>
+                <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-4">
+                  <div className="flex items-center gap-2 text-green-400">
+                    <CheckCircle size={20} />
+                    <span className="font-medium">Analysis complete!</span>
                   </div>
-                  {analysisResult.error_message && (
-                    <p className="mt-2 text-sm text-red-300">{analysisResult.error_message}</p>
-                  )}
                 </div>
                 <div className="rounded-lg border border-slate-600 bg-slate-700 p-4">
-                  <h4 className="mb-3 font-medium text-white">Analysis Results</h4>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="text-center">
+                  <h4 className="mb-2 font-medium text-white">Results</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
                       <p className="text-slate-400">Controls Analyzed</p>
                       <p className="text-2xl font-semibold text-white">{analysisResult.total_controls_analyzed}</p>
                     </div>
-                    <div className="text-center">
+                    <div>
                       <p className="text-slate-400">Mappings Created</p>
                       <p className="text-2xl font-semibold text-white">{analysisResult.mappings_created}</p>
                     </div>
-                    <div className="text-center">
+                    <div>
                       <p className="text-slate-400">Groups Created</p>
                       <p className="text-2xl font-semibold text-white">{analysisResult.groups_created}</p>
                     </div>
+                    <div>
+                      <p className="text-slate-400">Status</p>
+                      <p className="text-lg font-semibold text-green-400 capitalize">{analysisResult.status}</p>
+                    </div>
                   </div>
                 </div>
-                {analysisResult.completed_at && (
-                  <p className="text-xs text-slate-500">
-                    Completed at: {new Date(analysisResult.completed_at).toLocaleString()}
-                  </p>
-                )}
                 <div className="flex justify-end">
                   <button
                     onClick={() => {
                       setShowAnalysisModal(false);
                       setAnalysisResult(null);
                     }}
-                    className="rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+                    className="rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700"
                   >
                     Done
                   </button>
