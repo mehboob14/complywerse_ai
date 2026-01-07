@@ -132,6 +132,19 @@ def extract_text_with_vision(file_path: str, file_type: str) -> str:
         )
 
 
+def get_file_extension(evidence: Evidence) -> str:
+    """Extract file extension from file_name or file_path."""
+    if evidence.file_name:
+        ext = os.path.splitext(evidence.file_name)[1].lower().strip(".")
+        if ext:
+            return ext
+    if evidence.file_path:
+        ext = os.path.splitext(evidence.file_path)[1].lower().strip(".")
+        if ext:
+            return ext
+    return ""
+
+
 def process_evidence_ocr(evidence: Evidence, db: Session) -> OCRProcessResponse:
     if not evidence.file_path or not os.path.exists(evidence.file_path):
         evidence.ocr_status = "failed"
@@ -144,7 +157,7 @@ def process_evidence_ocr(evidence: Evidence, db: Session) -> OCRProcessResponse:
             message="File not found on disk"
         )
     
-    file_type = (evidence.file_type or "").lower().strip(".")
+    file_type = get_file_extension(evidence)
     if file_type not in PROCESSABLE_FILE_TYPES:
         evidence.ocr_status = "failed"
         evidence.ocr_processed_at = datetime.utcnow()
