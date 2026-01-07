@@ -43,6 +43,7 @@ interface AIAssessment {
   content_summary: string | null;
   gap_analysis: {
     detected_controls?: string[];
+    compliance_frameworks?: string[];
     gaps?: string[];
     recommendations?: string[];
   } | null;
@@ -126,6 +127,7 @@ interface LatestAssessment {
   audit_readiness: number | null;
   content_summary: string | null;
   detected_controls: string[];
+  compliance_frameworks: string[];
   compliance_gaps: string[];
   recommendations: string[];
   assessed_at: string;
@@ -1013,6 +1015,26 @@ function AssessmentTab({
           <h4 className="font-medium text-white">Content Summary</h4>
           <p className="text-slate-300">{data.content_summary || 'No summary available'}</p>
         </div>
+      </div>
+
+      <div className="rounded-lg bg-gradient-to-r from-primary-900/50 to-blue-900/50 border border-primary-500/30 p-4">
+        <h4 className="mb-3 flex items-center gap-2 font-medium text-white">
+          <ShieldCheck className="h-5 w-5 text-primary-400" />
+          Applicable Compliance Frameworks
+        </h4>
+        <p className="mb-3 text-xs text-slate-400">This evidence can be used to demonstrate compliance with the following requirements:</p>
+        {(assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks)?.length ? (
+          <div className="flex flex-wrap gap-2">
+            {((assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks) || []).map((framework, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-primary-500/20 px-3 py-1.5 text-sm font-medium text-primary-300 border border-primary-500/30">
+                <Shield className="h-3.5 w-3.5" />
+                {framework}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Run AI assessment to identify applicable compliance frameworks</p>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">

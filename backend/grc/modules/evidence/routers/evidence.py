@@ -2,7 +2,8 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import os
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+import threading
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
 from pydantic import BaseModel
@@ -10,7 +11,7 @@ from pydantic import BaseModel
 from ....models import (
     Evidence, EvidenceVersion, EvidenceControlMapping, EvidenceAIAssessment,
     RiskEvidenceLink, AssetEvidenceLink, EvidenceIncidentLink, EvidencePolicyLink,
-    GRCUser, Tenant, get_db
+    GRCUser, Tenant, get_db, engine
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -47,6 +48,45 @@ EVIDENCE_TYPES = [
     "incident_report",
     "other"
 ]
+
+OCR_PROCESSABLE_TYPES = {'pdf', 'png', 'jpg', 'jpeg'}
+
+
+def process_evidence_background(evidence_id: int):
+    """Background task to process OCR and AI assessment for uploaded evidence."""
+    from sqlalchemy.orm import Session as DBSession
+    from .ocr import process_evidence_ocr
+    from .ai_assessment import run_ai_assessment
+    
+    db = DBSession(bind=engine)
+    try:
+        evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+        if not evidence:
+            return
+        
+        file_ext = ""
+        if evidence.file_name:
+            file_ext = os.path.splitext(evidence.file_name)[1].lower().strip(".")
+        elif evidence.file_type:
+            file_ext = evidence.file_type.split("/")[-1].lower()
+        
+        if file_ext in OCR_PROCESSABLE_TYPES:
+            try:
+                ocr_result = process_evidence_ocr(evidence, db)
+                
+                if ocr_result.status == "completed" and evidence.ocr_content:
+                    try:
+                        run_ai_assessment(evidence, db)
+                    except Exception:
+                        pass
+            except Exception:
+                evidence.ocr_status = "failed"
+                db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
 
 router = APIRouter(prefix="/items", tags=["Evidence - Items"])
 
@@ -414,6 +454,7 @@ async def upload_evidence(
     source_system: Optional[str] = Form(None),
     tenant_id: Optional[int] = Form(None),
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -490,8 +531,17 @@ async def upload_evidence(
     db.commit()
     db.refresh(db_evidence)
     
+    if ocr_status_val == "pending":
+        thread = threading.Thread(
+            target=process_evidence_background,
+            args=(db_evidence.id,),
+            daemon=True
+        )
+        thread.start()
+    
     result = serialize_evidence(db_evidence, include_counts=False, db=db)
     result["file_size"] = file_size
+    result["ocr_processing"] = ocr_status_val == "pending"
     
     return result
 

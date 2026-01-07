@@ -16,14 +16,16 @@ router = APIRouter(prefix="/ai", tags=["Evidence - AI Assessment"])
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
-ASSESSMENT_PROMPT = """Analyze this compliance evidence and provide:
+ASSESSMENT_PROMPT = """Analyze this compliance evidence and provide a comprehensive assessment:
+
 1. Relevance Score (0-100): How relevant is this for demonstrating compliance
 2. Adequacy Score (0-100): How complete and sufficient is this evidence
 3. Audit Readiness (0-100): How ready is this for an audit
-4. Summary: Brief 2-3 sentence description of the evidence
-5. Detected Controls: List any specific controls or requirements this evidence supports
-6. Gaps: List any potential gaps or missing elements
-7. Recommendations: Suggestions for improvement
+4. Summary: Brief 2-3 sentence description of what this evidence shows and its purpose
+5. Detected Controls: List specific controls from known frameworks (ISO 27001, PCI DSS, NIST CSF, SOC 2, etc.) this evidence can support
+6. Compliance Frameworks: List regulatory frameworks or standards this evidence applies to (e.g., "PCI DSS 4.0 - Requirement 5.5.18", "ISO 27001:2022 - A.8.7", "NIST CSF - PR.DS-1")
+7. Gaps: List any potential gaps or missing elements for full compliance
+8. Recommendations: Suggestions for improvement
 
 Evidence content:
 {ocr_content}
@@ -34,8 +36,9 @@ Respond in JSON format with the following structure:
     "adequacy_score": <number 0-100>,
     "audit_readiness": <number 0-100>,
     "confidence_score": <number 0-100>,
-    "summary": "<string>",
-    "detected_controls": ["<control1>", "<control2>"],
+    "summary": "<string describing what this evidence is and what it demonstrates>",
+    "detected_controls": ["<specific control reference 1>", "<specific control reference 2>"],
+    "compliance_frameworks": ["<framework: requirement>", "<framework: requirement>"],
     "gaps": ["<gap1>", "<gap2>"],
     "recommendations": ["<rec1>", "<rec2>"]
 }}"""
@@ -54,6 +57,7 @@ class AssessmentResponse(BaseModel):
     audit_readiness: Optional[float]
     content_summary: Optional[str]
     detected_controls: List[str]
+    compliance_frameworks: List[str]
     compliance_gaps: List[str]
     recommendations: List[str]
     assessed_at: str
@@ -135,6 +139,7 @@ def format_assessment_response(assessment: EvidenceAIAssessment) -> AssessmentRe
         audit_readiness=assessment.audit_readiness,
         content_summary=assessment.content_summary,
         detected_controls=gap_analysis.get("detected_controls", []),
+        compliance_frameworks=gap_analysis.get("compliance_frameworks", []),
         compliance_gaps=gap_analysis.get("gaps", []),
         recommendations=gap_analysis.get("recommendations", []),
         assessed_at=assessment.assessed_at.isoformat() if assessment.assessed_at else ""
@@ -179,6 +184,7 @@ def run_ai_assessment(evidence: Evidence, db: Session) -> EvidenceAIAssessment:
             content_summary=ai_result.get("summary", ""),
             gap_analysis={
                 "detected_controls": ai_result.get("detected_controls", []),
+                "compliance_frameworks": ai_result.get("compliance_frameworks", []),
                 "gaps": ai_result.get("gaps", []),
                 "recommendations": ai_result.get("recommendations", [])
             },
