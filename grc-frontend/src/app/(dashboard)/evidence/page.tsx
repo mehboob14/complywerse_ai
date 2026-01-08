@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import apiClient from '@/lib/api';
 import { 
   FileCheck, 
@@ -479,22 +480,24 @@ export default function EvidencePage() {
                         />
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-slate-700 p-2">
-                            <TypeIcon className="h-4 w-4 text-primary-400" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="truncate text-sm font-medium text-white">{item.name}</p>
-                              {item.is_stale && (
-                                <span className="flex h-2 w-2 rounded-full bg-red-500" title="Stale evidence"></span>
-                              )}
+                        <Link href={`/evidence/${item.id}`} className="block">
+                          <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
+                            <div className="rounded-lg bg-slate-700 p-2">
+                              <TypeIcon className="h-4 w-4 text-primary-400" />
                             </div>
-                            <p className="truncate text-xs text-slate-400 max-w-xs">
-                              {item.description || 'No description'}
-                            </p>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-sm font-medium text-white hover:text-primary-400 transition-colors">{item.name}</p>
+                                {item.is_stale && (
+                                  <span className="flex h-2 w-2 rounded-full bg-red-500" title="Stale evidence"></span>
+                                )}
+                              </div>
+                              <p className="truncate text-xs text-slate-400 max-w-xs">
+                                {item.description || 'No description'}
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        </Link>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm text-slate-300 capitalize">
@@ -540,18 +543,20 @@ export default function EvidencePage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <button
+                          <Link
+                            href={`/evidence/${item.id}`}
                             title="View"
                             className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
                           >
                             <Eye size={14} />
-                          </button>
-                          <button
+                          </Link>
+                          <Link
+                            href={`/evidence/${item.id}`}
                             title="Edit"
                             className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
                           >
                             <Edit2 size={14} />
-                          </button>
+                          </Link>
                           {(item.ocr_status === 'pending' || item.ocr_status === 'failed') && (
                             <button
                               title="Process OCR"
