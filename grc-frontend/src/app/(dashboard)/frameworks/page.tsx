@@ -20,8 +20,10 @@ import {
   CheckCircle2,
   Clock,
   Layers,
-  Building2
+  Building2,
+  Upload
 } from 'lucide-react';
+import Link from 'next/link';
 
 export default function FrameworksPage() {
   const router = useRouter();
@@ -116,13 +118,22 @@ export default function FrameworksPage() {
           <h1 className="text-2xl font-bold text-white">Compliance Frameworks</h1>
           <p className="text-slate-400">Manage frameworks and track certification journeys</p>
         </div>
-        <button 
-          onClick={() => setShowCreateModal(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Create Custom Framework
-        </button>
+        <div className="flex items-center gap-3">
+          <Link 
+            href="/framework-upload"
+            className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 transition-colors"
+          >
+            <Upload className="h-4 w-4" />
+            Upload Framework
+          </Link>
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Create Custom Framework
+          </button>
+        </div>
       </div>
 
       {activeCertifications.length > 0 && (
