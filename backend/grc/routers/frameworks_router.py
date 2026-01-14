@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..models import (
     Framework, FrameworkDomain, ControlObjective, 
-    FrameworkControl, FrameworkSubControl, GRCUser, get_db
+    FrameworkControl, FrameworkSubControl, GRCUser, get_db,
+    CertificationJourney
 )
 from ..schemas import (
     FrameworkCreate, FrameworkUpdate, FrameworkResponse,
@@ -216,6 +217,17 @@ def delete_framework(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete a standard framework"
+        )
+    
+    active_certifications = db.query(CertificationJourney).filter(
+        CertificationJourney.framework_id == framework_id,
+        CertificationJourney.completed_at.is_(None)
+    ).count()
+    
+    if active_certifications > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot delete framework with {active_certifications} active certification journey(s). Complete or delete the certifications first."
         )
     
     db.delete(framework)

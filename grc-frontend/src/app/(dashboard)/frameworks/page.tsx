@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { frameworksApi, certificationsApi } from '@/lib/api';
 import { Framework, CertificationJourney, Domain } from '@/types';
@@ -21,13 +21,32 @@ import {
   Clock,
   Layers,
   Building2,
-  Upload
+  Upload,
+  Trash2,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function FrameworksPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<Framework | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: async (frameworkId: string) => {
+      return await frameworksApi.delete(frameworkId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['frameworks'] });
+      setDeleteConfirm(null);
+      setDeleteError(null);
+    },
+    onError: (error: any) => {
+      setDeleteError(error.response?.data?.detail || 'Failed to delete framework');
+    }
+  });
 
   const { data: frameworks, isLoading: frameworksLoading } = useQuery({
     queryKey: ['frameworks'],
@@ -251,14 +270,27 @@ export default function FrameworksPage() {
                   </div>
                 )}
 
-                <div className="mt-4 border-t border-slate-700 pt-4">
+                <div className="mt-4 border-t border-slate-700 pt-4 flex gap-2">
                   <button
                     onClick={() => handleStartCertification(framework)}
-                    className="btn-primary flex w-full items-center justify-center gap-2"
+                    className="btn-primary flex flex-1 items-center justify-center gap-2"
                   >
                     <Play className="h-4 w-4" />
                     Start Certification
                   </button>
+                  {framework.is_custom && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirm(framework);
+                        setDeleteError(null);
+                      }}
+                      className="rounded-lg bg-red-500/20 px-3 py-2 text-red-400 hover:bg-red-500/30 transition-colors"
+                      title="Delete Framework"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -285,6 +317,70 @@ export default function FrameworksPage() {
         isOpen={showCreateModal} 
         onClose={() => setShowCreateModal(false)} 
       />
+
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl bg-slate-800 p-6 shadow-xl border border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-400" />
+                Delete Framework
+              </h3>
+              <button
+                onClick={() => {
+                  setDeleteConfirm(null);
+                  setDeleteError(null);
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <p className="text-slate-300 mb-2">
+              Are you sure you want to delete <span className="font-semibold text-white">{deleteConfirm.name}</span>?
+            </p>
+            <p className="text-sm text-slate-400 mb-4">
+              This will permanently remove the framework and all associated domains, objectives, and controls. This action cannot be undone.
+            </p>
+
+            {deleteError && (
+              <div className="mb-4 rounded-lg bg-red-500/20 border border-red-500/30 p-3 text-sm text-red-400">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setDeleteConfirm(null);
+                  setDeleteError(null);
+                }}
+                className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(String(deleteConfirm.id))}
+                disabled={deleteMutation.isPending}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleteMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    Delete Framework
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
