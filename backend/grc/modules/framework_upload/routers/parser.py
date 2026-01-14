@@ -143,7 +143,100 @@ def extract_text_from_file(framework: UploadedFramework) -> str:
     return extracted_text
 
 
-def parse_with_openai(text: str, framework_name: str) -> List[dict]:
+def chunk_text(text: str, chunk_size: int = 40000, overlap: int = 2000) -> List[str]:
+    """Split text into overlapping chunks for processing large documents."""
+    if len(text) <= chunk_size:
+        return [text]
+    
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        if end < len(text):
+            break_point = text.rfind('\n\n', start + chunk_size - overlap, end)
+            if break_point == -1:
+                break_point = text.rfind('\n', start + chunk_size - overlap, end)
+            if break_point == -1:
+                break_point = text.rfind('. ', start + chunk_size - overlap, end)
+            if break_point > start:
+                end = break_point + 1
+        
+        chunks.append(text[start:end])
+        start = end - overlap if end < len(text) else end
+    
+    return chunks
+
+
+def infer_evidence_types(control_data: dict) -> List[str]:
+    """Infer appropriate evidence types based on control content."""
+    text = f"{control_data.get('title', '')} {control_data.get('description', '')} {control_data.get('full_text', '')}".lower()
+    
+    evidence_types = []
+    
+    if any(word in text for word in ['policy', 'policies', 'governance', 'management approval', 'board', 'documented']):
+        evidence_types.append('policy')
+    
+    if any(word in text for word in ['procedure', 'process', 'workflow', 'steps', 'method', 'guideline', 'instruction']):
+        evidence_types.append('procedure')
+    
+    if any(word in text for word in ['configuration', 'setting', 'parameter', 'system', 'network', 'firewall', 'server', 'encryption', 'tls', 'ssl']):
+        evidence_types.append('configuration')
+    
+    if any(word in text for word in ['log', 'audit trail', 'monitoring', 'event', 'alert', 'detection', 'tracking']):
+        evidence_types.append('log')
+    
+    if any(word in text for word in ['report', 'assessment', 'review', 'audit', 'test', 'scan', 'evaluation', 'analysis']):
+        evidence_types.append('report')
+    
+    if any(word in text for word in ['contract', 'agreement', 'sla', 'vendor', 'third party', 'supplier', 'outsourcing']):
+        evidence_types.append('contract')
+    
+    if not evidence_types:
+        evidence_types = ['policy', 'procedure']
+    
+    return evidence_types
+
+
+def normalize_priority(priority: str) -> str:
+    """Normalize priority values to expected enum values (high/medium/low)."""
+    priority_lower = (priority or "medium").lower().strip()
+    if priority_lower in ["critical", "high"]:
+        return "high"
+    elif priority_lower in ["medium", "moderate"]:
+        return "medium"
+    elif priority_lower in ["low", "minimal"]:
+        return "low"
+    return "medium"
+
+
+def deduplicate_controls(controls: List[dict]) -> List[dict]:
+    """Remove duplicate controls based on title and original_reference, maintaining order by reference."""
+    seen = set()
+    unique_controls = []
+    
+    for control in controls:
+        control["priority"] = normalize_priority(control.get("priority", "medium"))
+        
+        key = (
+            control.get('original_reference', '').strip().lower(),
+            control.get('title', '').strip().lower()[:100]
+        )
+        if key[0] or key[1]:
+            if key not in seen:
+                seen.add(key)
+                unique_controls.append(control)
+        else:
+            unique_controls.append(control)
+    
+    unique_controls.sort(key=lambda c: (
+        c.get('original_reference', 'zzz').lower(),
+        c.get('title', '').lower()
+    ))
+    
+    return unique_controls
+
+
+def parse_with_openai(text: str, framework_name: str, chunk_number: int = 1, total_chunks: int = 1) -> List[dict]:
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -155,59 +248,114 @@ def parse_with_openai(text: str, framework_name: str) -> List[dict]:
         base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
     )
     
-    prompt = f"""You are a compliance expert analyzing regulatory framework documents to extract structured control requirements.
+    chunk_context = ""
+    if total_chunks > 1:
+        chunk_context = f"\n\nNOTE: This is chunk {chunk_number} of {total_chunks} from the document. Extract ALL controls from this section."
+    
+    prompt = f"""You are an expert regulatory compliance analyst specializing in extracting control requirements from regulatory frameworks, standards, and guidelines.
 
-Analyze the following document text from "{framework_name}" and extract all control requirements.
+TASK: Analyze the following document text from "{framework_name}" and extract EVERY control requirement, sub-control, and compliance obligation.{chunk_context}
 
-For each control requirement you find, extract:
-1. original_reference: The original section, clause, or requirement number (e.g., "4.1.2", "REQ-001")
-2. title: A concise title summarizing the control (max 200 chars)
-3. description: A detailed description of what the control requires
-4. full_text: The complete original text of the requirement
-5. domain: Categorize into one of: Governance, Risk, Security, Access Control, Incident Management, Business Continuity, Data Protection, Compliance, Operations
-6. category: A sub-category within the domain (e.g., "Authentication", "Encryption", "Policy Management")
-7. is_mandatory: true if the requirement uses "shall", "must", "required"; false if "should", "may", "recommended"
-8. priority: "high" for critical security/compliance items, "medium" for standard requirements, "low" for best practices
-9. evidence_types: Array of suggested evidence types needed to demonstrate compliance. Choose from: policy, procedure, configuration, log, report, contract
-10. ai_confidence: Your confidence score from 0.0 to 1.0 in the extraction accuracy
+CRITICAL INSTRUCTIONS:
+1. Be EXHAUSTIVE - Extract ALL requirements, not just major ones. Include sub-requirements, nested controls, and all "shall/must/should" statements.
+2. Look for requirements in different formats: numbered lists, tables, paragraphs, appendices, annexes.
+3. Each "shall", "must", "should", "required", "expected" statement is likely a separate control.
+4. Preserve the ORIGINAL numbering/reference (e.g., "Principle 1", "4.1.2.a", "REQ-001", "Article 32(1)(a)").
+5. For Basel/banking frameworks: Look for Principles, Core Principles, Essential Criteria, Additional Criteria.
+6. For ISO frameworks: Look for clauses, sub-clauses, and annex requirements.
+7. For NIST/security frameworks: Look for control families, controls, and control enhancements.
+
+For EACH control requirement, extract:
+1. original_reference: The EXACT original section/clause/requirement number as it appears in the document
+2. title: A concise, descriptive title (max 200 chars) that captures the control's purpose
+3. description: A comprehensive description of what the control requires and its purpose
+4. full_text: The complete original text of the requirement (important for audit purposes)
+5. domain: Categorize into ONE of these domains:
+   - Governance (board oversight, organizational structure, accountability)
+   - Risk Management (risk identification, assessment, mitigation, appetite)
+   - Security (information security, cybersecurity, physical security)
+   - Access Control (authentication, authorization, identity management)
+   - Incident Management (incident response, breach notification, crisis management)
+   - Business Continuity (disaster recovery, backup, resilience)
+   - Data Protection (privacy, data handling, encryption, retention)
+   - Compliance (regulatory reporting, audit, monitoring)
+   - Operations (operational processes, change management, IT operations)
+   - Third Party (vendor management, outsourcing, supply chain)
+   - Capital & Liquidity (for banking: capital adequacy, liquidity risk)
+   - Credit Risk (for banking: credit assessment, provisioning)
+6. category: A specific sub-category (e.g., "Board Responsibilities", "Authentication", "Encryption Standards")
+7. is_mandatory: true if uses "shall", "must", "required", "expected"; false if "should", "may", "recommended"
+8. priority: 
+   - "critical" for fundamental/foundational requirements
+   - "high" for important security/compliance items
+   - "medium" for standard requirements  
+   - "low" for best practices or advisory items
+9. evidence_types: Array of evidence types needed. Choose from: policy, procedure, configuration, log, report, contract, attestation, screenshot, diagram, training_record
+10. ai_confidence: Confidence score 0.0-1.0 in extraction accuracy
+11. implementation_guidance: Brief guidance on how to implement this control (optional but helpful)
 
 Document text to analyze:
 ---
-{text[:50000]}
+{text}
 ---
 
-Return a JSON object with a "controls" array containing all extracted controls. Example format:
+Return a JSON object with a "controls" array. Be thorough - regulatory documents typically contain dozens to hundreds of controls.
+
+Example output format:
 {{
   "controls": [
     {{
-      "original_reference": "4.1.2",
-      "title": "Access Control Policy",
-      "description": "Organizations must establish and maintain...",
-      "full_text": "The organization shall establish...",
-      "domain": "Access Control",
-      "category": "Policy Management",
+      "original_reference": "Principle 1",
+      "title": "Board Responsibilities for Risk Management",
+      "description": "The board of directors has overall responsibility for approving and reviewing the risk management framework...",
+      "full_text": "The board has overall responsibility for...",
+      "domain": "Governance",
+      "category": "Board Oversight",
+      "is_mandatory": true,
+      "priority": "critical",
+      "evidence_types": ["policy", "report", "attestation"],
+      "ai_confidence": 0.95,
+      "implementation_guidance": "Document board-level risk committee charter and meeting minutes showing oversight"
+    }},
+    {{
+      "original_reference": "Principle 1.1",
+      "title": "Risk Appetite Framework Approval",
+      "description": "The board must approve the risk appetite framework and ensure it is aligned with strategy...",
+      "full_text": "The board shall approve the bank's risk appetite framework...",
+      "domain": "Risk Management",
+      "category": "Risk Appetite",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_types": ["policy", "procedure"],
-      "ai_confidence": 0.95
+      "evidence_types": ["policy", "report"],
+      "ai_confidence": 0.92,
+      "implementation_guidance": "Maintain documented risk appetite statement with board approval"
     }}
   ]
-}}"""
+}}
+
+Extract ALL controls - do not summarize or skip any requirements."""
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a compliance expert that extracts structured control requirements from regulatory documents. Always respond with valid JSON."},
+                {"role": "system", "content": "You are an expert regulatory compliance analyst. Your task is to exhaustively extract EVERY control requirement from regulatory documents. Be thorough and precise. Always respond with valid JSON containing all extracted controls."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            max_completion_tokens=8192
+            max_tokens=16384,
+            temperature=0.1
         )
         
         result_text = response.choices[0].message.content or "{}"
         result = json.loads(result_text)
-        return result.get("controls", [])
+        controls = result.get("controls", [])
+        
+        for control in controls:
+            if not control.get("evidence_types") or len(control.get("evidence_types", [])) == 0:
+                control["evidence_types"] = infer_evidence_types(control)
+        
+        return controls
     
     except json.JSONDecodeError as e:
         raise HTTPException(
@@ -225,6 +373,21 @@ Return a JSON object with a "controls" array containing all extracted controls. 
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OpenAI API error: {error_msg}"
         )
+
+
+def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
+    """Parse a document using chunking for large files."""
+    chunks = chunk_text(text, chunk_size=35000, overlap=1500)
+    
+    all_controls = []
+    
+    for idx, chunk in enumerate(chunks, start=1):
+        chunk_controls = parse_with_openai(chunk, framework_name, chunk_number=idx, total_chunks=len(chunks))
+        all_controls.extend(chunk_controls)
+    
+    unique_controls = deduplicate_controls(all_controls)
+    
+    return unique_controls
 
 
 @router.post("/{framework_id}/parse")
@@ -257,7 +420,7 @@ def parse_framework_document(
                 detail="No text could be extracted from the document"
             )
         
-        parsed_controls_data = parse_with_openai(extracted_text, framework.name)
+        parsed_controls_data = parse_document_with_chunking(extracted_text, framework.name)
         
         if not parsed_controls_data:
             framework.upload_status = "parsed"

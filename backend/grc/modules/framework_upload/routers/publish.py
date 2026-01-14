@@ -149,6 +149,7 @@ def publish_framework_to_library(
     
     domains_by_name = {}
     objectives_by_domain_category = {}
+    control_order = 0
     
     for pc in parsed_controls:
         domain_name = pc.domain or "General"
@@ -189,17 +190,18 @@ def publish_framework_to_library(
         
         objective = objectives_by_domain_category[objective_key]
         
+        control_order += 1
         control = FrameworkControl(
             objective_id=objective.id,
-            code=pc.control_id or pc.original_reference or f"CTRL-{pc.id}",
-            name=pc.title[:255] if pc.title else f"Control {pc.id}",
+            code=pc.control_id or pc.original_reference or f"CTRL-{control_order:03d}",
+            name=pc.title[:255] if pc.title else f"Control {control_order}",
             statement=pc.description,
             control_objective=pc.full_text,
             is_mandatory=pc.is_mandatory,
             risk_category="security",
             evidence_type="policy",
             implementation_guidance=f"Originally from: {uploaded_framework.name}",
-            order=pc.id
+            order=control_order
         )
         db.add(control)
     
