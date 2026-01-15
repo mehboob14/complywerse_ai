@@ -409,58 +409,117 @@ def parse_framework_document(
     
     validate_framework_access(current_user, framework, db)
     
+    file_path = framework.file_path
+    file_type = framework.file_type
+    framework_name = framework.name
+    
     framework.upload_status = "parsing"
     db.commit()
     
     try:
-        extracted_text = extract_text_from_file(framework)
+        if not os.path.exists(file_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Framework file not found on disk"
+            )
+        
+        extracted_text = ""
+        if file_type == "pdf":
+            from PyPDF2 import PdfReader
+            reader = PdfReader(file_path)
+            text_parts = []
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+            extracted_text = "\n\n".join(text_parts)
+        elif file_type == "docx":
+            from docx import Document
+            doc = Document(file_path)
+            text_parts = []
+            for paragraph in doc.paragraphs:
+                if paragraph.text.strip():
+                    text_parts.append(paragraph.text)
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                    if row_text:
+                        text_parts.append(row_text)
+            extracted_text = "\n".join(text_parts)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type: {file_type}"
+            )
         
         if not extracted_text.strip():
+            db.rollback()
+            fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+            if fw:
+                fw.upload_status = "parsed"
+                fw.parsed_at = datetime.utcnow()
+                fw.parse_error = "No text could be extracted from the document"
+                db.commit()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No text could be extracted from the document"
             )
         
-        parsed_controls_data = parse_document_with_chunking(extracted_text, framework.name)
+        parsed_controls_data = parse_document_with_chunking(extracted_text, framework_name)
         
         if not parsed_controls_data:
-            framework.upload_status = "parsed"
-            framework.parsed_at = datetime.utcnow()
-            framework.parse_error = "No controls found in document"
-            db.commit()
+            fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+            if fw:
+                fw.upload_status = "parsed"
+                fw.parsed_at = datetime.utcnow()
+                fw.parse_error = "No controls found in document"
+                db.commit()
             return {"message": "No controls found", "controls": []}
         
-        parsed_control_ids = db.query(ParsedFrameworkControl.id).filter(
+        fw_check = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+        if not fw_check:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Framework was deleted during parsing"
+            )
+        
+        existing_controls = db.query(ParsedFrameworkControl).filter(
             ParsedFrameworkControl.uploaded_framework_id == framework_id
-        ).subquery()
+        ).all()
+        existing_control_ids = [c.id for c in existing_controls]
         
-        assessment_item_ids = db.query(AssessmentItem.id).filter(
-            AssessmentItem.parsed_control_id.in_(parsed_control_ids)
-        ).subquery()
+        if existing_control_ids:
+            assessment_item_ids = db.query(AssessmentItem.id).filter(
+                AssessmentItem.parsed_control_id.in_(existing_control_ids)
+            ).all()
+            ai_ids = [a.id for a in assessment_item_ids]
+            
+            if ai_ids:
+                db.query(AssessmentRemediation).filter(
+                    AssessmentRemediation.assessment_item_id.in_(ai_ids)
+                ).delete(synchronize_session=False)
+                
+                db.query(AssessmentEvidence).filter(
+                    AssessmentEvidence.assessment_item_id.in_(ai_ids)
+                ).delete(synchronize_session=False)
+                
+                db.query(AssessmentItem).filter(
+                    AssessmentItem.id.in_(ai_ids)
+                ).delete(synchronize_session=False)
+            
+            db.query(FrameworkControlAlignment).filter(
+                FrameworkControlAlignment.parsed_control_id.in_(existing_control_ids)
+            ).delete(synchronize_session=False)
+            
+            db.query(ControlEvidenceMapping).filter(
+                ControlEvidenceMapping.parsed_control_id.in_(existing_control_ids)
+            ).delete(synchronize_session=False)
+            
+            db.query(ParsedFrameworkControl).filter(
+                ParsedFrameworkControl.id.in_(existing_control_ids)
+            ).delete(synchronize_session=False)
         
-        db.query(AssessmentRemediation).filter(
-            AssessmentRemediation.assessment_item_id.in_(assessment_item_ids)
-        ).delete(synchronize_session=False)
-        
-        db.query(AssessmentEvidence).filter(
-            AssessmentEvidence.assessment_item_id.in_(assessment_item_ids)
-        ).delete(synchronize_session=False)
-        
-        db.query(AssessmentItem).filter(
-            AssessmentItem.parsed_control_id.in_(parsed_control_ids)
-        ).delete(synchronize_session=False)
-        
-        db.query(FrameworkControlAlignment).filter(
-            FrameworkControlAlignment.parsed_control_id.in_(parsed_control_ids)
-        ).delete(synchronize_session=False)
-        
-        db.query(ControlEvidenceMapping).filter(
-            ControlEvidenceMapping.parsed_control_id.in_(parsed_control_ids)
-        ).delete(synchronize_session=False)
-        
-        db.query(ParsedFrameworkControl).filter(
-            ParsedFrameworkControl.uploaded_framework_id == framework_id
-        ).delete(synchronize_session=False)
+        db.flush()
         
         created_controls = []
         for idx, control_data in enumerate(parsed_controls_data, start=1):
@@ -497,9 +556,12 @@ def parse_framework_document(
             
             created_controls.append(parsed_control)
         
-        framework.upload_status = "parsed"
-        framework.parsed_at = datetime.utcnow()
-        framework.parse_error = None
+        fw_final = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+        if fw_final:
+            fw_final.upload_status = "parsed"
+            fw_final.parsed_at = datetime.utcnow()
+            fw_final.parse_error = None
+        
         db.commit()
         
         for control in created_controls:
@@ -513,17 +575,30 @@ def parse_framework_document(
         }
     
     except HTTPException:
-        framework.upload_status = "failed"
-        framework.parse_error = "Parsing failed"
-        db.commit()
+        db.rollback()
+        try:
+            fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+            if fw:
+                fw.upload_status = "failed"
+                fw.parse_error = "Parsing failed"
+                db.commit()
+        except Exception:
+            pass
         raise
     except Exception as e:
-        framework.upload_status = "failed"
-        framework.parse_error = str(e)
-        db.commit()
+        db.rollback()
+        error_msg = str(e)
+        try:
+            fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+            if fw:
+                fw.upload_status = "failed"
+                fw.parse_error = error_msg[:500]
+                db.commit()
+        except Exception:
+            pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Parsing failed: {str(e)}"
+            detail=f"Parsing failed: {error_msg}"
         )
 
 
