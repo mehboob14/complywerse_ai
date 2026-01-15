@@ -5,12 +5,13 @@ from sqlalchemy.orm import Session, joinedload
 
 from ....models import (
     GRCVulnEscalationLog, GRCVulnNotification, Vulnerability,
-    GRCVulnWorkflowEscalation, GRCTeam, GRCUser, GRCVulnWorkflowState,
+    GRCVulnWorkflowEscalation, GRCDepartment, GRCUser, GRCVulnWorkflowState,
     get_db
 )
 from ....schemas import (
     GRCVulnEscalationLogResponse, GRCVulnNotificationResponse,
-    EscalationCheckResult, UnreadNotificationCount, MessageResponse
+    EscalationCheckResult, UnreadNotificationCount, MessageResponse,
+    SLACheckResult
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from ..services.escalation_service import EscalationService
@@ -60,6 +61,50 @@ def run_escalation_check(
     )
 
 
+@router.post("/escalations/run-sla-check", response_model=SLACheckResult)
+def run_sla_check(
+    tenant_id: Optional[int] = None,
+    send_emails: bool = True,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Run SLA check on all open vulnerabilities.
+    
+    This endpoint checks all open vulnerabilities against their SLA:
+    - Triggers escalations based on department escalation paths
+    - Sends email notifications for SLA warnings (75%) and breaches (100%)
+    - Returns summary of actions taken
+    
+    Can be called periodically by a scheduler or manually by administrators.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+    
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        tenant_ids = [tenant_id]
+    else:
+        tenant_ids = user_tenants
+    
+    result = EscalationService.run_sla_check(
+        db=db,
+        tenant_ids=tenant_ids,
+        send_emails=send_emails
+    )
+    
+    return SLACheckResult(
+        total_checked=result["total_checked"],
+        warnings_sent=result["warnings_sent"],
+        breaches_detected=result["breaches_detected"],
+        escalations_triggered=result["escalations_triggered"],
+        emails_sent=result["emails_sent"],
+        vulnerabilities_affected=result["vulnerabilities_affected"],
+        details=result["details"]
+    )
+
+
 @router.get("/escalations/logs", response_model=List[GRCVulnEscalationLogResponse])
 def list_escalation_logs(
     vulnerability_id: Optional[int] = None,
@@ -83,7 +128,7 @@ def list_escalation_logs(
     logs = db.query(GRCVulnEscalationLog).options(
         joinedload(GRCVulnEscalationLog.vulnerability),
         joinedload(GRCVulnEscalationLog.escalation_rule),
-        joinedload(GRCVulnEscalationLog.escalated_to_team),
+        joinedload(GRCVulnEscalationLog.escalated_to_department),
         joinedload(GRCVulnEscalationLog.escalated_to_user),
         joinedload(GRCVulnEscalationLog.new_state)
     ).join(
@@ -108,8 +153,8 @@ def list_escalation_logs(
             escalation_rule_id=log.escalation_rule_id,
             escalation_rule_name=log.escalation_rule.name if log.escalation_rule else None,
             triggered_at=log.triggered_at,
-            escalated_to_team_id=log.escalated_to_team_id,
-            escalated_to_team_name=log.escalated_to_team.name if log.escalated_to_team else None,
+            escalated_to_department_id=log.escalated_to_department_id,
+            escalated_to_department_name=log.escalated_to_department.name if log.escalated_to_department else None,
             escalated_to_user_id=log.escalated_to_user_id,
             escalated_to_user_name=log.escalated_to_user.display_name if log.escalated_to_user else None,
             notification_sent=log.notification_sent,
@@ -142,7 +187,7 @@ def get_vulnerability_escalations(
     
     logs = db.query(GRCVulnEscalationLog).options(
         joinedload(GRCVulnEscalationLog.escalation_rule),
-        joinedload(GRCVulnEscalationLog.escalated_to_team),
+        joinedload(GRCVulnEscalationLog.escalated_to_department),
         joinedload(GRCVulnEscalationLog.escalated_to_user),
         joinedload(GRCVulnEscalationLog.new_state)
     ).filter(
@@ -157,8 +202,8 @@ def get_vulnerability_escalations(
             escalation_rule_id=log.escalation_rule_id,
             escalation_rule_name=log.escalation_rule.name if log.escalation_rule else None,
             triggered_at=log.triggered_at,
-            escalated_to_team_id=log.escalated_to_team_id,
-            escalated_to_team_name=log.escalated_to_team.name if log.escalated_to_team else None,
+            escalated_to_department_id=log.escalated_to_department_id,
+            escalated_to_department_name=log.escalated_to_department.name if log.escalated_to_department else None,
             escalated_to_user_id=log.escalated_to_user_id,
             escalated_to_user_name=log.escalated_to_user.display_name if log.escalated_to_user else None,
             notification_sent=log.notification_sent,
@@ -187,7 +232,7 @@ def list_notifications(
     notifications = db.query(GRCVulnNotification).options(
         joinedload(GRCVulnNotification.vulnerability),
         joinedload(GRCVulnNotification.recipient_user),
-        joinedload(GRCVulnNotification.recipient_team),
+        joinedload(GRCVulnNotification.recipient_department),
         joinedload(GRCVulnNotification.triggered_by)
     ).filter(
         GRCVulnNotification.tenant_id.in_(user_tenants),
@@ -215,8 +260,8 @@ def list_notifications(
             message=n.message,
             recipient_user_id=n.recipient_user_id,
             recipient_user_name=n.recipient_user.display_name if n.recipient_user else None,
-            recipient_team_id=n.recipient_team_id,
-            recipient_team_name=n.recipient_team.name if n.recipient_team else None,
+            recipient_department_id=n.recipient_department_id,
+            recipient_department_name=n.recipient_department.name if n.recipient_department else None,
             triggered_by_user_id=n.triggered_by_user_id,
             triggered_by_name=n.triggered_by.display_name if n.triggered_by else None,
             is_read=n.is_read,
@@ -261,8 +306,8 @@ def mark_notification_as_read(
         message=notification.message,
         recipient_user_id=notification.recipient_user_id,
         recipient_user_name=notification.recipient_user.display_name if notification.recipient_user else None,
-        recipient_team_id=notification.recipient_team_id,
-        recipient_team_name=notification.recipient_team.name if notification.recipient_team else None,
+        recipient_department_id=notification.recipient_department_id,
+        recipient_department_name=notification.recipient_department.name if notification.recipient_department else None,
         triggered_by_user_id=notification.triggered_by_user_id,
         triggered_by_name=notification.triggered_by.display_name if notification.triggered_by else None,
         is_read=notification.is_read,

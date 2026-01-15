@@ -7,7 +7,7 @@ from sqlalchemy import func, and_, or_
 from ....models import (
     Vulnerability, VulnerabilityAssetLink, VulnerabilitySLAConfig,
     VulnerabilityControlLink, ITAsset, GRCUser, get_db,
-    GRCTeam, GRCVulnerabilityTeamAssignment, GRCVulnWorkflowState,
+    GRCDepartment, GRCVulnerabilityDepartmentAssignment, GRCVulnWorkflowState,
     GRCVulnWorkflowHistory, GRCVulnEscalationLog, FrameworkControl,
     NormalizedControl, InternalControl
 )
@@ -266,15 +266,15 @@ def get_asset_exposure(
     return results[:limit]
 
 
-@router.get("/team-metrics")
-def get_team_metrics(
+@router.get("/department-metrics")
+def get_department_metrics(
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
-        return {"teams": [], "unassigned_count": 0}
+        return {"departments": [], "unassigned_count": 0}
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -284,9 +284,9 @@ def get_team_metrics(
     
     now = datetime.utcnow()
     
-    teams = db.query(GRCTeam).filter(
-        GRCTeam.tenant_id.in_(filter_tenants),
-        GRCTeam.is_active == True
+    departments = db.query(GRCDepartment).filter(
+        GRCDepartment.tenant_id.in_(filter_tenants),
+        GRCDepartment.is_active == True
     ).all()
     
     all_vulns = db.query(Vulnerability).filter(
@@ -294,41 +294,43 @@ def get_team_metrics(
     ).all()
     
     assigned_vuln_ids = set()
-    team_vuln_map = {}
+    dept_vuln_map = {}
     
-    for team in teams:
-        assignments = db.query(GRCVulnerabilityTeamAssignment).filter(
-            GRCVulnerabilityTeamAssignment.team_id == team.id
+    for dept in departments:
+        assignments = db.query(GRCVulnerabilityDepartmentAssignment).filter(
+            GRCVulnerabilityDepartmentAssignment.department_id == dept.id
         ).all()
-        team_vuln_ids = [a.vulnerability_id for a in assignments]
-        team_vuln_map[team.id] = team_vuln_ids
-        assigned_vuln_ids.update(team_vuln_ids)
+        dept_vuln_ids = [a.vulnerability_id for a in assignments]
+        dept_vuln_map[dept.id] = dept_vuln_ids
+        assigned_vuln_ids.update(dept_vuln_ids)
     
     unassigned_count = sum(1 for v in all_vulns if v.id not in assigned_vuln_ids)
     
-    team_results = []
-    for team in teams:
-        vuln_ids = team_vuln_map.get(team.id, [])
+    dept_results = []
+    for dept in departments:
+        vuln_ids = dept_vuln_map.get(dept.id, [])
         if not vuln_ids:
-            team_results.append({
-                "team_id": team.id,
-                "team_name": team.name,
-                "total_assigned": 0,
+            dept_results.append({
+                "department_id": dept.id,
+                "department_name": dept.name,
+                "department_code": dept.code,
+                "total_vulnerabilities": 0,
                 "open_count": 0,
                 "resolved_count": 0,
                 "mttr_days": None,
-                "sla_compliance_rate": 0.0,
+                "sla_compliance_percent": 0.0,
+                "current_workload": 0,
                 "overdue_count": 0,
-                "by_severity": {}
+                "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0}
             })
             continue
         
-        team_vulns = db.query(Vulnerability).filter(
+        dept_vulns = db.query(Vulnerability).filter(
             Vulnerability.id.in_(vuln_ids)
         ).all()
         
-        open_count = sum(1 for v in team_vulns if v.status not in ["resolved", "accepted", "false_positive"])
-        resolved_vulns = [v for v in team_vulns if v.status in ["resolved", "accepted", "false_positive"]]
+        open_count = sum(1 for v in dept_vulns if v.status not in ["resolved", "accepted", "false_positive"])
+        resolved_vulns = [v for v in dept_vulns if v.status in ["resolved", "accepted", "false_positive"]]
         resolved_count = len(resolved_vulns)
         
         resolution_times = []
@@ -338,45 +340,37 @@ def get_team_metrics(
         mttr = sum(resolution_times) / len(resolution_times) if resolution_times else None
         
         on_time = sum(1 for v in resolved_vulns if v.resolved_at and v.due_date and v.resolved_at <= v.due_date)
-        sla_compliance_rate = round((on_time / resolved_count * 100) if resolved_count > 0 else 0.0, 1)
+        sla_compliance_percent = round((on_time / resolved_count * 100) if resolved_count > 0 else 0.0, 1)
         
-        overdue_count = sum(1 for v in team_vulns 
+        overdue_count = sum(1 for v in dept_vulns 
                           if v.due_date and v.due_date < now 
                           and v.status not in ["resolved", "accepted", "false_positive"])
         
-        by_severity = {}
-        for sev in ["critical", "high", "medium", "low", "info"]:
-            sev_vulns = [v for v in team_vulns if v.severity == sev]
-            if sev_vulns:
-                sev_resolved = [v for v in sev_vulns if v.resolved_at and v.discovered_at]
-                sev_mttr = None
-                if sev_resolved:
-                    sev_times = [(v.resolved_at - v.discovered_at).days for v in sev_resolved]
-                    sev_mttr = round(sum(sev_times) / len(sev_times), 1) if sev_times else None
-                by_severity[sev] = {
-                    "count": len(sev_vulns),
-                    "mttr": sev_mttr
-                }
+        by_severity = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for sev in ["critical", "high", "medium", "low"]:
+            by_severity[sev] = sum(1 for v in dept_vulns if v.severity == sev)
         
-        team_results.append({
-            "team_id": team.id,
-            "team_name": team.name,
-            "total_assigned": len(team_vulns),
+        dept_results.append({
+            "department_id": dept.id,
+            "department_name": dept.name,
+            "department_code": dept.code,
+            "total_vulnerabilities": len(dept_vulns),
             "open_count": open_count,
             "resolved_count": resolved_count,
             "mttr_days": round(mttr, 1) if mttr else None,
-            "sla_compliance_rate": sla_compliance_rate,
+            "sla_compliance_percent": sla_compliance_percent,
+            "current_workload": open_count,
             "overdue_count": overdue_count,
             "by_severity": by_severity
         })
     
-    return {"teams": team_results, "unassigned_count": unassigned_count}
+    return {"departments": dept_results, "unassigned_count": unassigned_count}
 
 
 @router.get("/sla-trends")
 def get_sla_trends(
     period: str = Query("30d", pattern="^(7d|30d|90d|1y)$"),
-    team_id: Optional[int] = None,
+    department_id: Optional[int] = None,
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
@@ -401,11 +395,11 @@ def get_sla_trends(
         Vulnerability.resolved_at >= start_date
     )
     
-    if team_id:
-        team_vuln_ids = db.query(GRCVulnerabilityTeamAssignment.vulnerability_id).filter(
-            GRCVulnerabilityTeamAssignment.team_id == team_id
+    if department_id:
+        dept_vuln_ids = db.query(GRCVulnerabilityDepartmentAssignment.vulnerability_id).filter(
+            GRCVulnerabilityDepartmentAssignment.department_id == department_id
         ).subquery()
-        query = query.filter(Vulnerability.id.in_(team_vuln_ids))
+        query = query.filter(Vulnerability.id.in_(dept_vuln_ids))
     
     resolved_vulns = query.all()
     
@@ -559,7 +553,7 @@ def get_aging_analysis(
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
-        return {"buckets": [], "by_team": {}}
+        return {"buckets": [], "by_department": {}}
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -577,19 +571,19 @@ def get_aging_analysis(
     bucket_labels = ["0-7 days", "8-14 days", "15-30 days", "31-60 days", "60+ days"]
     overall_buckets = {label: 0 for label in bucket_labels}
     
-    teams = db.query(GRCTeam).filter(
-        GRCTeam.tenant_id.in_(filter_tenants),
-        GRCTeam.is_active == True
+    departments = db.query(GRCDepartment).filter(
+        GRCDepartment.tenant_id.in_(filter_tenants),
+        GRCDepartment.is_active == True
     ).all()
     
-    team_vuln_map = {}
-    for team in teams:
-        assignments = db.query(GRCVulnerabilityTeamAssignment).filter(
-            GRCVulnerabilityTeamAssignment.team_id == team.id
+    dept_vuln_map = {}
+    for dept in departments:
+        assignments = db.query(GRCVulnerabilityDepartmentAssignment).filter(
+            GRCVulnerabilityDepartmentAssignment.department_id == dept.id
         ).all()
-        team_vuln_map[team.id] = set(a.vulnerability_id for a in assignments)
+        dept_vuln_map[dept.id] = set(a.vulnerability_id for a in assignments)
     
-    by_team = {str(team.id): {label: 0 for label in bucket_labels} for team in teams}
+    by_department = {str(dept.id): {label: 0 for label in bucket_labels} for dept in departments}
     
     for v in open_vulns:
         age_days = (now - v.discovered_at).days if v.discovered_at else 0
@@ -607,13 +601,13 @@ def get_aging_analysis(
         
         overall_buckets[bucket] += 1
         
-        for team in teams:
-            if v.id in team_vuln_map.get(team.id, set()):
-                by_team[str(team.id)][bucket] += 1
+        for dept in departments:
+            if v.id in dept_vuln_map.get(dept.id, set()):
+                by_department[str(dept.id)][bucket] += 1
     
     buckets_list = [{"label": label, "count": count} for label, count in overall_buckets.items()]
     
-    return {"buckets": buckets_list, "by_team": by_team}
+    return {"buckets": buckets_list, "by_department": by_department}
 
 
 @router.get("/control-coverage")
@@ -721,3 +715,280 @@ def get_control_coverage(
         "coverage_rate": coverage_rate,
         "top_violated_controls": top_controls
     }
+
+
+@router.get("/sla-compliance-trends")
+def get_sla_compliance_trends(
+    weeks: int = Query(12, ge=1, le=52),
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"trends": [], "summary": {}}
+    
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        filter_tenants = [tenant_id]
+    else:
+        filter_tenants = user_tenants
+    
+    now = datetime.utcnow()
+    start_date = now - timedelta(weeks=weeks)
+    
+    departments = db.query(GRCDepartment).filter(
+        GRCDepartment.tenant_id.in_(filter_tenants),
+        GRCDepartment.is_active == True
+    ).all()
+    
+    dept_vuln_map = {}
+    for dept in departments:
+        assignments = db.query(GRCVulnerabilityDepartmentAssignment).filter(
+            GRCVulnerabilityDepartmentAssignment.department_id == dept.id
+        ).all()
+        dept_vuln_map[dept.id] = set(a.vulnerability_id for a in assignments)
+    
+    resolved_vulns = db.query(Vulnerability).filter(
+        Vulnerability.tenant_id.in_(filter_tenants),
+        Vulnerability.status.in_(["resolved", "accepted", "false_positive"]),
+        Vulnerability.resolved_at >= start_date
+    ).all()
+    
+    trends = []
+    for week_num in range(weeks):
+        week_start = now - timedelta(weeks=(weeks - week_num))
+        week_end = week_start + timedelta(weeks=1)
+        
+        for dept in departments:
+            dept_vulns = [v for v in resolved_vulns 
+                         if v.id in dept_vuln_map.get(dept.id, set())
+                         and v.resolved_at and week_start <= v.resolved_at < week_end]
+            
+            if dept_vulns:
+                on_time = sum(1 for v in dept_vulns if v.due_date and v.resolved_at <= v.due_date)
+                compliance_percent = round((on_time / len(dept_vulns)) * 100, 1)
+            else:
+                compliance_percent = None
+            
+            trends.append({
+                "period": f"Week {week_num + 1}",
+                "date": week_start.strftime("%Y-%m-%d"),
+                "compliance_percent": compliance_percent,
+                "resolved_count": len(dept_vulns),
+                "department_id": dept.id,
+                "department_name": dept.name
+            })
+    
+    summary = {}
+    for dept in departments:
+        dept_vulns = [v for v in resolved_vulns if v.id in dept_vuln_map.get(dept.id, set())]
+        if dept_vulns:
+            on_time = sum(1 for v in dept_vulns if v.due_date and v.resolved_at and v.resolved_at <= v.due_date)
+            summary[dept.name] = round((on_time / len(dept_vulns)) * 100, 1)
+        else:
+            summary[dept.name] = 0.0
+    
+    return {"trends": trends, "summary": summary}
+
+
+@router.get("/department-workload")
+def get_department_workload(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"workload": []}
+    
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        filter_tenants = [tenant_id]
+    else:
+        filter_tenants = user_tenants
+    
+    now = datetime.utcnow()
+    
+    departments = db.query(GRCDepartment).filter(
+        GRCDepartment.tenant_id.in_(filter_tenants),
+        GRCDepartment.is_active == True
+    ).all()
+    
+    all_open_vulns = db.query(Vulnerability).filter(
+        Vulnerability.tenant_id.in_(filter_tenants),
+        Vulnerability.status.notin_(["resolved", "accepted", "false_positive"])
+    ).all()
+    
+    workload = []
+    for dept in departments:
+        assignments = db.query(GRCVulnerabilityDepartmentAssignment).filter(
+            GRCVulnerabilityDepartmentAssignment.department_id == dept.id
+        ).all()
+        vuln_ids = set(a.vulnerability_id for a in assignments)
+        
+        dept_vulns = [v for v in all_open_vulns if v.id in vuln_ids]
+        
+        assigned_count = len(dept_vulns)
+        in_progress_count = sum(1 for v in dept_vulns if v.status == "in_progress")
+        pending_review_count = sum(1 for v in dept_vulns if v.status == "pending_review")
+        overdue_count = sum(1 for v in dept_vulns if v.due_date and v.due_date < now)
+        
+        workload.append({
+            "department_id": dept.id,
+            "department_name": dept.name,
+            "department_code": dept.code,
+            "assigned_count": assigned_count,
+            "in_progress_count": in_progress_count,
+            "pending_review_count": pending_review_count,
+            "overdue_count": overdue_count
+        })
+    
+    workload.sort(key=lambda x: x["assigned_count"], reverse=True)
+    
+    return {"workload": workload}
+
+
+@router.get("/aging-by-department")
+def get_aging_by_department(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"aging": []}
+    
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        filter_tenants = [tenant_id]
+    else:
+        filter_tenants = user_tenants
+    
+    now = datetime.utcnow()
+    
+    departments = db.query(GRCDepartment).filter(
+        GRCDepartment.tenant_id.in_(filter_tenants),
+        GRCDepartment.is_active == True
+    ).all()
+    
+    open_vulns = db.query(Vulnerability).filter(
+        Vulnerability.tenant_id.in_(filter_tenants),
+        Vulnerability.status.notin_(["resolved", "accepted", "false_positive"])
+    ).all()
+    
+    dept_vuln_map = {}
+    for dept in departments:
+        assignments = db.query(GRCVulnerabilityDepartmentAssignment).filter(
+            GRCVulnerabilityDepartmentAssignment.department_id == dept.id
+        ).all()
+        dept_vuln_map[dept.id] = set(a.vulnerability_id for a in assignments)
+    
+    aging = []
+    for dept in departments:
+        bucket_0_7 = 0
+        bucket_8_30 = 0
+        bucket_31_90 = 0
+        bucket_90_plus = 0
+        
+        dept_vulns = [v for v in open_vulns if v.id in dept_vuln_map.get(dept.id, set())]
+        
+        for v in dept_vulns:
+            age_days = (now - v.discovered_at).days if v.discovered_at else 0
+            
+            if age_days <= 7:
+                bucket_0_7 += 1
+            elif age_days <= 30:
+                bucket_8_30 += 1
+            elif age_days <= 90:
+                bucket_31_90 += 1
+            else:
+                bucket_90_plus += 1
+        
+        aging.append({
+            "department_id": dept.id,
+            "department_name": dept.name,
+            "bucket_0_7": bucket_0_7,
+            "bucket_8_30": bucket_8_30,
+            "bucket_31_90": bucket_31_90,
+            "bucket_90_plus": bucket_90_plus,
+            "total": len(dept_vulns)
+        })
+    
+    return {"aging": aging}
+
+
+@router.get("/escalation-metrics")
+def get_escalation_metrics(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"escalations": [], "summary": {}}
+    
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        filter_tenants = [tenant_id]
+    else:
+        filter_tenants = user_tenants
+    
+    departments = db.query(GRCDepartment).filter(
+        GRCDepartment.tenant_id.in_(filter_tenants),
+        GRCDepartment.is_active == True
+    ).all()
+    
+    all_escalations = db.query(GRCVulnEscalationLog).join(
+        Vulnerability
+    ).filter(
+        Vulnerability.tenant_id.in_(filter_tenants)
+    ).all()
+    
+    dept_vuln_map = {}
+    for dept in departments:
+        assignments = db.query(GRCVulnerabilityDepartmentAssignment).filter(
+            GRCVulnerabilityDepartmentAssignment.department_id == dept.id
+        ).all()
+        dept_vuln_map[dept.id] = set(a.vulnerability_id for a in assignments)
+    
+    escalations = []
+    for dept in departments:
+        dept_escalations = [e for e in all_escalations if e.vulnerability_id in dept_vuln_map.get(dept.id, set())]
+        
+        level_1_count = sum(1 for e in dept_escalations if e.escalation_level == 1)
+        level_2_count = sum(1 for e in dept_escalations if e.escalation_level == 2)
+        level_3_count = sum(1 for e in dept_escalations if e.escalation_level == 3)
+        
+        resolved_after_esc = []
+        for e in dept_escalations:
+            vuln = db.query(Vulnerability).filter(Vulnerability.id == e.vulnerability_id).first()
+            if vuln and vuln.resolved_at and e.triggered_at:
+                resolution_days = (vuln.resolved_at - e.triggered_at).days
+                resolved_after_esc.append(resolution_days)
+        
+        avg_resolution_after_escalation = round(sum(resolved_after_esc) / len(resolved_after_esc), 1) if resolved_after_esc else None
+        
+        escalations.append({
+            "department_id": dept.id,
+            "department_name": dept.name,
+            "total_escalations": len(dept_escalations),
+            "level_1_count": level_1_count,
+            "level_2_count": level_2_count,
+            "level_3_count": level_3_count,
+            "avg_resolution_after_escalation_days": avg_resolution_after_escalation
+        })
+    
+    total_escalations = sum(e["total_escalations"] for e in escalations)
+    total_level_1 = sum(e["level_1_count"] for e in escalations)
+    total_level_2 = sum(e["level_2_count"] for e in escalations)
+    total_level_3 = sum(e["level_3_count"] for e in escalations)
+    
+    summary = {
+        "total_escalations": total_escalations,
+        "level_1_count": total_level_1,
+        "level_2_count": total_level_2,
+        "level_3_count": total_level_3
+    }
+    
+    return {"escalations": escalations, "summary": summary}

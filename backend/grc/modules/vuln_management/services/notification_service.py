@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from ....models import (
-    GRCVulnNotification, Vulnerability, GRCUser, GRCTeam, GRCTeamMember
+    GRCVulnNotification, Vulnerability, GRCUser, GRCDepartment, GRCDepartmentMember
 )
 
 
@@ -26,7 +26,7 @@ class NotificationService:
         title: str,
         message: Optional[str] = None,
         recipient_user_id: Optional[int] = None,
-        recipient_team_id: Optional[int] = None,
+        recipient_department_id: Optional[int] = None,
         triggered_by_user_id: Optional[int] = None
     ) -> GRCVulnNotification:
         if notification_type not in NotificationService.NOTIFICATION_TYPES:
@@ -39,7 +39,7 @@ class NotificationService:
             title=title,
             message=message,
             recipient_user_id=recipient_user_id,
-            recipient_team_id=recipient_team_id,
+            recipient_department_id=recipient_department_id,
             triggered_by_user_id=triggered_by_user_id
         )
         db.add(notification)
@@ -100,7 +100,7 @@ class NotificationService:
         transition_name: str,
         requested_by_user_id: int,
         approver_user_id: Optional[int] = None,
-        approver_team_id: Optional[int] = None
+        approver_department_id: Optional[int] = None
     ) -> GRCVulnNotification:
         return NotificationService.create_notification(
             db=db,
@@ -110,7 +110,7 @@ class NotificationService:
             title=f"Approval Required: {vulnerability.vuln_id}",
             message=f"Approval is required for transition '{transition_name}' on vulnerability '{vulnerability.title}'.",
             recipient_user_id=approver_user_id,
-            recipient_team_id=approver_team_id,
+            recipient_department_id=approver_department_id,
             triggered_by_user_id=requested_by_user_id
         )
     

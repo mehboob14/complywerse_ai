@@ -72,13 +72,23 @@ interface AssetExposure {
   low_count: number;
 }
 
-interface TeamMetrics {
-  team_id: number;
-  team_name: string;
-  vulnerability_count: number;
+interface DepartmentMetrics {
+  department_id: number;
+  department_name: string;
+  department_code?: string;
+  total_vulnerabilities: number;
   mttr_days: number | null;
   open_count: number;
   resolved_count: number;
+  sla_compliance_percent: number;
+  current_workload: number;
+  overdue_count: number;
+  by_severity: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
 }
 
 interface SLATrend {
@@ -99,6 +109,45 @@ interface ControlCoverage {
   with_controls: number;
   coverage_percentage: number;
   control_effectiveness: number;
+}
+
+interface SLAComplianceTrend {
+  period: string;
+  date: string;
+  compliance_percent: number | null;
+  resolved_count: number;
+  department_id: number;
+  department_name: string;
+}
+
+interface DepartmentWorkload {
+  department_id: number;
+  department_name: string;
+  department_code: string;
+  assigned_count: number;
+  in_progress_count: number;
+  pending_review_count: number;
+  overdue_count: number;
+}
+
+interface AgingByDepartment {
+  department_id: number;
+  department_name: string;
+  bucket_0_7: number;
+  bucket_8_30: number;
+  bucket_31_90: number;
+  bucket_90_plus: number;
+  total: number;
+}
+
+interface EscalationMetrics {
+  department_id: number;
+  department_name: string;
+  total_escalations: number;
+  level_1_count: number;
+  level_2_count: number;
+  level_3_count: number;
+  avg_resolution_after_escalation_days: number | null;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -173,11 +222,11 @@ export default function VulnerabilityDashboardPage() {
     refetchInterval: 60000,
   });
 
-  const { data: teamMetrics } = useQuery({
-    queryKey: ['vuln-team-metrics'],
+  const { data: departmentMetrics } = useQuery({
+    queryKey: ['vuln-department-metrics'],
     queryFn: async () => {
-      const response = await vulnManagementApi.dashboard.getTeamMetrics();
-      return response.data as TeamMetrics[];
+      const response = await vulnManagementApi.dashboard.getDepartmentMetrics();
+      return response.data as DepartmentMetrics[];
     },
     refetchInterval: 60000,
   });
@@ -205,6 +254,42 @@ export default function VulnerabilityDashboardPage() {
     queryFn: async () => {
       const response = await vulnManagementApi.dashboard.getControlCoverage();
       return response.data as ControlCoverage;
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: slaComplianceTrends } = useQuery({
+    queryKey: ['vuln-sla-compliance-trends'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.dashboard.getSLAComplianceTrends(12);
+      return response.data as { trends: SLAComplianceTrend[]; summary: Record<string, number> };
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: departmentWorkload } = useQuery({
+    queryKey: ['vuln-department-workload'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.dashboard.getDepartmentWorkload();
+      return response.data as { workload: DepartmentWorkload[] };
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: agingByDepartment } = useQuery({
+    queryKey: ['vuln-aging-by-department'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.dashboard.getAgingByDepartment();
+      return response.data as { aging: AgingByDepartment[] };
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: escalationMetrics } = useQuery({
+    queryKey: ['vuln-escalation-metrics'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.dashboard.getEscalationMetrics();
+      return response.data as { escalations: EscalationMetrics[]; summary: Record<string, number> };
     },
     refetchInterval: 60000,
   });
@@ -807,6 +892,311 @@ export default function VulnerabilityDashboardPage() {
           </DataCard>
         )}
       </div>
+
+      {departmentMetrics && (departmentMetrics as { departments: DepartmentMetrics[] }).departments?.length > 0 && (
+        <DataCard
+          title="Department SLA Compliance"
+          icon={Shield}
+          subtitle="SLA performance by department with severity breakdown"
+        >
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {(departmentMetrics as { departments: DepartmentMetrics[] }).departments.map((dept) => {
+              const compliance = dept.sla_compliance_percent;
+              const complianceColor = compliance >= 90 ? 'bg-green-500/20 border-green-500/30' : 
+                                      compliance >= 70 ? 'bg-yellow-500/20 border-yellow-500/30' : 
+                                      'bg-red-500/20 border-red-500/30';
+              const textColor = compliance >= 90 ? 'text-green-400' : 
+                               compliance >= 70 ? 'text-yellow-400' : 
+                               'text-red-400';
+              
+              return (
+                <div
+                  key={dept.department_id}
+                  className={`p-4 rounded-lg border ${complianceColor} transition-all hover:scale-[1.02]`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-white truncate">{dept.department_name}</h4>
+                    <span className={`text-lg font-bold ${textColor}`}>{compliance}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-700 overflow-hidden mb-3">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        compliance >= 90 ? 'bg-green-500' : compliance >= 70 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${compliance}%` }}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Total:</span>
+                      <span className="text-white font-medium">{dept.total_vulnerabilities}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Open:</span>
+                      <span className="text-white font-medium">{dept.open_count}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Overdue:</span>
+                      <span className={`font-medium ${dept.overdue_count > 0 ? 'text-red-400' : 'text-slate-300'}`}>
+                        {dept.overdue_count}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">MTTR:</span>
+                      <span className="text-white font-medium">{dept.mttr_days !== null ? `${dept.mttr_days}d` : '-'}</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-700">
+                    <div className="flex gap-1.5 flex-wrap">
+                      {dept.by_severity.critical > 0 && (
+                        <span className="px-1.5 py-0.5 text-xs rounded bg-red-500/20 text-red-400">
+                          {dept.by_severity.critical}C
+                        </span>
+                      )}
+                      {dept.by_severity.high > 0 && (
+                        <span className="px-1.5 py-0.5 text-xs rounded bg-orange-500/20 text-orange-400">
+                          {dept.by_severity.high}H
+                        </span>
+                      )}
+                      {dept.by_severity.medium > 0 && (
+                        <span className="px-1.5 py-0.5 text-xs rounded bg-yellow-500/20 text-yellow-400">
+                          {dept.by_severity.medium}M
+                        </span>
+                      )}
+                      {dept.by_severity.low > 0 && (
+                        <span className="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">
+                          {dept.by_severity.low}L
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </DataCard>
+      )}
+
+      {slaComplianceTrends && slaComplianceTrends.trends?.length > 0 && (
+        <DataCard
+          title="SLA Compliance Trends by Department"
+          icon={Activity}
+          subtitle="12-week compliance trends across departments"
+        >
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis 
+                  dataKey="period"
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  axisLine={{ stroke: '#475569' }}
+                  allowDuplicatedCategory={false}
+                />
+                <YAxis 
+                  tick={{ fill: '#94a3b8', fontSize: 12 }} 
+                  axisLine={{ stroke: '#475569' }}
+                  domain={[0, 100]}
+                  tickFormatter={(value) => `${value}%`}
+                />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                  labelStyle={{ color: '#fff' }}
+                  formatter={(value: number | null) => value !== null ? [`${value}%`, 'Compliance'] : ['-', 'No Data']}
+                />
+                <Legend 
+                  verticalAlign="top" 
+                  height={36}
+                  formatter={(value) => <span className="text-xs text-slate-300">{value}</span>}
+                />
+                {(() => {
+                  const deptNames = [...new Set(slaComplianceTrends.trends.map(t => t.department_name))];
+                  const colors = ['#22c55e', '#3b82f6', '#8b5cf6', '#f97316', '#eab308', '#06b6d4'];
+                  return deptNames.map((deptName, idx) => {
+                    const deptData = slaComplianceTrends.trends
+                      .filter(t => t.department_name === deptName && t.compliance_percent !== null)
+                      .map(t => ({ period: t.period, compliance: t.compliance_percent }));
+                    return (
+                      <Line
+                        key={deptName}
+                        data={deptData}
+                        type="monotone"
+                        dataKey="compliance"
+                        name={deptName}
+                        stroke={colors[idx % colors.length]}
+                        strokeWidth={2}
+                        dot={{ fill: colors[idx % colors.length], strokeWidth: 1, r: 3 }}
+                        connectNulls
+                      />
+                    );
+                  });
+                })()}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </DataCard>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {departmentWorkload && departmentWorkload.workload?.length > 0 && (
+          <DataCard
+            title="Department Workload Distribution"
+            icon={Target}
+            subtitle="Current workload across departments"
+          >
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart 
+                  data={departmentWorkload.workload} 
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#475569' }} />
+                  <YAxis 
+                    type="category" 
+                    dataKey="department_name" 
+                    tick={{ fill: '#94a3b8', fontSize: 11 }} 
+                    axisLine={{ stroke: '#475569' }}
+                    width={100}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                    labelStyle={{ color: '#fff' }}
+                  />
+                  <Legend 
+                    verticalAlign="top" 
+                    height={36}
+                    formatter={(value) => <span className="text-xs text-slate-300 capitalize">{value.replace('_', ' ')}</span>}
+                  />
+                  <Bar dataKey="assigned_count" name="Assigned" fill="#3b82f6" radius={[0, 2, 2, 0]} stackId="a" />
+                  <Bar dataKey="in_progress_count" name="In Progress" fill="#eab308" radius={[0, 2, 2, 0]} stackId="a" />
+                  <Bar dataKey="pending_review_count" name="Pending Review" fill="#8b5cf6" radius={[0, 2, 2, 0]} stackId="a" />
+                  <Bar dataKey="overdue_count" name="Overdue" fill="#ef4444" radius={[0, 4, 4, 0]} stackId="a" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </DataCard>
+        )}
+
+        {agingByDepartment && agingByDepartment.aging?.length > 0 && (
+          <DataCard
+            title="Aging Analysis by Department"
+            icon={Calendar}
+            subtitle="Vulnerability age distribution (days open)"
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="text-left py-2 px-2 text-slate-400 font-medium">Department</th>
+                    <th className="text-center py-2 px-2 text-green-400 font-medium">0-7d</th>
+                    <th className="text-center py-2 px-2 text-yellow-400 font-medium">8-30d</th>
+                    <th className="text-center py-2 px-2 text-orange-400 font-medium">31-90d</th>
+                    <th className="text-center py-2 px-2 text-red-400 font-medium">90+d</th>
+                    <th className="text-center py-2 px-2 text-slate-400 font-medium">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agingByDepartment.aging.map((dept) => (
+                    <tr key={dept.department_id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                      <td className="py-2.5 px-2 text-white font-medium truncate max-w-[150px]">{dept.department_name}</td>
+                      <td className="py-2.5 px-2 text-center">
+                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_0_7 > 0 ? 'bg-green-500/20 text-green-400' : 'text-slate-500'}`}>
+                          {dept.bucket_0_7}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center">
+                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_8_30 > 0 ? 'bg-yellow-500/20 text-yellow-400' : 'text-slate-500'}`}>
+                          {dept.bucket_8_30}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center">
+                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_31_90 > 0 ? 'bg-orange-500/20 text-orange-400' : 'text-slate-500'}`}>
+                          {dept.bucket_31_90}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center">
+                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_90_plus > 0 ? 'bg-red-500/20 text-red-400' : 'text-slate-500'}`}>
+                          {dept.bucket_90_plus}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center text-white font-semibold">{dept.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </DataCard>
+        )}
+      </div>
+
+      {escalationMetrics && escalationMetrics.escalations?.length > 0 && (
+        <DataCard
+          title="Escalation Metrics by Department"
+          icon={AlertTriangle}
+          subtitle="Escalation levels and resolution performance"
+        >
+          <div className="grid gap-4 mb-6 sm:grid-cols-4">
+            <div className="p-4 rounded-lg bg-slate-700/50 border border-slate-600">
+              <p className="text-2xl font-bold text-white">{escalationMetrics.summary?.total_escalations || 0}</p>
+              <p className="text-sm text-slate-400">Total Escalations</p>
+            </div>
+            <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+              <p className="text-2xl font-bold text-yellow-400">{escalationMetrics.summary?.level_1_count || 0}</p>
+              <p className="text-sm text-slate-400">Level 1</p>
+            </div>
+            <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
+              <p className="text-2xl font-bold text-orange-400">{escalationMetrics.summary?.level_2_count || 0}</p>
+              <p className="text-sm text-slate-400">Level 2</p>
+            </div>
+            <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+              <p className="text-2xl font-bold text-red-400">{escalationMetrics.summary?.level_3_count || 0}</p>
+              <p className="text-sm text-slate-400">Level 3</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700">
+                  <th className="text-left py-2 px-2 text-slate-400 font-medium">Department</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Total</th>
+                  <th className="text-center py-2 px-2 text-yellow-400 font-medium">L1</th>
+                  <th className="text-center py-2 px-2 text-orange-400 font-medium">L2</th>
+                  <th className="text-center py-2 px-2 text-red-400 font-medium">L3</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg Resolution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {escalationMetrics.escalations.map((dept) => (
+                  <tr key={dept.department_id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                    <td className="py-2.5 px-2 text-white font-medium">{dept.department_name}</td>
+                    <td className="py-2.5 px-2 text-center text-white">{dept.total_escalations}</td>
+                    <td className="py-2.5 px-2 text-center">
+                      <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded ${dept.level_1_count > 0 ? 'bg-yellow-500/20 text-yellow-400' : 'text-slate-500'}`}>
+                        {dept.level_1_count}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-2 text-center">
+                      <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded ${dept.level_2_count > 0 ? 'bg-orange-500/20 text-orange-400' : 'text-slate-500'}`}>
+                        {dept.level_2_count}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-2 text-center">
+                      <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded ${dept.level_3_count > 0 ? 'bg-red-500/20 text-red-400' : 'text-slate-500'}`}>
+                        {dept.level_3_count}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-2 text-center text-slate-300">
+                      {dept.avg_resolution_after_escalation_days !== null ? `${dept.avg_resolution_after_escalation_days}d` : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DataCard>
+      )}
     </div>
   );
 }

@@ -13,8 +13,16 @@ import {
   Calendar,
   User,
   ExternalLink,
+  Building2,
+  CheckSquare,
 } from 'lucide-react';
 import Link from 'next/link';
+
+interface Department {
+  id: number;
+  name: string;
+  code?: string;
+}
 
 interface Vulnerability {
   id: number;
@@ -80,6 +88,8 @@ export default function VulnerabilitiesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
+  const [selectedVulnIds, setSelectedVulnIds] = useState<Set<number>>(new Set());
   const queryClient = useQueryClient();
 
   const { data: vulnerabilities, isLoading, error } = useQuery({
@@ -101,6 +111,15 @@ export default function VulnerabilitiesPage() {
     },
   });
 
+  const { data: departments } = useQuery({
+    queryKey: ['all-departments'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.departments.getAll();
+      return response.data as Department[];
+    },
+    enabled: showBulkAssignModal,
+  });
+
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => vulnManagementApi.vulnerabilities.create(data),
     onSuccess: () => {
@@ -109,6 +128,34 @@ export default function VulnerabilitiesPage() {
       setIsModalOpen(false);
     },
   });
+
+  const bulkAssignMutation = useMutation({
+    mutationFn: (data: { vulnerability_ids: number[]; department_id: number; priority?: string; notes?: string }) => 
+      vulnManagementApi.departments.bulkAssign(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+      setShowBulkAssignModal(false);
+      setSelectedVulnIds(new Set());
+    },
+  });
+
+  const handleSelectVuln = (id: number) => {
+    const newSelected = new Set(selectedVulnIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedVulnIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedVulnIds.size === filteredVulnerabilities.length) {
+      setSelectedVulnIds(new Set());
+    } else {
+      setSelectedVulnIds(new Set(filteredVulnerabilities.map(v => v.id)));
+    }
+  };
 
   const filteredVulnerabilities = useMemo(() => {
     if (!vulnerabilities) return [];
@@ -219,13 +266,24 @@ export default function VulnerabilitiesPage() {
           <h1 className="text-2xl font-bold text-white">Vulnerability Register</h1>
           <p className="mt-1 text-slate-400">Track and manage security vulnerabilities</p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={18} />
-          Add Vulnerability
-        </button>
+        <div className="flex items-center gap-3">
+          {selectedVulnIds.size > 0 && (
+            <button
+              onClick={() => setShowBulkAssignModal(true)}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <Building2 size={16} />
+              Assign to Department ({selectedVulnIds.size})
+            </button>
+          )}
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={18} />
+            Add Vulnerability
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-4">
@@ -270,6 +328,14 @@ export default function VulnerabilitiesPage() {
         <table className="w-full">
           <thead className="bg-slate-900/50">
             <tr>
+              <th className="px-4 py-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={filteredVulnerabilities.length > 0 && selectedVulnIds.size === filteredVulnerabilities.length}
+                  onChange={handleSelectAll}
+                  className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                />
+              </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">ID</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Title</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Severity</th>
@@ -283,7 +349,7 @@ export default function VulnerabilitiesPage() {
           <tbody className="divide-y divide-slate-700">
             {filteredVulnerabilities.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
+                <td colSpan={9} className="px-4 py-12 text-center text-slate-400">
                   No vulnerabilities found
                 </td>
               </tr>
@@ -292,7 +358,15 @@ export default function VulnerabilitiesPage() {
                 const severityStyle = getSeverityStyle(vuln.severity);
                 const statusStyle = getStatusStyle(vuln.status);
                 return (
-                  <tr key={vuln.id} className="hover:bg-slate-700/50 transition-colors">
+                  <tr key={vuln.id} className={`hover:bg-slate-700/50 transition-colors ${selectedVulnIds.has(vuln.id) ? 'bg-primary-500/10' : ''}`}>
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedVulnIds.has(vuln.id)}
+                        onChange={() => handleSelectVuln(vuln.id)}
+                        className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                      />
+                    </td>
                     <td className="px-4 py-3 text-sm font-mono text-slate-300">VULN-{vuln.id}</td>
                     <td className="px-4 py-3">
                       <Link href={`/vulnerabilities/${vuln.id}`} className="text-white hover:text-primary-400 font-medium">
@@ -424,6 +498,66 @@ export default function VulnerabilitiesPage() {
                 </button>
                 <button type="submit" disabled={createMutation.isPending} className="btn-primary">
                   {createMutation.isPending ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showBulkAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">Bulk Assign to Department</h2>
+              <button onClick={() => setShowBulkAssignModal(false)} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-slate-400 mb-4">
+              Assign {selectedVulnIds.size} selected vulnerabilities to a department
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                bulkAssignMutation.mutate({
+                  vulnerability_ids: Array.from(selectedVulnIds),
+                  department_id: parseInt(formData.get('department_id') as string),
+                  priority: formData.get('priority') as string || 'medium',
+                  notes: formData.get('notes') as string || undefined,
+                });
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Department *</label>
+                <select name="department_id" required className="input-field w-full">
+                  <option value="">Select a department</option>
+                  {departments?.map((dept) => (
+                    <option key={dept.id} value={dept.id}>{dept.name} {dept.code && `(${dept.code})`}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Priority</label>
+                <select name="priority" className="input-field w-full" defaultValue="medium">
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Notes</label>
+                <textarea name="notes" rows={2} className="input-field w-full" placeholder="Optional notes for the assignment..." />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowBulkAssignModal(false)} className="btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" disabled={bulkAssignMutation.isPending} className="btn-primary flex items-center gap-2">
+                  <CheckSquare size={16} />
+                  {bulkAssignMutation.isPending ? 'Assigning...' : 'Assign All'}
                 </button>
               </div>
             </form>

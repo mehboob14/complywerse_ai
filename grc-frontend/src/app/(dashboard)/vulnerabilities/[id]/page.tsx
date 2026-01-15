@@ -98,21 +98,25 @@ interface RiskException {
   expiry_date?: string;
 }
 
-interface TeamAssignment {
+interface DepartmentAssignment {
   id: number;
   vulnerability_id: number;
-  team_id: number;
-  team_name?: string;
+  department_id: number;
+  department_name?: string;
+  department_code?: string;
   assigned_by?: number;
   assigner_name?: string;
   assigned_at: string;
   notes?: string;
-  is_primary: boolean;
+  priority: string;
+  sla_override_days?: number;
+  notification_sent?: boolean;
 }
 
-interface Team {
+interface Department {
   id: number;
   name: string;
+  code?: string;
   description?: string;
   member_count?: number;
 }
@@ -155,7 +159,7 @@ const TABS = [
   { id: 'mitigations', label: 'Mitigations', icon: CheckCircle },
   { id: 'assets', label: 'Assets', icon: Server },
   { id: 'controls', label: 'Controls', icon: Shield },
-  { id: 'teams', label: 'Teams', icon: Users },
+  { id: 'departments', label: 'Departments', icon: Users },
   { id: 'workflow', label: 'Workflow', icon: GitBranch },
   { id: 'escalations', label: 'Escalations', icon: Bell },
   { id: 'retests', label: 'Retests', icon: RefreshCw },
@@ -202,7 +206,7 @@ export default function VulnerabilityDetailPage() {
   const [showRetestModal, setShowRetestModal] = useState(false);
   const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showTeamAssignModal, setShowTeamAssignModal] = useState(false);
+  const [showDeptAssignModal, setShowDeptAssignModal] = useState(false);
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [selectedTransition, setSelectedTransition] = useState<WorkflowTransition | null>(null);
   const [transitionComment, setTransitionComment] = useState('');
@@ -260,22 +264,22 @@ export default function VulnerabilityDetailPage() {
     enabled: activeTab === 'exception',
   });
 
-  const { data: teamAssignments } = useQuery({
-    queryKey: ['vuln-teams', vulnId],
+  const { data: departmentAssignments } = useQuery({
+    queryKey: ['vuln-departments', vulnId],
     queryFn: async () => {
-      const response = await vulnManagementApi.teams.getVulnerabilityTeams(vulnId);
-      return response.data as TeamAssignment[];
+      const response = await vulnManagementApi.departments.getVulnerabilityDepartments(vulnId);
+      return response.data as DepartmentAssignment[];
     },
-    enabled: activeTab === 'teams',
+    enabled: activeTab === 'departments',
   });
 
-  const { data: availableTeams } = useQuery({
-    queryKey: ['all-teams'],
+  const { data: availableDepartments } = useQuery({
+    queryKey: ['all-departments'],
     queryFn: async () => {
-      const response = await vulnManagementApi.teams.getAll();
-      return response.data as Team[];
+      const response = await vulnManagementApi.departments.getAll();
+      return response.data as Department[];
     },
-    enabled: showTeamAssignModal,
+    enabled: showDeptAssignModal,
   });
 
   const { data: workflowTransitions } = useQuery({
@@ -396,20 +400,20 @@ export default function VulnerabilityDetailPage() {
     },
   });
 
-  const assignTeamMutation = useMutation({
-    mutationFn: (data: { team_id: number; is_primary?: boolean }) => 
-      vulnManagementApi.teams.assignTeam(vulnId, data),
+  const assignDepartmentMutation = useMutation({
+    mutationFn: (data: { department_id: number; priority?: string; sla_override_days?: number; notes?: string }) => 
+      vulnManagementApi.departments.assignDepartment(vulnId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vuln-teams', vulnId] });
-      setShowTeamAssignModal(false);
+      queryClient.invalidateQueries({ queryKey: ['vuln-departments', vulnId] });
+      setShowDeptAssignModal(false);
     },
   });
 
-  const removeTeamAssignmentMutation = useMutation({
+  const removeDepartmentAssignmentMutation = useMutation({
     mutationFn: (assignmentId: number) => 
-      vulnManagementApi.teams.removeTeamAssignment(vulnId, assignmentId),
+      vulnManagementApi.departments.removeDepartmentAssignment(vulnId, assignmentId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vuln-teams', vulnId] });
+      queryClient.invalidateQueries({ queryKey: ['vuln-departments', vulnId] });
     },
   });
 
@@ -709,52 +713,65 @@ export default function VulnerabilityDetailPage() {
         </div>
       )}
 
-      {activeTab === 'teams' && (
+      {activeTab === 'departments' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-white">Team Assignments</h2>
-            <button onClick={() => setShowTeamAssignModal(true)} className="btn-primary flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-white">Department Assignments</h2>
+            <button onClick={() => setShowDeptAssignModal(true)} className="btn-primary flex items-center gap-2">
               <Plus size={16} />
-              Assign Team
+              Assign Department
             </button>
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-            {(!teamAssignments || teamAssignments.length === 0) ? (
-              <div className="p-8 text-center text-slate-400">No teams assigned yet</div>
+            {(!departmentAssignments || departmentAssignments.length === 0) ? (
+              <div className="p-8 text-center text-slate-400">No departments assigned yet</div>
             ) : (
               <table className="w-full">
                 <thead className="bg-slate-900/50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Team</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Department</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Priority</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">SLA Override</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Assigned</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
-                  {teamAssignments.map((assignment) => (
+                  {departmentAssignments.map((assignment) => (
                     <tr key={assignment.id} className="hover:bg-slate-700/50">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500/20">
                             <Users size={14} className="text-primary-400" />
                           </div>
-                          <span className="text-white font-medium">{assignment.team_name || `Team ${assignment.team_id}`}</span>
+                          <div>
+                            <span className="text-white font-medium">{assignment.department_name || `Department ${assignment.department_id}`}</span>
+                            {assignment.department_code && (
+                              <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 font-mono">
+                                {assignment.department_code}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
-                          assignment.is_primary ? 'bg-primary-500/20 text-primary-400' : 'bg-slate-500/20 text-slate-400'
+                          assignment.priority === 'high' ? 'bg-red-500/20 text-red-400' :
+                          assignment.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-green-500/20 text-green-400'
                         }`}>
-                          {assignment.is_primary ? 'Primary' : 'Secondary'}
+                          {assignment.priority}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">
+                        {assignment.sla_override_days ? `${assignment.sla_override_days} days` : '-'}
                       </td>
                       <td className="px-4 py-3 text-slate-300">
                         {new Date(assignment.assigned_at).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-3">
                         <button
-                          onClick={() => removeTeamAssignmentMutation.mutate(assignment.id)}
+                          onClick={() => removeDepartmentAssignmentMutation.mutate(assignment.id)}
                           className="text-slate-400 hover:text-red-400"
                         >
                           <Trash2 size={16} />
@@ -1313,12 +1330,12 @@ export default function VulnerabilityDetailPage() {
         </div>
       )}
 
-      {showTeamAssignModal && (
+      {showDeptAssignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white">Assign Team</h2>
-              <button onClick={() => setShowTeamAssignModal(false)} className="text-slate-400 hover:text-white">
+              <h2 className="text-xl font-bold text-white">Assign Department</h2>
+              <button onClick={() => setShowDeptAssignModal(false)} className="text-slate-400 hover:text-white">
                 <X size={20} />
               </button>
             </div>
@@ -1326,33 +1343,44 @@ export default function VulnerabilityDetailPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
-                assignTeamMutation.mutate({
-                  team_id: parseInt(formData.get('team_id') as string),
-                  is_primary: formData.get('is_primary') === 'true',
+                assignDepartmentMutation.mutate({
+                  department_id: parseInt(formData.get('department_id') as string),
+                  priority: formData.get('priority') as string || 'medium',
+                  sla_override_days: formData.get('sla_override_days') ? parseInt(formData.get('sla_override_days') as string) : undefined,
+                  notes: formData.get('notes') as string || undefined,
                 });
               }}
               className="space-y-4"
             >
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Team *</label>
-                <select name="team_id" required className="input-field w-full">
-                  <option value="">Select a team</option>
-                  {availableTeams?.map((team) => (
-                    <option key={team.id} value={team.id}>{team.name}</option>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Department *</label>
+                <select name="department_id" required className="input-field w-full">
+                  <option value="">Select a department</option>
+                  {availableDepartments?.map((dept) => (
+                    <option key={dept.id} value={dept.id}>{dept.name} {dept.code && `(${dept.code})`}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Role</label>
-                <select name="is_primary" className="input-field w-full">
-                  <option value="true">Primary</option>
-                  <option value="false">Secondary</option>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Priority</label>
+                <select name="priority" className="input-field w-full" defaultValue="medium">
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">SLA Override (days)</label>
+                <input type="number" name="sla_override_days" className="input-field w-full" placeholder="Leave empty to use default SLA" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Notes</label>
+                <textarea name="notes" rows={2} className="input-field w-full" placeholder="Optional notes..." />
+              </div>
               <div className="flex justify-end gap-3">
-                <button type="button" onClick={() => setShowTeamAssignModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={assignTeamMutation.isPending} className="btn-primary">
-                  {assignTeamMutation.isPending ? 'Assigning...' : 'Assign Team'}
+                <button type="button" onClick={() => setShowDeptAssignModal(false)} className="btn-secondary">Cancel</button>
+                <button type="submit" disabled={assignDepartmentMutation.isPending} className="btn-primary">
+                  {assignDepartmentMutation.isPending ? 'Assigning...' : 'Assign Department'}
                 </button>
               </div>
             </form>

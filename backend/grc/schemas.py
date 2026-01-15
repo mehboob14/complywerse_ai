@@ -2159,30 +2159,35 @@ class AssetExposureResponse(BaseModel):
 
 
 # =============================================================================
-# Team Management Schemas
+# Department Management Schemas
 # =============================================================================
 
-class GRCTeamCreate(BaseModel):
+class GRCDepartmentCreate(BaseModel):
     name: str
+    code: str
     description: Optional[str] = None
-    team_type: str = "security"
-    manager_id: Optional[int] = None
+    parent_department_id: Optional[int] = None
+    department_head_user_id: Optional[int] = None
 
 
-class GRCTeamUpdate(BaseModel):
+class GRCDepartmentUpdate(BaseModel):
     name: Optional[str] = None
+    code: Optional[str] = None
     description: Optional[str] = None
-    team_type: Optional[str] = None
-    manager_id: Optional[int] = None
+    parent_department_id: Optional[int] = None
+    department_head_user_id: Optional[int] = None
     is_active: Optional[bool] = None
 
 
-class GRCTeamMemberResponse(BaseModel):
+class GRCDepartmentMemberResponse(BaseModel):
     id: int
-    team_id: int
+    department_id: int
     user_id: int
     role: str
-    joined_at: datetime
+    email_notifications_enabled: bool
+    escalation_order: int
+    added_at: datetime
+    added_by: Optional[int]
     is_active: bool
     user_name: Optional[str] = None
     user_email: Optional[str] = None
@@ -2191,14 +2196,16 @@ class GRCTeamMemberResponse(BaseModel):
         from_attributes = True
 
 
-class GRCTeamResponse(BaseModel):
+class GRCDepartmentResponse(BaseModel):
     id: int
     tenant_id: int
     name: str
+    code: str
     description: Optional[str]
-    team_type: str
-    manager_id: Optional[int]
-    manager_name: Optional[str] = None
+    parent_department_id: Optional[int]
+    parent_department_name: Optional[str] = None
+    department_head_user_id: Optional[int]
+    department_head_name: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -2208,48 +2215,92 @@ class GRCTeamResponse(BaseModel):
         from_attributes = True
 
 
-class GRCTeamDetailResponse(BaseModel):
+class GRCDepartmentDetailResponse(BaseModel):
     id: int
     tenant_id: int
     name: str
+    code: str
     description: Optional[str]
-    team_type: str
-    manager_id: Optional[int]
-    manager_name: Optional[str] = None
+    parent_department_id: Optional[int]
+    parent_department_name: Optional[str] = None
+    department_head_user_id: Optional[int]
+    department_head_name: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    members: List[GRCTeamMemberResponse] = []
+    members: List[GRCDepartmentMemberResponse] = []
+    sub_departments: List["GRCDepartmentResponse"] = []
     vulnerability_count: int = 0
 
     class Config:
         from_attributes = True
 
 
-class GRCTeamMemberCreate(BaseModel):
+class GRCDepartmentMemberCreate(BaseModel):
     user_id: int
     role: str = "member"
+    email_notifications_enabled: bool = True
+    escalation_order: int = 0
 
 
-class GRCVulnerabilityTeamAssignmentCreate(BaseModel):
-    team_id: int
+class GRCVulnerabilityDepartmentAssignmentCreate(BaseModel):
+    department_id: int
+    priority: str = "medium"
     notes: Optional[str] = None
-    is_primary: bool = True
+    sla_override_days: Optional[int] = None
 
 
-class GRCVulnerabilityTeamAssignmentResponse(BaseModel):
+class GRCVulnerabilityDepartmentAssignmentResponse(BaseModel):
     id: int
     vulnerability_id: int
-    team_id: int
-    team_name: Optional[str] = None
+    department_id: int
+    department_name: Optional[str] = None
+    department_code: Optional[str] = None
     assigned_by: Optional[int]
     assigner_name: Optional[str] = None
     assigned_at: datetime
+    priority: str
     notes: Optional[str]
-    is_primary: bool
+    sla_override_days: Optional[int]
+    notification_sent: bool
 
     class Config:
         from_attributes = True
+
+
+class GRCDepartmentEscalationPathCreate(BaseModel):
+    escalation_level: int
+    target_role: str
+    sla_threshold_percent: int = 75
+    auto_escalate: bool = True
+
+
+class GRCDepartmentEscalationPathResponse(BaseModel):
+    id: int
+    department_id: int
+    escalation_level: int
+    target_role: str
+    sla_threshold_percent: int
+    auto_escalate: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BulkVulnerabilityAssignRequest(BaseModel):
+    vulnerability_ids: List[int]
+    department_id: int
+    priority: str = "medium"
+    notes: Optional[str] = None
+
+
+class BulkVulnerabilityAssignResponse(BaseModel):
+    success_count: int
+    failed_count: int
+    assignments: List[GRCVulnerabilityDepartmentAssignmentResponse] = []
+    errors: List[Dict[str, Any]] = []
 
 
 # =============================================================================
@@ -2277,7 +2328,7 @@ class GRCVulnWorkflowStateCreate(BaseModel):
     color: Optional[str] = None
     requires_approval: bool = False
     requires_evidence: bool = False
-    auto_assign_team_id: Optional[int] = None
+    auto_assign_department_id: Optional[int] = None
     sla_multiplier: float = 1.0
     is_terminal: bool = False
 
@@ -2289,7 +2340,7 @@ class GRCVulnWorkflowStateUpdate(BaseModel):
     color: Optional[str] = None
     requires_approval: Optional[bool] = None
     requires_evidence: Optional[bool] = None
-    auto_assign_team_id: Optional[int] = None
+    auto_assign_department_id: Optional[int] = None
     sla_multiplier: Optional[float] = None
     is_terminal: Optional[bool] = None
 
@@ -2303,8 +2354,8 @@ class GRCVulnWorkflowStateResponse(BaseModel):
     color: Optional[str]
     requires_approval: bool
     requires_evidence: bool
-    auto_assign_team_id: Optional[int]
-    auto_assign_team_name: Optional[str] = None
+    auto_assign_department_id: Optional[int]
+    auto_assign_department_name: Optional[str] = None
     sla_multiplier: float
     is_terminal: bool
 
@@ -2356,7 +2407,7 @@ class GRCVulnWorkflowEscalationCreate(BaseModel):
     name: str
     trigger_type: str
     trigger_value: float
-    escalate_to_team_id: Optional[int] = None
+    escalate_to_department_id: Optional[int] = None
     escalate_to_role: Optional[str] = None
     auto_transition_to_state_id: Optional[int] = None
     notification_type: str = "both"
@@ -2367,7 +2418,7 @@ class GRCVulnWorkflowEscalationUpdate(BaseModel):
     name: Optional[str] = None
     trigger_type: Optional[str] = None
     trigger_value: Optional[float] = None
-    escalate_to_team_id: Optional[int] = None
+    escalate_to_department_id: Optional[int] = None
     escalate_to_role: Optional[str] = None
     auto_transition_to_state_id: Optional[int] = None
     notification_type: Optional[str] = None
@@ -2380,8 +2431,8 @@ class GRCVulnWorkflowEscalationResponse(BaseModel):
     name: str
     trigger_type: str
     trigger_value: float
-    escalate_to_team_id: Optional[int]
-    escalate_to_team_name: Optional[str] = None
+    escalate_to_department_id: Optional[int]
+    escalate_to_department_name: Optional[str] = None
     escalate_to_role: Optional[str]
     auto_transition_to_state_id: Optional[int]
     auto_transition_to_state_name: Optional[str] = None
@@ -2473,8 +2524,8 @@ class GRCVulnEscalationLogResponse(BaseModel):
     escalation_rule_id: int
     escalation_rule_name: Optional[str] = None
     triggered_at: datetime
-    escalated_to_team_id: Optional[int]
-    escalated_to_team_name: Optional[str] = None
+    escalated_to_department_id: Optional[int]
+    escalated_to_department_name: Optional[str] = None
     escalated_to_user_id: Optional[int]
     escalated_to_user_name: Optional[str] = None
     notification_sent: bool
@@ -2504,7 +2555,7 @@ class GRCVulnNotificationCreate(BaseModel):
     title: str
     message: Optional[str] = None
     recipient_user_id: Optional[int] = None
-    recipient_team_id: Optional[int] = None
+    recipient_department_id: Optional[int] = None
 
 
 class GRCVulnNotificationResponse(BaseModel):
@@ -2517,8 +2568,8 @@ class GRCVulnNotificationResponse(BaseModel):
     message: Optional[str]
     recipient_user_id: Optional[int]
     recipient_user_name: Optional[str] = None
-    recipient_team_id: Optional[int]
-    recipient_team_name: Optional[str] = None
+    recipient_department_id: Optional[int]
+    recipient_department_name: Optional[str] = None
     triggered_by_user_id: Optional[int]
     triggered_by_name: Optional[str] = None
     is_read: bool
@@ -2531,3 +2582,13 @@ class GRCVulnNotificationResponse(BaseModel):
 
 class UnreadNotificationCount(BaseModel):
     count: int
+
+
+class SLACheckResult(BaseModel):
+    total_checked: int
+    warnings_sent: int
+    breaches_detected: int
+    escalations_triggered: int
+    emails_sent: int
+    vulnerabilities_affected: List[int] = []
+    details: List[Dict[str, Any]] = []

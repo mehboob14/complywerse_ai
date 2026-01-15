@@ -712,11 +712,6 @@ export const vulnManagementApi = {
     update: (id: number, data: Record<string, unknown>) => 
       apiClient.put(`/vuln-management/sla/${id}`, data),
   },
-  dashboard: {
-    get: () => apiClient.get('/vuln-management/dashboard'),
-    getOverdue: () => apiClient.get('/vuln-management/dashboard/overdue'),
-    getAssetExposure: () => apiClient.get('/vuln-management/dashboard/asset-exposure'),
-  },
   exceptions: {
     list: (vulnId: number) => 
       apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/exceptions`),
@@ -725,26 +720,34 @@ export const vulnManagementApi = {
     update: (vulnId: number, exceptionId: number, data: Record<string, unknown>) => 
       apiClient.put(`/vuln-management/vulnerabilities/${vulnId}/exceptions/${exceptionId}`, data),
   },
-  teams: {
-    getAll: () => apiClient.get('/vuln-management/teams'),
-    getById: (id: number) => apiClient.get(`/vuln-management/teams/${id}`),
+  departments: {
+    getAll: () => apiClient.get('/vuln-management/departments'),
+    getById: (id: number) => apiClient.get(`/vuln-management/departments/${id}`),
     create: (data: Record<string, unknown>) => 
-      apiClient.post('/vuln-management/teams', data),
+      apiClient.post('/vuln-management/departments', data),
     update: (id: number, data: Record<string, unknown>) => 
-      apiClient.put(`/vuln-management/teams/${id}`, data),
-    delete: (id: number) => apiClient.delete(`/vuln-management/teams/${id}`),
-    addMember: (teamId: number, data: { user_id: number; role?: string }) => 
-      apiClient.post(`/vuln-management/teams/${teamId}/members`, data),
-    removeMember: (teamId: number, userId: number) => 
-      apiClient.delete(`/vuln-management/teams/${teamId}/members/${userId}`),
-    getVulnerabilityTeams: (vulnId: number) => 
-      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/teams`),
-    assignTeam: (vulnId: number, data: { team_id: number; is_primary?: boolean }) => 
-      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/assign-team`, data),
-    removeTeamAssignment: (vulnId: number, teamId: number) => 
-      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/assign-team/${teamId}`),
-    getTeamVulnerabilities: (teamId: number) =>
-      apiClient.get(`/vuln-management/teams/${teamId}/vulnerabilities`),
+      apiClient.put(`/vuln-management/departments/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/vuln-management/departments/${id}`),
+    addMember: (deptId: number, data: { user_id: number; role?: string; email_notifications_enabled?: boolean; escalation_order?: number }) => 
+      apiClient.post(`/vuln-management/departments/${deptId}/members`, data),
+    removeMember: (deptId: number, memberId: number) => 
+      apiClient.delete(`/vuln-management/departments/${deptId}/members/${memberId}`),
+    getMembers: (deptId: number) =>
+      apiClient.get(`/vuln-management/departments/${deptId}/members`),
+    getVulnerabilityDepartments: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/departments`),
+    assignDepartment: (vulnId: number, data: { department_id: number; priority?: string; sla_override_days?: number; notes?: string }) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/assign-department`, data),
+    removeDepartmentAssignment: (vulnId: number, assignmentId: number) => 
+      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/assign-department/${assignmentId}`),
+    getDepartmentVulnerabilities: (deptId: number) =>
+      apiClient.get(`/vuln-management/departments/${deptId}/vulnerabilities`),
+    getEscalationPaths: (deptId: number) =>
+      apiClient.get(`/vuln-management/departments/${deptId}/escalation-paths`),
+    createEscalationPath: (deptId: number, data: Record<string, unknown>) =>
+      apiClient.post(`/vuln-management/departments/${deptId}/escalation-paths`, data),
+    bulkAssign: (data: { vulnerability_ids: number[]; department_id: number; priority?: string; notes?: string }) =>
+      apiClient.post('/vuln-management/vulnerabilities/bulk-assign', data),
   },
   workflows: {
     getAvailableTransitions: (vulnId: number) => 
@@ -766,11 +769,19 @@ export const vulnManagementApi = {
     markAllAsRead: () => 
       apiClient.put('/vuln-management/notifications/read-all'),
   },
-  dashboardExtended: {
-    getTeamMetrics: () => apiClient.get('/vuln-management/dashboard/team-metrics'),
+  dashboard: {
+    get: () => apiClient.get('/vuln-management/dashboard'),
+    getOverdue: () => apiClient.get('/vuln-management/dashboard/overdue'),
+    getAssetExposure: () => apiClient.get('/vuln-management/dashboard/asset-exposure'),
+    getDepartmentMetrics: () => apiClient.get('/vuln-management/dashboard/department-metrics'),
     getSLATrends: () => apiClient.get('/vuln-management/dashboard/sla-trends'),
     getWorkflowMetrics: () => apiClient.get('/vuln-management/dashboard/workflow-metrics'),
     getControlCoverage: () => apiClient.get('/vuln-management/dashboard/control-coverage'),
+    getSLAComplianceTrends: (weeks?: number) => 
+      apiClient.get('/vuln-management/dashboard/sla-compliance-trends', { params: { weeks } }),
+    getDepartmentWorkload: () => apiClient.get('/vuln-management/dashboard/department-workload'),
+    getAgingByDepartment: () => apiClient.get('/vuln-management/dashboard/aging-by-department'),
+    getEscalationMetrics: () => apiClient.get('/vuln-management/dashboard/escalation-metrics'),
   },
 };
 

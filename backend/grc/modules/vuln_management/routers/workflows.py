@@ -7,7 +7,7 @@ from sqlalchemy import func
 from ....models import (
     GRCVulnWorkflowTemplate, GRCVulnWorkflowState, GRCVulnWorkflowTransition,
     GRCVulnWorkflowEscalation, GRCVulnWorkflowHistory, Vulnerability,
-    GRCTeam, GRCUser, get_db
+    GRCDepartment, GRCUser, get_db
 )
 from ....schemas import (
     GRCVulnWorkflowTemplateCreate, GRCVulnWorkflowTemplateUpdate,
@@ -19,6 +19,10 @@ from ....schemas import (
     MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ..services.email_service import EmailService
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Vulnerability Workflows"])
 
@@ -338,7 +342,7 @@ def add_workflow_state(
         color=request.color,
         requires_approval=request.requires_approval,
         requires_evidence=request.requires_evidence,
-        auto_assign_team_id=request.auto_assign_team_id,
+        auto_assign_department_id=request.auto_assign_department_id,
         sla_multiplier=request.sla_multiplier,
         is_terminal=request.is_terminal
     )
@@ -346,10 +350,10 @@ def add_workflow_state(
     db.commit()
     db.refresh(state)
     
-    team_name = None
-    if state.auto_assign_team_id:
-        team = db.query(GRCTeam).filter(GRCTeam.id == state.auto_assign_team_id).first()
-        team_name = team.name if team else None
+    dept_name = None
+    if state.auto_assign_department_id:
+        dept = db.query(GRCDepartment).filter(GRCDepartment.id == state.auto_assign_department_id).first()
+        dept_name = dept.name if dept else None
     
     return GRCVulnWorkflowStateResponse(
         id=state.id,
@@ -360,8 +364,8 @@ def add_workflow_state(
         color=state.color,
         requires_approval=state.requires_approval,
         requires_evidence=state.requires_evidence,
-        auto_assign_team_id=state.auto_assign_team_id,
-        auto_assign_team_name=team_name,
+        auto_assign_department_id=state.auto_assign_department_id,
+        auto_assign_department_name=dept_name,
         sla_multiplier=state.sla_multiplier,
         is_terminal=state.is_terminal
     )
@@ -391,10 +395,10 @@ def update_workflow_state(
     db.commit()
     db.refresh(state)
     
-    team_name = None
-    if state.auto_assign_team_id:
-        team = db.query(GRCTeam).filter(GRCTeam.id == state.auto_assign_team_id).first()
-        team_name = team.name if team else None
+    dept_name = None
+    if state.auto_assign_department_id:
+        dept = db.query(GRCDepartment).filter(GRCDepartment.id == state.auto_assign_department_id).first()
+        dept_name = dept.name if dept else None
     
     return GRCVulnWorkflowStateResponse(
         id=state.id,
@@ -405,8 +409,8 @@ def update_workflow_state(
         color=state.color,
         requires_approval=state.requires_approval,
         requires_evidence=state.requires_evidence,
-        auto_assign_team_id=state.auto_assign_team_id,
-        auto_assign_team_name=team_name,
+        auto_assign_department_id=state.auto_assign_department_id,
+        auto_assign_department_name=dept_name,
         sla_multiplier=state.sla_multiplier,
         is_terminal=state.is_terminal
     )
@@ -572,7 +576,7 @@ def add_workflow_escalation(
         name=request.name,
         trigger_type=request.trigger_type,
         trigger_value=request.trigger_value,
-        escalate_to_team_id=request.escalate_to_team_id,
+        escalate_to_department_id=request.escalate_to_department_id,
         escalate_to_role=request.escalate_to_role,
         auto_transition_to_state_id=request.auto_transition_to_state_id,
         notification_type=request.notification_type,
@@ -582,11 +586,11 @@ def add_workflow_escalation(
     db.commit()
     db.refresh(escalation)
     
-    team_name = None
+    dept_name = None
     state_name = None
-    if escalation.escalate_to_team_id:
-        team = db.query(GRCTeam).filter(GRCTeam.id == escalation.escalate_to_team_id).first()
-        team_name = team.name if team else None
+    if escalation.escalate_to_department_id:
+        dept = db.query(GRCDepartment).filter(GRCDepartment.id == escalation.escalate_to_department_id).first()
+        dept_name = dept.name if dept else None
     if escalation.auto_transition_to_state_id:
         state = db.query(GRCVulnWorkflowState).filter(GRCVulnWorkflowState.id == escalation.auto_transition_to_state_id).first()
         state_name = state.name if state else None
@@ -597,8 +601,8 @@ def add_workflow_escalation(
         name=escalation.name,
         trigger_type=escalation.trigger_type,
         trigger_value=escalation.trigger_value,
-        escalate_to_team_id=escalation.escalate_to_team_id,
-        escalate_to_team_name=team_name,
+        escalate_to_department_id=escalation.escalate_to_department_id,
+        escalate_to_department_name=dept_name,
         escalate_to_role=escalation.escalate_to_role,
         auto_transition_to_state_id=escalation.auto_transition_to_state_id,
         auto_transition_to_state_name=state_name,
@@ -631,11 +635,11 @@ def update_workflow_escalation(
     db.commit()
     db.refresh(escalation)
     
-    team_name = None
+    dept_name = None
     state_name = None
-    if escalation.escalate_to_team_id:
-        team = db.query(GRCTeam).filter(GRCTeam.id == escalation.escalate_to_team_id).first()
-        team_name = team.name if team else None
+    if escalation.escalate_to_department_id:
+        dept = db.query(GRCDepartment).filter(GRCDepartment.id == escalation.escalate_to_department_id).first()
+        dept_name = dept.name if dept else None
     if escalation.auto_transition_to_state_id:
         state = db.query(GRCVulnWorkflowState).filter(GRCVulnWorkflowState.id == escalation.auto_transition_to_state_id).first()
         state_name = state.name if state else None
@@ -646,8 +650,8 @@ def update_workflow_escalation(
         name=escalation.name,
         trigger_type=escalation.trigger_type,
         trigger_value=escalation.trigger_value,
-        escalate_to_team_id=escalation.escalate_to_team_id,
-        escalate_to_team_name=team_name,
+        escalate_to_department_id=escalation.escalate_to_department_id,
+        escalate_to_department_name=dept_name,
         escalate_to_role=escalation.escalate_to_role,
         auto_transition_to_state_id=escalation.auto_transition_to_state_id,
         auto_transition_to_state_name=state_name,
@@ -769,6 +773,19 @@ def perform_vulnerability_transition(
                 changed_by_user_id=current_user.id,
                 notify_user_id=vuln.assigned_to
             )
+            
+            if vuln.assignee and vuln.assignee.email:
+                try:
+                    EmailService.send_status_change(
+                        recipient_email=vuln.assignee.email,
+                        recipient_name=vuln.assignee.display_name,
+                        vulnerability=vuln,
+                        old_status=from_state.name if from_state else None,
+                        new_status=to_state.name if to_state else "Unknown",
+                        changed_by=current_user.display_name
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send status change email: {e}")
         except Exception:
             pass
     

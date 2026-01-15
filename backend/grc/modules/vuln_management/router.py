@@ -10,7 +10,7 @@ from .routers import (
     sla_router,
     dashboard_router,
     exceptions_router,
-    teams_router,
+    departments_router,
     workflows_router,
     escalations_router
 )
@@ -27,7 +27,7 @@ router.include_router(ai_analysis_router)
 router.include_router(sla_router)
 router.include_router(dashboard_router)
 router.include_router(exceptions_router)
-router.include_router(teams_router)
+router.include_router(departments_router)
 router.include_router(workflows_router)
 router.include_router(escalations_router)
 
@@ -48,7 +48,7 @@ def vuln_management_module_info():
             "/sla",
             "/dashboard",
             "/exceptions",
-            "/teams",
+            "/departments",
             "/workflows",
             "/escalations",
             "/notifications"

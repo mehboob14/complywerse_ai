@@ -2974,82 +2974,115 @@ class VulnerabilitySLAConfig(Base):
 
 
 # =============================================================================
-# 19. Team Management Models
+# 19. Department Management Models
 # =============================================================================
 
-class GRCTeam(Base):
-    """Teams for vulnerability remediation and management"""
-    __tablename__ = "grc_teams"
+class GRCDepartment(Base):
+    """Departments for vulnerability remediation and management with hierarchy support"""
+    __tablename__ = "grc_departments"
     
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     
     name = Column(String(255), nullable=False)
+    code = Column(String(50), nullable=False)  # e.g., "IT-SEC", "NET-OPS"
     description = Column(Text, nullable=True)
-    team_type = Column(String(50), nullable=False, default="security")  # security, it_operations, development, compliance, management
     
-    manager_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    parent_department_id = Column(Integer, ForeignKey("grc_departments.id"), nullable=True, index=True)
+    department_head_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    manager = relationship("GRCUser", foreign_keys=[manager_id])
-    members = relationship("GRCTeamMember", back_populates="team", cascade="all, delete-orphan")
-    vulnerability_assignments = relationship("GRCVulnerabilityTeamAssignment", back_populates="team", cascade="all, delete-orphan")
+    department_head = relationship("GRCUser", foreign_keys=[department_head_user_id])
+    parent_department = relationship("GRCDepartment", remote_side=[id], backref="sub_departments")
+    members = relationship("GRCDepartmentMember", back_populates="department", cascade="all, delete-orphan")
+    vulnerability_assignments = relationship("GRCVulnerabilityDepartmentAssignment", back_populates="department", cascade="all, delete-orphan")
+    escalation_paths = relationship("GRCDepartmentEscalationPath", back_populates="department", cascade="all, delete-orphan")
     
     __table_args__ = (
-        UniqueConstraint("tenant_id", "name", name="uq_team_tenant_name"),
-        Index("ix_team_tenant", "tenant_id"),
-        Index("ix_team_type", "team_type"),
+        UniqueConstraint("tenant_id", "name", name="uq_department_tenant_name"),
+        UniqueConstraint("tenant_id", "code", name="uq_department_tenant_code"),
+        Index("ix_department_tenant", "tenant_id"),
+        Index("ix_department_parent", "parent_department_id"),
     )
 
 
-class GRCTeamMember(Base):
-    """Team membership for users"""
-    __tablename__ = "grc_team_members"
+class GRCDepartmentMember(Base):
+    """Department membership for users"""
+    __tablename__ = "grc_department_members"
     
     id = Column(Integer, primary_key=True, index=True)
-    team_id = Column(Integer, ForeignKey("grc_teams.id"), nullable=False, index=True)
+    department_id = Column(Integer, ForeignKey("grc_departments.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
     
-    role = Column(String(50), nullable=False, default="member")  # member, lead, manager
+    role = Column(String(50), nullable=False, default="member")  # head, lead, member
+    email_notifications_enabled = Column(Boolean, default=True)
+    escalation_order = Column(Integer, default=0)  # Priority for escalations
     
-    joined_at = Column(DateTime, default=datetime.utcnow)
+    added_at = Column(DateTime, default=datetime.utcnow)
+    added_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     is_active = Column(Boolean, default=True)
     
-    team = relationship("GRCTeam", back_populates="members")
-    user = relationship("GRCUser")
+    department = relationship("GRCDepartment", back_populates="members")
+    user = relationship("GRCUser", foreign_keys=[user_id])
+    added_by_user = relationship("GRCUser", foreign_keys=[added_by])
     
     __table_args__ = (
-        UniqueConstraint("team_id", "user_id", name="uq_team_member"),
-        Index("ix_team_member_team", "team_id"),
-        Index("ix_team_member_user", "user_id"),
+        UniqueConstraint("department_id", "user_id", name="uq_department_member"),
+        Index("ix_department_member_dept", "department_id"),
+        Index("ix_department_member_user", "user_id"),
     )
 
 
-class GRCVulnerabilityTeamAssignment(Base):
-    """Assignment of vulnerabilities to teams"""
-    __tablename__ = "grc_vulnerability_team_assignments"
+class GRCVulnerabilityDepartmentAssignment(Base):
+    """Assignment of vulnerabilities to departments"""
+    __tablename__ = "grc_vulnerability_department_assignments"
     
     id = Column(Integer, primary_key=True, index=True)
     vulnerability_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=False, index=True)
-    team_id = Column(Integer, ForeignKey("grc_teams.id"), nullable=False, index=True)
+    department_id = Column(Integer, ForeignKey("grc_departments.id"), nullable=False, index=True)
     
     assigned_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     assigned_at = Column(DateTime, default=datetime.utcnow)
     
+    priority = Column(String(20), nullable=False, default="medium")  # high, medium, low
     notes = Column(Text, nullable=True)
-    is_primary = Column(Boolean, default=True)
+    sla_override_days = Column(Integer, nullable=True)  # Override default SLA
+    notification_sent = Column(Boolean, default=False)
     
     vulnerability = relationship("Vulnerability")
-    team = relationship("GRCTeam", back_populates="vulnerability_assignments")
+    department = relationship("GRCDepartment", back_populates="vulnerability_assignments")
     assigner = relationship("GRCUser", foreign_keys=[assigned_by])
     
     __table_args__ = (
-        UniqueConstraint("vulnerability_id", "team_id", name="uq_vuln_team_assignment"),
-        Index("ix_vuln_team_assignment_vuln", "vulnerability_id"),
-        Index("ix_vuln_team_assignment_team", "team_id"),
+        UniqueConstraint("vulnerability_id", "department_id", name="uq_vuln_department_assignment"),
+        Index("ix_vuln_dept_assignment_vuln", "vulnerability_id"),
+        Index("ix_vuln_dept_assignment_dept", "department_id"),
+    )
+
+
+class GRCDepartmentEscalationPath(Base):
+    """Escalation paths for departments"""
+    __tablename__ = "grc_department_escalation_paths"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    department_id = Column(Integer, ForeignKey("grc_departments.id"), nullable=False, index=True)
+    
+    escalation_level = Column(Integer, nullable=False)  # 1, 2, 3
+    target_role = Column(String(50), nullable=False)  # lead, head, parent_dept_head
+    sla_threshold_percent = Column(Integer, nullable=False, default=75)  # e.g., 75, 100
+    auto_escalate = Column(Boolean, default=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    department = relationship("GRCDepartment", back_populates="escalation_paths")
+    
+    __table_args__ = (
+        UniqueConstraint("department_id", "escalation_level", name="uq_dept_escalation_level"),
+        Index("ix_dept_escalation_dept", "department_id"),
     )
 
 
@@ -3100,12 +3133,12 @@ class GRCVulnWorkflowState(Base):
     requires_approval = Column(Boolean, default=False)
     requires_evidence = Column(Boolean, default=False)
     
-    auto_assign_team_id = Column(Integer, ForeignKey("grc_teams.id"), nullable=True, index=True)
+    auto_assign_department_id = Column(Integer, ForeignKey("grc_departments.id"), nullable=True, index=True)
     sla_multiplier = Column(Float, default=1.0)
     is_terminal = Column(Boolean, default=False)
     
     template = relationship("GRCVulnWorkflowTemplate", back_populates="states")
-    auto_assign_team = relationship("GRCTeam")
+    auto_assign_department = relationship("GRCDepartment")
     
     __table_args__ = (
         Index("ix_vuln_workflow_state_template", "template_id"),
@@ -3153,7 +3186,7 @@ class GRCVulnWorkflowEscalation(Base):
     trigger_type = Column(String(50), nullable=False)  # sla_percentage, days_open, severity_escalation
     trigger_value = Column(Float, nullable=False)  # e.g., 75.0 for 75% SLA, 30 for 30 days
     
-    escalate_to_team_id = Column(Integer, ForeignKey("grc_teams.id"), nullable=True, index=True)
+    escalate_to_department_id = Column(Integer, ForeignKey("grc_departments.id"), nullable=True, index=True)
     escalate_to_role = Column(String(50), nullable=True)  # manager, ciso
     
     auto_transition_to_state_id = Column(Integer, ForeignKey("grc_vuln_workflow_states.id"), nullable=True, index=True)
@@ -3162,7 +3195,7 @@ class GRCVulnWorkflowEscalation(Base):
     is_active = Column(Boolean, default=True)
     
     template = relationship("GRCVulnWorkflowTemplate", back_populates="escalations")
-    escalate_to_team = relationship("GRCTeam")
+    escalate_to_department = relationship("GRCDepartment")
     auto_transition_to_state = relationship("GRCVulnWorkflowState")
     
     __table_args__ = (
@@ -3208,7 +3241,7 @@ class GRCVulnEscalationLog(Base):
     
     triggered_at = Column(DateTime, default=datetime.utcnow)
     
-    escalated_to_team_id = Column(Integer, ForeignKey("grc_teams.id"), nullable=True, index=True)
+    escalated_to_department_id = Column(Integer, ForeignKey("grc_departments.id"), nullable=True, index=True)
     escalated_to_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     
     notification_sent = Column(Boolean, default=False)
@@ -3219,7 +3252,7 @@ class GRCVulnEscalationLog(Base):
     
     vulnerability = relationship("Vulnerability")
     escalation_rule = relationship("GRCVulnWorkflowEscalation")
-    escalated_to_team = relationship("GRCTeam")
+    escalated_to_department = relationship("GRCDepartment")
     escalated_to_user = relationship("GRCUser", foreign_keys=[escalated_to_user_id])
     new_state = relationship("GRCVulnWorkflowState")
     
@@ -3243,7 +3276,7 @@ class GRCVulnNotification(Base):
     message = Column(Text, nullable=True)
     
     recipient_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
-    recipient_team_id = Column(Integer, ForeignKey("grc_teams.id"), nullable=True, index=True)
+    recipient_department_id = Column(Integer, ForeignKey("grc_departments.id"), nullable=True, index=True)
     triggered_by_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     
     is_read = Column(Boolean, default=False)
@@ -3254,7 +3287,7 @@ class GRCVulnNotification(Base):
     tenant = relationship("Tenant")
     vulnerability = relationship("Vulnerability")
     recipient_user = relationship("GRCUser", foreign_keys=[recipient_user_id])
-    recipient_team = relationship("GRCTeam")
+    recipient_department = relationship("GRCDepartment")
     triggered_by = relationship("GRCUser", foreign_keys=[triggered_by_user_id])
     
     __table_args__ = (
