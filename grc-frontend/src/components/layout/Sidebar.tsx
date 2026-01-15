@@ -48,14 +48,14 @@ type NavEntry = NavItem | NavGroup;
 const navigation: NavEntry[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   {
-    name: 'Compliance',
-    icon: Shield,
+    name: 'Governance',
+    icon: Scale,
     defaultOpen: true,
     items: [
-      { name: 'Frameworks', href: '/frameworks', icon: Layers },
-      { name: 'Controls', href: '/controls', icon: Shield },
-      { name: 'Evidence', href: '/evidence', icon: FileCheck },
-      { name: 'Control Library', href: '/control-library', icon: Library },
+      { name: 'Policies', href: '/governance', icon: BookOpen },
+      { name: 'Documents', href: '/governance/documents', icon: FileText },
+      { name: 'Workflows', href: '/governance/workflows', icon: GitBranch },
+      { name: 'Reviews', href: '/governance/reviews', icon: ClipboardCheck },
     ],
   },
   {
@@ -70,6 +70,16 @@ const navigation: NavEntry[] = [
     ],
   },
   {
+    name: 'Compliance',
+    icon: Shield,
+    items: [
+      { name: 'Frameworks', href: '/frameworks', icon: Layers },
+      { name: 'Controls', href: '/controls', icon: Shield },
+      { name: 'Evidence', href: '/evidence', icon: FileCheck },
+      { name: 'Control Library', href: '/control-library', icon: Library },
+    ],
+  },
+  {
     name: 'Vulnerability Management',
     icon: Bug,
     items: [
@@ -77,16 +87,6 @@ const navigation: NavEntry[] = [
       { name: 'Vulnerabilities', href: '/vulnerabilities', icon: Bug },
       { name: 'Reports', href: '/vulnerabilities/reports', icon: FileText },
       { name: 'SLA Config', href: '/vulnerabilities/sla', icon: Clock },
-    ],
-  },
-  {
-    name: 'Governance',
-    icon: Scale,
-    items: [
-      { name: 'Policies', href: '/governance', icon: BookOpen },
-      { name: 'Documents', href: '/governance/documents', icon: FileText },
-      { name: 'Workflows', href: '/governance/workflows', icon: GitBranch },
-      { name: 'Reviews', href: '/governance/reviews', icon: ClipboardCheck },
     ],
   },
   {
