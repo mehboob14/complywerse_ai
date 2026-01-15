@@ -1,41 +1,100 @@
 'use client';
 
-import { Bell, ChevronDown, Search, User, LogOut, Settings, UserCircle } from 'lucide-react';
+import { Bell, ChevronDown, Search, User, LogOut, Settings, UserCircle, Check, ExternalLink } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { vulnManagementApi } from '@/lib/api';
 
 interface Notification {
-  id: string;
-  message: string;
-  time: string;
-  type: 'info' | 'warning' | 'success' | 'danger';
-  read: boolean;
+  id: number;
+  notification_type: string;
+  title: string;
+  message?: string;
+  vulnerability_id: number;
+  vulnerability_title?: string;
+  created_at: string;
+  is_read: boolean;
 }
 
-const mockNotifications: Notification[] = [
-  { id: '1', message: 'New evidence uploaded for review', time: '2 minutes ago', type: 'info', read: false },
-  { id: '2', message: 'Risk assessment due tomorrow', time: '1 hour ago', type: 'warning', read: false },
-  { id: '3', message: 'Control testing completed', time: '3 hours ago', type: 'success', read: false },
-  { id: '4', message: 'High severity vulnerability detected', time: '5 hours ago', type: 'danger', read: true },
-];
-
-const typeColors = {
-  info: 'border-primary-500',
-  warning: 'border-amber-500',
-  success: 'border-emerald-500',
-  danger: 'border-rose-500',
+const typeColors: Record<string, string> = {
+  escalation: 'border-rose-500',
+  sla_breach: 'border-amber-500',
+  assignment: 'border-primary-500',
+  status_change: 'border-emerald-500',
+  info: 'border-slate-500',
 };
 
+function formatTimeAgo(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  return date.toLocaleDateString();
+}
+
 export default function Header() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [notifications] = useState<Notification[]>(mockNotifications);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.escalations.getNotifications();
+      return response.data as Notification[];
+    },
+    refetchInterval: 30000,
+  });
+
+  const { data: unreadCountData } = useQuery({
+    queryKey: ['notifications-unread-count'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.escalations.getUnreadCount();
+      return response.data as { count: number };
+    },
+    refetchInterval: 30000,
+  });
+
+  const unreadCount = unreadCountData?.count || notifications.filter(n => !n.is_read).length;
+
+  const markAsReadMutation = useMutation({
+    mutationFn: (notificationId: number) => 
+      vulnManagementApi.escalations.markAsRead(notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+    },
+  });
+
+  const markAllAsReadMutation = useMutation({
+    mutationFn: () => vulnManagementApi.escalations.markAllAsRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+    },
+  });
+
+  const handleNotificationClick = (notification: Notification) => {
+    if (!notification.is_read) {
+      markAsReadMutation.mutate(notification.id);
+    }
+    router.push(`/vulnerabilities/${notification.vulnerability_id}`);
+    setShowNotifications(false);
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -94,52 +153,85 @@ export default function Header() {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-slate-700 bg-slate-800 shadow-2xl animate-fade-in z-50">
+            <div className="absolute right-0 mt-2 w-96 rounded-xl border border-slate-700 bg-slate-800 shadow-2xl animate-fade-in z-50">
               <div className="border-b border-slate-700 px-4 py-3 flex items-center justify-between">
                 <h3 className="font-semibold text-white text-sm">Notifications</h3>
-                {unreadCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-xs font-medium">
-                    {unreadCount} new
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <>
+                      <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-xs font-medium">
+                        {unreadCount} new
+                      </span>
+                      <button
+                        onClick={() => markAllAsReadMutation.mutate()}
+                        disabled={markAllAsReadMutation.isPending}
+                        className="flex items-center gap-1 text-xs text-slate-400 hover:text-primary-400 transition-colors"
+                      >
+                        <Check size={12} />
+                        Mark all read
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="max-h-80 overflow-y-auto scrollbar-thin">
+              <div className="max-h-96 overflow-y-auto scrollbar-thin">
                 {notifications.length === 0 ? (
                   <div className="py-8 text-center text-slate-500 text-sm">
-                    No notifications
+                    <Bell className="h-8 w-8 mx-auto mb-2 text-slate-600" />
+                    No notifications yet
                   </div>
                 ) : (
-                  notifications.map((notif) => (
+                  notifications.slice(0, 10).map((notif) => (
                     <div 
                       key={notif.id}
+                      onClick={() => handleNotificationClick(notif)}
                       className={clsx(
                         'flex items-start gap-3 px-4 py-3 border-l-2 transition-colors cursor-pointer',
                         'hover:bg-slate-700/50',
-                        typeColors[notif.type],
-                        !notif.read && 'bg-slate-700/30'
+                        typeColors[notif.notification_type] || typeColors.info,
+                        !notif.is_read && 'bg-slate-700/30'
                       )}
                     >
                       <div className="flex-1 min-w-0">
                         <p className={clsx(
-                          'text-sm',
-                          notif.read ? 'text-slate-400' : 'text-slate-200'
+                          'text-sm font-medium',
+                          notif.is_read ? 'text-slate-400' : 'text-slate-200'
                         )}>
-                          {notif.message}
+                          {notif.title}
                         </p>
-                        <p className="text-xs text-slate-500 mt-0.5">{notif.time}</p>
+                        {notif.message && (
+                          <p className={clsx(
+                            'text-xs mt-0.5',
+                            notif.is_read ? 'text-slate-500' : 'text-slate-400'
+                          )}>
+                            {notif.message}
+                          </p>
+                        )}
+                        {notif.vulnerability_title && (
+                          <p className="text-xs text-primary-400 mt-0.5 flex items-center gap-1">
+                            <ExternalLink size={10} />
+                            {notif.vulnerability_title}
+                          </p>
+                        )}
+                        <p className="text-xs text-slate-500 mt-0.5">{formatTimeAgo(notif.created_at)}</p>
                       </div>
-                      {!notif.read && (
+                      {!notif.is_read && (
                         <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0 mt-1.5" />
                       )}
                     </div>
                   ))
                 )}
               </div>
-              <div className="border-t border-slate-700 p-2">
-                <button className="w-full text-center text-sm text-primary-400 hover:text-primary-300 py-2 rounded-lg hover:bg-slate-700/50 transition-colors">
-                  View all notifications
-                </button>
-              </div>
+              {notifications.length > 0 && (
+                <div className="border-t border-slate-700 p-2">
+                  <Link 
+                    href="/vulnerabilities/notifications"
+                    className="w-full text-center text-sm text-primary-400 hover:text-primary-300 py-2 rounded-lg hover:bg-slate-700/50 transition-colors block"
+                  >
+                    View all notifications
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </div>

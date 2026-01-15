@@ -85,6 +85,7 @@ const navigation: NavEntry[] = [
     items: [
       { name: 'Dashboard', href: '/vulnerabilities/dashboard', icon: BarChart3 },
       { name: 'Vulnerabilities', href: '/vulnerabilities', icon: Bug },
+      { name: 'Teams', href: '/vulnerabilities/teams', icon: Users },
       { name: 'Reports', href: '/vulnerabilities/reports', icon: FileText },
       { name: 'SLA Config', href: '/vulnerabilities/sla', icon: Clock },
     ],

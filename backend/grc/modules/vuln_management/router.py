@@ -9,7 +9,10 @@ from .routers import (
     ai_analysis_router,
     sla_router,
     dashboard_router,
-    exceptions_router
+    exceptions_router,
+    teams_router,
+    workflows_router,
+    escalations_router
 )
 
 router = APIRouter(prefix="/vuln-management", tags=["Vulnerability Management"])
@@ -24,6 +27,9 @@ router.include_router(ai_analysis_router)
 router.include_router(sla_router)
 router.include_router(dashboard_router)
 router.include_router(exceptions_router)
+router.include_router(teams_router)
+router.include_router(workflows_router)
+router.include_router(escalations_router)
 
 
 @router.get("")
@@ -41,6 +47,10 @@ def vuln_management_module_info():
             "/ai",
             "/sla",
             "/dashboard",
-            "/exceptions"
+            "/exceptions",
+            "/teams",
+            "/workflows",
+            "/escalations",
+            "/notifications"
         ]
     }

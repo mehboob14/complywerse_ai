@@ -23,6 +23,11 @@ import {
   Calendar,
   User,
   ExternalLink,
+  Users,
+  GitBranch,
+  Bell,
+  ChevronRight,
+  MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -93,11 +98,66 @@ interface RiskException {
   expiry_date?: string;
 }
 
+interface TeamAssignment {
+  id: number;
+  vulnerability_id: number;
+  team_id: number;
+  team_name?: string;
+  assigned_by?: number;
+  assigner_name?: string;
+  assigned_at: string;
+  notes?: string;
+  is_primary: boolean;
+}
+
+interface Team {
+  id: number;
+  name: string;
+  description?: string;
+  member_count?: number;
+}
+
+interface WorkflowTransition {
+  id: number;
+  name: string;
+  to_state_id: number;
+  to_state_name: string;
+  requires_comment: boolean;
+  requires_approval: boolean;
+}
+
+interface WorkflowHistoryItem {
+  id: number;
+  vulnerability_id: number;
+  from_state_id?: number;
+  from_state_name?: string;
+  to_state_id: number;
+  to_state_name?: string;
+  transition_id?: number;
+  transition_name?: string;
+  performed_by: number;
+  performer_name?: string;
+  comment?: string;
+  performed_at: string;
+}
+
+interface Escalation {
+  id: number;
+  rule_name: string;
+  escalated_to?: string;
+  escalated_at: string;
+  reason?: string;
+  status: string;
+}
+
 const TABS = [
   { id: 'overview', label: 'Overview', icon: FileText },
   { id: 'mitigations', label: 'Mitigations', icon: CheckCircle },
   { id: 'assets', label: 'Assets', icon: Server },
   { id: 'controls', label: 'Controls', icon: Shield },
+  { id: 'teams', label: 'Teams', icon: Users },
+  { id: 'workflow', label: 'Workflow', icon: GitBranch },
+  { id: 'escalations', label: 'Escalations', icon: Bell },
   { id: 'retests', label: 'Retests', icon: RefreshCw },
   { id: 'ai', label: 'AI Analysis', icon: Sparkles },
   { id: 'exception', label: 'Exception', icon: AlertCircle },
@@ -142,6 +202,10 @@ export default function VulnerabilityDetailPage() {
   const [showRetestModal, setShowRetestModal] = useState(false);
   const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showTeamAssignModal, setShowTeamAssignModal] = useState(false);
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
+  const [selectedTransition, setSelectedTransition] = useState<WorkflowTransition | null>(null);
+  const [transitionComment, setTransitionComment] = useState('');
 
   const { data: vulnerability, isLoading, error } = useQuery({
     queryKey: ['vulnerability', vulnId],
@@ -194,6 +258,51 @@ export default function VulnerabilityDetailPage() {
       return response.data as RiskException[];
     },
     enabled: activeTab === 'exception',
+  });
+
+  const { data: teamAssignments } = useQuery({
+    queryKey: ['vuln-teams', vulnId],
+    queryFn: async () => {
+      const response = await vulnManagementApi.teams.getVulnerabilityTeams(vulnId);
+      return response.data as TeamAssignment[];
+    },
+    enabled: activeTab === 'teams',
+  });
+
+  const { data: availableTeams } = useQuery({
+    queryKey: ['all-teams'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.teams.getAll();
+      return response.data as Team[];
+    },
+    enabled: showTeamAssignModal,
+  });
+
+  const { data: workflowTransitions } = useQuery({
+    queryKey: ['vuln-workflow-transitions', vulnId],
+    queryFn: async () => {
+      const response = await vulnManagementApi.workflows.getAvailableTransitions(vulnId);
+      return response.data as WorkflowTransition[];
+    },
+    enabled: activeTab === 'workflow',
+  });
+
+  const { data: workflowHistory } = useQuery({
+    queryKey: ['vuln-workflow-history', vulnId],
+    queryFn: async () => {
+      const response = await vulnManagementApi.workflows.getHistory(vulnId);
+      return response.data as WorkflowHistoryItem[];
+    },
+    enabled: activeTab === 'workflow',
+  });
+
+  const { data: escalationsData } = useQuery({
+    queryKey: ['vuln-escalations', vulnId],
+    queryFn: async () => {
+      const response = await vulnManagementApi.escalations.getVulnerabilityEscalations(vulnId);
+      return response.data as Escalation[];
+    },
+    enabled: activeTab === 'escalations',
   });
 
   const { data: assets } = useQuery({
@@ -284,6 +393,36 @@ export default function VulnerabilityDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vuln-exceptions', vulnId] });
       setShowExceptionModal(false);
+    },
+  });
+
+  const assignTeamMutation = useMutation({
+    mutationFn: (data: { team_id: number; is_primary?: boolean }) => 
+      vulnManagementApi.teams.assignTeam(vulnId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vuln-teams', vulnId] });
+      setShowTeamAssignModal(false);
+    },
+  });
+
+  const removeTeamAssignmentMutation = useMutation({
+    mutationFn: (assignmentId: number) => 
+      vulnManagementApi.teams.removeTeamAssignment(vulnId, assignmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vuln-teams', vulnId] });
+    },
+  });
+
+  const workflowTransitionMutation = useMutation({
+    mutationFn: (data: { transition_name: string; comment?: string }) => 
+      vulnManagementApi.workflows.transition(vulnId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vulnerability', vulnId] });
+      queryClient.invalidateQueries({ queryKey: ['vuln-workflow-transitions', vulnId] });
+      queryClient.invalidateQueries({ queryKey: ['vuln-workflow-history', vulnId] });
+      setShowTransitionModal(false);
+      setSelectedTransition(null);
+      setTransitionComment('');
     },
   });
 
@@ -560,6 +699,199 @@ export default function VulnerabilityDetailPage() {
                         >
                           <Trash2 size={16} />
                         </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'teams' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-white">Team Assignments</h2>
+            <button onClick={() => setShowTeamAssignModal(true)} className="btn-primary flex items-center gap-2">
+              <Plus size={16} />
+              Assign Team
+            </button>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+            {(!teamAssignments || teamAssignments.length === 0) ? (
+              <div className="p-8 text-center text-slate-400">No teams assigned yet</div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-slate-900/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Team</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Assigned</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700">
+                  {teamAssignments.map((assignment) => (
+                    <tr key={assignment.id} className="hover:bg-slate-700/50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500/20">
+                            <Users size={14} className="text-primary-400" />
+                          </div>
+                          <span className="text-white font-medium">{assignment.team_name || `Team ${assignment.team_id}`}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
+                          assignment.is_primary ? 'bg-primary-500/20 text-primary-400' : 'bg-slate-500/20 text-slate-400'
+                        }`}>
+                          {assignment.is_primary ? 'Primary' : 'Secondary'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">
+                        {new Date(assignment.assigned_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => removeTeamAssignmentMutation.mutate(assignment.id)}
+                          className="text-slate-400 hover:text-red-400"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'workflow' && (
+        <div className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-6">
+              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <GitBranch className="h-5 w-5 text-primary-400" />
+                Current State
+              </h2>
+              <div className="flex items-center gap-3 mb-6">
+                <span className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium ${
+                  getStatusStyle(vulnerability.status).bg
+                } ${getStatusStyle(vulnerability.status).text}`}>
+                  {getStatusStyle(vulnerability.status).label}
+                </span>
+              </div>
+              
+              <h3 className="text-sm font-medium text-slate-400 mb-3">Available Actions</h3>
+              {(!workflowTransitions || workflowTransitions.length === 0) ? (
+                <p className="text-slate-500 text-sm">No transitions available from current state</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {workflowTransitions.map((transition) => (
+                    <button
+                      key={transition.name}
+                      onClick={() => {
+                        if (transition.requires_comment) {
+                          setSelectedTransition(transition);
+                          setShowTransitionModal(true);
+                        } else {
+                          workflowTransitionMutation.mutate({ transition_name: transition.name });
+                        }
+                      }}
+                      disabled={workflowTransitionMutation.isPending}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm font-medium text-white hover:bg-slate-600 transition-colors"
+                    >
+                      <ChevronRight size={14} />
+                      {transition.name}
+                      {transition.requires_comment && (
+                        <MessageSquare size={12} className="text-slate-400" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-6">
+              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <Clock className="h-5 w-5 text-slate-400" />
+                Workflow History
+              </h2>
+              {(!workflowHistory || workflowHistory.length === 0) ? (
+                <p className="text-slate-500 text-sm">No workflow history available</p>
+              ) : (
+                <div className="space-y-4 max-h-80 overflow-y-auto">
+                  {workflowHistory.map((item, index) => (
+                    <div key={item.id} className="relative pl-6 pb-4">
+                      {index < workflowHistory.length - 1 && (
+                        <div className="absolute left-2 top-4 bottom-0 w-0.5 bg-slate-600" />
+                      )}
+                      <div className="absolute left-0 top-1 w-4 h-4 rounded-full bg-primary-500/20 border-2 border-primary-500" />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-white">{item.transition_name || 'State Change'}</span>
+                          <span className="text-xs text-slate-500">
+                            {item.from_state_name || 'Initial'} → {item.to_state_name || 'Unknown'}
+                          </span>
+                        </div>
+                        {item.comment && (
+                          <p className="text-sm text-slate-400">{item.comment}</p>
+                        )}
+                        <p className="text-xs text-slate-500">
+                          {item.performer_name || 'System'} • {new Date(item.performed_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'escalations' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-white">Escalation History</h2>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+            {(!escalationsData || escalationsData.length === 0) ? (
+              <div className="p-8 text-center text-slate-400">No escalations triggered</div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-slate-900/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Rule</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Escalated To</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700">
+                  {escalationsData.map((esc) => (
+                    <tr key={esc.id} className="hover:bg-slate-700/50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Bell size={14} className="text-orange-400" />
+                          <span className="text-white">{esc.rule_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">{esc.escalated_to || '-'}</td>
+                      <td className="px-4 py-3 text-slate-300">
+                        {new Date(esc.escalated_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
+                          esc.status === 'acknowledged' ? 'bg-green-500/20 text-green-400' :
+                          esc.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-slate-500/20 text-slate-400'
+                        }`}>
+                          {esc.status}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -977,6 +1309,118 @@ export default function VulnerabilityDetailPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showTeamAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">Assign Team</h2>
+              <button onClick={() => setShowTeamAssignModal(false)} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                assignTeamMutation.mutate({
+                  team_id: parseInt(formData.get('team_id') as string),
+                  is_primary: formData.get('is_primary') === 'true',
+                });
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Team *</label>
+                <select name="team_id" required className="input-field w-full">
+                  <option value="">Select a team</option>
+                  {availableTeams?.map((team) => (
+                    <option key={team.id} value={team.id}>{team.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Role</label>
+                <select name="is_primary" className="input-field w-full">
+                  <option value="true">Primary</option>
+                  <option value="false">Secondary</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => setShowTeamAssignModal(false)} className="btn-secondary">Cancel</button>
+                <button type="submit" disabled={assignTeamMutation.isPending} className="btn-primary">
+                  {assignTeamMutation.isPending ? 'Assigning...' : 'Assign Team'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showTransitionModal && selectedTransition && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">{selectedTransition.name}</h2>
+              <button 
+                onClick={() => {
+                  setShowTransitionModal(false);
+                  setSelectedTransition(null);
+                  setTransitionComment('');
+                }} 
+                className="text-slate-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mb-4">
+              <p className="text-slate-400 text-sm">
+                Transition to <span className="text-white font-medium">{selectedTransition.to_state_name}</span>
+              </p>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Comment {selectedTransition.requires_comment && <span className="text-red-400">*</span>}
+                </label>
+                <textarea
+                  value={transitionComment}
+                  onChange={(e) => setTransitionComment(e.target.value)}
+                  rows={4}
+                  required={selectedTransition.requires_comment}
+                  className="input-field w-full"
+                  placeholder="Add a comment for this transition..."
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setShowTransitionModal(false);
+                    setSelectedTransition(null);
+                    setTransitionComment('');
+                  }} 
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    workflowTransitionMutation.mutate({
+                      transition_name: selectedTransition.name,
+                      comment: transitionComment || undefined,
+                    });
+                  }}
+                  disabled={workflowTransitionMutation.isPending || (selectedTransition.requires_comment && !transitionComment.trim())}
+                  className="btn-primary"
+                >
+                  {workflowTransitionMutation.isPending ? 'Processing...' : 'Confirm Transition'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -2156,3 +2156,378 @@ class AssetExposureResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# =============================================================================
+# Team Management Schemas
+# =============================================================================
+
+class GRCTeamCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    team_type: str = "security"
+    manager_id: Optional[int] = None
+
+
+class GRCTeamUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    team_type: Optional[str] = None
+    manager_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class GRCTeamMemberResponse(BaseModel):
+    id: int
+    team_id: int
+    user_id: int
+    role: str
+    joined_at: datetime
+    is_active: bool
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class GRCTeamResponse(BaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    description: Optional[str]
+    team_type: str
+    manager_id: Optional[int]
+    manager_name: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    member_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class GRCTeamDetailResponse(BaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    description: Optional[str]
+    team_type: str
+    manager_id: Optional[int]
+    manager_name: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    members: List[GRCTeamMemberResponse] = []
+    vulnerability_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class GRCTeamMemberCreate(BaseModel):
+    user_id: int
+    role: str = "member"
+
+
+class GRCVulnerabilityTeamAssignmentCreate(BaseModel):
+    team_id: int
+    notes: Optional[str] = None
+    is_primary: bool = True
+
+
+class GRCVulnerabilityTeamAssignmentResponse(BaseModel):
+    id: int
+    vulnerability_id: int
+    team_id: int
+    team_name: Optional[str] = None
+    assigned_by: Optional[int]
+    assigner_name: Optional[str] = None
+    assigned_at: datetime
+    notes: Optional[str]
+    is_primary: bool
+
+    class Config:
+        from_attributes = True
+
+
+# =============================================================================
+# Vulnerability Workflow Template Schemas
+# =============================================================================
+
+class GRCVulnWorkflowTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_default: bool = False
+    is_active: bool = True
+
+
+class GRCVulnWorkflowTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class GRCVulnWorkflowStateCreate(BaseModel):
+    name: str
+    state_type: str = "in_progress"
+    order_index: int = 0
+    color: Optional[str] = None
+    requires_approval: bool = False
+    requires_evidence: bool = False
+    auto_assign_team_id: Optional[int] = None
+    sla_multiplier: float = 1.0
+    is_terminal: bool = False
+
+
+class GRCVulnWorkflowStateUpdate(BaseModel):
+    name: Optional[str] = None
+    state_type: Optional[str] = None
+    order_index: Optional[int] = None
+    color: Optional[str] = None
+    requires_approval: Optional[bool] = None
+    requires_evidence: Optional[bool] = None
+    auto_assign_team_id: Optional[int] = None
+    sla_multiplier: Optional[float] = None
+    is_terminal: Optional[bool] = None
+
+
+class GRCVulnWorkflowStateResponse(BaseModel):
+    id: int
+    template_id: int
+    name: str
+    state_type: str
+    order_index: int
+    color: Optional[str]
+    requires_approval: bool
+    requires_evidence: bool
+    auto_assign_team_id: Optional[int]
+    auto_assign_team_name: Optional[str] = None
+    sla_multiplier: float
+    is_terminal: bool
+
+    class Config:
+        from_attributes = True
+
+
+class GRCVulnWorkflowTransitionCreate(BaseModel):
+    from_state_id: int
+    to_state_id: int
+    name: str
+    requires_comment: bool = False
+    requires_approval: bool = False
+    approver_role: Optional[str] = None
+    allowed_roles: List[str] = []
+    trigger_notification: bool = True
+
+
+class GRCVulnWorkflowTransitionUpdate(BaseModel):
+    from_state_id: Optional[int] = None
+    to_state_id: Optional[int] = None
+    name: Optional[str] = None
+    requires_comment: Optional[bool] = None
+    requires_approval: Optional[bool] = None
+    approver_role: Optional[str] = None
+    allowed_roles: Optional[List[str]] = None
+    trigger_notification: Optional[bool] = None
+
+
+class GRCVulnWorkflowTransitionResponse(BaseModel):
+    id: int
+    template_id: int
+    from_state_id: int
+    to_state_id: int
+    name: str
+    requires_comment: bool
+    requires_approval: bool
+    approver_role: Optional[str]
+    allowed_roles: List[str] = []
+    trigger_notification: bool
+    from_state_name: Optional[str] = None
+    to_state_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class GRCVulnWorkflowEscalationCreate(BaseModel):
+    name: str
+    trigger_type: str
+    trigger_value: float
+    escalate_to_team_id: Optional[int] = None
+    escalate_to_role: Optional[str] = None
+    auto_transition_to_state_id: Optional[int] = None
+    notification_type: str = "both"
+    is_active: bool = True
+
+
+class GRCVulnWorkflowEscalationUpdate(BaseModel):
+    name: Optional[str] = None
+    trigger_type: Optional[str] = None
+    trigger_value: Optional[float] = None
+    escalate_to_team_id: Optional[int] = None
+    escalate_to_role: Optional[str] = None
+    auto_transition_to_state_id: Optional[int] = None
+    notification_type: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class GRCVulnWorkflowEscalationResponse(BaseModel):
+    id: int
+    template_id: int
+    name: str
+    trigger_type: str
+    trigger_value: float
+    escalate_to_team_id: Optional[int]
+    escalate_to_team_name: Optional[str] = None
+    escalate_to_role: Optional[str]
+    auto_transition_to_state_id: Optional[int]
+    auto_transition_to_state_name: Optional[str] = None
+    notification_type: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class GRCVulnWorkflowHistoryResponse(BaseModel):
+    id: int
+    vulnerability_id: int
+    from_state_id: Optional[int]
+    from_state_name: Optional[str] = None
+    to_state_id: int
+    to_state_name: Optional[str] = None
+    transition_id: Optional[int]
+    transition_name: Optional[str] = None
+    performed_by: int
+    performer_name: Optional[str] = None
+    comment: Optional[str]
+    performed_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GRCVulnWorkflowTemplateResponse(BaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    description: Optional[str]
+    is_default: bool
+    is_active: bool
+    created_by: Optional[int]
+    creator_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    state_count: int = 0
+    transition_count: int = 0
+    escalation_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class GRCVulnWorkflowTemplateDetailResponse(BaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    description: Optional[str]
+    is_default: bool
+    is_active: bool
+    created_by: Optional[int]
+    creator_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    states: List[GRCVulnWorkflowStateResponse] = []
+    transitions: List[GRCVulnWorkflowTransitionResponse] = []
+    escalations: List[GRCVulnWorkflowEscalationResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class VulnWorkflowTransitionRequest(BaseModel):
+    transition_id: int
+    comment: Optional[str] = None
+
+
+class VulnAvailableTransitionResponse(BaseModel):
+    id: int
+    name: str
+    to_state_id: int
+    to_state_name: str
+    requires_comment: bool
+    requires_approval: bool
+
+
+# =============================================================================
+# Escalation Log Schemas
+# =============================================================================
+
+class GRCVulnEscalationLogResponse(BaseModel):
+    id: int
+    vulnerability_id: int
+    vulnerability_title: Optional[str] = None
+    escalation_rule_id: int
+    escalation_rule_name: Optional[str] = None
+    triggered_at: datetime
+    escalated_to_team_id: Optional[int]
+    escalated_to_team_name: Optional[str] = None
+    escalated_to_user_id: Optional[int]
+    escalated_to_user_name: Optional[str] = None
+    notification_sent: bool
+    auto_transitioned: bool
+    new_state_id: Optional[int]
+    new_state_name: Optional[str] = None
+    notes: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class EscalationCheckResult(BaseModel):
+    total_checked: int
+    escalations_triggered: int
+    vulnerabilities_affected: List[int] = []
+    details: List[Dict[str, Any]] = []
+
+
+# =============================================================================
+# Notification Schemas
+# =============================================================================
+
+class GRCVulnNotificationCreate(BaseModel):
+    vulnerability_id: int
+    notification_type: str
+    title: str
+    message: Optional[str] = None
+    recipient_user_id: Optional[int] = None
+    recipient_team_id: Optional[int] = None
+
+
+class GRCVulnNotificationResponse(BaseModel):
+    id: int
+    tenant_id: int
+    vulnerability_id: int
+    vulnerability_title: Optional[str] = None
+    notification_type: str
+    title: str
+    message: Optional[str]
+    recipient_user_id: Optional[int]
+    recipient_user_name: Optional[str] = None
+    recipient_team_id: Optional[int]
+    recipient_team_name: Optional[str] = None
+    triggered_by_user_id: Optional[int]
+    triggered_by_name: Optional[str] = None
+    is_read: bool
+    read_at: Optional[datetime]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UnreadNotificationCount(BaseModel):
+    count: int

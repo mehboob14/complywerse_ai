@@ -29,6 +29,10 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  Legend,
 } from 'recharts';
 import { StatCard, ProgressRing, SeverityBadge, DataCard, StatusBadge } from '@/components/ui';
 import { useState } from 'react';
@@ -66,6 +70,35 @@ interface AssetExposure {
   high_count: number;
   medium_count: number;
   low_count: number;
+}
+
+interface TeamMetrics {
+  team_id: number;
+  team_name: string;
+  vulnerability_count: number;
+  mttr_days: number | null;
+  open_count: number;
+  resolved_count: number;
+}
+
+interface SLATrend {
+  date: string;
+  compliance_rate: number;
+  total_resolved: number;
+  on_time: number;
+}
+
+interface WorkflowMetrics {
+  state: string;
+  count: number;
+  percentage: number;
+}
+
+interface ControlCoverage {
+  total_vulnerabilities: number;
+  with_controls: number;
+  coverage_percentage: number;
+  control_effectiveness: number;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -136,6 +169,42 @@ export default function VulnerabilityDashboardPage() {
     queryFn: async () => {
       const response = await vulnManagementApi.dashboard.getAssetExposure();
       return response.data as AssetExposure[];
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: teamMetrics } = useQuery({
+    queryKey: ['vuln-team-metrics'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.dashboard.getTeamMetrics();
+      return response.data as TeamMetrics[];
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: slaTrends } = useQuery({
+    queryKey: ['vuln-sla-trends'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.dashboard.getSLATrends();
+      return response.data as SLATrend[];
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: workflowMetrics } = useQuery({
+    queryKey: ['vuln-workflow-metrics'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.dashboard.getWorkflowMetrics();
+      return response.data as WorkflowMetrics[];
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: controlCoverage } = useQuery({
+    queryKey: ['vuln-control-coverage'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.dashboard.getControlCoverage();
+      return response.data as ControlCoverage;
     },
     refetchInterval: 60000,
   });
@@ -575,6 +644,169 @@ export default function VulnerabilityDashboardPage() {
           </div>
         </DataCard>
       )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {teamMetrics && teamMetrics.length > 0 && (
+          <DataCard
+            title="Team MTTR Performance"
+            icon={Timer}
+            subtitle="Mean Time to Remediate by team"
+          >
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={teamMetrics.filter(t => t.mttr_days !== null).slice(0, 8)}
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#475569' }} />
+                  <YAxis 
+                    type="category" 
+                    dataKey="team_name" 
+                    tick={{ fill: '#94a3b8', fontSize: 12 }} 
+                    axisLine={{ stroke: '#475569' }}
+                    width={100}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                    labelStyle={{ color: '#fff' }}
+                    formatter={(value: number) => [`${value} days`, 'MTTR']}
+                  />
+                  <Bar dataKey="mttr_days" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </DataCard>
+        )}
+
+        {slaTrends && slaTrends.length > 0 && (
+          <DataCard
+            title="SLA Compliance Trend"
+            icon={Activity}
+            subtitle="Compliance rate over time"
+          >
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={slaTrends} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis 
+                    dataKey="date" 
+                    tick={{ fill: '#94a3b8', fontSize: 12 }} 
+                    axisLine={{ stroke: '#475569' }}
+                    tickFormatter={(value) => {
+                      const date = new Date(value);
+                      return `${date.getMonth() + 1}/${date.getDate()}`;
+                    }}
+                  />
+                  <YAxis 
+                    tick={{ fill: '#94a3b8', fontSize: 12 }} 
+                    axisLine={{ stroke: '#475569' }}
+                    domain={[0, 100]}
+                    tickFormatter={(value) => `${value}%`}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                    labelStyle={{ color: '#fff' }}
+                    formatter={(value: number) => [`${value}%`, 'Compliance']}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="compliance_rate" 
+                    stroke="#22c55e" 
+                    strokeWidth={2}
+                    dot={{ fill: '#22c55e', strokeWidth: 2 }}
+                    activeDot={{ r: 6, fill: '#22c55e' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </DataCard>
+        )}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {workflowMetrics && workflowMetrics.length > 0 && (
+          <DataCard
+            title="Workflow State Distribution"
+            icon={Target}
+            subtitle="Current vulnerability states"
+          >
+            <div className="h-64 flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={workflowMetrics}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={70}
+                    paddingAngle={2}
+                    dataKey="count"
+                    nameKey="state"
+                  >
+                    {workflowMetrics.map((entry, index) => {
+                      const colors = ['#22c55e', '#eab308', '#3b82f6', '#8b5cf6', '#ef4444', '#f97316'];
+                      return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                    })}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                    formatter={(value: number, name: string) => [`${value} (${workflowMetrics.find(w => w.state === name)?.percentage || 0}%)`, name]}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    formatter={(value) => <span className="text-xs text-slate-300 capitalize">{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </DataCard>
+        )}
+
+        {controlCoverage && (
+          <DataCard
+            title="Control Coverage"
+            icon={Shield}
+            subtitle="Vulnerabilities with linked controls"
+            className="lg:col-span-2"
+          >
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="flex items-center gap-6">
+                <ProgressRing
+                  percentage={controlCoverage.coverage_percentage}
+                  size={100}
+                  color={controlCoverage.coverage_percentage >= 70 ? 'success' : controlCoverage.coverage_percentage >= 40 ? 'warning' : 'danger'}
+                  showPercentage={true}
+                />
+                <div>
+                  <p className="text-2xl font-bold text-white">{controlCoverage.coverage_percentage}%</p>
+                  <p className="text-sm text-slate-400">Coverage Rate</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {controlCoverage.with_controls} of {controlCoverage.total_vulnerabilities} vulns
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6">
+                <ProgressRing
+                  percentage={controlCoverage.control_effectiveness}
+                  size={100}
+                  color={controlCoverage.control_effectiveness >= 70 ? 'success' : controlCoverage.control_effectiveness >= 40 ? 'warning' : 'danger'}
+                  showPercentage={true}
+                />
+                <div>
+                  <p className="text-2xl font-bold text-white">{controlCoverage.control_effectiveness}%</p>
+                  <p className="text-sm text-slate-400">Control Effectiveness</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Remediation rate with controls
+                  </p>
+                </div>
+              </div>
+            </div>
+          </DataCard>
+        )}
+      </div>
     </div>
   );
 }

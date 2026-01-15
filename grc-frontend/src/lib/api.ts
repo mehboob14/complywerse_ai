@@ -725,6 +725,51 @@ export const vulnManagementApi = {
     update: (vulnId: number, exceptionId: number, data: Record<string, unknown>) => 
       apiClient.put(`/vuln-management/vulnerabilities/${vulnId}/exceptions/${exceptionId}`, data),
   },
+  teams: {
+    getAll: () => apiClient.get('/grc/vuln-management/teams/teams'),
+    getById: (id: number) => apiClient.get(`/grc/vuln-management/teams/teams/${id}`),
+    create: (data: Record<string, unknown>) => 
+      apiClient.post('/grc/vuln-management/teams/teams', data),
+    update: (id: number, data: Record<string, unknown>) => 
+      apiClient.put(`/grc/vuln-management/teams/teams/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/grc/vuln-management/teams/teams/${id}`),
+    addMember: (teamId: number, data: { user_id: number; role?: string }) => 
+      apiClient.post(`/grc/vuln-management/teams/teams/${teamId}/members`, data),
+    removeMember: (teamId: number, userId: number) => 
+      apiClient.delete(`/grc/vuln-management/teams/teams/${teamId}/members/${userId}`),
+    getVulnerabilityTeams: (vulnId: number) => 
+      apiClient.get(`/grc/vuln-management/teams/vulnerabilities/${vulnId}/teams`),
+    assignTeam: (vulnId: number, data: { team_id: number; role?: string }) => 
+      apiClient.post(`/grc/vuln-management/teams/vulnerabilities/${vulnId}/teams`, data),
+    removeTeamAssignment: (vulnId: number, assignmentId: number) => 
+      apiClient.delete(`/grc/vuln-management/teams/vulnerabilities/${vulnId}/teams/${assignmentId}`),
+  },
+  workflows: {
+    getAvailableTransitions: (vulnId: number) => 
+      apiClient.get(`/grc/vuln-management/workflows/vulnerabilities/${vulnId}/available-transitions`),
+    getHistory: (vulnId: number) => 
+      apiClient.get(`/grc/vuln-management/workflows/vulnerabilities/${vulnId}/history`),
+    transition: (vulnId: number, data: { transition_name: string; comment?: string }) => 
+      apiClient.post(`/grc/vuln-management/workflows/vulnerabilities/${vulnId}/transition`, data),
+  },
+  escalations: {
+    getVulnerabilityEscalations: (vulnId: number) => 
+      apiClient.get(`/grc/vuln-management/escalations/vulnerabilities/${vulnId}/escalations`),
+  },
+  notifications: {
+    getAll: () => apiClient.get('/grc/vuln-management/escalations/notifications'),
+    getUnreadCount: () => apiClient.get('/grc/vuln-management/escalations/notifications/unread-count'),
+    markAsRead: (id: number) => 
+      apiClient.put(`/grc/vuln-management/escalations/notifications/${id}/read`),
+    markAllAsRead: () => 
+      apiClient.put('/grc/vuln-management/escalations/notifications/read-all'),
+  },
+  dashboardExtended: {
+    getTeamMetrics: () => apiClient.get('/grc/vuln-management/dashboard/team-metrics'),
+    getSLATrends: () => apiClient.get('/grc/vuln-management/dashboard/sla-trends'),
+    getWorkflowMetrics: () => apiClient.get('/grc/vuln-management/dashboard/workflow-metrics'),
+    getControlCoverage: () => apiClient.get('/grc/vuln-management/dashboard/control-coverage'),
+  },
 };
 
 export const dashboardApi = {

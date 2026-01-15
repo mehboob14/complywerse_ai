@@ -8,6 +8,9 @@ from .ai_analysis import router as ai_analysis_router
 from .sla import router as sla_router
 from .dashboard import router as dashboard_router
 from .exceptions import router as exceptions_router
+from .teams import router as teams_router
+from .workflows import router as workflows_router
+from .escalations import router as escalations_router
 
 __all__ = [
     "reports_router",
@@ -19,5 +22,8 @@ __all__ = [
     "ai_analysis_router",
     "sla_router",
     "dashboard_router",
-    "exceptions_router"
+    "exceptions_router",
+    "teams_router",
+    "workflows_router",
+    "escalations_router"
 ]
