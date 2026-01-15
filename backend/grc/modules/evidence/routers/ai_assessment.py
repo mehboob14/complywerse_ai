@@ -281,6 +281,8 @@ Respond in JSON format:
 }}"""
     
     try:
+        # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
+        # gpt-5.x models don't support temperature parameter and use max_completion_tokens instead of max_tokens
         response = client.chat.completions.create(
             model="gpt-5.2",
             messages=[
@@ -293,8 +295,7 @@ Respond in JSON format:
                     "content": enhanced_prompt
                 }
             ],
-            max_tokens=4000,
-            temperature=0.2
+            max_completion_tokens=4000
         )
         
         ai_result = parse_ai_response(response.choices[0].message.content or "")

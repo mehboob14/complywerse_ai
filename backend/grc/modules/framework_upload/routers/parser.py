@@ -336,6 +336,8 @@ Example output format:
 Extract ALL controls - do not summarize or skip any requirements."""
 
     try:
+        # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
+        # gpt-5.x models don't support temperature parameter and use max_completion_tokens instead of max_tokens
         response = client.chat.completions.create(
             model="gpt-5.2",
             messages=[
@@ -343,8 +345,7 @@ Extract ALL controls - do not summarize or skip any requirements."""
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            max_tokens=16384,
-            temperature=0.1
+            max_completion_tokens=16384
         )
         
         result_text = response.choices[0].message.content or "{}"
