@@ -36,7 +36,52 @@ The platform utilizes a multi-tenant architecture with complete tenant isolation
 - **IT Asset Inventory**: Asset classification, valuation, and linking to GRC elements.
 - **Role-Based Access Control (RBAC)**: Fine-grained permissions per tenant.
 - **Unified Control Library**: AI-powered control mapping across frameworks with evidence recommendations and gap analysis, including common control groups, AI similarity analysis, control inheritance, and harmonization reports.
-- **Vulnerability Management**: A module for managing vulnerability and penetration testing reports with AI-powered fix recommendations, SLA tracking, compliance mapping, team-based workflow, and escalation systems.
+- **Vulnerability Management**: A module for managing vulnerability and penetration testing reports with AI-powered fix recommendations, SLA tracking, compliance mapping, department-based workflow, and escalation systems.
+
+## Vulnerability Management Module
+
+A comprehensive module for managing vulnerability and penetration testing reports with department-based assignment, email notifications, SLA tracking, and escalation systems.
+
+### Key Capabilities
+- **Report Upload** - Upload Excel/CSV vulnerability scan reports with intelligent parsing
+- **Vulnerability Register** - Central list with CVSS scores, CVE/CWE tracking, severity levels
+- **AI-Powered Analysis** - OpenAI-powered fix recommendations and impact assessment
+- **SLA Management** - Configurable remediation SLAs by severity (Critical: 7d, High: 30d, Medium: 90d, Low: 180d)
+- **Department-Based Assignment** - Assign vulnerabilities to organizational departments (IT Security, Network Ops, Development, etc.)
+- **Bulk Assignment** - Multi-select vulnerabilities and assign to departments in one action
+- **Email Notifications** - SMTP-based email alerts for assignments, status changes, SLA warnings, and escalations
+- **Escalation Paths** - Configurable 3-level escalation chains (Member → Lead → Head → Parent Dept Head)
+- **SLA-Triggered Escalations** - Automatic escalation at 75% and 100% SLA thresholds
+- **Dashboard** - Department SLA compliance, MTTR by department, workload distribution, aging analysis, escalation metrics
+
+### Backend Structure
+```
+backend/grc/modules/vuln_management/
+├── router.py                    # Main router
+├── routers/
+│   ├── departments.py           # Department management, bulk assignment
+│   ├── vulnerabilities.py       # CRUD, assignment, status changes
+│   ├── workflows.py             # Workflow states and transitions
+│   ├── escalations.py           # SLA check, escalation triggers, notifications
+│   ├── dashboard.py             # Metrics, SLA trends, workload
+│   └── ...
+└── services/
+    ├── email_service.py         # SMTP email sending with HTML templates
+    ├── escalation_service.py    # SLA check and escalation logic
+    └── notification_service.py  # In-app notification management
+```
+
+### Email Configuration (Optional)
+Set these environment variables for email notifications:
+- SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM_EMAIL
+- If not configured, emails are logged for development/demo
+
+### API Endpoints
+- **Departments**: `/grc/vuln-management/departments/*`
+- **Bulk Assign**: `POST /grc/vuln-management/vulnerabilities/bulk-assign`
+- **Escalation Paths**: `/grc/vuln-management/departments/{id}/escalation-paths`
+- **SLA Check**: `POST /grc/vuln-management/escalations/run-sla-check`
+- **Dashboard Metrics**: `/grc/vuln-management/dashboard/department-metrics`, `sla-compliance-trends`, `department-workload`, `aging-by-department`, `escalation-metrics`
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.
