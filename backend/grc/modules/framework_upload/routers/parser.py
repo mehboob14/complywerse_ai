@@ -337,9 +337,9 @@ Extract ALL controls - do not summarize or skip any requirements."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.2",
             messages=[
-                {"role": "system", "content": "You are an expert regulatory compliance analyst. Your task is to exhaustively extract EVERY control requirement from regulatory documents. Be thorough and precise. Always respond with valid JSON containing all extracted controls."},
+                {"role": "system", "content": "You are an expert regulatory compliance analyst with deep expertise in GRC frameworks (ISO 27001, PCI DSS, NIST CSF, Basel, SWIFT CSP, etc.). Your task is to exhaustively extract EVERY control requirement from regulatory documents. Be extremely thorough - do not miss any controls, sub-controls, or requirements. Parse the complete document structure and identify all mandatory and advisory controls. Always respond with valid JSON containing all extracted controls."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},

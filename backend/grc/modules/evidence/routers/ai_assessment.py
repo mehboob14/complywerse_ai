@@ -8,7 +8,7 @@ from sqlalchemy import desc
 from pydantic import BaseModel
 from openai import OpenAI
 
-from ....models import Evidence, EvidenceAIAssessment, GRCUser, get_db
+from ....models import Evidence, EvidenceAIAssessment, EvidenceControlMapping, GRCUser, get_db, Framework, FrameworkDomain, ControlObjective, FrameworkControl
 from ....routers.auth_router import require_auth, get_user_tenants
 
 router = APIRouter(prefix="/ai", tags=["Evidence - AI Assessment"])
@@ -146,6 +146,98 @@ def format_assessment_response(assessment: EvidenceAIAssessment) -> AssessmentRe
     )
 
 
+def get_available_frameworks(db: Session) -> str:
+    """Fetch available framework names and short codes for AI context."""
+    frameworks = db.query(Framework).filter(Framework.is_active == True).all()
+    
+    framework_info = []
+    for fw in frameworks:
+        control_count = db.query(FrameworkControl).join(ControlObjective).join(FrameworkDomain).filter(
+            FrameworkDomain.framework_id == fw.id
+        ).count()
+        framework_info.append(f"- {fw.name} (code: {fw.short_code}) - {control_count} controls")
+    
+    return "\n".join(framework_info)
+
+
+def normalize_control_code(code: str) -> str:
+    """Normalize control code for matching (remove spaces, lowercase, standardize separators)."""
+    import re
+    normalized = code.lower().strip()
+    normalized = re.sub(r'[\s\-_\.]+', '', normalized)
+    normalized = re.sub(r'^(req|requirement|control|ctrl)[\s\-_\.]*', '', normalized)
+    return normalized
+
+
+def auto_link_controls(evidence: Evidence, detected_controls: List[str], compliance_frameworks: List[str], db: Session) -> int:
+    """Auto-link detected controls to actual database controls using smart matching."""
+    linked_count = 0
+    all_refs = detected_controls + compliance_frameworks
+    
+    frameworks = {fw.short_code.lower(): fw for fw in db.query(Framework).filter(Framework.is_active == True).all()}
+    
+    for control_ref in all_refs:
+        control_ref = control_ref.strip()
+        if not control_ref:
+            continue
+            
+        framework_code = None
+        control_code = control_ref
+        
+        if ':' in control_ref:
+            parts = control_ref.split(':', 1)
+            framework_code = parts[0].strip().lower()
+            control_code = parts[1].strip()
+        elif ' - ' in control_ref:
+            parts = control_ref.split(' - ', 1)
+            framework_code = parts[0].strip().lower()
+            control_code = parts[1].strip()
+        
+        normalized_code = normalize_control_code(control_code)
+        
+        query = db.query(FrameworkControl)
+        
+        if framework_code:
+            framework_short_codes = [k for k in frameworks.keys() if framework_code in k or k in framework_code]
+            if framework_short_codes:
+                fw = frameworks.get(framework_short_codes[0])
+                if fw:
+                    query = query.join(ControlObjective).join(FrameworkDomain).filter(
+                        FrameworkDomain.framework_id == fw.id
+                    )
+        
+        all_controls = query.all()
+        matched_control = None
+        
+        for ctrl in all_controls:
+            ctrl_normalized = normalize_control_code(ctrl.code)
+            if ctrl_normalized == normalized_code or normalized_code in ctrl_normalized or ctrl_normalized in normalized_code:
+                matched_control = ctrl
+                break
+        
+        if not matched_control:
+            for ctrl in all_controls:
+                if control_code.lower() in ctrl.code.lower() or ctrl.code.lower() in control_code.lower():
+                    matched_control = ctrl
+                    break
+        
+        if matched_control:
+            existing = db.query(EvidenceControlMapping).filter(
+                EvidenceControlMapping.evidence_id == evidence.id,
+                EvidenceControlMapping.framework_control_id == matched_control.id
+            ).first()
+            
+            if not existing:
+                mapping = EvidenceControlMapping(
+                    evidence_id=evidence.id,
+                    framework_control_id=matched_control.id
+                )
+                db.add(mapping)
+                linked_count += 1
+    
+    return linked_count
+
+
 def run_ai_assessment(evidence: Evidence, db: Session) -> EvidenceAIAssessment:
     if not evidence.ocr_content:
         raise HTTPException(
@@ -154,26 +246,61 @@ def run_ai_assessment(evidence: Evidence, db: Session) -> EvidenceAIAssessment:
         )
     
     client = get_openai_client()
-    prompt = ASSESSMENT_PROMPT.format(ocr_content=evidence.ocr_content[:10000])
+    
+    available_frameworks = get_available_frameworks(db)
+    
+    enhanced_prompt = f"""Analyze this compliance evidence and provide a comprehensive assessment.
+
+Available Compliance Frameworks in our GRC system:
+{available_frameworks}
+
+Assessment Requirements:
+1. Relevance Score (0-100): How relevant is this for demonstrating compliance
+2. Adequacy Score (0-100): How complete and sufficient is this evidence
+3. Audit Readiness (0-100): How ready is this for an audit
+4. Summary: Brief 2-3 sentence description of what this evidence shows and its purpose
+5. Detected Controls: List specific control codes from standard frameworks this evidence supports. Use format "FRAMEWORK_CODE: control_number" (e.g., "PCI-DSS: 1.1.1", "ISO27001: A.8.1", "NIST-CSF: PR.AC-1")
+6. Compliance Frameworks: List framework requirements this evidence applies to using format: "FRAMEWORK_CODE: control_code" (e.g., "PCI-DSS: 5.2.1", "ISO27001: A.9.1.2", "SWIFT-CSP: 1.1")
+7. Gaps: List any potential gaps or missing elements for full compliance
+8. Recommendations: Suggestions for improvement
+
+Evidence content:
+{evidence.ocr_content[:12000]}
+
+Respond in JSON format:
+{{
+    "relevance_score": <number 0-100>,
+    "adequacy_score": <number 0-100>,
+    "audit_readiness": <number 0-100>,
+    "confidence_score": <number 0-100>,
+    "summary": "<string>",
+    "detected_controls": ["<FRAMEWORK_CODE: control_code>", ...],
+    "compliance_frameworks": ["<FRAMEWORK_CODE: control_code>", ...],
+    "gaps": ["<gap1>", ...],
+    "recommendations": ["<rec1>", ...]
+}}"""
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.2",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a compliance expert analyzing evidence documents. Provide accurate, helpful assessments in valid JSON format."
+                    "content": "You are an expert GRC compliance analyst. Analyze evidence documents and map them to EXACT control codes from the provided framework list. Be precise with control references - only use codes that exist in the available frameworks."
                 },
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": enhanced_prompt
                 }
             ],
-            max_tokens=2000,
-            temperature=0.3
+            max_tokens=4000,
+            temperature=0.2
         )
         
         ai_result = parse_ai_response(response.choices[0].message.content or "")
+        
+        detected_controls = ai_result.get("detected_controls", [])
+        compliance_frameworks = ai_result.get("compliance_frameworks", [])
         
         assessment = EvidenceAIAssessment(
             evidence_id=evidence.id,
@@ -183,8 +310,8 @@ def run_ai_assessment(evidence: Evidence, db: Session) -> EvidenceAIAssessment:
             audit_readiness=float(ai_result.get("audit_readiness", 0)),
             content_summary=ai_result.get("summary", ""),
             gap_analysis={
-                "detected_controls": ai_result.get("detected_controls", []),
-                "compliance_frameworks": ai_result.get("compliance_frameworks", []),
+                "detected_controls": detected_controls,
+                "compliance_frameworks": compliance_frameworks,
                 "gaps": ai_result.get("gaps", []),
                 "recommendations": ai_result.get("recommendations", [])
             },
@@ -192,6 +319,8 @@ def run_ai_assessment(evidence: Evidence, db: Session) -> EvidenceAIAssessment:
         )
         
         db.add(assessment)
+        
+        linked_count = auto_link_controls(evidence, detected_controls, compliance_frameworks, db)
         
         quality_score = (
             ai_result.get("relevance_score", 0) * 0.3 +
