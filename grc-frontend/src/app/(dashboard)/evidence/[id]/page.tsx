@@ -230,7 +230,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get(`/evidence-mgmt/cross-links/${evidenceId}/all-links`);
       return response.data;
     },
-    enabled: activeTab === 'cross-links',
+    enabled: activeTab === 'cross-links' || activeTab === 'assessment',
   });
 
   const { data: controlsData } = useQuery<ControlsResponse>({
@@ -239,7 +239,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get(`/evidence-mgmt/links/${evidenceId}/controls`);
       return response.data;
     },
-    enabled: activeTab === 'controls',
+    enabled: activeTab === 'controls' || activeTab === 'assessment',
   });
 
   const processOCRMutation = useMutation({
@@ -714,6 +714,8 @@ export default function EvidenceDetailPage() {
           <AssessmentTab 
             evidence={evidence}
             assessment={latestAssessment}
+            controlsData={controlsData}
+            assetsData={allLinks?.assets}
             onRunAssessment={() => runAssessmentMutation.mutate()}
             isRunning={runAssessmentMutation.isPending}
             formatDateTime={formatDateTime}
@@ -920,15 +922,29 @@ function OCRTab({
   );
 }
 
+interface AssetsDataType {
+  total: number;
+  links: Array<{
+    id: number;
+    asset_id: number;
+    link_type: string;
+    asset: { id: number; name: string; asset_type: string; criticality: string; status: string } | null;
+  }>;
+}
+
 function AssessmentTab({ 
   evidence, 
   assessment,
+  controlsData,
+  assetsData,
   onRunAssessment,
   isRunning,
   formatDateTime
 }: { 
   evidence: EvidenceDetail;
   assessment?: LatestAssessment;
+  controlsData?: ControlsResponse;
+  assetsData?: AssetsDataType;
   onRunAssessment: () => void;
   isRunning: boolean;
   formatDateTime: (d?: string | null) => string;
@@ -1023,18 +1039,120 @@ function AssessmentTab({
           Applicable Compliance Frameworks
         </h4>
         <p className="mb-3 text-xs text-slate-400">This evidence can be used to demonstrate compliance with the following requirements:</p>
-        {(assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks)?.length ? (
-          <div className="flex flex-wrap gap-2">
-            {((assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks) || []).map((framework, i) => (
-              <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-primary-500/20 px-3 py-1.5 text-sm font-medium text-primary-300 border border-primary-500/30">
-                <Shield className="h-3.5 w-3.5" />
-                {framework}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-slate-500">Run AI assessment to identify applicable compliance frameworks</p>
-        )}
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-600/50">
+                <th className="pb-3 pr-4 font-medium text-slate-300 w-1/3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-primary-400" />
+                    AI-Detected Frameworks
+                  </div>
+                </th>
+                <th className="pb-3 px-4 font-medium text-slate-300 w-1/3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-blue-400" />
+                    Linked Controls
+                  </div>
+                </th>
+                <th className="pb-3 pl-4 font-medium text-slate-300 w-1/3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-green-400" />
+                    Associated Assets
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="py-3 pr-4 align-top">
+                  {(() => {
+                    const frameworks = (assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks) || [];
+                    return frameworks.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {frameworks.map((framework, i) => (
+                          <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-primary-500/20 px-3 py-1 text-sm font-medium text-primary-300 border border-primary-500/30">
+                            <Shield className="h-3 w-3" />
+                            {framework}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-500 text-sm">Run AI assessment to identify</span>
+                    );
+                  })()}
+                </td>
+                <td className="py-3 px-4 align-top border-l border-slate-700/30">
+                  {controlsData?.by_framework && controlsData.by_framework.length > 0 ? (
+                    <div className="space-y-3">
+                      {controlsData.by_framework.map((framework) => (
+                        <div key={framework.framework_id}>
+                          <div className="text-xs font-medium text-slate-400 mb-1.5">{framework.framework_name}</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {framework.controls.slice(0, 5).map((mapping) => (
+                              <Link 
+                                key={mapping.id}
+                                href={`/frameworks`}
+                                className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-300 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
+                              >
+                                <ShieldCheck className="h-2.5 w-2.5" />
+                                {mapping.framework_control?.code}
+                              </Link>
+                            ))}
+                            {framework.controls.length > 5 && (
+                              <span className="text-xs text-slate-500">+{framework.controls.length - 5} more</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-slate-500 text-sm">No linked controls</span>
+                  )}
+                </td>
+                <td className="py-3 pl-4 align-top border-l border-slate-700/30">
+                  {assetsData?.links && assetsData.links.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {assetsData.links.slice(0, 6).map((link) => (
+                        link.asset && (
+                          <Link 
+                            key={link.id}
+                            href={`/assets/${link.asset_id}`}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-green-500/20 px-3 py-1 text-sm font-medium text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-colors"
+                          >
+                            <Building2 className="h-3 w-3" />
+                            {link.asset.name}
+                          </Link>
+                        )
+                      ))}
+                      {assetsData.links.length > 6 && (
+                        <span className="text-xs text-slate-500 self-center">+{assetsData.links.length - 6} more</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-slate-500 text-sm">No linked assets</span>
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div className="mt-4 pt-3 border-t border-slate-700/30 flex items-center gap-6 text-xs text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5 text-primary-400" />
+            <span className="font-medium text-slate-300">{(assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks)?.length || 0}</span> frameworks detected
+          </span>
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
+            <span className="font-medium text-slate-300">{controlsData?.total_mappings || 0}</span> controls linked
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Building2 className="h-3.5 w-3.5 text-green-400" />
+            <span className="font-medium text-slate-300">{assetsData?.total || 0}</span> assets associated
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
