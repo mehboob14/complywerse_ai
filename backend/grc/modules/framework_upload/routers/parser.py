@@ -1,8 +1,9 @@
 import os
 import json
+import threading
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ from openai import OpenAI
 from ....models import (
     UploadedFramework, ParsedFrameworkControl, ControlEvidenceMapping,
     FrameworkControlAlignment, AssessmentItem, AssessmentEvidence,
-    AssessmentRemediation, GRCUser, get_db
+    AssessmentRemediation, GRCUser, get_db, SessionLocal
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -500,12 +501,253 @@ def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
     return unique_controls
 
 
+def run_background_parsing(framework_id: int, file_path: str, file_type: str, framework_name: str):
+    """Run parsing in a background thread to avoid HTTP timeout."""
+    db = SessionLocal()
+    try:
+        extracted_text = ""
+        if file_type == "pdf":
+            from PyPDF2 import PdfReader
+            reader = PdfReader(file_path)
+            text_parts = []
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+            extracted_text = "\n\n".join(text_parts)
+        elif file_type == "docx":
+            from docx import Document
+            doc = Document(file_path)
+            text_parts = []
+            for paragraph in doc.paragraphs:
+                if paragraph.text.strip():
+                    text_parts.append(paragraph.text)
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                    if row_text:
+                        text_parts.append(row_text)
+            extracted_text = "\n".join(text_parts)
+        else:
+            fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+            if fw:
+                fw.upload_status = "failed"
+                fw.parse_error = f"Unsupported file type: {file_type}"
+                db.commit()
+            return
+        
+        if not extracted_text.strip():
+            fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+            if fw:
+                fw.upload_status = "failed"
+                fw.parse_error = "No text could be extracted from the document"
+                db.commit()
+            return
+        
+        parsed_controls_data = parse_document_with_chunking(extracted_text, framework_name)
+        
+        if not parsed_controls_data:
+            fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+            if fw:
+                fw.upload_status = "parsed"
+                fw.parsed_at = datetime.utcnow()
+                fw.parse_error = "No controls found in document"
+                db.commit()
+            return
+        
+        existing_controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework_id
+        ).all()
+        existing_control_ids = [c.id for c in existing_controls]
+        
+        if existing_control_ids:
+            assessment_item_ids = db.query(AssessmentItem.id).filter(
+                AssessmentItem.parsed_control_id.in_(existing_control_ids)
+            ).all()
+            ai_ids = [a.id for a in assessment_item_ids]
+            
+            if ai_ids:
+                db.query(AssessmentRemediation).filter(
+                    AssessmentRemediation.assessment_item_id.in_(ai_ids)
+                ).delete(synchronize_session=False)
+                
+                db.query(AssessmentEvidence).filter(
+                    AssessmentEvidence.assessment_item_id.in_(ai_ids)
+                ).delete(synchronize_session=False)
+                
+                db.query(AssessmentItem).filter(
+                    AssessmentItem.id.in_(ai_ids)
+                ).delete(synchronize_session=False)
+            
+            db.query(FrameworkControlAlignment).filter(
+                FrameworkControlAlignment.parsed_control_id.in_(existing_control_ids)
+            ).delete(synchronize_session=False)
+            
+            db.query(ControlEvidenceMapping).filter(
+                ControlEvidenceMapping.parsed_control_id.in_(existing_control_ids)
+            ).delete(synchronize_session=False)
+            
+            db.query(ParsedFrameworkControl).filter(
+                ParsedFrameworkControl.id.in_(existing_control_ids)
+            ).delete(synchronize_session=False)
+        
+        db.flush()
+        
+        for idx, control_data in enumerate(parsed_controls_data, start=1):
+            control_id = f"FW-{framework_id:03d}-{idx:03d}"
+            
+            parsed_control = ParsedFrameworkControl(
+                uploaded_framework_id=framework_id,
+                control_id=control_id,
+                original_reference=control_data.get("original_reference"),
+                title=control_data.get("title", "Untitled Control")[:500],
+                description=control_data.get("description"),
+                full_text=control_data.get("full_text"),
+                domain=control_data.get("domain"),
+                category=control_data.get("category"),
+                is_mandatory=control_data.get("is_mandatory", True),
+                priority=control_data.get("priority", "medium"),
+                section_number=control_data.get("original_reference"),
+                ai_confidence=control_data.get("ai_confidence"),
+                is_verified=False
+            )
+            db.add(parsed_control)
+            db.flush()
+            
+            evidence_types = control_data.get("evidence_types", [])
+            for evidence_type in evidence_types:
+                if evidence_type in ["policy", "procedure", "configuration", "log", "report", "contract"]:
+                    evidence_mapping = ControlEvidenceMapping(
+                        parsed_control_id=parsed_control.id,
+                        evidence_type=evidence_type,
+                        is_required=True,
+                        suggested_by_ai=True
+                    )
+                    db.add(evidence_mapping)
+        
+        fw_final = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+        if fw_final:
+            fw_final.upload_status = "parsed"
+            fw_final.parsed_at = datetime.utcnow()
+            fw_final.parse_error = None
+        
+        db.commit()
+        
+    except Exception as e:
+        error_msg = str(e)
+        try:
+            fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+            if fw:
+                fw.upload_status = "failed"
+                fw.parse_error = error_msg[:500]
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
 @router.post("/{framework_id}/parse")
 def parse_framework_document(
+    framework_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Start parsing a framework document in the background.
+    
+    Returns immediately with status 'parsing'. The actual parsing runs in
+    the background. Poll the framework status to check when parsing completes.
+    """
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uploaded framework not found"
+        )
+    
+    validate_framework_access(current_user, framework, db)
+    
+    if framework.upload_status == "parsing":
+        return {
+            "message": "Parsing already in progress",
+            "framework_id": framework_id,
+            "status": "parsing"
+        }
+    
+    file_path = framework.file_path
+    file_type = framework.file_type
+    framework_name = framework.name
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework file not found on disk"
+        )
+    
+    framework.upload_status = "parsing"
+    framework.parse_error = None
+    db.commit()
+    
+    thread = threading.Thread(
+        target=run_background_parsing,
+        args=(framework_id, file_path, file_type, framework_name),
+        daemon=True
+    )
+    thread.start()
+    
+    return {
+        "message": "Parsing started in background. Refresh the page periodically to check status.",
+        "framework_id": framework_id,
+        "status": "parsing"
+    }
+
+
+@router.get("/{framework_id}/parse-status")
+def get_parse_status(
     framework_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    """Check the parsing status of a framework."""
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uploaded framework not found"
+        )
+    
+    validate_framework_access(current_user, framework, db)
+    
+    controls_count = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id
+    ).count() if framework.upload_status == "parsed" else 0
+    
+    return {
+        "framework_id": framework_id,
+        "status": framework.upload_status,
+        "parse_error": framework.parse_error,
+        "parsed_at": framework.parsed_at.isoformat() if framework.parsed_at else None,
+        "controls_count": controls_count
+    }
+
+
+@router.post("/{framework_id}/parse-sync")
+def parse_framework_document_sync(
+    framework_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Parse a framework document synchronously (for small documents only).
+    
+    Warning: This may timeout for large documents. Use the async /parse endpoint instead.
+    """
     framework = db.query(UploadedFramework).filter(
         UploadedFramework.id == framework_id
     ).first()
