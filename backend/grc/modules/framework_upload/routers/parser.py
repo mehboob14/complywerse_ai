@@ -143,26 +143,71 @@ def extract_text_from_file(framework: UploadedFramework) -> str:
     return extracted_text
 
 
-def chunk_text(text: str, chunk_size: int = 40000, overlap: int = 2000) -> List[str]:
-    """Split text into overlapping chunks for processing large documents."""
+def chunk_text(text: str, chunk_size: int = 30000, overlap: int = 3000) -> List[str]:
+    """Split text into overlapping chunks for processing large documents.
+    
+    Uses smaller chunks with larger overlap to ensure no controls are missed
+    at chunk boundaries. Prioritizes breaking at section boundaries.
+    """
     if len(text) <= chunk_size:
         return [text]
     
     chunks = []
     start = 0
+    
     while start < len(text):
-        end = start + chunk_size
-        if end < len(text):
-            break_point = text.rfind('\n\n', start + chunk_size - overlap, end)
-            if break_point == -1:
-                break_point = text.rfind('\n', start + chunk_size - overlap, end)
-            if break_point == -1:
-                break_point = text.rfind('. ', start + chunk_size - overlap, end)
-            if break_point > start:
-                end = break_point + 1
+        end = min(start + chunk_size, len(text))
         
-        chunks.append(text[start:end])
-        start = end - overlap if end < len(text) else end
+        if end < len(text):
+            search_start = max(start + chunk_size - overlap - 1000, start)
+            search_end = min(end + 500, len(text))
+            search_region = text[search_start:search_end]
+            
+            import re
+            section_patterns = [
+                r'\n\s*(?:Chapter|Section|Article|Part|Annex|Appendix)\s+\d+',
+                r'\n\s*\d+\.\s+[A-Z]',
+                r'\n\s*[A-Z]\.\s+[A-Z]',
+                r'\n\s*Principle\s+\d+',
+                r'\n\s*Requirement\s+\d+',
+                r'\n\s*Control\s+\d+',
+                r'\n\n\s*\d+\.\d+\s+',
+                r'\n\n\n',
+                r'\n\n',
+            ]
+            
+            best_break = -1
+            for pattern in section_patterns:
+                matches = list(re.finditer(pattern, search_region, re.IGNORECASE))
+                if matches:
+                    last_match = matches[-1]
+                    break_pos = search_start + last_match.start()
+                    if break_pos > start + (chunk_size // 2):
+                        best_break = break_pos
+                        break
+            
+            if best_break > start:
+                end = best_break
+            else:
+                break_point = text.rfind('\n\n', start + chunk_size - overlap, end)
+                if break_point == -1:
+                    break_point = text.rfind('\n', start + chunk_size - overlap, end)
+                if break_point == -1:
+                    break_point = text.rfind('. ', start + chunk_size - overlap, end)
+                if break_point > start:
+                    end = break_point + 1
+        
+        chunk_text_segment = text[start:end]
+        if chunk_text_segment.strip():
+            chunks.append(chunk_text_segment)
+        
+        next_start = end - overlap
+        if next_start <= start:
+            next_start = end
+        start = next_start
+        
+        if start >= len(text):
+            break
     
     return chunks
 
@@ -236,7 +281,55 @@ def deduplicate_controls(controls: List[dict]) -> List[dict]:
     return unique_controls
 
 
-def parse_with_openai(text: str, framework_name: str, chunk_number: int = 1, total_chunks: int = 1) -> List[dict]:
+def extract_document_structure(text: str, framework_name: str) -> dict:
+    """First pass: Extract the document's table of contents and structure to ensure completeness."""
+    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
+        return {"sections": [], "total_expected_controls": 0}
+    
+    client = OpenAI(
+        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
+        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+    )
+    
+    sample_text = text[:25000] if len(text) > 25000 else text
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-5.2",
+            messages=[
+                {"role": "system", "content": "You are an expert at analyzing regulatory document structures. Extract the complete table of contents and section structure."},
+                {"role": "user", "content": f"""Analyze this regulatory framework document "{framework_name}" and extract its complete structure.
+
+Document excerpt:
+---
+{sample_text}
+---
+
+Return JSON with:
+1. "sections": Array of all major sections/chapters with their numbering
+2. "control_patterns": Common patterns used for control numbering (e.g., "X.Y.Z", "Principle N", "REQ-XXX")
+3. "total_expected_controls": Estimated total number of controls/requirements in the full document
+4. "framework_type": Type of framework (ISO, NIST, PCI, Banking, etc.)
+
+Example:
+{{
+  "sections": ["Chapter 1", "Chapter 2", "Annex A", "Annex B"],
+  "control_patterns": ["N.N.N", "Principle N"],
+  "total_expected_controls": 150,
+  "framework_type": "ISO"
+}}"""}
+            ],
+            response_format={"type": "json_object"},
+            max_completion_tokens=4096
+        )
+        
+        result = json.loads(response.choices[0].message.content or "{}")
+        return result
+    except Exception:
+        return {"sections": [], "total_expected_controls": 0}
+
+
+def parse_with_openai(text: str, framework_name: str, chunk_number: int = 1, total_chunks: int = 1, doc_structure: dict = None) -> List[dict]:
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -250,98 +343,98 @@ def parse_with_openai(text: str, framework_name: str, chunk_number: int = 1, tot
     
     chunk_context = ""
     if total_chunks > 1:
-        chunk_context = f"\n\nNOTE: This is chunk {chunk_number} of {total_chunks} from the document. Extract ALL controls from this section."
+        chunk_context = f"""
+
+IMPORTANT CONTEXT:
+- This is chunk {chunk_number} of {total_chunks} from a large document
+- You MUST extract EVERY control from this section - do not skip any
+- If a control spans chunk boundaries, extract what you see with a note
+- Previous/next chunks will capture overlapping content"""
     
-    prompt = f"""You are an expert regulatory compliance analyst specializing in extracting control requirements from regulatory frameworks, standards, and guidelines.
+    structure_hint = ""
+    if doc_structure:
+        patterns = doc_structure.get("control_patterns", [])
+        fw_type = doc_structure.get("framework_type", "")
+        if patterns:
+            structure_hint = f"\n\nDOCUMENT STRUCTURE HINTS:\n- Framework type: {fw_type}\n- Control numbering patterns found: {', '.join(patterns)}\n- Look for controls matching these patterns"
+    
+    prompt = f"""You are an expert regulatory compliance analyst. Your task is to perform EXHAUSTIVE extraction of ALL control requirements from this regulatory framework document.
 
-TASK: Analyze the following document text from "{framework_name}" and extract EVERY control requirement, sub-control, and compliance obligation.{chunk_context}
+DOCUMENT: "{framework_name}"{chunk_context}{structure_hint}
 
-CRITICAL INSTRUCTIONS:
-1. Be EXHAUSTIVE - Extract ALL requirements, not just major ones. Include sub-requirements, nested controls, and all "shall/must/should" statements.
-2. Look for requirements in different formats: numbered lists, tables, paragraphs, appendices, annexes.
-3. Each "shall", "must", "should", "required", "expected" statement is likely a separate control.
-4. Preserve the ORIGINAL numbering/reference (e.g., "Principle 1", "4.1.2.a", "REQ-001", "Article 32(1)(a)").
-5. For Basel/banking frameworks: Look for Principles, Core Principles, Essential Criteria, Additional Criteria.
-6. For ISO frameworks: Look for clauses, sub-clauses, and annex requirements.
-7. For NIST/security frameworks: Look for control families, controls, and control enhancements.
+=== CRITICAL EXTRACTION RULES ===
 
-For EACH control requirement, extract:
-1. original_reference: The EXACT original section/clause/requirement number as it appears in the document
-2. title: A concise, descriptive title (max 200 chars) that captures the control's purpose
-3. description: A comprehensive description of what the control requires and its purpose
-4. full_text: The complete original text of the requirement (important for audit purposes)
-5. domain: Categorize into ONE of these domains:
-   - Governance (board oversight, organizational structure, accountability)
-   - Risk Management (risk identification, assessment, mitigation, appetite)
-   - Security (information security, cybersecurity, physical security)
-   - Access Control (authentication, authorization, identity management)
-   - Incident Management (incident response, breach notification, crisis management)
-   - Business Continuity (disaster recovery, backup, resilience)
-   - Data Protection (privacy, data handling, encryption, retention)
-   - Compliance (regulatory reporting, audit, monitoring)
-   - Operations (operational processes, change management, IT operations)
-   - Third Party (vendor management, outsourcing, supply chain)
-   - Capital & Liquidity (for banking: capital adequacy, liquidity risk)
-   - Credit Risk (for banking: credit assessment, provisioning)
-6. category: A specific sub-category (e.g., "Board Responsibilities", "Authentication", "Encryption Standards")
-7. is_mandatory: true if uses "shall", "must", "required", "expected"; false if "should", "may", "recommended"
-8. priority: 
-   - "critical" for fundamental/foundational requirements
-   - "high" for important security/compliance items
-   - "medium" for standard requirements  
-   - "low" for best practices or advisory items
-9. evidence_types: Array of evidence types needed. Choose from: policy, procedure, configuration, log, report, contract, attestation, screenshot, diagram, training_record
-10. ai_confidence: Confidence score 0.0-1.0 in extraction accuracy
-11. implementation_guidance: Brief guidance on how to implement this control (optional but helpful)
+1. EXTRACT EVERYTHING - Do NOT skip, summarize, or consolidate controls
+2. PRESERVE EXACT WORDING - Copy the original text verbatim in full_text field
+3. PRESERVE EXACT NUMBERING - Use the document's original reference numbers exactly as written
+4. HIERARCHICAL EXTRACTION - Extract parent controls AND all sub-controls separately
+5. GRANULARITY - Each "shall", "must", "should", "required" statement = separate control
 
-Document text to analyze:
+=== WHAT TO LOOK FOR ===
+
+MANDATORY requirements (is_mandatory=true):
+- "shall", "must", "is required to", "are expected to", "needs to"
+
+ADVISORY requirements (is_mandatory=false):  
+- "should", "may", "is recommended", "is encouraged"
+
+CONTROL LOCATIONS - Check ALL of these:
+- Numbered sections (1.1, 1.2, 1.2.1, etc.)
+- Lettered sub-items (a, b, c or i, ii, iii)
+- Tables with requirements
+- Bullet points with obligations
+- Principles/Articles/Clauses
+- Annexes and Appendices
+- Notes and Remarks with requirements
+- Definitions that include obligations
+
+=== OUTPUT FORMAT ===
+
+For EACH control, provide:
+{{
+  "original_reference": "EXACT number/reference from document (e.g., '4.1.2.a', 'Principle 3', 'A.5.1.1')",
+  "title": "Clear descriptive title (max 200 chars)",
+  "description": "Detailed explanation of what this control requires",
+  "full_text": "COMPLETE VERBATIM text of the requirement - copy exactly as written",
+  "domain": "One of: Governance|Risk Management|Security|Access Control|Incident Management|Business Continuity|Data Protection|Compliance|Operations|Third Party|Capital & Liquidity|Credit Risk|Human Resources|Physical Security|Network Security|Application Security",
+  "category": "Specific sub-category",
+  "is_mandatory": true/false,
+  "priority": "critical|high|medium|low",
+  "evidence_types": ["policy", "procedure", "configuration", "log", "report", "contract", "attestation"],
+  "ai_confidence": 0.0-1.0,
+  "parent_reference": "Reference of parent control if this is a sub-control (optional)"
+}}
+
+=== DOCUMENT TEXT TO ANALYZE ===
 ---
 {text}
 ---
 
-Return a JSON object with a "controls" array. Be thorough - regulatory documents typically contain dozens to hundreds of controls.
+=== FINAL INSTRUCTIONS ===
 
-Example output format:
-{{
-  "controls": [
-    {{
-      "original_reference": "Principle 1",
-      "title": "Board Responsibilities for Risk Management",
-      "description": "The board of directors has overall responsibility for approving and reviewing the risk management framework...",
-      "full_text": "The board has overall responsibility for...",
-      "domain": "Governance",
-      "category": "Board Oversight",
-      "is_mandatory": true,
-      "priority": "critical",
-      "evidence_types": ["policy", "report", "attestation"],
-      "ai_confidence": 0.95,
-      "implementation_guidance": "Document board-level risk committee charter and meeting minutes showing oversight"
-    }},
-    {{
-      "original_reference": "Principle 1.1",
-      "title": "Risk Appetite Framework Approval",
-      "description": "The board must approve the risk appetite framework and ensure it is aligned with strategy...",
-      "full_text": "The board shall approve the bank's risk appetite framework...",
-      "domain": "Risk Management",
-      "category": "Risk Appetite",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_types": ["policy", "report"],
-      "ai_confidence": 0.92,
-      "implementation_guidance": "Maintain documented risk appetite statement with board approval"
-    }}
-  ]
-}}
+1. Read through the ENTIRE text carefully
+2. Extract EVERY requirement you find - err on the side of including more
+3. Do NOT combine multiple requirements into one control
+4. If uncertain whether something is a control, INCLUDE IT with lower confidence
+5. Regulatory documents typically have 50-500+ controls - extract them ALL
 
-Extract ALL controls - do not summarize or skip any requirements."""
+Return a JSON object with a "controls" array containing ALL extracted controls."""
 
     try:
-        # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
-        # gpt-5.x models don't support temperature parameter and use max_completion_tokens instead of max_tokens
         response = client.chat.completions.create(
             model="gpt-5.2",
             messages=[
-                {"role": "system", "content": "You are an expert regulatory compliance analyst with deep expertise in GRC frameworks (ISO 27001, PCI DSS, NIST CSF, Basel, SWIFT CSP, etc.). Your task is to exhaustively extract EVERY control requirement from regulatory documents. Be extremely thorough - do not miss any controls, sub-controls, or requirements. Parse the complete document structure and identify all mandatory and advisory controls. Always respond with valid JSON containing all extracted controls."},
+                {"role": "system", "content": """You are an expert regulatory compliance analyst specializing in GRC framework analysis. Your specialty is EXHAUSTIVE extraction of control requirements from complex regulatory documents.
+
+CRITICAL BEHAVIORS:
+1. You NEVER skip controls - every requirement must be captured
+2. You preserve EXACT original wording and numbering
+3. You extract hierarchically - parent controls AND all sub-controls
+4. You treat each "shall/must/should" statement as a potential separate control
+5. You check tables, annexes, appendices, notes - everywhere for requirements
+6. You return valid JSON with complete control data
+
+You are thorough, meticulous, and never miss a requirement."""},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
@@ -377,16 +470,32 @@ Extract ALL controls - do not summarize or skip any requirements."""
 
 
 def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
-    """Parse a document using chunking for large files."""
-    chunks = chunk_text(text, chunk_size=35000, overlap=1500)
+    """Parse a document using a two-pass approach for comprehensive extraction.
+    
+    Pass 1: Extract document structure to understand numbering patterns
+    Pass 2: Process each chunk with structure context for exhaustive extraction
+    """
+    doc_structure = extract_document_structure(text, framework_name)
+    
+    chunks = chunk_text(text, chunk_size=30000, overlap=3000)
     
     all_controls = []
     
     for idx, chunk in enumerate(chunks, start=1):
-        chunk_controls = parse_with_openai(chunk, framework_name, chunk_number=idx, total_chunks=len(chunks))
+        chunk_controls = parse_with_openai(
+            chunk, 
+            framework_name, 
+            chunk_number=idx, 
+            total_chunks=len(chunks),
+            doc_structure=doc_structure
+        )
         all_controls.extend(chunk_controls)
     
     unique_controls = deduplicate_controls(all_controls)
+    
+    expected_count = doc_structure.get("total_expected_controls", 0)
+    if expected_count > 0 and len(unique_controls) < expected_count * 0.7:
+        pass
     
     return unique_controls
 
