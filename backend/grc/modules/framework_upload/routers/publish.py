@@ -7,7 +7,8 @@ from pydantic import BaseModel
 
 from ....models import (
     UploadedFramework, ParsedFrameworkControl, Framework, FrameworkDomain,
-    ControlObjective, FrameworkControl, GRCUser, get_db
+    ControlObjective, FrameworkControl, GRCUser, get_db, ControlEvidenceMapping,
+    CuratedEvidenceItem
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -150,6 +151,7 @@ def publish_framework_to_library(
     domains_by_name = {}
     objectives_by_domain_category = {}
     control_order = 0
+    parsed_to_published_control_map = {}
     
     for pc in parsed_controls:
         domain_name = pc.domain or "General"
@@ -204,6 +206,31 @@ def publish_framework_to_library(
             order=control_order
         )
         db.add(control)
+        db.flush()
+        parsed_to_published_control_map[pc.id] = control.id
+    
+    parsed_control_ids = [pc.id for pc in parsed_controls]
+    evidence_mappings = db.query(ControlEvidenceMapping).filter(
+        ControlEvidenceMapping.parsed_control_id.in_(parsed_control_ids)
+    ).all()
+    
+    evidence_count = 0
+    for em in evidence_mappings:
+        published_control_id = parsed_to_published_control_map.get(em.parsed_control_id)
+        if published_control_id:
+            evidence_type = em.evidence_type or "document"
+            curated_item = CuratedEvidenceItem(
+                framework_control_id=published_control_id,
+                sub_control_id=None,
+                title=em.evidence_description or f"{evidence_type.title()} Evidence",
+                description=em.evidence_description or f"Required {evidence_type} documentation",
+                artifact_type=evidence_type,
+                format_guidance=None,
+                frequency="annual",
+                is_required=em.is_required if em.is_required is not None else True
+            )
+            db.add(curated_item)
+            evidence_count += 1
     
     uploaded_framework.published_framework_id = new_framework.id
     uploaded_framework.published_at = datetime.utcnow()
@@ -228,7 +255,8 @@ def publish_framework_to_library(
         "migration_summary": {
             "domains_created": domains_count,
             "objectives_created": objectives_count,
-            "controls_created": controls_count
+            "controls_created": controls_count,
+            "evidence_requirements_created": evidence_count
         },
         "uploaded_framework_id": uploaded_framework.id,
         "published_at": uploaded_framework.published_at.isoformat()
@@ -276,6 +304,104 @@ def unpublish_framework(
         "message": f"Successfully unpublished '{uploaded_framework.name}'",
         "framework_id": framework_id,
         "status": "parsed"
+    }
+
+
+@router.post("/{framework_id}/sync-evidence")
+def sync_evidence_requirements(
+    framework_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Sync evidence requirements from parsed controls to published framework controls.
+    
+    Use this to retroactively populate evidence requirements for frameworks 
+    that were published before the evidence sync feature was added.
+    """
+    uploaded_framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).first()
+    
+    if not uploaded_framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uploaded framework not found"
+        )
+    
+    validate_framework_access(current_user, uploaded_framework, db)
+    
+    if uploaded_framework.published_framework_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This framework is not published yet"
+        )
+    
+    parsed_controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id
+    ).all()
+    
+    if not parsed_controls:
+        return {
+            "message": "No parsed controls found",
+            "evidence_synced": 0
+        }
+    
+    published_controls = db.query(FrameworkControl).join(
+        ControlObjective
+    ).join(
+        FrameworkDomain
+    ).filter(
+        FrameworkDomain.framework_id == uploaded_framework.published_framework_id
+    ).all()
+    
+    control_code_to_id = {c.code: c.id for c in published_controls}
+    control_name_to_id = {c.name: c.id for c in published_controls}
+    
+    evidence_synced = 0
+    for pc in parsed_controls:
+        control_code = pc.control_id or pc.original_reference
+        published_control_id = control_code_to_id.get(control_code)
+        
+        if not published_control_id and pc.title:
+            title_key = pc.title[:255] if pc.title else None
+            published_control_id = control_name_to_id.get(title_key)
+        
+        if not published_control_id:
+            continue
+        
+        existing_evidence = db.query(CuratedEvidenceItem).filter(
+            CuratedEvidenceItem.framework_control_id == published_control_id
+        ).count()
+        
+        if existing_evidence > 0:
+            continue
+        
+        evidence_mappings = db.query(ControlEvidenceMapping).filter(
+            ControlEvidenceMapping.parsed_control_id == pc.id
+        ).all()
+        
+        for em in evidence_mappings:
+            evidence_type = em.evidence_type or "document"
+            curated_item = CuratedEvidenceItem(
+                framework_control_id=published_control_id,
+                sub_control_id=None,
+                title=em.evidence_description or f"{evidence_type.title()} Evidence",
+                description=em.evidence_description or f"Required {evidence_type} documentation",
+                artifact_type=evidence_type,
+                format_guidance=None,
+                frequency="annual",
+                is_required=em.is_required if em.is_required is not None else True
+            )
+            db.add(curated_item)
+            evidence_synced += 1
+    
+    db.commit()
+    
+    return {
+        "message": f"Successfully synced evidence requirements",
+        "framework_id": framework_id,
+        "published_framework_id": uploaded_framework.published_framework_id,
+        "evidence_synced": evidence_synced
     }
 
 
