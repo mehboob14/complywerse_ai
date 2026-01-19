@@ -147,6 +147,7 @@ const getCategoryFromDomain = (domainName: string): string => {
 
 type CategoryFilter = 'all' | 'organizational' | 'people' | 'physical' | 'technological';
 type StatusFilter = 'all' | 'implemented' | 'not_implemented' | 'partial' | 'in_progress' | 'verified';
+type SortOrder = 'asc' | 'desc' | 'default';
 
 
 const ANNEX_A_DOMAINS = [
@@ -180,6 +181,7 @@ export default function CertificationJourneyPage() {
   const [expandedControls, setExpandedControls] = useState<number[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('default');
   const [uploadingControlId, setUploadingControlId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -318,6 +320,36 @@ export default function CertificationJourneyPage() {
     }
   };
 
+  // Natural sort comparison for section/clause numbers (e.g., "1.2.10" should come after "1.2.9")
+  const naturalSortCompare = (a: string, b: string): number => {
+    const aParts = (a || '').split(/[.\-_\s]+/).map(p => {
+      const num = parseInt(p, 10);
+      return isNaN(num) ? p.toLowerCase() : num;
+    });
+    const bParts = (b || '').split(/[.\-_\s]+/).map(p => {
+      const num = parseInt(p, 10);
+      return isNaN(num) ? p.toLowerCase() : num;
+    });
+    
+    const maxLen = Math.max(aParts.length, bParts.length);
+    for (let i = 0; i < maxLen; i++) {
+      const aPart = aParts[i] ?? '';
+      const bPart = bParts[i] ?? '';
+      
+      if (typeof aPart === 'number' && typeof bPart === 'number') {
+        if (aPart !== bPart) return aPart - bPart;
+      } else if (typeof aPart === 'number') {
+        return -1; // Numbers come before strings
+      } else if (typeof bPart === 'number') {
+        return 1;
+      } else {
+        const cmp = String(aPart).localeCompare(String(bPart));
+        if (cmp !== 0) return cmp;
+      }
+    }
+    return 0;
+  };
+
   const filteredControls = controls?.filter((control: CertificationControl) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -339,6 +371,12 @@ export default function CertificationJourneyPage() {
       if (statusFilter === 'verified' && control.status !== 'verified') return false;
     }
     return true;
+  }).sort((a: CertificationControl, b: CertificationControl) => {
+    if (sortOrder === 'default') return 0;
+    const codeA = a.control_code || '';
+    const codeB = b.control_code || '';
+    const result = naturalSortCompare(codeA, codeB);
+    return sortOrder === 'desc' ? -result : result;
   }) || [];
 
   const controlStats = {
@@ -1182,6 +1220,15 @@ export default function CertificationJourneyPage() {
                 <option value="implemented">Implemented</option>
                 <option value="partial">In Progress</option>
                 <option value="not_implemented">Not Started</option>
+              </select>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                className="input w-48"
+              >
+                <option value="default">Sort by Default</option>
+                <option value="asc">Clause # (Ascending)</option>
+                <option value="desc">Clause # (Descending)</option>
               </select>
             </div>
 

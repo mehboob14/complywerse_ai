@@ -255,6 +255,37 @@ def normalize_priority(priority: str) -> str:
     return "medium"
 
 
+def clean_section_reference(reference: str) -> str:
+    """Clean up section/clause reference numbers by removing trailing artifacts.
+    
+    Examples:
+    - "6.4.2.—" -> "6.4.2"
+    - "5.1.." -> "5.1"
+    - "A.5.1.1-" -> "A.5.1.1"
+    - "Principle 3:" -> "Principle 3"
+    """
+    import re
+    if not reference:
+        return reference
+    
+    cleaned = reference.strip()
+    
+    # Remove trailing dashes, dots, colons, and whitespace repeatedly
+    while cleaned and cleaned[-1] in '.-—–:;, \t':
+        cleaned = cleaned[:-1]
+    
+    # Remove multiple consecutive dots/dashes in the middle (e.g., "5..1" -> "5.1")
+    cleaned = re.sub(r'\.{2,}', '.', cleaned)
+    cleaned = re.sub(r'-{2,}', '-', cleaned)
+    cleaned = re.sub(r'—+', '', cleaned)
+    
+    # Clean up any leading artifacts too
+    while cleaned and cleaned[0] in '.-—–:;, \t':
+        cleaned = cleaned[1:]
+    
+    return cleaned.strip()
+
+
 def deduplicate_controls(controls: List[dict]) -> List[dict]:
     """Remove duplicate controls based on title and original_reference, maintaining order by reference."""
     seen = set()
@@ -367,9 +398,19 @@ DOCUMENT: "{framework_name}"{chunk_context}{structure_hint}
 
 1. EXTRACT EVERYTHING - Do NOT skip, summarize, or consolidate controls
 2. PRESERVE EXACT WORDING - Copy the original text verbatim in full_text field
-3. PRESERVE EXACT NUMBERING - Use the document's original reference numbers exactly as written
+3. PRESERVE EXACT NUMBERING - Use the document's EXACT original clause/section numbers (e.g., "4.1", "5.2.3", "A.5.1.1", "Requirement 1.1.1")
 4. HIERARCHICAL EXTRACTION - Extract parent controls AND all sub-controls separately
 5. GRANULARITY - Each "shall", "must", "should", "required" statement = separate control
+6. CLEAN REFERENCES - Remove trailing dashes, dots, or other extraneous characters from reference numbers
+
+=== CLAUSE/SECTION NUMBERING FORMAT ===
+
+CRITICAL: Extract the EXACT official clause/section number as it appears in the document:
+- ISO standards: "4.1", "5.2", "6.3.1", "A.5.1.1", "Annex A.5"
+- PCI DSS style: "1.1.1", "1.2.3.a", "Requirement 1.1"
+- NIST style: "PR.AC-1", "ID.AM-1"
+- Banking frameworks: "Principle 1", "Article 3.2", "Section 4.1"
+- Custom formats: Preserve whatever numbering system the document uses
 
 === WHAT TO LOOK FOR ===
 
@@ -393,7 +434,7 @@ CONTROL LOCATIONS - Check ALL of these:
 
 For EACH control, provide:
 {{
-  "original_reference": "EXACT number/reference from document (e.g., '4.1.2.a', 'Principle 3', 'A.5.1.1')",
+  "original_reference": "EXACT clause/section number from document (e.g., '4.1.2', 'Principle 3', 'A.5.1.1', 'REQ-1.2.3') - NO trailing dashes or extraneous punctuation",
   "title": "Clear descriptive title (max 200 chars)",
   "description": "Detailed explanation of what this control requires",
   "full_text": "COMPLETE VERBATIM text of the requirement - copy exactly as written",
@@ -401,10 +442,40 @@ For EACH control, provide:
   "category": "Specific sub-category",
   "is_mandatory": true/false,
   "priority": "critical|high|medium|low",
-  "evidence_types": ["policy", "procedure", "configuration", "log", "report", "contract", "attestation"],
+  "evidence_requirements": [
+    {{
+      "type": "policy|procedure|configuration|log|report|contract|attestation|register|matrix|plan|screenshot|training|assessment",
+      "title": "Specific evidence title (e.g., 'Risk Management Policy', 'Access Control Procedure', 'Firewall Configuration Export')",
+      "description": "Detailed description of what this evidence should contain and demonstrate for THIS SPECIFIC control",
+      "artifact_examples": ["Example 1", "Example 2"],
+      "is_required": true/false
+    }}
+  ],
   "ai_confidence": 0.0-1.0,
   "parent_reference": "Reference of parent control if this is a sub-control (optional)"
 }}
+
+=== EVIDENCE REQUIREMENTS GUIDANCE ===
+
+For each control, provide SPECIFIC and MEANINGFUL evidence requirements, NOT generic types. Examples:
+
+For a risk assessment control:
+- "Risk Assessment Report" - "Documented risk assessment covering threat identification, likelihood analysis, and impact evaluation for organizational objectives"
+- "Risk Register" - "Comprehensive register of identified risks with risk owners, treatment plans, and residual risk levels"
+- "Risk Treatment Plan" - "Action plans for mitigating identified risks with timelines and responsible parties"
+
+For an access control requirement:
+- "Access Control Policy" - "Formal policy defining access control principles, user provisioning, and access review requirements"
+- "User Access Matrix" - "Role-based access control matrix showing user roles mapped to system permissions"
+- "Access Review Records" - "Periodic access review documentation showing user access validation and remediation actions"
+- "System Access Logs" - "Audit logs showing user authentication events and access attempts"
+
+For a security configuration control:
+- "Firewall Configuration Export" - "Current firewall ruleset export showing inbound/outbound traffic rules"
+- "System Hardening Checklist" - "Completed hardening checklist with configuration settings verified against security baseline"
+- "Vulnerability Scan Report" - "Automated vulnerability scan results with remediation status"
+
+BE FRAMEWORK-SPECIFIC: Tailor evidence to the exact requirements of "{framework_name}". Reference specific clauses and requirements in evidence descriptions.
 
 === DOCUMENT TEXT TO ANALYZE ===
 ---
@@ -418,6 +489,9 @@ For EACH control, provide:
 3. Do NOT combine multiple requirements into one control
 4. If uncertain whether something is a control, INCLUDE IT with lower confidence
 5. Regulatory documents typically have 50-500+ controls - extract them ALL
+6. For EACH control, provide SPECIFIC, MEANINGFUL evidence requirements tailored to that exact control
+7. Evidence descriptions should reference the control's specific requirements, not be generic
+8. Clean up clause/section numbers - remove trailing dashes, extra periods, or formatting artifacts
 
 Return a JSON object with a "controls" array containing ALL extracted controls."""
 
@@ -596,10 +670,14 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
         for idx, control_data in enumerate(parsed_controls_data, start=1):
             control_id = f"FW-{framework_id:03d}-{idx:03d}"
             
+            # Clean up section references
+            raw_reference = control_data.get("original_reference", "")
+            cleaned_reference = clean_section_reference(raw_reference) if raw_reference else None
+            
             parsed_control = ParsedFrameworkControl(
                 uploaded_framework_id=framework_id,
                 control_id=control_id,
-                original_reference=control_data.get("original_reference"),
+                original_reference=cleaned_reference,
                 title=control_data.get("title", "Untitled Control")[:500],
                 description=control_data.get("description"),
                 full_text=control_data.get("full_text"),
@@ -607,23 +685,53 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
                 category=control_data.get("category"),
                 is_mandatory=control_data.get("is_mandatory", True),
                 priority=control_data.get("priority", "medium"),
-                section_number=control_data.get("original_reference"),
+                section_number=cleaned_reference,
                 ai_confidence=control_data.get("ai_confidence"),
                 is_verified=False
             )
             db.add(parsed_control)
             db.flush()
             
-            evidence_types = control_data.get("evidence_types", [])
-            for evidence_type in evidence_types:
-                if evidence_type in ["policy", "procedure", "configuration", "log", "report", "contract"]:
-                    evidence_mapping = ControlEvidenceMapping(
-                        parsed_control_id=parsed_control.id,
-                        evidence_type=evidence_type,
-                        is_required=True,
-                        suggested_by_ai=True
-                    )
-                    db.add(evidence_mapping)
+            # Handle new detailed evidence_requirements format
+            evidence_requirements = control_data.get("evidence_requirements", [])
+            if evidence_requirements:
+                for ev_req in evidence_requirements:
+                    if isinstance(ev_req, dict):
+                        ev_type = ev_req.get("type", "document")
+                        ev_title = ev_req.get("title", "")
+                        ev_description = ev_req.get("description", "")
+                        ev_is_required = ev_req.get("is_required", True)
+                        
+                        # Build detailed description including title
+                        full_description = ev_title
+                        if ev_description:
+                            full_description = f"{ev_title}: {ev_description}" if ev_title else ev_description
+                        
+                        # Validate evidence type
+                        valid_types = ["policy", "procedure", "configuration", "log", "report", "contract", "attestation", "register", "matrix", "plan", "screenshot", "training", "assessment", "document"]
+                        if ev_type not in valid_types:
+                            ev_type = "document"
+                        
+                        evidence_mapping = ControlEvidenceMapping(
+                            parsed_control_id=parsed_control.id,
+                            evidence_type=ev_type,
+                            evidence_description=full_description[:1000] if full_description else None,
+                            is_required=ev_is_required if isinstance(ev_is_required, bool) else True,
+                            suggested_by_ai=True
+                        )
+                        db.add(evidence_mapping)
+            else:
+                # Fallback to old evidence_types format for backward compatibility
+                evidence_types = control_data.get("evidence_types", [])
+                for evidence_type in evidence_types:
+                    if evidence_type in ["policy", "procedure", "configuration", "log", "report", "contract"]:
+                        evidence_mapping = ControlEvidenceMapping(
+                            parsed_control_id=parsed_control.id,
+                            evidence_type=evidence_type,
+                            is_required=True,
+                            suggested_by_ai=True
+                        )
+                        db.add(evidence_mapping)
         
         fw_final = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
         if fw_final:
@@ -876,10 +984,14 @@ def parse_framework_document_sync(
         for idx, control_data in enumerate(parsed_controls_data, start=1):
             control_id = f"FW-{framework_id:03d}-{idx:03d}"
             
+            # Clean up section references
+            raw_reference = control_data.get("original_reference", "")
+            cleaned_reference = clean_section_reference(raw_reference) if raw_reference else None
+            
             parsed_control = ParsedFrameworkControl(
                 uploaded_framework_id=framework_id,
                 control_id=control_id,
-                original_reference=control_data.get("original_reference"),
+                original_reference=cleaned_reference,
                 title=control_data.get("title", "Untitled Control")[:500],
                 description=control_data.get("description"),
                 full_text=control_data.get("full_text"),
@@ -887,23 +999,53 @@ def parse_framework_document_sync(
                 category=control_data.get("category"),
                 is_mandatory=control_data.get("is_mandatory", True),
                 priority=control_data.get("priority", "medium"),
-                section_number=control_data.get("original_reference"),
+                section_number=cleaned_reference,
                 ai_confidence=control_data.get("ai_confidence"),
                 is_verified=False
             )
             db.add(parsed_control)
             db.flush()
             
-            evidence_types = control_data.get("evidence_types", [])
-            for evidence_type in evidence_types:
-                if evidence_type in ["policy", "procedure", "configuration", "log", "report", "contract"]:
-                    evidence_mapping = ControlEvidenceMapping(
-                        parsed_control_id=parsed_control.id,
-                        evidence_type=evidence_type,
-                        is_required=True,
-                        suggested_by_ai=True
-                    )
-                    db.add(evidence_mapping)
+            # Handle new detailed evidence_requirements format
+            evidence_requirements = control_data.get("evidence_requirements", [])
+            if evidence_requirements:
+                for ev_req in evidence_requirements:
+                    if isinstance(ev_req, dict):
+                        ev_type = ev_req.get("type", "document")
+                        ev_title = ev_req.get("title", "")
+                        ev_description = ev_req.get("description", "")
+                        ev_is_required = ev_req.get("is_required", True)
+                        
+                        # Build detailed description including title
+                        full_description = ev_title
+                        if ev_description:
+                            full_description = f"{ev_title}: {ev_description}" if ev_title else ev_description
+                        
+                        # Validate evidence type
+                        valid_types = ["policy", "procedure", "configuration", "log", "report", "contract", "attestation", "register", "matrix", "plan", "screenshot", "training", "assessment", "document"]
+                        if ev_type not in valid_types:
+                            ev_type = "document"
+                        
+                        evidence_mapping = ControlEvidenceMapping(
+                            parsed_control_id=parsed_control.id,
+                            evidence_type=ev_type,
+                            evidence_description=full_description[:1000] if full_description else None,
+                            is_required=ev_is_required if isinstance(ev_is_required, bool) else True,
+                            suggested_by_ai=True
+                        )
+                        db.add(evidence_mapping)
+            else:
+                # Fallback to old evidence_types format for backward compatibility
+                evidence_types = control_data.get("evidence_types", [])
+                for evidence_type in evidence_types:
+                    if evidence_type in ["policy", "procedure", "configuration", "log", "report", "contract"]:
+                        evidence_mapping = ControlEvidenceMapping(
+                            parsed_control_id=parsed_control.id,
+                            evidence_type=evidence_type,
+                            is_required=True,
+                            suggested_by_ai=True
+                        )
+                        db.add(evidence_mapping)
             
             created_controls.append(parsed_control)
         
