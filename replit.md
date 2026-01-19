@@ -83,6 +83,9 @@ Set these environment variables for email notifications:
 - **SLA Check**: `POST /grc/vuln-management/escalations/run-sla-check`
 - **Dashboard Metrics**: `/grc/vuln-management/dashboard/department-metrics`, `sla-compliance-trends`, `department-workload`, `aging-by-department`, `escalation-metrics`
 
+## Documentation
+- **Database Schema**: See `docs/DATABASE_SCHEMA.md` for comprehensive documentation of all 80+ database tables, columns, relationships, and data flows.
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **FastAPI**: Backend API framework.
