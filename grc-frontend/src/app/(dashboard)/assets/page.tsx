@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { assetsApi } from '@/lib/api';
@@ -24,7 +24,11 @@ import {
   Edit,
   Trash2,
   Shield,
-  DollarSign
+  DollarSign,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2
 } from 'lucide-react';
 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'decommissioned';
@@ -44,6 +48,7 @@ export default function AssetsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [criticalityFilter, setCriticalityFilter] = useState<CriticalityFilter>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<ITAsset | null>(null);
   const [expandedAsset, setExpandedAsset] = useState<number | null>(null);
   const queryClient = useQueryClient();
@@ -212,13 +217,30 @@ export default function AssetsPage() {
           <h1 className="text-2xl font-bold text-white">IT Asset Inventory & Valuation</h1>
           <p className="text-slate-400">Manage and track IT assets with CIA ratings and valuations</p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
-        >
-          <Plus size={18} />
-          Add Asset
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => assetsApi.downloadTemplate()}
+            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700"
+            title="Download CSV template for bulk import"
+          >
+            <Download size={16} />
+            Template
+          </button>
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-2 rounded-lg border border-primary-600 bg-primary-600/20 px-3 py-2 text-sm font-medium text-primary-400 hover:bg-primary-600/30"
+          >
+            <Upload size={16} />
+            Import
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+          >
+            <Plus size={18} />
+            Add Asset
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -363,9 +385,8 @@ export default function AssetsPage() {
             {filteredAssets?.map((asset: ITAsset) => {
               const isExpanded = expandedAsset === asset.id;
               return (
-                <>
+                <React.Fragment key={asset.id}>
                   <tr 
-                    key={asset.id} 
                     className="bg-slate-800/50 hover:bg-slate-700/50 cursor-pointer"
                     onClick={() => setExpandedAsset(isExpanded ? null : asset.id)}
                   >
@@ -461,7 +482,7 @@ export default function AssetsPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -490,6 +511,16 @@ export default function AssetsPage() {
           onSave={(data) => updateMutation.mutate({ id: editingAsset.id, data })}
           isLoading={updateMutation.isPending}
           initialData={editingAsset}
+        />
+      )}
+
+      {isImportModalOpen && (
+        <ImportAssetsModal
+          onClose={() => setIsImportModalOpen(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['assets'] });
+            queryClient.invalidateQueries({ queryKey: ['assets-dashboard'] });
+          }}
         />
       )}
     </div>
@@ -762,6 +793,240 @@ function AssetModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function ImportAssetsModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [result, setResult] = useState<{
+    success: boolean;
+    imported: number;
+    total_rows: number;
+    errors: string[];
+    total_errors: number;
+    message: string;
+  } | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile.name.match(/\.(csv|xlsx|xls)$/i)) {
+        setFile(droppedFile);
+        setResult(null);
+      }
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setResult(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    
+    setIsUploading(true);
+    try {
+      const response = await assetsApi.importAssets(file);
+      setResult(response.data);
+      if (response.data.imported > 0) {
+        onSuccess();
+      }
+    } catch (error: any) {
+      setResult({
+        success: false,
+        imported: 0,
+        total_rows: 0,
+        errors: [error.response?.data?.detail || 'Upload failed'],
+        total_errors: 1,
+        message: 'Upload failed'
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-lg bg-slate-800 p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">Import IT Assets</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <X size={20} />
+          </button>
+        </div>
+
+        {!result ? (
+          <>
+            <div className="mb-4 rounded-lg border border-slate-600 bg-slate-700/50 p-4">
+              <div className="flex items-start gap-3">
+                <FileSpreadsheet className="h-5 w-5 text-primary-400 mt-0.5" />
+                <div>
+                  <p className="text-sm text-white font-medium">How to import assets:</p>
+                  <ol className="mt-2 text-xs text-slate-400 space-y-1 list-decimal list-inside">
+                    <li>Click "Template" button to download the CSV template</li>
+                    <li>Fill in your assets (keep the header row)</li>
+                    <li>Upload the completed file here</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`relative mb-4 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+                dragActive
+                  ? 'border-primary-500 bg-primary-900/20'
+                  : file
+                  ? 'border-green-500 bg-green-900/20'
+                  : 'border-slate-600 hover:border-slate-500'
+              }`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                onChange={handleFileChange}
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
+              
+              {file ? (
+                <div className="flex flex-col items-center">
+                  <CheckCircle2 className="h-10 w-10 text-green-400 mb-2" />
+                  <p className="text-white font-medium">{file.name}</p>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {(file.size / 1024).toFixed(1)} KB
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFile(null);
+                    }}
+                    className="mt-2 text-xs text-slate-400 hover:text-white"
+                  >
+                    Choose different file
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center">
+                  <Upload className="h-10 w-10 text-slate-500 mb-2" />
+                  <p className="text-white">Drag and drop your file here</p>
+                  <p className="text-sm text-slate-400 mt-1">or click to browse</p>
+                  <p className="text-xs text-slate-500 mt-2">Supports CSV, XLSX, XLS</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={onClose}
+                className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpload}
+                disabled={!file || isUploading}
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+              >
+                {isUploading && <Loader2 className="h-4 w-4 animate-spin" />}
+                Import Assets
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={`mb-4 rounded-lg p-4 ${
+              result.success && result.imported > 0
+                ? 'bg-green-900/30 border border-green-800'
+                : 'bg-red-900/30 border border-red-800'
+            }`}>
+              <div className="flex items-start gap-3">
+                {result.success && result.imported > 0 ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-400 mt-0.5" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+                )}
+                <div>
+                  <p className={`font-medium ${
+                    result.success && result.imported > 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {result.message}
+                  </p>
+                  <div className="mt-2 text-sm text-slate-300">
+                    <p>Imported: {result.imported} of {result.total_rows} rows</p>
+                    {result.total_errors > 0 && (
+                      <p className="text-red-400">Errors: {result.total_errors}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {result.errors.length > 0 && (
+              <div className="mb-4 max-h-40 overflow-y-auto rounded-lg bg-slate-700/50 p-3">
+                <p className="text-xs font-medium text-slate-400 mb-2">Error Details:</p>
+                <ul className="text-xs text-red-400 space-y-1">
+                  {result.errors.map((error, idx) => (
+                    <li key={idx}>{error}</li>
+                  ))}
+                </ul>
+                {result.total_errors > result.errors.length && (
+                  <p className="text-xs text-slate-500 mt-2">
+                    ... and {result.total_errors - result.errors.length} more errors
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setResult(null);
+                }}
+                className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
+              >
+                Import More
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700"
+              >
+                Done
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

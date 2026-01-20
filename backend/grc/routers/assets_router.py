@@ -1,7 +1,10 @@
 import random
+import csv
+import io
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 
 from ..models import (
@@ -879,3 +882,211 @@ def perform_risk_assessment(
     db.refresh(assessment)
     
     return assessment
+
+
+ASSET_TEMPLATE_COLUMNS = [
+    ("name", "Asset Name (Required)", "ERP System"),
+    ("description", "Description", "Enterprise Resource Planning system for finance and operations"),
+    ("asset_type", "Asset Type (Required: application/infrastructure/data/cloud/third_party)", "application"),
+    ("criticality", "Criticality (low/medium/high/critical)", "high"),
+    ("vendor", "Vendor Name", "SAP"),
+    ("location", "Location", "Primary Data Center"),
+    ("confidentiality_rating", "Confidentiality Rating (1-5)", "4"),
+    ("integrity_rating", "Integrity Rating (1-5)", "5"),
+    ("availability_rating", "Availability Rating (1-5)", "5"),
+    ("valuation", "Valuation (USD)", "500000"),
+    ("status", "Status (active/inactive/decommissioned)", "active"),
+]
+
+
+@router.get("/template/download")
+def download_asset_template(
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Download CSV template for bulk asset import"""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    headers = [col[0] for col in ASSET_TEMPLATE_COLUMNS]
+    writer.writerow(headers)
+    
+    descriptions = [col[1] for col in ASSET_TEMPLATE_COLUMNS]
+    writer.writerow(descriptions)
+    
+    examples = [col[2] for col in ASSET_TEMPLATE_COLUMNS]
+    writer.writerow(examples)
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=it_assets_template.csv"}
+    )
+
+
+@router.post("/import/upload")
+async def upload_assets_file(
+    file: UploadFile = File(...),
+    tenant_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Upload CSV or Excel file to bulk import IT assets"""
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    else:
+        tenant_id = get_user_primary_tenant(current_user, db)
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is not assigned to any tenant"
+            )
+    
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No file provided"
+        )
+    
+    filename = file.filename.lower()
+    if not (filename.endswith('.csv') or filename.endswith('.xlsx') or filename.endswith('.xls')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be CSV or Excel format (.csv, .xlsx, .xls)"
+        )
+    
+    content = await file.read()
+    rows = []
+    
+    try:
+        if filename.endswith('.csv'):
+            text_content = content.decode('utf-8')
+            reader = csv.DictReader(io.StringIO(text_content))
+            rows = list(reader)
+        else:
+            from openpyxl import load_workbook
+            wb = load_workbook(filename=io.BytesIO(content), read_only=True)
+            ws = wb.active
+            
+            headers = []
+            for idx, row in enumerate(ws.iter_rows(values_only=True)):
+                if idx == 0:
+                    headers = [str(cell).strip() if cell else "" for cell in row]
+                    continue
+                if idx == 1:
+                    first_cell = str(row[0]).lower() if row[0] else ""
+                    if "required" in first_cell or "description" in first_cell or "name" in first_cell:
+                        continue
+                
+                if not any(row):
+                    continue
+                    
+                row_dict = {}
+                for col_idx, cell in enumerate(row):
+                    if col_idx < len(headers) and headers[col_idx]:
+                        row_dict[headers[col_idx]] = cell
+                rows.append(row_dict)
+            wb.close()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error parsing file: {str(e)}"
+        )
+    
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No data rows found in file"
+        )
+    
+    valid_asset_types = ['application', 'infrastructure', 'data', 'cloud', 'third_party']
+    valid_criticality = ['low', 'medium', 'high', 'critical']
+    valid_status = ['active', 'inactive', 'decommissioned']
+    
+    imported = 0
+    errors = []
+    
+    for idx, row in enumerate(rows):
+        row_num = idx + 2
+        
+        name = str(row.get('name', '')).strip()
+        if not name:
+            errors.append(f"Row {row_num}: Missing required field 'name'")
+            continue
+        
+        asset_type = str(row.get('asset_type', 'application')).strip().lower()
+        if asset_type not in valid_asset_types:
+            errors.append(f"Row {row_num}: Invalid asset_type '{asset_type}'. Must be one of: {', '.join(valid_asset_types)}")
+            continue
+        
+        criticality = str(row.get('criticality', 'medium')).strip().lower()
+        if criticality not in valid_criticality:
+            criticality = 'medium'
+        
+        asset_status = str(row.get('status', 'active')).strip().lower()
+        if asset_status not in valid_status:
+            asset_status = 'active'
+        
+        conf_rating = row.get('confidentiality_rating')
+        int_rating = row.get('integrity_rating')
+        avail_rating = row.get('availability_rating')
+        valuation = row.get('valuation')
+        
+        try:
+            conf_rating = int(conf_rating) if conf_rating else None
+            if conf_rating and (conf_rating < 1 or conf_rating > 5):
+                conf_rating = None
+        except (ValueError, TypeError):
+            conf_rating = None
+            
+        try:
+            int_rating = int(int_rating) if int_rating else None
+            if int_rating and (int_rating < 1 or int_rating > 5):
+                int_rating = None
+        except (ValueError, TypeError):
+            int_rating = None
+            
+        try:
+            avail_rating = int(avail_rating) if avail_rating else None
+            if avail_rating and (avail_rating < 1 or avail_rating > 5):
+                avail_rating = None
+        except (ValueError, TypeError):
+            avail_rating = None
+            
+        try:
+            valuation = float(str(valuation).replace(',', '').replace('$', '')) if valuation else None
+        except (ValueError, TypeError):
+            valuation = None
+        
+        try:
+            db_asset = ITAsset(
+                tenant_id=tenant_id,
+                name=name,
+                description=str(row.get('description', '')).strip() or None,
+                asset_type=asset_type,
+                criticality=criticality,
+                vendor=str(row.get('vendor', '')).strip() or None,
+                location=str(row.get('location', '')).strip() or None,
+                confidentiality_rating=conf_rating,
+                integrity_rating=int_rating,
+                availability_rating=avail_rating,
+                valuation=valuation,
+                status=asset_status
+            )
+            db.add(db_asset)
+            imported += 1
+        except Exception as e:
+            errors.append(f"Row {row_num}: Error creating asset - {str(e)}")
+    
+    if imported > 0:
+        db.commit()
+    
+    return {
+        "success": True,
+        "imported": imported,
+        "total_rows": len(rows),
+        "errors": errors[:20] if errors else [],
+        "total_errors": len(errors),
+        "message": f"Successfully imported {imported} assets" + (f" with {len(errors)} errors" if errors else "")
+    }

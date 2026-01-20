@@ -33,10 +33,36 @@ The platform utilizes a multi-tenant architecture with complete tenant isolation
 - **Enterprise Risk Management (ERM)**: Risk register, mitigation actions, appetite management, KRIs, incidents, and reporting, including an Internal Control Register sub-module for managing organization-specific internal controls with workflow, testing, and risk linking.
 - **Governance Orchestration**: Lifecycle management for policies, standards, and procedures with version control and approval workflows.
 - **Policy/Document Management**: Comprehensive document lifecycle, versioning, and approval.
-- **IT Asset Inventory**: Asset classification, valuation, and linking to GRC elements.
+- **IT Asset Inventory**: Asset classification, valuation, linking to GRC elements, and bulk import via CSV/Excel templates.
 - **Role-Based Access Control (RBAC)**: Fine-grained permissions per tenant.
 - **Unified Control Library**: AI-powered control mapping across frameworks with evidence recommendations and gap analysis, including common control groups, AI similarity analysis, control inheritance, and harmonization reports.
 - **Vulnerability Management**: A module for managing vulnerability and penetration testing reports with AI-powered fix recommendations, SLA tracking, compliance mapping, department-based workflow, and escalation systems.
+
+## IT Asset Bulk Import
+
+The IT Asset module supports bulk import of assets via CSV or Excel files.
+
+### How to Use
+1. Navigate to **Assets** page
+2. Click **Template** button to download the CSV template
+3. Fill in your assets using the template columns:
+   - `name` (Required) - Asset name
+   - `description` - Description of the asset
+   - `asset_type` (Required) - One of: application, infrastructure, data, cloud, third_party
+   - `criticality` - One of: low, medium, high, critical (default: medium)
+   - `vendor` - Vendor name
+   - `location` - Physical or logical location
+   - `confidentiality_rating` - 1-5 scale
+   - `integrity_rating` - 1-5 scale
+   - `availability_rating` - 1-5 scale
+   - `valuation` - Monetary value in USD
+   - `status` - One of: active, inactive, decommissioned (default: active)
+4. Click **Import** button and upload the filled file
+5. View import results showing successful imports and any errors
+
+### API Endpoints
+- **Download Template**: `GET /grc/assets/template/download`
+- **Import Assets**: `POST /grc/assets/import/upload`
 
 ## Vulnerability Management Module
 

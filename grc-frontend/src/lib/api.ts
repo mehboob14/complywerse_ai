@@ -271,6 +271,24 @@ export const assetsApi = {
     apiClient.delete(`/assets/${id}/link-evidence/${linkId}`),
   getCoverageAnalysis: (id: number) => apiClient.get(`/assets/${id}/coverage-analysis`),
   assessRisk: (id: number) => apiClient.post(`/assets/${id}/assess`),
+  downloadTemplate: () => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    window.location.href = `${baseUrl}/grc/assets/template/download`;
+  },
+  importAssets: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post<{
+      success: boolean;
+      imported: number;
+      total_rows: number;
+      errors: string[];
+      total_errors: number;
+      message: string;
+    }>('/assets/import/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export const certificationsApi = {
