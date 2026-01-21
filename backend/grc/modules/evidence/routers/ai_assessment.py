@@ -2,6 +2,7 @@ import os
 import json
 import hashlib
 import time
+import logging
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -9,6 +10,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from pydantic import BaseModel
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 from ....models import (
     Evidence, EvidenceAIAssessment, EvidenceControlMapping, EvidenceAssessmentCache,
@@ -444,17 +447,18 @@ def run_ai_assessment(
             return assessment
     
     # Run fresh AI assessment
-    start_time = time.time()
-    client = get_openai_client()
-    available_frameworks = get_available_frameworks(db)
-    
-    enhanced_prompt = DETERMINISTIC_ASSESSMENT_PROMPT.format(
-        available_frameworks=available_frameworks,
-        evidence_content=evidence.ocr_content[:12000]
-    )
-    
     try:
-        # Use deterministic parameters: temperature=0, seed for reproducibility
+        start_time = time.time()
+        client = get_openai_client()
+        available_frameworks = get_available_frameworks(db)
+        
+        enhanced_prompt = DETERMINISTIC_ASSESSMENT_PROMPT.format(
+            available_frameworks=available_frameworks,
+            evidence_content=evidence.ocr_content[:12000]
+        )
+        
+        # Use deterministic parameters: temperature=0 for consistent output
+        # Note: seed parameter removed for compatibility with Replit AI integrations
         response = client.chat.completions.create(
             model=MODEL_VERSION,
             messages=[
@@ -468,7 +472,6 @@ def run_ai_assessment(
                 }
             ],
             temperature=0,  # CRITICAL: Deterministic output
-            seed=42,  # Fixed seed for reproducibility
             max_tokens=4000
         )
         
@@ -528,6 +531,7 @@ def run_ai_assessment(
         raise
     except Exception as e:
         error_msg = str(e)
+        logger.error(f"AI Assessment Error: {error_msg}", exc_info=True)
         if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
