@@ -636,12 +636,39 @@ class EvidenceControlMapping(Base):
     normalized_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=True, index=True)
     framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=True, index=True)
     
+    # Clause-level mapping fields for auditor-defensible output
+    framework_name = Column(String(255), nullable=True)  # e.g., "ISO 27001:2022"
+    control_code = Column(String(100), nullable=True)  # e.g., "A.5.1"
+    clause_reference = Column(String(255), nullable=True)  # Exact clause/sub-clause reference
+    control_title = Column(String(500), nullable=True)  # Control title text
+    matching_rationale = Column(Text, nullable=True)  # Why this evidence matches
+    confidence_score = Column(Float, nullable=True)  # 0-100 confidence percentage
+    coverage_type = Column(String(50), default="partial")  # full, partial, supporting, not_applicable
+    
+    # Evidence text snippets that matched
+    matched_text_snippets = Column(JSON, default=[])  # Text excerpts from evidence
+    matched_control_language = Column(Text, nullable=True)  # Control requirement text matched
+    similarity_score = Column(Float, nullable=True)  # Semantic similarity score
+    rule_based_validation = Column(Boolean, default=False)  # Whether rule-based validation passed
+    
+    # Locking mechanism to prevent drift
+    is_locked = Column(Boolean, default=False)  # Locked by user validation
+    locked_at = Column(DateTime, nullable=True)
+    locked_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    # Audit trail
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by_ai = Column(Boolean, default=True)  # True if AI-generated, False if manual
+    assessment_id = Column(Integer, ForeignKey("grc_evidence_ai_assessments.id"), nullable=True)
+    
     evidence = relationship("Evidence", back_populates="control_mappings")
     normalized_control = relationship("NormalizedControl", back_populates="evidence_mappings")
     framework_control = relationship("FrameworkControl", back_populates="evidence_mappings")
+    locker = relationship("GRCUser", foreign_keys=[locked_by])
     
     __table_args__ = (
         Index("ix_evidence_control_mapping", "evidence_id", "normalized_control_id"),
+        Index("ix_evidence_control_locked", "evidence_id", "is_locked"),
     )
 
 
@@ -661,7 +688,59 @@ class EvidenceAIAssessment(Base):
     detected_controls = Column(JSON, default=[])
     compliance_gaps = Column(JSON, default=[])
     
+    # Deterministic assessment fields
+    content_hash = Column(String(64), nullable=True, index=True)  # SHA-256 hash of OCR content
+    model_version = Column(String(50), nullable=True)  # AI model version used (e.g., "gpt-4o-2024-08-06")
+    prompt_version = Column(String(20), default="1.0")  # Prompt template version for tracking
+    
+    # Assessment mode
+    assessment_mode = Column(String(50), default="initial")  # initial, incremental, locked_audit
+    is_locked = Column(Boolean, default=False)  # Prevent re-assessment
+    locked_at = Column(DateTime, nullable=True)
+    locked_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    lock_reason = Column(String(255), nullable=True)  # e.g., "Auditor validated", "User approved"
+    
+    # Clause-level control mappings (auditor-defensible output)
+    clause_mappings = Column(JSON, default=[])  # [{framework, control_id, clause, title, rationale, confidence, coverage_type}]
+    
+    # Explainability data
+    matched_text_excerpts = Column(JSON, default=[])  # Text snippets from evidence used for matching
+    rule_validations = Column(JSON, default=[])  # Results of rule-based validations
+    
+    # Full audit trail
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    assessment_duration_ms = Column(Integer, nullable=True)  # Time taken for AI assessment
+    
     evidence = relationship("Evidence", back_populates="ai_assessments")
+    locker = relationship("GRCUser", foreign_keys=[locked_by])
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    
+    control_mappings = relationship("EvidenceControlMapping", backref="source_assessment", foreign_keys="EvidenceControlMapping.assessment_id")
+
+
+class EvidenceAssessmentCache(Base):
+    """Cache for deterministic AI assessments - same content hash returns same results"""
+    __tablename__ = "grc_evidence_assessment_cache"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    content_hash = Column(String(64), nullable=False, unique=True, index=True)  # SHA-256 hash
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    # Cached AI response (full JSON)
+    cached_response = Column(JSON, nullable=False)
+    
+    # Tracking
+    model_version = Column(String(50), nullable=False)
+    prompt_version = Column(String(20), default="1.0")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_used_at = Column(DateTime, default=datetime.utcnow)
+    use_count = Column(Integer, default=1)
+    
+    tenant = relationship("Tenant")
+    
+    __table_args__ = (
+        Index("ix_assessment_cache_tenant_hash", "tenant_id", "content_hash"),
+    )
 
 
 class EvidenceIncidentLink(Base):

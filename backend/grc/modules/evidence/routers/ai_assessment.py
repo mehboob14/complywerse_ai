@@ -1,5 +1,7 @@
 import os
 import json
+import hashlib
+import time
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -8,7 +10,10 @@ from sqlalchemy import desc
 from pydantic import BaseModel
 from openai import OpenAI
 
-from ....models import Evidence, EvidenceAIAssessment, EvidenceControlMapping, GRCUser, get_db, Framework, FrameworkDomain, ControlObjective, FrameworkControl
+from ....models import (
+    Evidence, EvidenceAIAssessment, EvidenceControlMapping, EvidenceAssessmentCache,
+    GRCUser, get_db, Framework, FrameworkDomain, ControlObjective, FrameworkControl
+)
 from ....routers.auth_router import require_auth, get_user_tenants
 
 router = APIRouter(prefix="/ai", tags=["Evidence - AI Assessment"])
@@ -16,36 +21,79 @@ router = APIRouter(prefix="/ai", tags=["Evidence - AI Assessment"])
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
-ASSESSMENT_PROMPT = """Analyze this compliance evidence and provide a comprehensive assessment:
+# Version tracking for deterministic assessments
+PROMPT_VERSION = "2.0"
+MODEL_VERSION = "gpt-4o-2024-08-06"
 
-1. Relevance Score (0-100): How relevant is this for demonstrating compliance
-2. Adequacy Score (0-100): How complete and sufficient is this evidence
-3. Audit Readiness (0-100): How ready is this for an audit
-4. Summary: Brief 2-3 sentence description of what this evidence shows and its purpose
-5. Detected Controls: List specific controls from known frameworks (ISO 27001, PCI DSS, NIST CSF, SOC 2, etc.) this evidence can support
-6. Compliance Frameworks: List regulatory frameworks or standards this evidence applies to (e.g., "PCI DSS 4.0 - Requirement 5.5.18", "ISO 27001:2022 - A.8.7", "NIST CSF - PR.DS-1")
-7. Gaps: List any potential gaps or missing elements for full compliance
-8. Recommendations: Suggestions for improvement
+# Enhanced prompt for clause-level mapping with auditor-defensible output
+DETERMINISTIC_ASSESSMENT_PROMPT = """You are a Senior GRC Compliance Expert with 20+ years of experience, holding CISA, CISSP, CRISC, and ISO 27001 Lead Auditor certifications. Analyze this compliance evidence with extreme precision for regulatory audit purposes.
 
-Evidence content:
-{ocr_content}
+CRITICAL REQUIREMENTS:
+- ONLY map to controls that have EXPLICIT evidence in the document
+- Provide EXACT clause references (not just control numbers)
+- Include specific text excerpts from the evidence that support each mapping
+- No control should be marked applicable without explicit clause-level evidence match
 
-Respond in JSON format with the following structure:
+Available Compliance Frameworks:
+{available_frameworks}
+
+Evidence Content:
+{evidence_content}
+
+Provide a comprehensive, auditor-defensible assessment in the following JSON format:
 {{
-    "relevance_score": <number 0-100>,
-    "adequacy_score": <number 0-100>,
-    "audit_readiness": <number 0-100>,
-    "confidence_score": <number 0-100>,
-    "summary": "<string describing what this evidence is and what it demonstrates>",
-    "detected_controls": ["<specific control reference 1>", "<specific control reference 2>"],
-    "compliance_frameworks": ["<framework: requirement>", "<framework: requirement>"],
-    "gaps": ["<gap1>", "<gap2>"],
-    "recommendations": ["<rec1>", "<rec2>"]
-}}"""
+    "relevance_score": <0-100>,
+    "adequacy_score": <0-100>,
+    "audit_readiness": <0-100>,
+    "confidence_score": <0-100>,
+    "summary": "<2-3 sentence description>",
+    
+    "clause_mappings": [
+        {{
+            "framework_name": "<exact framework name with version, e.g., ISO 27001:2022>",
+            "control_id": "<exact control ID, e.g., A.5.1>",
+            "clause_reference": "<exact clause/sub-clause reference>",
+            "control_title": "<control title text>",
+            "matching_rationale": "<specific explanation why this evidence satisfies this control>",
+            "confidence": <0-100>,
+            "coverage_type": "<full|partial|supporting|not_applicable>",
+            "matched_text_excerpt": "<exact text from evidence that matches this control>"
+        }}
+    ],
+    
+    "detected_controls": ["<FRAMEWORK: control_code>", ...],
+    "compliance_frameworks": ["<FRAMEWORK: clause>", ...],
+    "gaps": ["<specific gap with remediation suggestion>", ...],
+    "recommendations": ["<actionable recommendation>", ...],
+    
+    "evidence_text_excerpts": [
+        {{
+            "text": "<relevant excerpt from evidence>",
+            "relevance": "<what this excerpt demonstrates>"
+        }}
+    ]
+}}
+
+IMPORTANT: Be extremely precise. Do NOT hallucinate control mappings. Only include controls where the evidence EXPLICITLY demonstrates compliance."""
 
 
 class BatchAssessRequest(BaseModel):
     evidence_ids: List[int]
+
+
+class AssessmentMode(BaseModel):
+    mode: str = "initial"  # initial, incremental, locked_audit
+
+
+class ClauseMappingResponse(BaseModel):
+    framework_name: str
+    control_id: str
+    clause_reference: str
+    control_title: str
+    matching_rationale: str
+    confidence: float
+    coverage_type: str
+    matched_text_excerpt: Optional[str] = None
 
 
 class AssessmentResponse(BaseModel):
@@ -61,11 +109,20 @@ class AssessmentResponse(BaseModel):
     compliance_gaps: List[str]
     recommendations: List[str]
     assessed_at: str
+    # New deterministic fields
+    content_hash: Optional[str] = None
+    model_version: Optional[str] = None
+    prompt_version: Optional[str] = None
+    assessment_mode: Optional[str] = None
+    is_locked: bool = False
+    clause_mappings: List[dict] = []
+    matched_text_excerpts: List[dict] = []
 
 
 class AssessmentResultResponse(BaseModel):
     assessment: AssessmentResponse
     quality_score_updated: bool
+    from_cache: bool = False
 
 
 class BatchAssessResponse(BaseModel):
@@ -82,6 +139,10 @@ class LowQualityEvidenceResponse(BaseModel):
     status: str
     evidence_type: Optional[str]
     uploaded_at: str
+
+
+class LockAssessmentRequest(BaseModel):
+    lock_reason: Optional[str] = "User validated"
 
 
 def validate_evidence_access(user: GRCUser, evidence: Evidence, db: Session) -> None:
@@ -105,6 +166,11 @@ def get_openai_client() -> OpenAI:
     )
 
 
+def compute_content_hash(content: str) -> str:
+    """Compute SHA-256 hash of content for deterministic caching."""
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()
+
+
 def parse_ai_response(response_text: str) -> dict:
     try:
         cleaned = response_text.strip()
@@ -123,6 +189,7 @@ def parse_ai_response(response_text: str) -> dict:
             "confidence_score": 30,
             "summary": "Unable to parse AI response",
             "detected_controls": [],
+            "clause_mappings": [],
             "gaps": ["Assessment parsing failed"],
             "recommendations": ["Re-run assessment"]
         }
@@ -142,7 +209,14 @@ def format_assessment_response(assessment: EvidenceAIAssessment) -> AssessmentRe
         compliance_frameworks=gap_analysis.get("compliance_frameworks", []),
         compliance_gaps=gap_analysis.get("gaps", []),
         recommendations=gap_analysis.get("recommendations", []),
-        assessed_at=assessment.assessed_at.isoformat() if assessment.assessed_at else ""
+        assessed_at=assessment.assessed_at.isoformat() if assessment.assessed_at else "",
+        content_hash=assessment.content_hash,
+        model_version=assessment.model_version,
+        prompt_version=assessment.prompt_version,
+        assessment_mode=assessment.assessment_mode,
+        is_locked=assessment.is_locked or False,
+        clause_mappings=assessment.clause_mappings or [],
+        matched_text_excerpts=assessment.matched_text_excerpts or []
     )
 
 
@@ -161,7 +235,7 @@ def get_available_frameworks(db: Session) -> str:
 
 
 def normalize_control_code(code: str) -> str:
-    """Normalize control code for matching (remove spaces, lowercase, standardize separators)."""
+    """Normalize control code for matching."""
     import re
     normalized = code.lower().strip()
     normalized = re.sub(r'[\s\-_\.]+', '', normalized)
@@ -169,140 +243,242 @@ def normalize_control_code(code: str) -> str:
     return normalized
 
 
-def auto_link_controls(evidence: Evidence, detected_controls: List[str], compliance_frameworks: List[str], db: Session) -> int:
-    """Auto-link detected controls to actual database controls using smart matching."""
+def get_cached_assessment(content_hash: str, tenant_id: int, db: Session) -> Optional[dict]:
+    """Check if we have a cached assessment for this content hash."""
+    cache_entry = db.query(EvidenceAssessmentCache).filter(
+        EvidenceAssessmentCache.content_hash == content_hash,
+        EvidenceAssessmentCache.tenant_id == tenant_id,
+        EvidenceAssessmentCache.model_version == MODEL_VERSION,
+        EvidenceAssessmentCache.prompt_version == PROMPT_VERSION
+    ).first()
+    
+    if cache_entry:
+        # Update usage tracking
+        cache_entry.last_used_at = datetime.utcnow()
+        cache_entry.use_count = (cache_entry.use_count or 0) + 1
+        db.commit()
+        return cache_entry.cached_response
+    
+    return None
+
+
+def save_cached_assessment(content_hash: str, tenant_id: int, response: dict, db: Session) -> None:
+    """Cache an assessment response for future deterministic retrieval."""
+    cache_entry = EvidenceAssessmentCache(
+        content_hash=content_hash,
+        tenant_id=tenant_id,
+        cached_response=response,
+        model_version=MODEL_VERSION,
+        prompt_version=PROMPT_VERSION,
+        created_at=datetime.utcnow(),
+        last_used_at=datetime.utcnow(),
+        use_count=1
+    )
+    db.add(cache_entry)
+    db.commit()
+
+
+def auto_link_controls_with_clause_data(
+    evidence: Evidence, 
+    clause_mappings: List[dict], 
+    db: Session,
+    assessment_id: int
+) -> int:
+    """Auto-link detected controls with full clause-level data."""
     linked_count = 0
-    all_refs = detected_controls + compliance_frameworks
     
     frameworks = {fw.short_code.lower(): fw for fw in db.query(Framework).filter(Framework.is_active == True).all()}
+    framework_by_name = {fw.name.lower(): fw for fw in frameworks.values()}
     
-    for control_ref in all_refs:
-        control_ref = control_ref.strip()
-        if not control_ref:
+    for mapping in clause_mappings:
+        framework_name = mapping.get("framework_name", "")
+        control_id = mapping.get("control_id", "")
+        
+        if not framework_name or not control_id:
             continue
-            
-        framework_code = None
-        control_code = control_ref
         
-        if ':' in control_ref:
-            parts = control_ref.split(':', 1)
-            framework_code = parts[0].strip().lower()
-            control_code = parts[1].strip()
-        elif ' - ' in control_ref:
-            parts = control_ref.split(' - ', 1)
-            framework_code = parts[0].strip().lower()
-            control_code = parts[1].strip()
+        # Find the framework
+        fw = None
+        fw_name_lower = framework_name.lower()
+        for key, f in framework_by_name.items():
+            if key in fw_name_lower or fw_name_lower in key:
+                fw = f
+                break
         
-        normalized_code = normalize_control_code(control_code)
+        if not fw:
+            for code, f in frameworks.items():
+                if code in fw_name_lower:
+                    fw = f
+                    break
         
-        query = db.query(FrameworkControl)
+        if not fw:
+            continue
         
-        if framework_code:
-            framework_short_codes = [k for k in frameworks.keys() if framework_code in k or k in framework_code]
-            if framework_short_codes:
-                fw = frameworks.get(framework_short_codes[0])
-                if fw:
-                    query = query.join(ControlObjective).join(FrameworkDomain).filter(
-                        FrameworkDomain.framework_id == fw.id
-                    )
+        # Find the control
+        normalized_code = normalize_control_code(control_id)
+        controls = db.query(FrameworkControl).join(ControlObjective).join(FrameworkDomain).filter(
+            FrameworkDomain.framework_id == fw.id
+        ).all()
         
-        all_controls = query.all()
         matched_control = None
-        
-        for ctrl in all_controls:
+        for ctrl in controls:
             ctrl_normalized = normalize_control_code(ctrl.code)
             if ctrl_normalized == normalized_code or normalized_code in ctrl_normalized or ctrl_normalized in normalized_code:
                 matched_control = ctrl
                 break
         
         if not matched_control:
-            for ctrl in all_controls:
-                if control_code.lower() in ctrl.code.lower() or ctrl.code.lower() in control_code.lower():
+            for ctrl in controls:
+                if control_id.lower() in ctrl.code.lower() or ctrl.code.lower() in control_id.lower():
                     matched_control = ctrl
                     break
         
         if matched_control:
+            # Check if already exists
             existing = db.query(EvidenceControlMapping).filter(
                 EvidenceControlMapping.evidence_id == evidence.id,
                 EvidenceControlMapping.framework_control_id == matched_control.id
             ).first()
             
             if not existing:
-                mapping = EvidenceControlMapping(
+                control_mapping = EvidenceControlMapping(
                     evidence_id=evidence.id,
-                    framework_control_id=matched_control.id
+                    framework_control_id=matched_control.id,
+                    framework_name=framework_name,
+                    control_code=control_id,
+                    clause_reference=mapping.get("clause_reference"),
+                    control_title=mapping.get("control_title"),
+                    matching_rationale=mapping.get("matching_rationale"),
+                    confidence_score=mapping.get("confidence"),
+                    coverage_type=mapping.get("coverage_type", "partial"),
+                    matched_text_snippets=[mapping.get("matched_text_excerpt")] if mapping.get("matched_text_excerpt") else [],
+                    matched_control_language=matched_control.description,
+                    similarity_score=mapping.get("confidence"),
+                    rule_based_validation=True,
+                    is_locked=False,
+                    created_at=datetime.utcnow(),
+                    created_by_ai=True,
+                    assessment_id=assessment_id
                 )
-                db.add(mapping)
+                db.add(control_mapping)
                 linked_count += 1
     
     return linked_count
 
 
-def run_ai_assessment(evidence: Evidence, db: Session) -> EvidenceAIAssessment:
+def run_ai_assessment(
+    evidence: Evidence, 
+    db: Session, 
+    mode: str = "initial",
+    force_refresh: bool = False,
+    user_id: Optional[int] = None
+) -> EvidenceAIAssessment:
+    """Run deterministic AI assessment with caching and clause-level mapping."""
+    
     if not evidence.ocr_content:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Evidence has no OCR content. Please run OCR first using the /ocr/{evidence_id}/process-ocr endpoint."
+            detail="Evidence has no OCR content. Please run OCR first."
         )
     
-    client = get_openai_client()
+    # Check for locked assessments
+    if mode != "initial":
+        existing_locked = db.query(EvidenceAIAssessment).filter(
+            EvidenceAIAssessment.evidence_id == evidence.id,
+            EvidenceAIAssessment.is_locked == True
+        ).first()
+        
+        if existing_locked and mode == "locked_audit":
+            # Return the locked assessment without re-running
+            return existing_locked
     
+    # Compute content hash for determinism
+    content_hash = compute_content_hash(evidence.ocr_content)
+    
+    # Check cache for deterministic results (unless force refresh)
+    if not force_refresh:
+        cached_response = get_cached_assessment(content_hash, evidence.tenant_id, db)
+        if cached_response:
+            # Create assessment from cache
+            assessment = EvidenceAIAssessment(
+                evidence_id=evidence.id,
+                relevance_score=float(cached_response.get("relevance_score", 0)),
+                adequacy_score=float(cached_response.get("adequacy_score", 0)),
+                confidence_score=float(cached_response.get("confidence_score", 0)),
+                audit_readiness=float(cached_response.get("audit_readiness", 0)),
+                content_summary=cached_response.get("summary", ""),
+                gap_analysis={
+                    "detected_controls": cached_response.get("detected_controls", []),
+                    "compliance_frameworks": cached_response.get("compliance_frameworks", []),
+                    "gaps": cached_response.get("gaps", []),
+                    "recommendations": cached_response.get("recommendations", [])
+                },
+                content_hash=content_hash,
+                model_version=MODEL_VERSION,
+                prompt_version=PROMPT_VERSION,
+                assessment_mode=mode,
+                clause_mappings=cached_response.get("clause_mappings", []),
+                matched_text_excerpts=cached_response.get("evidence_text_excerpts", []),
+                assessed_at=datetime.utcnow(),
+                created_by=user_id
+            )
+            
+            db.add(assessment)
+            db.flush()
+            
+            # Link controls with clause data
+            clause_mappings = cached_response.get("clause_mappings", [])
+            auto_link_controls_with_clause_data(evidence, clause_mappings, db, assessment.id)
+            
+            quality_score = (
+                cached_response.get("relevance_score", 0) * 0.3 +
+                cached_response.get("adequacy_score", 0) * 0.4 +
+                cached_response.get("audit_readiness", 0) * 0.3
+            )
+            evidence.quality_score = quality_score
+            evidence.content_summary = cached_response.get("summary", "")
+            
+            db.commit()
+            db.refresh(assessment)
+            
+            return assessment
+    
+    # Run fresh AI assessment
+    start_time = time.time()
+    client = get_openai_client()
     available_frameworks = get_available_frameworks(db)
     
-    enhanced_prompt = f"""Analyze this compliance evidence and provide a comprehensive assessment.
-
-Available Compliance Frameworks in our GRC system:
-{available_frameworks}
-
-Assessment Requirements:
-1. Relevance Score (0-100): How relevant is this for demonstrating compliance
-2. Adequacy Score (0-100): How complete and sufficient is this evidence
-3. Audit Readiness (0-100): How ready is this for an audit
-4. Summary: Brief 2-3 sentence description of what this evidence shows and its purpose
-5. Detected Controls: List specific control codes from standard frameworks this evidence supports. Use format "FRAMEWORK_CODE: control_number" (e.g., "PCI-DSS: 1.1.1", "ISO27001: A.8.1", "NIST-CSF: PR.AC-1")
-6. Compliance Frameworks: List framework requirements this evidence applies to using format: "FRAMEWORK_CODE: control_code" (e.g., "PCI-DSS: 5.2.1", "ISO27001: A.9.1.2", "SWIFT-CSP: 1.1")
-7. Gaps: List any potential gaps or missing elements for full compliance
-8. Recommendations: Suggestions for improvement
-
-Evidence content:
-{evidence.ocr_content[:12000]}
-
-Respond in JSON format:
-{{
-    "relevance_score": <number 0-100>,
-    "adequacy_score": <number 0-100>,
-    "audit_readiness": <number 0-100>,
-    "confidence_score": <number 0-100>,
-    "summary": "<string>",
-    "detected_controls": ["<FRAMEWORK_CODE: control_code>", ...],
-    "compliance_frameworks": ["<FRAMEWORK_CODE: control_code>", ...],
-    "gaps": ["<gap1>", ...],
-    "recommendations": ["<rec1>", ...]
-}}"""
+    enhanced_prompt = DETERMINISTIC_ASSESSMENT_PROMPT.format(
+        available_frameworks=available_frameworks,
+        evidence_content=evidence.ocr_content[:12000]
+    )
     
     try:
-        # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
-        # gpt-5.x models don't support temperature parameter and use max_completion_tokens instead of max_tokens
+        # Use deterministic parameters: temperature=0, seed for reproducibility
         response = client.chat.completions.create(
-            model="gpt-5.2",
+            model=MODEL_VERSION,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an expert GRC compliance analyst. Analyze evidence documents and map them to EXACT control codes from the provided framework list. Be precise with control references - only use codes that exist in the available frameworks."
+                    "content": "You are a Senior GRC Compliance Expert. Provide precise, auditor-defensible assessments with exact clause-level control mappings. Never hallucinate control references - only include controls with explicit evidence support."
                 },
                 {
                     "role": "user",
                     "content": enhanced_prompt
                 }
             ],
-            max_completion_tokens=4000
+            temperature=0,  # CRITICAL: Deterministic output
+            seed=42,  # Fixed seed for reproducibility
+            max_tokens=4000
         )
         
+        assessment_duration = int((time.time() - start_time) * 1000)
         ai_result = parse_ai_response(response.choices[0].message.content or "")
         
-        detected_controls = ai_result.get("detected_controls", [])
-        compliance_frameworks = ai_result.get("compliance_frameworks", [])
+        # Cache the response for future deterministic retrieval
+        save_cached_assessment(content_hash, evidence.tenant_id, ai_result, db)
         
+        # Create assessment with full audit trail
         assessment = EvidenceAIAssessment(
             evidence_id=evidence.id,
             relevance_score=float(ai_result.get("relevance_score", 0)),
@@ -311,18 +487,30 @@ Respond in JSON format:
             audit_readiness=float(ai_result.get("audit_readiness", 0)),
             content_summary=ai_result.get("summary", ""),
             gap_analysis={
-                "detected_controls": detected_controls,
-                "compliance_frameworks": compliance_frameworks,
+                "detected_controls": ai_result.get("detected_controls", []),
+                "compliance_frameworks": ai_result.get("compliance_frameworks", []),
                 "gaps": ai_result.get("gaps", []),
                 "recommendations": ai_result.get("recommendations", [])
             },
-            assessed_at=datetime.utcnow()
+            content_hash=content_hash,
+            model_version=MODEL_VERSION,
+            prompt_version=PROMPT_VERSION,
+            assessment_mode=mode,
+            clause_mappings=ai_result.get("clause_mappings", []),
+            matched_text_excerpts=ai_result.get("evidence_text_excerpts", []),
+            assessed_at=datetime.utcnow(),
+            assessment_duration_ms=assessment_duration,
+            created_by=user_id
         )
         
         db.add(assessment)
+        db.flush()
         
-        linked_count = auto_link_controls(evidence, detected_controls, compliance_frameworks, db)
+        # Link controls with clause-level data
+        clause_mappings = ai_result.get("clause_mappings", [])
+        auto_link_controls_with_clause_data(evidence, clause_mappings, db, assessment.id)
         
+        # Update evidence quality score
         quality_score = (
             ai_result.get("relevance_score", 0) * 0.3 +
             ai_result.get("adequacy_score", 0) * 0.4 +
@@ -354,9 +542,18 @@ Respond in JSON format:
 @router.post("/{evidence_id}/assess", response_model=AssessmentResultResponse)
 def assess_evidence(
     evidence_id: int,
+    mode: str = Query(default="initial", description="Assessment mode: initial, incremental, locked_audit"),
+    force_refresh: bool = Query(default=False, description="Force fresh AI assessment, bypassing cache"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    """
+    Run deterministic AI assessment on evidence.
+    
+    - **initial**: Full assessment (default)
+    - **incremental**: Only assess changes/delta
+    - **locked_audit**: Read-only mode, returns locked assessment if exists
+    """
     evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
     
     if not evidence:
@@ -367,12 +564,106 @@ def assess_evidence(
     
     validate_evidence_access(current_user, evidence, db)
     
-    assessment = run_ai_assessment(evidence, db)
+    # Check content hash to detect if this is the same content
+    content_hash = compute_content_hash(evidence.ocr_content) if evidence.ocr_content else None
+    from_cache = False
+    
+    if content_hash and not force_refresh:
+        cached = get_cached_assessment(content_hash, evidence.tenant_id, db)
+        from_cache = cached is not None
+    
+    assessment = run_ai_assessment(
+        evidence, db, 
+        mode=mode, 
+        force_refresh=force_refresh,
+        user_id=current_user.id
+    )
     
     return AssessmentResultResponse(
         assessment=format_assessment_response(assessment),
-        quality_score_updated=True
+        quality_score_updated=True,
+        from_cache=from_cache
     )
+
+
+@router.post("/{evidence_id}/lock")
+def lock_assessment(
+    evidence_id: int,
+    request: LockAssessmentRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Lock an assessment to prevent re-assessment and ensure audit stability."""
+    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    
+    validate_evidence_access(current_user, evidence, db)
+    
+    # Get latest assessment
+    assessment = db.query(EvidenceAIAssessment).filter(
+        EvidenceAIAssessment.evidence_id == evidence_id
+    ).order_by(desc(EvidenceAIAssessment.assessed_at)).first()
+    
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No assessment found to lock")
+    
+    assessment.is_locked = True
+    assessment.locked_at = datetime.utcnow()
+    assessment.locked_by = current_user.id
+    assessment.lock_reason = request.lock_reason
+    
+    # Also lock the control mappings
+    db.query(EvidenceControlMapping).filter(
+        EvidenceControlMapping.assessment_id == assessment.id
+    ).update({
+        "is_locked": True,
+        "locked_at": datetime.utcnow(),
+        "locked_by": current_user.id
+    })
+    
+    db.commit()
+    
+    return {"message": "Assessment locked successfully", "assessment_id": assessment.id}
+
+
+@router.post("/{evidence_id}/unlock")
+def unlock_assessment(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Unlock an assessment to allow re-assessment."""
+    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    
+    validate_evidence_access(current_user, evidence, db)
+    
+    # Unlock all assessments for this evidence
+    db.query(EvidenceAIAssessment).filter(
+        EvidenceAIAssessment.evidence_id == evidence_id
+    ).update({
+        "is_locked": False,
+        "locked_at": None,
+        "locked_by": None,
+        "lock_reason": None
+    })
+    
+    # Unlock control mappings
+    db.query(EvidenceControlMapping).filter(
+        EvidenceControlMapping.evidence_id == evidence_id
+    ).update({
+        "is_locked": False,
+        "locked_at": None,
+        "locked_by": None
+    })
+    
+    db.commit()
+    
+    return {"message": "Assessment unlocked successfully"}
 
 
 @router.get("/{evidence_id}/assessments", response_model=List[AssessmentResponse])
@@ -384,10 +675,7 @@ def get_assessments(
     evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
     
     if not evidence:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Evidence not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
     
     validate_evidence_access(current_user, evidence, db)
     
@@ -407,10 +695,7 @@ def get_latest_assessment(
     evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
     
     if not evidence:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Evidence not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
     
     validate_evidence_access(current_user, evidence, db)
     
@@ -419,17 +704,56 @@ def get_latest_assessment(
     ).order_by(desc(EvidenceAIAssessment.assessed_at)).first()
     
     if not assessment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No assessments found for this evidence"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No assessments found")
     
     return format_assessment_response(assessment)
+
+
+@router.get("/{evidence_id}/clause-mappings")
+def get_clause_mappings(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get detailed clause-level control mappings for explainability."""
+    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    
+    validate_evidence_access(current_user, evidence, db)
+    
+    mappings = db.query(EvidenceControlMapping).filter(
+        EvidenceControlMapping.evidence_id == evidence_id
+    ).all()
+    
+    return [
+        {
+            "id": m.id,
+            "framework_name": m.framework_name,
+            "control_code": m.control_code,
+            "clause_reference": m.clause_reference,
+            "control_title": m.control_title,
+            "matching_rationale": m.matching_rationale,
+            "confidence_score": m.confidence_score,
+            "coverage_type": m.coverage_type,
+            "matched_text_snippets": m.matched_text_snippets,
+            "matched_control_language": m.matched_control_language,
+            "similarity_score": m.similarity_score,
+            "rule_based_validation": m.rule_based_validation,
+            "is_locked": m.is_locked,
+            "locked_at": m.locked_at.isoformat() if m.locked_at else None,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "created_by_ai": m.created_by_ai
+        }
+        for m in mappings
+    ]
 
 
 @router.post("/batch-assess", response_model=BatchAssessResponse)
 def batch_assess_evidence(
     request: BatchAssessRequest,
+    mode: str = Query(default="initial"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -443,54 +767,35 @@ def batch_assess_evidence(
         evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
         
         if not evidence:
-            results.append({
-                "evidence_id": evidence_id,
-                "status": "failed",
-                "message": "Evidence not found"
-            })
+            results.append({"evidence_id": evidence_id, "status": "failed", "message": "Not found"})
             failed_count += 1
             continue
         
         if evidence.tenant_id not in user_tenants:
-            results.append({
-                "evidence_id": evidence_id,
-                "status": "failed",
-                "message": "Access denied"
-            })
+            results.append({"evidence_id": evidence_id, "status": "failed", "message": "Access denied"})
             failed_count += 1
             continue
         
         if not evidence.ocr_content:
-            results.append({
-                "evidence_id": evidence_id,
-                "status": "failed",
-                "message": "No OCR content available"
-            })
+            results.append({"evidence_id": evidence_id, "status": "failed", "message": "No OCR content"})
             failed_count += 1
             continue
         
         try:
-            assessment = run_ai_assessment(evidence, db)
+            assessment = run_ai_assessment(evidence, db, mode=mode, user_id=current_user.id)
             results.append({
                 "evidence_id": evidence_id,
                 "status": "completed",
                 "assessment_id": assessment.id,
-                "quality_score": evidence.quality_score
+                "quality_score": evidence.quality_score,
+                "content_hash": assessment.content_hash
             })
             processed_count += 1
         except HTTPException as e:
-            results.append({
-                "evidence_id": evidence_id,
-                "status": "failed",
-                "message": e.detail
-            })
+            results.append({"evidence_id": evidence_id, "status": "failed", "message": e.detail})
             failed_count += 1
         except Exception as e:
-            results.append({
-                "evidence_id": evidence_id,
-                "status": "failed",
-                "message": str(e)
-            })
+            results.append({"evidence_id": evidence_id, "status": "failed", "message": str(e)})
             failed_count += 1
     
     return BatchAssessResponse(
@@ -503,7 +808,7 @@ def batch_assess_evidence(
 
 @router.get("/low-quality", response_model=List[LowQualityEvidenceResponse])
 def get_low_quality_evidence(
-    threshold: float = Query(default=50, ge=0, le=100, description="Quality score threshold"),
+    threshold: float = Query(default=50, ge=0, le=100),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
