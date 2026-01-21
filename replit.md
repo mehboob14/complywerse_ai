@@ -109,6 +109,48 @@ Set these environment variables for email notifications:
 - **SLA Check**: `POST /grc/vuln-management/escalations/run-sla-check`
 - **Dashboard Metrics**: `/grc/vuln-management/dashboard/department-metrics`, `sla-compliance-trends`, `department-workload`, `aging-by-department`, `escalation-metrics`
 
+## Deterministic AI Evidence Assessment
+
+The Evidence Management module features a deterministic AI assessment system that produces auditor-defensible, regulator-ready output with exact clause-level control mappings. Same evidence inputs MUST produce identical framework, control, and clause mappings across multiple runs.
+
+### Key Features
+- **Deterministic AI**: Uses `temperature=0` and `seed=42` with GPT-4o for reproducible results
+- **Content Hash Caching**: SHA-256 hash of OCR content ensures identical evidence returns cached results
+- **Clause-Level Mapping**: Exact framework name, control ID, clause reference, matching rationale, confidence score, and coverage type
+- **Assessment Locking**: Lock validated mappings to prevent drift; only unlock on evidence deletion, framework version change, or explicit user re-trigger
+- **Assessment Modes**:
+  - `initial`: Full assessment (default)
+  - `incremental`: Only assess changes/delta
+  - `locked_audit`: Read-only mode, returns locked assessment if exists
+- **Explainability Panel**: Frontend displays model version, content hash, timestamps, clause mappings, text excerpts, and lock controls
+
+### Audit Trail Fields
+- `content_hash`: SHA-256 hash of evidence content
+- `model_version`: AI model used (e.g., "gpt-4o-2024-08-06")
+- `prompt_version`: Prompt template version for tracking
+- `assessment_duration_ms`: Time taken for AI assessment
+- `is_locked`, `locked_at`, `locked_by`, `lock_reason`: Locking controls
+
+### Clause Mapping Structure
+```json
+{
+  "framework_name": "ISO 27001:2022",
+  "control_id": "A.5.1",
+  "clause_reference": "A.5.1.1",
+  "control_title": "Policies for information security",
+  "matching_rationale": "Evidence explicitly demonstrates...",
+  "confidence": 85,
+  "coverage_type": "full",
+  "matched_text_excerpt": "Exact text from evidence..."
+}
+```
+
+### API Endpoints
+- **Run Assessment**: `POST /grc/evidence-mgmt/ai/{evidence_id}/assess?mode=initial&force_refresh=false`
+- **Get Clause Mappings**: `GET /grc/evidence-mgmt/ai/{evidence_id}/clause-mappings`
+- **Lock Assessment**: `POST /grc/evidence-mgmt/ai/{evidence_id}/lock`
+- **Unlock Assessment**: `POST /grc/evidence-mgmt/ai/{evidence_id}/unlock`
+
 ## Documentation
 - **Database Schema**: See `docs/DATABASE_SCHEMA.md` for comprehensive documentation of all 80+ database tables, columns, relationships, and data flows.
 
