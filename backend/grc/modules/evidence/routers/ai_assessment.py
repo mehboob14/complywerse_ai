@@ -26,7 +26,9 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_UR
 
 # Version tracking for deterministic assessments
 PROMPT_VERSION = "2.0"
-MODEL_VERSION = "gpt-4o-2024-08-06"
+# the newest OpenAI model is "gpt-5" which was released August 7, 2025.
+# Using gpt-4o for compatibility with Replit AI integrations
+MODEL_VERSION = "gpt-4o"
 
 # Enhanced prompt for clause-level mapping with auditor-defensible output
 DETERMINISTIC_ASSESSMENT_PROMPT = """You are a Senior GRC Compliance Expert with 20+ years of experience, holding CISA, CISSP, CRISC, and ISO 27001 Lead Auditor certifications. Analyze this compliance evidence with extreme precision for regulatory audit purposes.
