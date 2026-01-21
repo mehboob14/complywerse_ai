@@ -357,7 +357,7 @@ def auto_link_controls_with_clause_data(
                     confidence_score=mapping.get("confidence"),
                     coverage_type=mapping.get("coverage_type", "partial"),
                     matched_text_snippets=[mapping.get("matched_text_excerpt")] if mapping.get("matched_text_excerpt") else [],
-                    matched_control_language=matched_control.description,
+                    matched_control_language=matched_control.statement or matched_control.name,
                     similarity_score=mapping.get("confidence"),
                     rule_based_validation=True,
                     is_locked=False,
