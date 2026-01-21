@@ -271,9 +271,19 @@ export const assetsApi = {
     apiClient.delete(`/assets/${id}/link-evidence/${linkId}`),
   getCoverageAnalysis: (id: number) => apiClient.get(`/assets/${id}/coverage-analysis`),
   assessRisk: (id: number) => apiClient.post(`/assets/${id}/assess`),
-  downloadTemplate: () => {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    window.location.href = `${baseUrl}/grc/assets/template/download`;
+  downloadTemplate: async () => {
+    const response = await apiClient.get('/assets/template/download', {
+      responseType: 'blob'
+    });
+    const blob = new Blob([response.data], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'it_assets_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   },
   importAssets: async (file: File) => {
     const formData = new FormData();

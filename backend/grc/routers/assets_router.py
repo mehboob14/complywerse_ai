@@ -403,11 +403,17 @@ async def upload_assets_file(
     
     db.commit()
     
+    imported_count = len(imported)
+    error_count = len(errors)
+    error_messages = [f"Row {e['row']}: {e['error']}" for e in errors[:20]]
+    
     return {
-        "imported_count": len(imported),
+        "success": True,
+        "imported": imported_count,
         "total_rows": len(rows),
-        "imported": imported,
-        "errors": errors
+        "errors": error_messages,
+        "total_errors": error_count,
+        "message": f"Successfully imported {imported_count} assets" + (f" with {error_count} errors" if error_count > 0 else "")
     }
 
 
