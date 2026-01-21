@@ -9,7 +9,8 @@ import {
   CheckCircle, XCircle, FileText, Edit, ScanText, Brain, Link2,
   AlertTriangle, Eye, Trash2, Send, ThumbsUp, ThumbsDown, RefreshCw,
   History, FileSpreadsheet, Shield, Building2, Info, Image, Settings,
-  ShieldCheck, ClipboardList, ExternalLink, Plus, X
+  ShieldCheck, ClipboardList, ExternalLink, Plus, X, Lock, Unlock,
+  ChevronDown, ChevronRight, Hash, Cpu, FileCode, Quote
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -118,6 +119,17 @@ interface OCRContent {
   ocr_processed_at: string | null;
 }
 
+interface ClauseMapping {
+  framework_name: string;
+  control_id: string;
+  clause_reference: string;
+  control_title: string;
+  matching_rationale: string;
+  confidence: number;
+  coverage_type: string;
+  matched_text_excerpt: string;
+}
+
 interface LatestAssessment {
   id: number;
   evidence_id: number;
@@ -131,6 +143,13 @@ interface LatestAssessment {
   compliance_gaps: string[];
   recommendations: string[];
   assessed_at: string;
+  content_hash: string | null;
+  model_version: string | null;
+  prompt_version: string | null;
+  assessment_mode: string | null;
+  is_locked: boolean;
+  clause_mappings: ClauseMapping[];
+  matched_text_excerpts: { text: string; relevance: string }[];
 }
 
 interface AllLinksResponse {
@@ -242,6 +261,16 @@ export default function EvidenceDetailPage() {
     enabled: activeTab === 'controls' || activeTab === 'assessment',
   });
 
+  const { data: clauseMappings } = useQuery<ClauseMapping[]>({
+    queryKey: ['evidence-clause-mappings', evidenceId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/evidence-mgmt/ai/${evidenceId}/clause-mappings`);
+      return response.data;
+    },
+    enabled: activeTab === 'assessment',
+    retry: false,
+  });
+
   const processOCRMutation = useMutation({
     mutationFn: () => apiClient.post(`/evidence-mgmt/ocr/${evidenceId}/process-ocr`),
     onSuccess: () => {
@@ -298,6 +327,22 @@ export default function EvidenceDetailPage() {
       apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/assets/${linkId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    },
+  });
+
+  const lockAssessmentMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/lock`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-assessment', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+    },
+  });
+
+  const unlockAssessmentMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/unlock`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-assessment', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
     },
   });
 
@@ -716,8 +761,13 @@ export default function EvidenceDetailPage() {
             assessment={latestAssessment}
             controlsData={controlsData}
             assetsData={allLinks?.assets}
+            clauseMappings={clauseMappings}
             onRunAssessment={() => runAssessmentMutation.mutate()}
+            onLock={() => lockAssessmentMutation.mutate()}
+            onUnlock={() => unlockAssessmentMutation.mutate()}
             isRunning={runAssessmentMutation.isPending}
+            isLocking={lockAssessmentMutation.isPending}
+            isUnlocking={unlockAssessmentMutation.isPending}
             formatDateTime={formatDateTime}
           />
         )}
@@ -937,18 +987,62 @@ function AssessmentTab({
   assessment,
   controlsData,
   assetsData,
+  clauseMappings,
   onRunAssessment,
+  onLock,
+  onUnlock,
   isRunning,
+  isLocking,
+  isUnlocking,
   formatDateTime
 }: { 
   evidence: EvidenceDetail;
   assessment?: LatestAssessment;
   controlsData?: ControlsResponse;
   assetsData?: AssetsDataType;
+  clauseMappings?: ClauseMapping[];
   onRunAssessment: () => void;
+  onLock: () => void;
+  onUnlock: () => void;
   isRunning: boolean;
+  isLocking: boolean;
+  isUnlocking: boolean;
   formatDateTime: (d?: string | null) => string;
 }) {
+  const [expandedClauses, setExpandedClauses] = useState<Set<number>>(new Set());
+
+  const toggleClause = (index: number) => {
+    setExpandedClauses(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const getCoverageTypeStyle = (coverageType: string) => {
+    switch (coverageType.toLowerCase()) {
+      case 'full':
+        return 'bg-green-500/20 text-green-400 border-green-500/30';
+      case 'partial':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'minimal':
+        return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+      case 'none':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      default:
+        return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+    }
+  };
+
+  const truncateHash = (hash: string | null) => {
+    if (!hash) return '-';
+    return `${hash.substring(0, 8)}...${hash.substring(hash.length - 8)}`;
+  };
+
   const ScoreBar = ({ label, score, color }: { label: string; score: number | null; color: string }) => {
     const value = score || 0;
     return (
@@ -1016,6 +1110,170 @@ function AssessmentTab({
             Re-assess
           </button>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-r from-slate-900 to-cyan-900/20 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="flex items-center gap-2 font-medium text-white">
+            <Cpu className="h-5 w-5 text-cyan-400" />
+            AI Explainability Panel
+          </h4>
+          <div className="flex items-center gap-2">
+            {assessment?.is_locked ? (
+              <button
+                onClick={onUnlock}
+                disabled={isUnlocking}
+                className="flex items-center gap-2 rounded-lg bg-yellow-600 px-3 py-1.5 text-sm text-white hover:bg-yellow-700 disabled:opacity-50"
+              >
+                {isUnlocking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlock className="h-4 w-4" />}
+                Unlock
+              </button>
+            ) : (
+              <button
+                onClick={onLock}
+                disabled={isLocking}
+                className="flex items-center gap-2 rounded-lg bg-slate-600 px-3 py-1.5 text-sm text-white hover:bg-slate-500 disabled:opacity-50"
+              >
+                {isLocking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                Lock Assessment
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4 mb-4">
+          <div className="rounded-lg bg-slate-800/50 p-3">
+            <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
+              <Cpu className="h-3 w-3" />
+              Model Version
+            </div>
+            <p className="text-sm font-medium text-white">{assessment?.model_version || '-'}</p>
+          </div>
+          <div className="rounded-lg bg-slate-800/50 p-3">
+            <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
+              <FileCode className="h-3 w-3" />
+              Prompt Version
+            </div>
+            <p className="text-sm font-medium text-white">{assessment?.prompt_version || '-'}</p>
+          </div>
+          <div className="rounded-lg bg-slate-800/50 p-3">
+            <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
+              <Hash className="h-3 w-3" />
+              Content Hash
+            </div>
+            <p className="text-sm font-mono text-cyan-400">{truncateHash(assessment?.content_hash || null)}</p>
+          </div>
+          <div className="rounded-lg bg-slate-800/50 p-3">
+            <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
+              <Clock className="h-3 w-3" />
+              Assessment Mode
+            </div>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-white">{assessment?.assessment_mode || '-'}</p>
+              {assessment?.is_locked && (
+                <span className="flex items-center gap-1 rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-400 border border-yellow-500/30">
+                  <Lock className="h-3 w-3" />
+                  Locked
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {((clauseMappings && clauseMappings.length > 0) || (assessment?.clause_mappings && assessment.clause_mappings.length > 0)) && (
+          <div className="mt-4">
+            <h5 className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-3">
+              <Shield className="h-4 w-4 text-primary-400" />
+              Clause-Level Mappings ({(clauseMappings || assessment?.clause_mappings || []).length})
+            </h5>
+            <div className="space-y-2">
+              {(clauseMappings || assessment?.clause_mappings || []).map((clause, index) => (
+                <div key={index} className="rounded-lg border border-slate-700 bg-slate-800/50 overflow-hidden">
+                  <button
+                    onClick={() => toggleClause(index)}
+                    className="w-full flex items-center justify-between p-3 hover:bg-slate-700/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      {expandedClauses.has(index) ? (
+                        <ChevronDown className="h-4 w-4 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-slate-400" />
+                      )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-primary-400">{clause.framework_name}</span>
+                        <span className="text-slate-500">|</span>
+                        <span className="text-sm text-blue-400">{clause.control_id}</span>
+                        <span className="text-slate-500">|</span>
+                        <span className="text-sm text-slate-300">{clause.clause_reference}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium border ${getCoverageTypeStyle(clause.coverage_type)}`}>
+                        {clause.coverage_type}
+                      </span>
+                      <div className="flex items-center gap-2 min-w-[100px]">
+                        <div className="h-2 flex-1 rounded-full bg-slate-700">
+                          <div 
+                            className={`h-2 rounded-full transition-all ${
+                              clause.confidence >= 80 ? 'bg-green-500' : 
+                              clause.confidence >= 60 ? 'bg-yellow-500' : 
+                              clause.confidence >= 40 ? 'bg-orange-500' : 'bg-red-500'
+                            }`}
+                            style={{ width: `${clause.confidence}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-slate-400 w-10">{clause.confidence}%</span>
+                      </div>
+                    </div>
+                  </button>
+                  {expandedClauses.has(index) && (
+                    <div className="border-t border-slate-700 p-4 space-y-3">
+                      <div>
+                        <h6 className="text-xs text-slate-400 mb-1">Control Title</h6>
+                        <p className="text-sm text-white">{clause.control_title}</p>
+                      </div>
+                      <div>
+                        <h6 className="text-xs text-slate-400 mb-1">Matching Rationale</h6>
+                        <p className="text-sm text-slate-300">{clause.matching_rationale}</p>
+                      </div>
+                      <div>
+                        <h6 className="flex items-center gap-1 text-xs text-slate-400 mb-1">
+                          <Quote className="h-3 w-3" />
+                          Matched Text Excerpt
+                        </h6>
+                        <blockquote className="border-l-4 border-cyan-500 bg-slate-900 pl-4 py-2 rounded-r-lg">
+                          <p className="text-sm text-cyan-300 italic">&quot;{clause.matched_text_excerpt}&quot;</p>
+                        </blockquote>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {assessment?.matched_text_excerpts && assessment.matched_text_excerpts.length > 0 && (
+          <div className="mt-4">
+            <h5 className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-3">
+              <FileText className="h-4 w-4 text-cyan-400" />
+              Matched Text Excerpts ({assessment.matched_text_excerpts.length})
+            </h5>
+            <div className="space-y-2">
+              {assessment.matched_text_excerpts.map((excerpt, index) => (
+                <div key={index} className="rounded-lg bg-slate-800/50 p-3 border border-slate-700">
+                  <div className="flex items-start gap-3">
+                    <Quote className="h-4 w-4 text-slate-500 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm text-slate-300 italic">&quot;{excerpt.text}&quot;</p>
+                      <p className="text-xs text-cyan-400 mt-1">Relevance: {excerpt.relevance}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
