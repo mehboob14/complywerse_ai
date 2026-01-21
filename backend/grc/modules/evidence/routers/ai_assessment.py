@@ -721,7 +721,7 @@ def get_clause_mappings(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Get detailed clause-level control mappings for explainability."""
+    """Get detailed clause-level control mappings from the latest AI assessment."""
     evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
     
     if not evidence:
@@ -729,6 +729,29 @@ def get_clause_mappings(
     
     validate_evidence_access(current_user, evidence, db)
     
+    # Get clause mappings from the latest AI assessment (primary source of truth)
+    latest_assessment = db.query(EvidenceAIAssessment).filter(
+        EvidenceAIAssessment.evidence_id == evidence_id
+    ).order_by(EvidenceAIAssessment.assessed_at.desc()).first()
+    
+    if latest_assessment and latest_assessment.clause_mappings:
+        # Return clause mappings from the AI assessment directly
+        return [
+            {
+                "id": idx,
+                "framework_name": mapping.get("framework_name", ""),
+                "control_id": mapping.get("control_id", ""),
+                "clause_reference": mapping.get("clause_reference", ""),
+                "control_title": mapping.get("control_title", ""),
+                "matching_rationale": mapping.get("matching_rationale", ""),
+                "confidence": mapping.get("confidence", 0),
+                "coverage_type": mapping.get("coverage_type", "partial"),
+                "matched_text_excerpt": mapping.get("matched_text_excerpt", ""),
+            }
+            for idx, mapping in enumerate(latest_assessment.clause_mappings)
+        ]
+    
+    # Fallback to EvidenceControlMapping table for backward compatibility
     mappings = db.query(EvidenceControlMapping).filter(
         EvidenceControlMapping.evidence_id == evidence_id
     ).all()
@@ -744,13 +767,6 @@ def get_clause_mappings(
             "confidence": m.confidence_score or 0,
             "coverage_type": m.coverage_type or "partial",
             "matched_text_excerpt": (m.matched_text_snippets[0] if m.matched_text_snippets else "") or "",
-            "matched_control_language": m.matched_control_language or "",
-            "similarity_score": m.similarity_score,
-            "rule_based_validation": m.rule_based_validation,
-            "is_locked": m.is_locked or False,
-            "locked_at": m.locked_at.isoformat() if m.locked_at else None,
-            "created_at": m.created_at.isoformat() if m.created_at else None,
-            "created_by_ai": m.created_by_ai
         }
         for m in mappings
     ]
