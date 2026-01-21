@@ -731,16 +731,16 @@ export default function VulnerabilityDashboardPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {teamMetrics && teamMetrics.length > 0 && (
+        {departmentMetrics && (departmentMetrics as { departments: DepartmentMetrics[] }).departments?.length > 0 && (
           <DataCard
-            title="Team MTTR Performance"
+            title="Department MTTR Performance"
             icon={Timer}
-            subtitle="Mean Time to Remediate by team"
+            subtitle="Mean Time to Remediate by department"
           >
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={teamMetrics.filter(t => t.mttr_days !== null).slice(0, 8)}
+                  data={(departmentMetrics as { departments: DepartmentMetrics[] }).departments.filter(t => t.mttr_days !== null).slice(0, 8)}
                   layout="vertical"
                   margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                 >
@@ -748,7 +748,7 @@ export default function VulnerabilityDashboardPage() {
                   <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#475569' }} />
                   <YAxis 
                     type="category" 
-                    dataKey="team_name" 
+                    dataKey="department_name" 
                     tick={{ fill: '#94a3b8', fontSize: 12 }} 
                     axisLine={{ stroke: '#475569' }}
                     width={100}
