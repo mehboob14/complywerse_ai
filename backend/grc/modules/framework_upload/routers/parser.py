@@ -896,13 +896,20 @@ def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
     Pass 1: Extract document structure to understand numbering patterns
     Pass 2: Process each chunk with structure context for exhaustive extraction
     """
+    print(f"[PARSE] Starting document parsing for: {framework_name}")
+    print(f"[PARSE] Document text length: {len(text):,} characters")
+    
+    print(f"[PARSE] Pass 1: Extracting document structure...")
     doc_structure = extract_document_structure(text, framework_name)
+    print(f"[PARSE] Document structure extracted. Expected controls: {doc_structure.get('total_expected_controls', 'unknown')}")
     
     chunks = chunk_text(text, chunk_size=30000, overlap=3000)
+    print(f"[PARSE] Document split into {len(chunks)} chunks for processing")
     
     all_controls = []
     
     for idx, chunk in enumerate(chunks, start=1):
+        print(f"[PARSE] Processing chunk {idx}/{len(chunks)} ({len(chunk):,} chars)...")
         chunk_controls = parse_with_openai(
             chunk, 
             framework_name, 
@@ -911,30 +918,44 @@ def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
             doc_structure=doc_structure
         )
         all_controls.extend(chunk_controls)
+        print(f"[PARSE] Chunk {idx}/{len(chunks)} complete. Found {len(chunk_controls)} controls. Total so far: {len(all_controls)}")
     
+    print(f"[PARSE] All chunks processed. Total raw controls: {len(all_controls)}")
+    print(f"[PARSE] Deduplicating controls...")
     unique_controls = deduplicate_controls(all_controls)
+    print(f"[PARSE] Deduplication complete. Unique controls: {len(unique_controls)}")
     
     expected_count = doc_structure.get("total_expected_controls", 0)
     if expected_count > 0 and len(unique_controls) < expected_count * 0.7:
-        pass
+        print(f"[PARSE] Warning: Found fewer controls than expected ({len(unique_controls)} vs {expected_count})")
     
+    print(f"[PARSE] Parsing complete! Returning {len(unique_controls)} controls")
     return unique_controls
 
 
 def run_background_parsing(framework_id: int, file_path: str, file_type: str, framework_name: str):
     """Run parsing in a background thread to avoid HTTP timeout."""
+    print(f"[PARSE] ========================================")
+    print(f"[PARSE] Background parsing started for framework ID: {framework_id}")
+    print(f"[PARSE] Framework name: {framework_name}")
+    print(f"[PARSE] File: {file_path} ({file_type})")
+    print(f"[PARSE] ========================================")
+    
     db = SessionLocal()
     try:
         extracted_text = ""
         if file_type == "pdf":
+            print(f"[PARSE] Extracting text from PDF...")
             from PyPDF2 import PdfReader
             reader = PdfReader(file_path)
+            print(f"[PARSE] PDF has {len(reader.pages)} pages")
             text_parts = []
             for page in reader.pages:
                 page_text = page.extract_text()
                 if page_text:
                     text_parts.append(page_text)
             extracted_text = "\n\n".join(text_parts)
+            print(f"[PARSE] Text extraction complete. Total characters: {len(extracted_text):,}")
         elif file_type == "docx":
             from docx import Document
             doc = Document(file_path)
