@@ -75,7 +75,8 @@ export default function FrameworksPage() {
     queryKey: ['uploaded-frameworks'],
     queryFn: async () => {
       const response = await apiClient.get('/framework-upload/upload');
-      return response.data.items as UploadedFramework[];
+      const items = response.data?.items;
+      return Array.isArray(items) ? items as UploadedFramework[] : [];
     },
   });
 
@@ -105,7 +106,9 @@ export default function FrameworksPage() {
     activeCertifications.map((c: CertificationJourney) => String(c.framework_id))
   );
 
-  const completedFrameworks = (frameworks || []).filter(
+  const frameworksArray = Array.isArray(frameworks) ? frameworks : [];
+  
+  const completedFrameworks = frameworksArray.filter(
     (f: UploadedFramework) => f.upload_status === 'completed'
   );
 
