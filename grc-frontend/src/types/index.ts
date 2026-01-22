@@ -386,7 +386,8 @@ export interface AssetDetail extends ITAsset {
 export interface CertificationJourney {
   id: number;
   tenant_id: number;
-  framework_id: number;
+  framework_id?: number | null;
+  uploaded_framework_id?: number | null;
   framework?: Framework;
   name: string;
   target_date?: string;

@@ -929,7 +929,8 @@ class CertificationJourneyUpdate(BaseModel):
 class CertificationJourneyResponse(BaseModel):
     id: int
     tenant_id: int
-    framework_id: int
+    framework_id: Optional[int] = None
+    uploaded_framework_id: Optional[int] = None
     name: str
     target_date: Optional[datetime]
     started_at: datetime

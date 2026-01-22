@@ -103,7 +103,7 @@ export default function FrameworksPage() {
   );
 
   const activeCertificationFrameworkIds = new Set(
-    activeCertifications.map((c: CertificationJourney) => String(c.framework_id))
+    activeCertifications.map((c: CertificationJourney) => String(c.framework_id || c.uploaded_framework_id))
   );
 
   const frameworksArray = Array.isArray(frameworks) ? frameworks : [];
