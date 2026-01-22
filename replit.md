@@ -113,8 +113,11 @@ Set these environment variables for email notifications:
 
 The Evidence Management module features a deterministic AI assessment system that produces auditor-defensible, regulator-ready output with exact clause-level control mappings. Same evidence inputs MUST produce identical framework, control, and clause mappings across multiple runs.
 
+**IMPORTANT**: AI assessments now map evidence against UPLOADED FRAMEWORKS (user-uploaded via Framework Upload) instead of pre-seeded frameworks. This ensures assessments use the exact framework versions your organization has uploaded and parsed.
+
 ### Key Features
-- **Deterministic AI**: Uses `temperature=0` and `seed=42` with GPT-4o for reproducible results
+- **Uploaded Framework Mapping**: AI maps evidence to controls in `grc_uploaded_frameworks` and `grc_parsed_framework_controls` tables (not pre-seeded frameworks)
+- **Deterministic AI**: Uses `temperature=0` with GPT-4o for reproducible results
 - **Content Hash Caching**: SHA-256 hash of OCR content ensures identical evidence returns cached results
 - **Clause-Level Mapping**: Exact framework name, control ID, clause reference, matching rationale, confidence score, and coverage type
 - **Assessment Locking**: Lock validated mappings to prevent drift; only unlock on evidence deletion, framework version change, or explicit user re-trigger

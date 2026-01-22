@@ -635,6 +635,8 @@ class EvidenceControlMapping(Base):
     evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
     normalized_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=True, index=True)
     framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=True, index=True)
+    parsed_control_id = Column(Integer, ForeignKey("grc_parsed_framework_controls.id"), nullable=True, index=True)
+    uploaded_framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id"), nullable=True, index=True)
     
     # Clause-level mapping fields for auditor-defensible output
     framework_name = Column(String(255), nullable=True)  # e.g., "ISO 27001:2022"
@@ -664,11 +666,14 @@ class EvidenceControlMapping(Base):
     evidence = relationship("Evidence", back_populates="control_mappings")
     normalized_control = relationship("NormalizedControl", back_populates="evidence_mappings")
     framework_control = relationship("FrameworkControl", back_populates="evidence_mappings")
+    parsed_control = relationship("ParsedFrameworkControl", foreign_keys=[parsed_control_id])
+    uploaded_framework = relationship("UploadedFramework", foreign_keys=[uploaded_framework_id])
     locker = relationship("GRCUser", foreign_keys=[locked_by])
     
     __table_args__ = (
         Index("ix_evidence_control_mapping", "evidence_id", "normalized_control_id"),
         Index("ix_evidence_control_locked", "evidence_id", "is_locked"),
+        Index("ix_evidence_parsed_control", "evidence_id", "parsed_control_id"),
     )
 
 

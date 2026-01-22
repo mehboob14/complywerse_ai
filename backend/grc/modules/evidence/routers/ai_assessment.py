@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 from ....models import (
     Evidence, EvidenceAIAssessment, EvidenceControlMapping, EvidenceAssessmentCache,
-    GRCUser, get_db, Framework, FrameworkDomain, ControlObjective, FrameworkControl
+    GRCUser, get_db, Framework, FrameworkDomain, ControlObjective, FrameworkControl,
+    UploadedFramework, ParsedFrameworkControl
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -25,7 +26,8 @@ AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY"
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
 # Version tracking for deterministic assessments
-PROMPT_VERSION = "2.0"
+# v2.1: Updated to use uploaded frameworks instead of pre-seeded ones
+PROMPT_VERSION = "2.1"
 # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
 # Using gpt-4o for compatibility with Replit AI integrations
 MODEL_VERSION = "gpt-4o"
@@ -34,12 +36,14 @@ MODEL_VERSION = "gpt-4o"
 DETERMINISTIC_ASSESSMENT_PROMPT = """You are a Senior GRC Compliance Expert with 20+ years of experience, holding CISA, CISSP, CRISC, and ISO 27001 Lead Auditor certifications. Analyze this compliance evidence with extreme precision for regulatory audit purposes.
 
 CRITICAL REQUIREMENTS:
+- ONLY map to controls from the UPLOADED FRAMEWORKS listed below
+- Use the EXACT framework names as shown in the available frameworks list
 - ONLY map to controls that have EXPLICIT evidence in the document
 - Provide EXACT clause references (not just control numbers)
 - Include specific text excerpts from the evidence that support each mapping
 - No control should be marked applicable without explicit clause-level evidence match
 
-Available Compliance Frameworks:
+UPLOADED FRAMEWORKS (Use these exact names in your mappings):
 {available_frameworks}
 
 Evidence Content:
@@ -55,8 +59,8 @@ Provide a comprehensive, auditor-defensible assessment in the following JSON for
     
     "clause_mappings": [
         {{
-            "framework_name": "<exact framework name with version, e.g., ISO 27001:2022>",
-            "control_id": "<exact control ID, e.g., A.5.1>",
+            "framework_name": "<USE EXACT framework name from the UPLOADED FRAMEWORKS list above>",
+            "control_id": "<exact control ID from the framework, e.g., A.5.1, 1.2.3>",
             "clause_reference": "<exact clause/sub-clause reference>",
             "control_title": "<control title text>",
             "matching_rationale": "<specific explanation why this evidence satisfies this control>",
@@ -225,16 +229,41 @@ def format_assessment_response(assessment: EvidenceAIAssessment) -> AssessmentRe
     )
 
 
-def get_available_frameworks(db: Session) -> str:
-    """Fetch available framework names and short codes for AI context."""
-    frameworks = db.query(Framework).filter(Framework.is_active == True).all()
+def get_available_frameworks(db: Session, tenant_id: int = None) -> str:
+    """Fetch available framework names from uploaded frameworks for AI context.
     
+    IMPORTANT: This now queries UPLOADED frameworks (grc_uploaded_frameworks) 
+    instead of pre-seeded frameworks (grc_frameworks) to ensure AI assessment 
+    maps to user-uploaded framework versions.
+    """
     framework_info = []
-    for fw in frameworks:
-        control_count = db.query(FrameworkControl).join(ControlObjective).join(FrameworkDomain).filter(
-            FrameworkDomain.framework_id == fw.id
+    
+    # Query uploaded frameworks with status 'parsed' or 'published'
+    query = db.query(UploadedFramework).filter(
+        UploadedFramework.upload_status.in_(['parsed', 'published']),
+        UploadedFramework.is_active == True
+    )
+    
+    # Filter by tenant if provided (include shared frameworks too)
+    if tenant_id:
+        query = query.filter(
+            (UploadedFramework.tenant_id == tenant_id) | 
+            (UploadedFramework.is_shared == True) |
+            (UploadedFramework.tenant_id == None)
+        )
+    
+    uploaded_frameworks = query.all()
+    
+    for fw in uploaded_frameworks:
+        control_count = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == fw.id
         ).count()
-        framework_info.append(f"- {fw.name} (code: {fw.short_code}) - {control_count} controls")
+        
+        version_info = f" v{fw.version}" if fw.version else ""
+        framework_info.append(f"- {fw.name}{version_info} (ID: {fw.id}) - {control_count} controls")
+    
+    if not framework_info:
+        return "No uploaded frameworks available. Please upload and parse frameworks first."
     
     return "\n".join(framework_info)
 
@@ -289,11 +318,35 @@ def auto_link_controls_with_clause_data(
     db: Session,
     assessment_id: int
 ) -> int:
-    """Auto-link detected controls with full clause-level data."""
+    """Auto-link detected controls with full clause-level data.
+    
+    IMPORTANT: This now links to UPLOADED frameworks (ParsedFrameworkControl)
+    instead of pre-seeded frameworks (FrameworkControl) to ensure accurate
+    mapping to user-uploaded framework versions.
+    
+    SECURITY: Tenant isolation is strictly enforced - only frameworks belonging 
+    to the evidence's tenant (or shared frameworks) are considered for mapping.
+    If evidence has no tenant_id, no linking is performed as a security safeguard.
+    """
     linked_count = 0
     
-    frameworks = {fw.short_code.lower(): fw for fw in db.query(Framework).filter(Framework.is_active == True).all()}
-    framework_by_name = {fw.name.lower(): fw for fw in frameworks.values()}
+    # SECURITY: Hard check - evidence MUST have a tenant_id for mapping
+    if not evidence.tenant_id:
+        logger.warning(f"Evidence {evidence.id} has no tenant_id - skipping control linking for security")
+        return 0
+    
+    # Query uploaded frameworks with STRICT TENANT SCOPING for security
+    # Only get frameworks belonging to this tenant or explicitly shared frameworks
+    uploaded_frameworks = db.query(UploadedFramework).filter(
+        UploadedFramework.upload_status.in_(['parsed', 'published']),
+        UploadedFramework.is_active == True,
+        (UploadedFramework.tenant_id == evidence.tenant_id) | 
+        (UploadedFramework.is_shared == True)
+    ).all()
+    
+    # Build lookup dictionaries for uploaded frameworks
+    framework_by_name = {fw.name.lower(): fw for fw in uploaded_frameworks}
+    framework_by_id = {fw.id: fw for fw in uploaded_frameworks}
     
     for mapping in clause_mappings:
         framework_name = mapping.get("framework_name", "")
@@ -302,62 +355,105 @@ def auto_link_controls_with_clause_data(
         if not framework_name or not control_id:
             continue
         
-        # Find the framework
+        # Find the uploaded framework by name matching
         fw = None
         fw_name_lower = framework_name.lower()
+        
+        # Exact match first
         for key, f in framework_by_name.items():
-            if key in fw_name_lower or fw_name_lower in key:
+            if key == fw_name_lower:
                 fw = f
                 break
         
+        # Partial match
         if not fw:
-            for code, f in frameworks.items():
-                if code in fw_name_lower:
+            for key, f in framework_by_name.items():
+                if key in fw_name_lower or fw_name_lower in key:
                     fw = f
                     break
         
+        # Try common framework name variations
         if not fw:
+            name_variations = {
+                'iso 27001': ['iso_iec-270012022', 'iso-27001', 'iso27001'],
+                'pci-dss': ['pci-dss', 'pcidss', 'pci_dss'],
+                'nist': ['nist', 'nist-csf'],
+                'sama': ['sama', 'sama-csf', 'sama - cyber'],
+                'sbp': ['sbp', 'sbp-etgrmf', 'sbp etgrmf'],
+                'soc 2': ['soc2', 'soc-2', 'soc 2'],
+            }
+            for base_name, variations in name_variations.items():
+                if any(v in fw_name_lower for v in [base_name] + variations):
+                    for key, f in framework_by_name.items():
+                        if any(v in key for v in variations):
+                            fw = f
+                            break
+                if fw:
+                    break
+        
+        if not fw:
+            logger.warning(f"Could not find uploaded framework for: {framework_name}")
             continue
         
-        # Find the control
+        # Find the parsed control within this framework
         normalized_code = normalize_control_code(control_id)
-        controls = db.query(FrameworkControl).join(ControlObjective).join(FrameworkDomain).filter(
-            FrameworkDomain.framework_id == fw.id
+        parsed_controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == fw.id
         ).all()
         
         matched_control = None
-        for ctrl in controls:
-            ctrl_normalized = normalize_control_code(ctrl.code)
-            if ctrl_normalized == normalized_code or normalized_code in ctrl_normalized or ctrl_normalized in normalized_code:
+        
+        # Try exact match on control_id or original_reference
+        for ctrl in parsed_controls:
+            ctrl_code_normalized = normalize_control_code(ctrl.control_id)
+            ctrl_ref_normalized = normalize_control_code(ctrl.original_reference or "")
+            
+            if ctrl_code_normalized == normalized_code or ctrl_ref_normalized == normalized_code:
                 matched_control = ctrl
                 break
         
+        # Try partial match
         if not matched_control:
-            for ctrl in controls:
-                if control_id.lower() in ctrl.code.lower() or ctrl.code.lower() in control_id.lower():
+            for ctrl in parsed_controls:
+                ctrl_code = (ctrl.control_id or "").lower()
+                ctrl_ref = (ctrl.original_reference or "").lower()
+                control_lower = control_id.lower()
+                
+                if (control_lower in ctrl_code or ctrl_code in control_lower or
+                    control_lower in ctrl_ref or ctrl_ref in control_lower):
                     matched_control = ctrl
                     break
         
+        # Try matching by title similarity
+        if not matched_control:
+            control_title = mapping.get("control_title", "").lower()
+            if control_title:
+                for ctrl in parsed_controls:
+                    if control_title in (ctrl.title or "").lower() or (ctrl.title or "").lower() in control_title:
+                        matched_control = ctrl
+                        break
+        
         if matched_control:
-            # Check if already exists
+            # Check if already exists (using parsed_control_id)
             existing = db.query(EvidenceControlMapping).filter(
                 EvidenceControlMapping.evidence_id == evidence.id,
-                EvidenceControlMapping.framework_control_id == matched_control.id
+                EvidenceControlMapping.parsed_control_id == matched_control.id
             ).first()
             
             if not existing:
                 control_mapping = EvidenceControlMapping(
                     evidence_id=evidence.id,
-                    framework_control_id=matched_control.id,
-                    framework_name=framework_name,
-                    control_code=control_id,
+                    parsed_control_id=matched_control.id,
+                    uploaded_framework_id=fw.id,
+                    framework_name=fw.name,
+                    control_code=matched_control.original_reference or matched_control.control_id,
                     clause_reference=mapping.get("clause_reference"),
-                    control_title=mapping.get("control_title"),
+                    control_title=matched_control.title,
                     matching_rationale=mapping.get("matching_rationale"),
                     confidence_score=mapping.get("confidence"),
                     coverage_type=mapping.get("coverage_type", "partial"),
                     matched_text_snippets=[mapping.get("matched_text_excerpt")] if mapping.get("matched_text_excerpt") else [],
-                    matched_control_language=matched_control.statement or matched_control.name,
+                    matched_control_language=matched_control.description or matched_control.full_text or matched_control.title,
                     similarity_score=mapping.get("confidence"),
                     rule_based_validation=True,
                     is_locked=False,
@@ -367,6 +463,9 @@ def auto_link_controls_with_clause_data(
                 )
                 db.add(control_mapping)
                 linked_count += 1
+                logger.info(f"Linked evidence {evidence.id} to parsed control {matched_control.id} ({fw.name}: {matched_control.control_id})")
+        else:
+            logger.warning(f"Could not find control '{control_id}' in framework '{fw.name}'")
     
     return linked_count
 
@@ -452,7 +551,7 @@ def run_ai_assessment(
     try:
         start_time = time.time()
         client = get_openai_client()
-        available_frameworks = get_available_frameworks(db)
+        available_frameworks = get_available_frameworks(db, tenant_id=evidence.tenant_id)
         
         enhanced_prompt = DETERMINISTIC_ASSESSMENT_PROMPT.format(
             available_frameworks=available_frameworks,
