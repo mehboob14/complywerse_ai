@@ -2198,12 +2198,18 @@ Return JSON with "controls" array containing objects with "id" and "evidence_req
                 result = json.loads(result_text)
                 enhanced_batch = result.get("controls", [])
                 
-                id_to_evidence = {item["id"]: item.get("evidence_requirements", []) for item in enhanced_batch}
+                id_to_evidence = {int(item["id"]): item.get("evidence_requirements", []) for item in enhanced_batch}
                 
+                matched_count = 0
                 for control in batch:
                     if control.id in id_to_evidence:
-                        control.evidence_requirements = id_to_evidence[control.id]
-                        control.updated_at = datetime.utcnow()
+                        evidence_reqs = id_to_evidence[control.id]
+                        if evidence_reqs:
+                            control.evidence_requirements = evidence_reqs
+                            control.updated_at = datetime.utcnow()
+                            matched_count += 1
+                
+                print(f"[ENHANCE] Matched {matched_count}/{len(batch)} controls with evidence", flush=True)
                 
                 db.commit()
                 print(f"[ENHANCE] Batch {batch_num} completed in {elapsed:.1f}s", flush=True)
@@ -2264,7 +2270,7 @@ def enhance_framework_with_evidence(
     controls_with_evidence = db.query(ParsedFrameworkControl).filter(
         ParsedFrameworkControl.uploaded_framework_id == framework_id,
         ParsedFrameworkControl.evidence_requirements != None,
-        ParsedFrameworkControl.evidence_requirements != []
+        func.jsonb_array_length(ParsedFrameworkControl.evidence_requirements) > 0
     ).count()
     
     background_tasks.add_task(

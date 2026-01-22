@@ -456,13 +456,25 @@ export interface FrameworkControl {
   objective?: { id: number; code: string; name: string; domain?: { id: number; code: string; name: string } };
 }
 
+export interface EvidenceRequirement {
+  type: string;
+  title: string;
+  description: string;
+  is_required?: boolean;
+  artifact_examples?: string[];
+  review_frequency?: string;
+}
+
 export interface SubControlWithEvidence {
   id: number;
   code: string;
   name: string;
   description: string;
+  parent_section?: string;
   evidence_recommendations: string[];
-  ai_matching_keywords: string[];
+  evidence_requirements?: EvidenceRequirement[];
+  ai_matching_keywords?: string[];
+  sub_controls?: SubControlWithEvidence[];
 }
 
 export interface ControlEvidence {
@@ -478,6 +490,7 @@ export interface CertificationControl {
   id: number;
   journey_id: number;
   framework_control_id: number;
+  parsed_control_id?: number;
   control_code: string;
   control_name: string;
   control_statement: string;
@@ -493,6 +506,7 @@ export interface CertificationControl {
   is_applicable: boolean;
   priority: number;
   sub_controls: SubControlWithEvidence[];
+  evidence_requirements: EvidenceRequirement[];
   evidence: ControlEvidence[];
   evidence_count: number;
   required_evidence_count: number;

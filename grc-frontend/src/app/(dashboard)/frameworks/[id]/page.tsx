@@ -809,6 +809,55 @@ export default function CertificationJourneyPage() {
     </div>
   );
 
+  const renderSubControlsRecursive = (subControls: SubControlWithEvidence[], depth: number): JSX.Element => {
+    const borderColors = ['border-primary-500/30', 'border-cyan-500/30', 'border-purple-500/30'];
+    const bgColors = ['bg-slate-900/50', 'bg-slate-900/40', 'bg-slate-900/30'];
+    const borderColor = borderColors[Math.min(depth, borderColors.length - 1)];
+    const bgColor = bgColors[Math.min(depth, bgColors.length - 1)];
+    
+    return (
+      <div className={`space-y-2 ${depth > 0 ? `pl-4 border-l-2 ${borderColor}` : `pl-4 border-l-2 ${borderColor}`}`}>
+        {subControls.map((sub, idx) => (
+          <div key={sub.id || idx} className={`rounded-lg ${bgColor} p-3`}>
+            <div className="flex items-start gap-3">
+              <ChevronRight className={`h-4 w-4 mt-0.5 flex-shrink-0 ${depth === 0 ? 'text-primary-400' : depth === 1 ? 'text-cyan-400' : 'text-purple-400'}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`font-mono text-xs ${depth === 0 ? 'text-primary-400' : depth === 1 ? 'text-cyan-400' : 'text-purple-400'}`}>{sub.code}</span>
+                  <span className="text-sm font-medium text-white">{sub.name}</span>
+                  {depth > 0 && (
+                    <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-xs text-slate-500">Level {depth + 1}</span>
+                  )}
+                </div>
+                {sub.description && (
+                  <p className="text-xs text-slate-400 mt-1 line-clamp-2">{sub.description}</p>
+                )}
+                {sub.evidence_requirements && sub.evidence_requirements.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {sub.evidence_requirements.slice(0, 4).map((ev, evIdx) => (
+                      <span key={evIdx} className="rounded bg-slate-700/50 px-1.5 py-0.5 text-xs text-slate-400">
+                        {ev.title}
+                      </span>
+                    ))}
+                    {sub.evidence_requirements.length > 4 && (
+                      <span className="text-xs text-slate-500">+{sub.evidence_requirements.length - 4} more</span>
+                    )}
+                  </div>
+                )}
+                {sub.sub_controls && sub.sub_controls.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs text-slate-500 mb-2">Sub-controls ({sub.sub_controls.length})</p>
+                    {renderSubControlsRecursive(sub.sub_controls, depth + 1)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const renderControlAccordion = (control: CertificationControl, showUpload = true) => {
     const isExpanded = expandedControls.includes(control.id);
     const category = getCategoryFromDomain(control.domain_name);
@@ -853,6 +902,17 @@ export default function CertificationJourneyPage() {
         </button>
         {isExpanded && (
           <div className="border-t border-slate-700 p-4">
+            {/* Sub-controls section - recursive hierarchy */}
+            {control.sub_controls && control.sub_controls.length > 0 && (
+              <div className="mb-6">
+                <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
+                  <Layers className="h-4 w-4 text-primary-400" />
+                  Control Hierarchy ({control.sub_controls.length} sub-controls)
+                </h4>
+                {renderSubControlsRecursive(control.sub_controls, 0)}
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div>
                 <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
@@ -861,7 +921,8 @@ export default function CertificationJourneyPage() {
                 </h4>
                 {control.evidence_requirements?.length > 0 ? (
                   <div className="space-y-2">
-                    {control.evidence_requirements.map((ev: { id: number; title: string; description: string; artifact_type: string; format_guidance?: string; frequency: string; is_required: boolean; sub_control_id: number }, idx: number) => {
+                    {control.evidence_requirements.map((ev, idx: number) => {
+                      const evType = ev.type || 'document';
                       const typeColors: Record<string, string> = {
                         'policy': 'bg-blue-500/20 text-blue-400',
                         'procedure': 'bg-purple-500/20 text-purple-400',
@@ -871,35 +932,30 @@ export default function CertificationJourneyPage() {
                         'record': 'bg-green-500/20 text-green-400',
                         'configuration': 'bg-indigo-500/20 text-indigo-400',
                         'certificate': 'bg-emerald-500/20 text-emerald-400',
+                        'contract': 'bg-amber-500/20 text-amber-400',
+                        'attestation': 'bg-teal-500/20 text-teal-400',
+                        'test_results': 'bg-lime-500/20 text-lime-400',
+                        'register': 'bg-violet-500/20 text-violet-400',
                       };
-                      const typeColor = typeColors[ev.artifact_type] || 'bg-slate-500/20 text-slate-400';
-                      const typeLabel = ev.artifact_type.charAt(0).toUpperCase() + ev.artifact_type.slice(1);
+                      const typeColor = typeColors[evType] || 'bg-slate-500/20 text-slate-400';
+                      const typeLabel = evType.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                       
                       return (
-                        <div key={`${ev.id}-${idx}`} className="rounded-lg bg-slate-900/50 p-3">
+                        <div key={`${idx}`} className="rounded-lg bg-slate-900/50 p-3">
                           <div className="flex items-start gap-3">
                             <Radio className="h-4 w-4 text-primary-400 mt-1 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white">{ev.title}</p>
                               <p className="text-xs text-slate-400 mt-1">{ev.description}</p>
-                              {ev.format_guidance && (
-                                <p className="text-xs text-slate-500 mt-1 italic">Format: {ev.format_guidance}</p>
-                              )}
                               <div className="mt-2 flex flex-wrap items-center gap-2">
                                 <span className={`rounded px-1.5 py-0.5 text-xs ${typeColor}`}>
                                   {typeLabel}
                                 </span>
-                                {ev.frequency !== 'as_needed' && (
-                                  <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400 flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    {ev.frequency}
-                                  </span>
-                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className={`rounded px-2 py-1 text-xs ${ev.is_required ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-400'}`}>
-                                {ev.is_required ? 'Required' : 'Optional'}
+                              <span className={`rounded px-2 py-1 text-xs ${ev.is_required !== false ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-400'}`}>
+                                {ev.is_required !== false ? 'Required' : 'Optional'}
                               </span>
                               {showUpload && (
                                 <label className="cursor-pointer">

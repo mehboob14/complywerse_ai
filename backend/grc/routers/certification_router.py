@@ -393,8 +393,39 @@ def list_journey_controls(
             domain_name = parsed_control.domain
             objective_code = parsed_control.category
             objective_name = parsed_control.category
-            sub_controls_list = []
-            evidence_requirements = []
+            
+            def build_control_hierarchy(parent_control_id: str, framework_id: int, visited: set = None) -> list:
+                """Recursively build control hierarchy with cycle detection (unbounded depth)"""
+                if visited is None:
+                    visited = set()
+                
+                if parent_control_id in visited:
+                    return []
+                visited.add(parent_control_id)
+                    
+                children = db.query(ParsedFrameworkControl).filter(
+                    ParsedFrameworkControl.uploaded_framework_id == framework_id,
+                    ParsedFrameworkControl.parent_section == parent_control_id
+                ).all()
+                
+                result = []
+                for child in children:
+                    child_evidence = child.evidence_requirements or []
+                    grandchildren = build_control_hierarchy(child.control_id, framework_id, visited.copy())
+                    result.append({
+                        "id": child.id,
+                        "code": child.control_id,
+                        "name": child.title,
+                        "description": child.description or child.full_text,
+                        "parent_section": child.parent_section,
+                        "evidence_requirements": child_evidence,
+                        "evidence_recommendations": [ev.get("title", "") for ev in child_evidence] if child_evidence else [],
+                        "sub_controls": grandchildren
+                    })
+                return result
+            
+            sub_controls_list = build_control_hierarchy(parsed_control.control_id, parsed_control.uploaded_framework_id)
+            evidence_requirements = parsed_control.evidence_requirements or []
         elif framework_control:
             control = framework_control
             objective = control.objective if control else None
