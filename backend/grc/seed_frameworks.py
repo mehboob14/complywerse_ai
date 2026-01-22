@@ -121,7 +121,14 @@ def _determine_control_attributes(control_name, control_statement):
 
 
 def seed_frameworks():
-    """Seed all regulatory frameworks with complete normalized data structure."""
+    """
+    DEPRECATED: Pre-seeded frameworks have been removed from the system.
+    Users should now upload their own framework documents via the Framework Upload feature.
+    """
+    print("Pre-seeded frameworks disabled. Use Framework Upload to add frameworks.")
+    return
+    
+    # Legacy code below - kept for reference but never executed
     db = SessionLocal()
     try:
         existing = db.query(Framework).first()

@@ -10,7 +10,7 @@ from ..models import (
     CertificationJourney, ControlImplementation, ImplementationEvidence,
     Framework, FrameworkControl, FrameworkDomain, ControlObjective,
     FrameworkSubControl, Evidence, GRCUser, Tenant, CuratedEvidenceItem, 
-    CertificationPhase, get_db
+    CertificationPhase, UploadedFramework, ParsedFrameworkControl, get_db
 )
 from ..schemas import (
     CertificationJourneyCreate, CertificationJourneyUpdate, CertificationJourneyResponse,
@@ -105,7 +105,10 @@ def list_certifications(
     if status_filter:
         query = query.filter(CertificationJourney.status == status_filter)
     if framework_id:
-        query = query.filter(CertificationJourney.framework_id == framework_id)
+        query = query.filter(
+            (CertificationJourney.framework_id == framework_id) | 
+            (CertificationJourney.uploaded_framework_id == framework_id)
+        )
     
     journeys = query.order_by(CertificationJourney.started_at.desc()).offset(skip).limit(limit).all()
     return journeys
@@ -128,7 +131,7 @@ def create_certification(
                 detail="User is not assigned to any tenant"
             )
     
-    framework = db.query(Framework).filter(Framework.id == journey_data.framework_id).first()
+    framework = db.query(UploadedFramework).filter(UploadedFramework.id == journey_data.framework_id).first()
     if not framework:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -137,7 +140,7 @@ def create_certification(
     
     journey = CertificationJourney(
         tenant_id=tenant_id,
-        framework_id=journey_data.framework_id,
+        uploaded_framework_id=journey_data.framework_id,
         name=journey_data.name,
         target_date=journey_data.target_date,
         notes=journey_data.notes,
@@ -147,14 +150,14 @@ def create_certification(
     db.commit()
     db.refresh(journey)
     
-    controls = db.query(FrameworkControl).join(ControlObjective).join(FrameworkDomain).filter(
-        FrameworkDomain.framework_id == journey_data.framework_id
+    controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == journey_data.framework_id
     ).all()
     
     for control in controls:
         implementation = ControlImplementation(
             journey_id=journey.id,
-            framework_control_id=control.id,
+            parsed_control_id=control.id,
             status="not_started",
             priority=3
         )
@@ -173,26 +176,12 @@ def get_certification(
 ):
     journey = get_journey_or_404(journey_id, current_user, db)
     
-    framework = db.query(Framework).filter(Framework.id == journey.framework_id).first()
+    framework = db.query(UploadedFramework).filter(UploadedFramework.id == journey.uploaded_framework_id).first()
     implementations = db.query(ControlImplementation).filter(
         ControlImplementation.journey_id == journey_id
     ).all()
     
-    phases = db.query(CertificationPhase).filter(
-        CertificationPhase.framework_id == journey.framework_id
-    ).order_by(CertificationPhase.phase_number).all()
-    
-    phases_list = [
-        {
-            "id": phase.id,
-            "phase_number": phase.phase_number,
-            "name": phase.name,
-            "description": phase.description,
-            "key_tasks": phase.key_tasks or [],
-            "deliverables": phase.deliverables or []
-        }
-        for phase in phases
-    ]
+    phases_list = []
     
     total = len(implementations)
     implemented = sum(1 for i in implementations if i.status in ["implemented", "verified"])
@@ -201,9 +190,9 @@ def get_certification(
     return {
         "id": journey.id,
         "tenant_id": journey.tenant_id,
-        "framework_id": journey.framework_id,
+        "framework_id": journey.uploaded_framework_id,
         "framework_name": framework.name if framework else None,
-        "framework_short_code": framework.short_code if framework else None,
+        "framework_short_code": framework.name[:10] if framework else None,
         "name": journey.name,
         "target_date": journey.target_date.isoformat() if journey.target_date else None,
         "started_at": journey.started_at.isoformat() if journey.started_at else None,
@@ -268,6 +257,7 @@ def list_journey_controls(
     query = db.query(ControlImplementation).options(
         joinedload(ControlImplementation.framework_control).joinedload(FrameworkControl.objective).joinedload(ControlObjective.domain),
         joinedload(ControlImplementation.framework_control).joinedload(FrameworkControl.sub_controls),
+        joinedload(ControlImplementation.parsed_control),
         joinedload(ControlImplementation.evidence_attachments)
     ).filter(ControlImplementation.journey_id == journey_id)
     
@@ -275,30 +265,60 @@ def list_journey_controls(
         query = query.filter(ControlImplementation.status == status_filter)
     if priority:
         query = query.filter(ControlImplementation.priority == priority)
-    if domain_id:
-        query = query.join(FrameworkControl).join(ControlObjective).filter(ControlObjective.domain_id == domain_id)
     
     implementations = query.all()
     
     result = []
     for impl in implementations:
-        control = impl.framework_control
-        objective = control.objective if control else None
-        domain = objective.domain if objective else None
+        parsed_control = impl.parsed_control
+        framework_control = impl.framework_control
         
-        sub_controls_list = []
-        if control and control.sub_controls:
-            for sub in control.sub_controls:
-                sub_controls_list.append({
-                    "id": sub.id,
-                    "code": sub.code,
-                    "name": sub.name,
-                    "description": sub.description,
-                    "evidence_recommendations": sub.evidence_recommendations or [],
-                    "ai_matching_keywords": sub.ai_matching_keywords or []
-                })
-        
-        evidence_requirements = get_curated_evidence_for_control(impl.framework_control_id, db)
+        if parsed_control:
+            control_code = parsed_control.control_id
+            control_name = parsed_control.title
+            control_statement = parsed_control.description or parsed_control.full_text
+            domain_id_val = None
+            domain_code = parsed_control.domain
+            domain_name = parsed_control.domain
+            objective_code = parsed_control.category
+            objective_name = parsed_control.category
+            sub_controls_list = []
+            evidence_requirements = []
+        elif framework_control:
+            control = framework_control
+            objective = control.objective if control else None
+            domain = objective.domain if objective else None
+            control_code = control.code if control else None
+            control_name = control.name if control else None
+            control_statement = control.statement if control else None
+            domain_id_val = domain.id if domain else None
+            domain_code = domain.code if domain else None
+            domain_name = domain.name if domain else None
+            objective_code = objective.code if objective else None
+            objective_name = objective.name if objective else None
+            sub_controls_list = []
+            if control and control.sub_controls:
+                for sub in control.sub_controls:
+                    sub_controls_list.append({
+                        "id": sub.id,
+                        "code": sub.code,
+                        "name": sub.name,
+                        "description": sub.description,
+                        "evidence_recommendations": sub.evidence_recommendations or [],
+                        "ai_matching_keywords": sub.ai_matching_keywords or []
+                    })
+            evidence_requirements = get_curated_evidence_for_control(impl.framework_control_id, db)
+        else:
+            control_code = None
+            control_name = None
+            control_statement = None
+            domain_id_val = None
+            domain_code = None
+            domain_name = None
+            objective_code = None
+            objective_name = None
+            sub_controls_list = []
+            evidence_requirements = []
         
         evidence_list = []
         for ev in impl.evidence_attachments:
@@ -315,14 +335,15 @@ def list_journey_controls(
             "id": impl.id,
             "journey_id": impl.journey_id,
             "framework_control_id": impl.framework_control_id,
-            "control_code": control.code if control else None,
-            "control_name": control.name if control else None,
-            "control_statement": control.statement if control else None,
-            "domain_id": domain.id if domain else None,
-            "domain_code": domain.code if domain else None,
-            "domain_name": domain.name if domain else None,
-            "objective_code": objective.code if objective else None,
-            "objective_name": objective.name if objective else None,
+            "parsed_control_id": impl.parsed_control_id,
+            "control_code": control_code,
+            "control_name": control_name,
+            "control_statement": control_statement,
+            "domain_id": domain_id_val,
+            "domain_code": domain_code,
+            "domain_name": domain_name,
+            "objective_code": objective_code,
+            "objective_name": objective_name,
             "status": impl.status,
             "implementation_notes": impl.implementation_notes,
             "implementation_date": impl.implementation_date.isoformat() if impl.implementation_date else None,
@@ -350,6 +371,7 @@ def get_control_details(
     
     implementation = db.query(ControlImplementation).options(
         joinedload(ControlImplementation.framework_control),
+        joinedload(ControlImplementation.parsed_control),
         joinedload(ControlImplementation.evidence_attachments)
     ).filter(
         ControlImplementation.id == control_id,
@@ -362,7 +384,28 @@ def get_control_details(
             detail="Control implementation not found"
         )
     
-    control = implementation.framework_control
+    parsed_control = implementation.parsed_control
+    framework_control = implementation.framework_control
+    
+    if parsed_control:
+        control_code = parsed_control.control_id
+        control_name = parsed_control.title
+        control_statement = parsed_control.description or parsed_control.full_text
+        implementation_guidance = parsed_control.ai_notes
+        testing_guidance = None
+    elif framework_control:
+        control_code = framework_control.code
+        control_name = framework_control.name
+        control_statement = framework_control.statement
+        implementation_guidance = framework_control.implementation_guidance
+        testing_guidance = framework_control.testing_guidance
+    else:
+        control_code = None
+        control_name = None
+        control_statement = None
+        implementation_guidance = None
+        testing_guidance = None
+    
     evidence_list = []
     for ev in implementation.evidence_attachments:
         evidence_list.append({
@@ -385,11 +428,12 @@ def get_control_details(
         "id": implementation.id,
         "journey_id": implementation.journey_id,
         "framework_control_id": implementation.framework_control_id,
-        "control_code": control.code if control else None,
-        "control_name": control.name if control else None,
-        "control_statement": control.statement if control else None,
-        "implementation_guidance": control.implementation_guidance if control else None,
-        "testing_guidance": control.testing_guidance if control else None,
+        "parsed_control_id": implementation.parsed_control_id,
+        "control_code": control_code,
+        "control_name": control_name,
+        "control_statement": control_statement,
+        "implementation_guidance": implementation_guidance,
+        "testing_guidance": testing_guidance,
         "status": implementation.status,
         "implementation_notes": implementation.implementation_notes,
         "implementation_date": implementation.implementation_date.isoformat() if implementation.implementation_date else None,
@@ -600,7 +644,8 @@ def get_progress_summary(
     journey = get_journey_or_404(journey_id, current_user, db)
     
     implementations = db.query(ControlImplementation).options(
-        joinedload(ControlImplementation.framework_control).joinedload(FrameworkControl.objective).joinedload(ControlObjective.domain)
+        joinedload(ControlImplementation.framework_control).joinedload(FrameworkControl.objective).joinedload(ControlObjective.domain),
+        joinedload(ControlImplementation.parsed_control)
     ).filter(ControlImplementation.journey_id == journey_id).all()
     
     total = len(implementations)
@@ -611,9 +656,30 @@ def get_progress_summary(
         status = impl.status
         by_status[status] = by_status.get(status, 0) + 1
         
-        control = impl.framework_control
-        if control and control.objective and control.objective.domain:
-            domain = control.objective.domain
+        parsed_control = impl.parsed_control
+        framework_control = impl.framework_control
+        
+        if parsed_control:
+            domain_name = parsed_control.domain or "General"
+            domain_id = domain_name
+            if domain_id not in by_domain_dict:
+                by_domain_dict[domain_id] = {
+                    "domain_id": domain_id,
+                    "domain_name": domain_name,
+                    "total": 0,
+                    "completed": 0,
+                    "in_progress": 0,
+                    "not_started": 0
+                }
+            by_domain_dict[domain_id]["total"] += 1
+            if impl.status in ["implemented", "verified"]:
+                by_domain_dict[domain_id]["completed"] += 1
+            elif impl.status == "in_progress":
+                by_domain_dict[domain_id]["in_progress"] += 1
+            else:
+                by_domain_dict[domain_id]["not_started"] += 1
+        elif framework_control and framework_control.objective and framework_control.objective.domain:
+            domain = framework_control.objective.domain
             domain_id = domain.id
             domain_name = domain.name
             if domain_id not in by_domain_dict:
@@ -667,6 +733,7 @@ def get_gap_analysis(
     
     implementations = db.query(ControlImplementation).options(
         joinedload(ControlImplementation.framework_control),
+        joinedload(ControlImplementation.parsed_control),
         joinedload(ControlImplementation.evidence_attachments)
     ).filter(
         ControlImplementation.journey_id == journey_id,
@@ -680,11 +747,23 @@ def get_gap_analysis(
     high_priority_gaps = []
     
     for impl in implementations:
-        control = impl.framework_control
+        parsed_control = impl.parsed_control
+        framework_control = impl.framework_control
+        
+        if parsed_control:
+            control_code = parsed_control.control_id
+            control_name = parsed_control.title
+        elif framework_control:
+            control_code = framework_control.code
+            control_name = framework_control.name
+        else:
+            control_code = None
+            control_name = None
+        
         control_info = {
             "implementation_id": impl.id,
-            "control_code": control.code if control else None,
-            "control_name": control.name if control else None,
+            "control_code": control_code,
+            "control_name": control_name,
             "status": impl.status,
             "priority": impl.priority
         }
@@ -711,7 +790,7 @@ def get_gap_analysis(
                 evidence_pending_review.append({
                     "evidence_id": ev.id,
                     "file_name": ev.file_name,
-                    "control_code": control.code if control else None,
+                    "control_code": control_code,
                     "uploaded_at": ev.uploaded_at.isoformat() if ev.uploaded_at else None
                 })
     

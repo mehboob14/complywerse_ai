@@ -3,45 +3,52 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { frameworksApi, certificationsApi } from '@/lib/api';
-import { Framework, CertificationJourney, Domain } from '@/types';
-import CreateFrameworkModal from '@/components/CreateFrameworkModal';
+import apiClient, { certificationsApi } from '@/lib/api';
+import { CertificationJourney } from '@/types';
 import { 
   FileStack, 
-  ChevronRight, 
   Loader2, 
   AlertCircle,
   Shield,
-  Plus,
   Play,
   ArrowRight,
   Calendar,
   Target,
   CheckCircle2,
   Clock,
-  Layers,
-  Building2,
   Upload,
   Trash2,
-  X
+  X,
+  Tag
 } from 'lucide-react';
 import Link from 'next/link';
+
+interface UploadedFramework {
+  id: number;
+  name: string;
+  version: string;
+  framework_type: string;
+  upload_status: string;
+  controls_count: number;
+  is_shared: boolean;
+  is_active: boolean;
+  created_at: string;
+}
 
 export default function FrameworksPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<Framework | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<UploadedFramework | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [journeyDeleteConfirm, setJourneyDeleteConfirm] = useState<CertificationJourney | null>(null);
   const [journeyDeleteError, setJourneyDeleteError] = useState<string | null>(null);
 
   const deleteMutation = useMutation({
-    mutationFn: async (frameworkId: string) => {
-      return await frameworksApi.delete(frameworkId);
+    mutationFn: async (frameworkId: number) => {
+      return await apiClient.delete(`/framework-upload/upload/${frameworkId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['frameworks'] });
+      queryClient.invalidateQueries({ queryKey: ['uploaded-frameworks'] });
       setDeleteConfirm(null);
       setDeleteError(null);
     },
@@ -65,10 +72,10 @@ export default function FrameworksPage() {
   });
 
   const { data: frameworks, isLoading: frameworksLoading } = useQuery({
-    queryKey: ['frameworks'],
+    queryKey: ['uploaded-frameworks'],
     queryFn: async () => {
-      const response = await frameworksApi.getAll();
-      return response.data;
+      const response = await apiClient.get('/framework-upload/upload');
+      return response.data.items as UploadedFramework[];
     },
   });
 
@@ -98,15 +105,13 @@ export default function FrameworksPage() {
     activeCertifications.map((c: CertificationJourney) => String(c.framework_id))
   );
 
-  const availableFrameworks = (frameworks || []).filter(
-    (f: Framework) => !activeCertificationFrameworkIds.has(String(f.id))
+  const completedFrameworks = (frameworks || []).filter(
+    (f: UploadedFramework) => f.upload_status === 'completed'
   );
 
-  const getJourneyForFramework = (frameworkId: string) => {
-    return (certifications as CertificationJourney[] || []).find(
-      (c: CertificationJourney) => String(c.framework_id) === frameworkId
-    );
-  };
+  const availableFrameworks = completedFrameworks.filter(
+    (f: UploadedFramework) => !activeCertificationFrameworkIds.has(String(f.id))
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -124,26 +129,30 @@ export default function FrameworksPage() {
     return 'bg-red-500';
   };
 
-  const handleStartCertification = async (framework: Framework) => {
+  const getFrameworkTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      'iso': 'ISO',
+      'nist': 'NIST',
+      'pci_dss': 'PCI DSS',
+      'soc2': 'SOC 2',
+      'gdpr': 'GDPR',
+      'hipaa': 'HIPAA',
+      'cobit': 'COBIT',
+      'other': 'Custom'
+    };
+    return labels[type] || type.toUpperCase();
+  };
+
+  const handleStartCertification = async (framework: UploadedFramework) => {
     try {
       const response = await certificationsApi.create({
-        framework_id: parseInt(framework.id),
+        framework_id: framework.id,
         name: `${framework.name} Certification`,
       });
       router.push(`/frameworks/${response.data.id}`);
     } catch (error) {
       console.error('Failed to start certification:', error);
     }
-  };
-
-  const countControls = (framework: Framework) => {
-    let count = 0;
-    framework.domains?.forEach((domain: Domain) => {
-      domain.control_objectives?.forEach((obj) => {
-        count += obj.controls?.length || 0;
-      });
-    });
-    return count;
   };
 
   return (
@@ -161,13 +170,6 @@ export default function FrameworksPage() {
             <Upload className="h-4 w-4" />
             Upload Framework
           </Link>
-          <button 
-            onClick={() => setShowCreateModal(true)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create Custom Framework
-          </button>
         </div>
       </div>
 
@@ -262,10 +264,7 @@ export default function FrameworksPage() {
           Available Frameworks
         </h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {availableFrameworks?.map((framework: Framework) => {
-            const domainCount = framework.domain_count || framework.domains?.length || 0;
-            const controlCount = framework.control_count || countControls(framework);
-            
+          {availableFrameworks?.map((framework: UploadedFramework) => {
             return (
               <div 
                 key={framework.id} 
@@ -283,21 +282,15 @@ export default function FrameworksPage() {
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="inline-flex items-center gap-1 rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300">
-                    <Layers className="h-3 w-3" />
-                    {domainCount} domains
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300">
                     <Shield className="h-3 w-3" />
-                    {controlCount} controls
+                    {framework.controls_count} controls
                   </span>
                 </div>
 
-                {framework.source && (
-                  <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
-                    <Building2 className="h-3 w-3" />
-                    {framework.source}
-                  </div>
-                )}
+                <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
+                  <Tag className="h-3 w-3" />
+                  {getFrameworkTypeLabel(framework.framework_type)}
+                </div>
 
                 <div className="mt-4 border-t border-slate-700 pt-4 flex gap-2">
                   <button
@@ -307,45 +300,38 @@ export default function FrameworksPage() {
                     <Play className="h-4 w-4" />
                     Start Certification
                   </button>
-                  {framework.is_custom && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirm(framework);
-                        setDeleteError(null);
-                      }}
-                      className="rounded-lg bg-red-500/20 px-3 py-2 text-red-400 hover:bg-red-500/30 transition-colors"
-                      title="Delete Framework"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteConfirm(framework);
+                      setDeleteError(null);
+                    }}
+                    className="rounded-lg bg-red-500/20 px-3 py-2 text-red-400 hover:bg-red-500/30 transition-colors"
+                    title="Delete Framework"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {(!frameworks || frameworks.length === 0) && (
+        {(!completedFrameworks || completedFrameworks.length === 0) && (
           <div className="card flex flex-col items-center justify-center py-12 text-center">
             <FileStack className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-white">No frameworks found</h3>
-            <p className="mt-1 text-slate-400">Get started by adding a compliance framework</p>
-            <button 
-              onClick={() => setShowCreateModal(true)}
-              className="btn-primary mt-4 flex items-center gap-2"
+            <h3 className="text-lg font-medium text-white">No frameworks available</h3>
+            <p className="mt-1 text-slate-400">Upload a compliance framework to get started with certification</p>
+            <Link 
+              href="/framework-upload"
+              className="mt-4 flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 transition-colors"
             >
-              <Plus className="h-4 w-4" />
-              Create Framework
-            </button>
+              <Upload className="h-4 w-4" />
+              Upload Framework
+            </Link>
           </div>
         )}
       </section>
-
-      <CreateFrameworkModal 
-        isOpen={showCreateModal} 
-        onClose={() => setShowCreateModal(false)} 
-      />
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -370,7 +356,7 @@ export default function FrameworksPage() {
               Are you sure you want to delete <span className="font-semibold text-white">{deleteConfirm.name}</span>?
             </p>
             <p className="text-sm text-slate-400 mb-4">
-              This will permanently remove the framework and all associated domains, objectives, and controls. This action cannot be undone.
+              This will permanently remove the framework and all associated controls. This action cannot be undone.
             </p>
 
             {deleteError && (
@@ -390,7 +376,7 @@ export default function FrameworksPage() {
                 Cancel
               </button>
               <button
-                onClick={() => deleteMutation.mutate(String(deleteConfirm.id))}
+                onClick={() => deleteMutation.mutate(deleteConfirm.id)}
                 disabled={deleteMutation.isPending}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
               >

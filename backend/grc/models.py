@@ -1893,7 +1893,8 @@ class CertificationJourney(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
-    framework_id = Column(Integer, ForeignKey("grc_frameworks.id"), nullable=False, index=True)
+    framework_id = Column(Integer, ForeignKey("grc_frameworks.id"), nullable=True, index=True)
+    uploaded_framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     target_date = Column(DateTime, nullable=True)
     started_at = Column(DateTime, default=datetime.utcnow)
@@ -1904,11 +1905,12 @@ class CertificationJourney(Base):
     
     tenant = relationship("Tenant", back_populates="certification_journeys")
     framework = relationship("Framework")
+    uploaded_framework = relationship("UploadedFramework")
     control_implementations = relationship("ControlImplementation", back_populates="journey", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_cert_journey_tenant_framework", "tenant_id", "framework_id"),
-        UniqueConstraint("tenant_id", "framework_id", name="uq_cert_journey_tenant_framework"),
+        Index("ix_cert_journey_tenant_uploaded_framework", "tenant_id", "uploaded_framework_id"),
     )
 
 
@@ -1937,7 +1939,8 @@ class ControlImplementation(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     journey_id = Column(Integer, ForeignKey("grc_certification_journeys.id"), nullable=False, index=True)
-    framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=False, index=True)
+    framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=True, index=True)
+    parsed_control_id = Column(Integer, ForeignKey("grc_parsed_framework_controls.id"), nullable=True, index=True)
     status = Column(String(50), default="not_started")
     implementation_notes = Column(Text, nullable=True)
     implementation_date = Column(DateTime, nullable=True)
@@ -1948,6 +1951,7 @@ class ControlImplementation(Base):
     
     journey = relationship("CertificationJourney", back_populates="control_implementations")
     framework_control = relationship("FrameworkControl")
+    parsed_control = relationship("ParsedFrameworkControl")
     verifier = relationship("GRCUser")
     evidence_attachments = relationship("ImplementationEvidence", back_populates="implementation", cascade="all, delete-orphan")
 
