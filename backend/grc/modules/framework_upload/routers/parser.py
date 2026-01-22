@@ -1221,6 +1221,21 @@ def parse_document_with_chunking(text: str, framework_name: str) -> tuple:
     return enhanced_controls, doc_structure
 
 
+def update_parsing_heartbeat(db: Session, framework_id: int, stage: str):
+    """Update the framework's updated_at timestamp as a heartbeat during parsing.
+    
+    This allows staleness detection to accurately determine if parsing is active.
+    """
+    try:
+        fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+        if fw:
+            fw.updated_at = datetime.utcnow()
+            db.commit()
+            print(f"[PARSE] Heartbeat: {stage}", flush=True)
+    except Exception as e:
+        print(f"[PARSE] Heartbeat update failed: {e}", flush=True)
+
+
 def run_background_parsing(framework_id: int, file_path: str, file_type: str, framework_name: str):
     """Run parsing in a background thread to avoid HTTP timeout."""
     print(f"[PARSE] ========================================", flush=True)
@@ -1244,6 +1259,7 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
                     text_parts.append(page_text)
             extracted_text = "\n\n".join(text_parts)
             print(f"[PARSE] Text extraction complete. Total characters: {len(extracted_text):,}", flush=True)
+            update_parsing_heartbeat(db, framework_id, "PDF text extracted")
         elif file_type == "docx":
             from docx import Document
             doc = Document(file_path)
@@ -1257,6 +1273,7 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
                     if row_text:
                         text_parts.append(row_text)
             extracted_text = "\n".join(text_parts)
+            update_parsing_heartbeat(db, framework_id, "DOCX text extracted")
         else:
             fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
             if fw:
@@ -1274,6 +1291,7 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
             return
         
         parsed_controls_data, doc_structure = parse_document_with_chunking(extracted_text, framework_name)
+        update_parsing_heartbeat(db, framework_id, f"AI parsing complete - {len(parsed_controls_data) if parsed_controls_data else 0} controls")
         
         if not parsed_controls_data:
             fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
@@ -1542,6 +1560,119 @@ def get_parse_status(
         "parse_error": framework.parse_error,
         "parsed_at": framework.parsed_at.isoformat() if framework.parsed_at else None,
         "controls_count": controls_count
+    }
+
+
+@router.post("/{framework_id}/retry-parse")
+def retry_framework_parsing(
+    framework_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Reset a stuck framework and restart parsing.
+    
+    Use this to recover from:
+    - Frameworks stuck in 'parsing' status due to server restart (>10 minutes)
+    - Failed parsing that needs to be retried
+    - Any framework that didn't complete parsing properly
+    
+    Safety: Only allows retry if parsing is stale (>10 min) or status is failed/uploaded/text_extracted
+    """
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uploaded framework not found"
+        )
+    
+    validate_framework_access(current_user, framework, db)
+    
+    old_status = framework.upload_status
+    
+    # Check if retry is allowed based on status and staleness
+    if old_status == 'parsing':
+        # Check if parsing is stale (running for more than 10 minutes)
+        if framework.updated_at:
+            time_since_update = (datetime.utcnow() - framework.updated_at).total_seconds()
+            if time_since_update < 600:  # 10 minutes = 600 seconds
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Parsing is still in progress (started {int(time_since_update)}s ago). Wait at least 10 minutes before retrying."
+                )
+    elif old_status in ['parsed', 'published', 'completed']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Framework already has status '{old_status}'. No retry needed."
+        )
+    
+    # Clear any partial parsed data to prevent duplicates
+    existing_control_ids = db.query(ParsedFrameworkControl.id).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id
+    ).all()
+    
+    if existing_control_ids:
+        ctrl_ids = [c.id for c in existing_control_ids]
+        # Delete associated assessment items
+        assessment_item_ids = db.query(AssessmentItem.id).filter(
+            AssessmentItem.parsed_control_id.in_(ctrl_ids)
+        ).all()
+        ai_ids = [a.id for a in assessment_item_ids]
+        
+        if ai_ids:
+            db.query(AssessmentRemediation).filter(
+                AssessmentRemediation.assessment_item_id.in_(ai_ids)
+            ).delete(synchronize_session=False)
+            db.query(AssessmentEvidence).filter(
+                AssessmentEvidence.assessment_item_id.in_(ai_ids)
+            ).delete(synchronize_session=False)
+            db.query(AssessmentItem).filter(
+                AssessmentItem.id.in_(ai_ids)
+            ).delete(synchronize_session=False)
+        
+        db.query(FrameworkControlAlignment).filter(
+            FrameworkControlAlignment.parsed_control_id.in_(ctrl_ids)
+        ).delete(synchronize_session=False)
+        db.query(ControlEvidenceMapping).filter(
+            ControlEvidenceMapping.parsed_control_id.in_(ctrl_ids)
+        ).delete(synchronize_session=False)
+        db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.id.in_(ctrl_ids)
+        ).delete(synchronize_session=False)
+        db.flush()
+    
+    # Reset status and start fresh parsing
+    framework.upload_status = "parsing"
+    framework.parse_error = None
+    framework.updated_at = datetime.utcnow()  # Update timestamp to track staleness
+    db.commit()
+    
+    file_path = framework.file_path
+    file_type = framework.file_type
+    framework_name = framework.name
+    
+    if not os.path.exists(file_path):
+        framework.upload_status = "failed"
+        framework.parse_error = "Framework file not found on disk"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework file not found on disk"
+        )
+    
+    thread = threading.Thread(
+        target=run_background_parsing,
+        args=(framework_id, file_path, file_type, framework_name),
+        daemon=True
+    )
+    thread.start()
+    
+    return {
+        "message": f"Parsing restarted. Previous status was '{old_status}'.",
+        "framework_id": framework_id,
+        "status": "parsing"
     }
 
 

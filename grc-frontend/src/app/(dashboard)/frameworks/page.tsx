@@ -75,6 +75,27 @@ export default function FrameworksPage() {
     }
   });
 
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [retrySuccess, setRetrySuccess] = useState<string | null>(null);
+
+  const retryParseMutation = useMutation({
+    mutationFn: async (frameworkId: number) => {
+      return await apiClient.post(`/framework-upload/parser/${frameworkId}/retry-parse`);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['uploaded-frameworks'] });
+      setRetryError(null);
+      setRetrySuccess(data.data?.message || 'Parsing restarted successfully');
+      setTimeout(() => setRetrySuccess(null), 5000);
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.detail || 'Failed to retry parsing';
+      setRetryError(errorMsg);
+      setRetrySuccess(null);
+      setTimeout(() => setRetryError(null), 5000);
+    }
+  });
+
   const { data: frameworks, isLoading: frameworksLoading, isFetching } = useQuery({
     queryKey: ['uploaded-frameworks'],
     queryFn: async () => {
@@ -260,6 +281,21 @@ export default function FrameworksPage() {
               Auto-refreshing every 3s
             </span>
           </h2>
+          
+          {retryError && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/20 p-3 text-sm text-red-400">
+              <AlertCircle className="h-4 w-4" />
+              {retryError}
+            </div>
+          )}
+          
+          {retrySuccess && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-green-500/20 p-3 text-sm text-green-400">
+              <CheckCircle className="h-4 w-4" />
+              {retrySuccess}
+            </div>
+          )}
+          
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {processingFrameworks.map((framework: UploadedFramework) => {
               const statusInfo = getUploadStatusInfo(framework.upload_status);
@@ -311,9 +347,23 @@ export default function FrameworksPage() {
                     )}
                   </div>
 
-                  <div className="mt-4 flex items-center gap-1 text-xs text-slate-500 border-t border-slate-700 pt-3">
-                    <Clock className="h-3 w-3" />
-                    Started: {new Date(framework.created_at).toLocaleTimeString()}
+                  <div className="mt-4 flex items-center justify-between border-t border-slate-700 pt-3">
+                    <div className="flex items-center gap-1 text-xs text-slate-500">
+                      <Clock className="h-3 w-3" />
+                      Started: {new Date(framework.created_at).toLocaleTimeString()}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        retryParseMutation.mutate(framework.id);
+                      }}
+                      disabled={retryParseMutation.isPending}
+                      className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-orange-400 hover:bg-orange-500/20 transition-colors disabled:opacity-50"
+                      title="Retry parsing if stuck"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${retryParseMutation.isPending ? 'animate-spin' : ''}`} />
+                      Retry
+                    </button>
                   </div>
                 </div>
               );
