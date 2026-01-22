@@ -2081,6 +2081,7 @@ class ParsedFrameworkControl(Base):
     
     ai_confidence = Column(Float, nullable=True)  # AI extraction confidence
     ai_notes = Column(Text, nullable=True)  # AI processing notes
+    evidence_requirements = Column(JSON, default=list)  # AI-recommended evidence types
     
     is_verified = Column(Boolean, default=False)  # Human-verified
     verified_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)

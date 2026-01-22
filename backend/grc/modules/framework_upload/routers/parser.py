@@ -2102,4 +2102,224 @@ def delete_parsed_control(
     return None
 
 
+def enhance_framework_controls_background(framework_id: int, framework_name: str):
+    """Background task to enhance all controls with evidence requirements."""
+    db = SessionLocal()
+    try:
+        if not AI_INTEGRATIONS_OPENAI_API_KEY:
+            print("[ENHANCE] OpenAI API key not configured", flush=True)
+            return
+        
+        client = OpenAI(
+            api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
+            base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+        )
+        
+        controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework_id
+        ).all()
+        
+        if not controls:
+            print(f"[ENHANCE] No controls found for framework {framework_id}", flush=True)
+            return
+        
+        framework = db.query(UploadedFramework).filter(
+            UploadedFramework.id == framework_id
+        ).first()
+        
+        if framework:
+            framework.upload_status = "enhancing"
+            db.commit()
+        
+        print(f"[ENHANCE] Starting enhancement for {len(controls)} controls in {framework_name}", flush=True)
+        
+        batch_size = 10
+        total_batches = (len(controls) + batch_size - 1) // batch_size
+        
+        for batch_num, i in enumerate(range(0, len(controls), batch_size), start=1):
+            batch = controls[i:i + batch_size]
+            print(f"[ENHANCE] Processing batch {batch_num}/{total_batches} ({len(batch)} controls)...", flush=True)
+            
+            controls_data = []
+            for c in batch:
+                controls_data.append({
+                    "id": c.id,
+                    "control_id": c.control_id,
+                    "title": c.title,
+                    "description": c.description or "",
+                    "full_text": c.full_text or ""
+                })
+            
+            controls_json = json.dumps(controls_data, indent=2)
+            
+            prompt = f"""For framework "{framework_name}", generate audit-ready evidence requirements for these controls.
+
+INPUT CONTROLS:
+{controls_json}
+
+For EACH control, provide:
+- id: Keep the same ID from input
+- evidence_requirements: Array of 2-4 evidence items, each with:
+  {{
+    "type": "policy|procedure|configuration|log|report|contract|attestation|register|screenshot|interview|test_results",
+    "title": "specific evidence name (e.g., 'Access Control Policy Document')",
+    "description": "what auditor looks for and how to obtain",
+    "is_required": true/false
+  }}
+
+Be specific and practical. Example evidence types:
+- policy: Written policies (Information Security Policy, Access Control Policy)
+- procedure: Step-by-step procedures (Incident Response Procedure, Change Management Procedure)
+- configuration: System configs (Firewall rules, AD group memberships, encryption settings)
+- log: Audit logs (Login logs, change logs, access logs)
+- report: Periodic reports (Vulnerability scan reports, compliance dashboards)
+- attestation: Signed acknowledgments (Training completion, policy acceptance)
+- test_results: Test evidence (Penetration test reports, DR test results)
+
+Return JSON with "controls" array containing objects with "id" and "evidence_requirements"."""
+
+            try:
+                import time
+                start_time = time.time()
+                
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are a GRC expert adding audit-ready evidence requirements to compliance controls. Be specific and practical."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    max_tokens=16384,
+                    temperature=0
+                )
+                
+                elapsed = time.time() - start_time
+                result_text = response.choices[0].message.content or "{}"
+                result = json.loads(result_text)
+                enhanced_batch = result.get("controls", [])
+                
+                id_to_evidence = {item["id"]: item.get("evidence_requirements", []) for item in enhanced_batch}
+                
+                for control in batch:
+                    if control.id in id_to_evidence:
+                        control.evidence_requirements = id_to_evidence[control.id]
+                        control.updated_at = datetime.utcnow()
+                
+                db.commit()
+                print(f"[ENHANCE] Batch {batch_num} completed in {elapsed:.1f}s", flush=True)
+                
+            except Exception as e:
+                print(f"[ENHANCE] Error in batch {batch_num}: {str(e)}", flush=True)
+                continue
+        
+        if framework:
+            framework.upload_status = "published"
+            framework.updated_at = datetime.utcnow()
+            db.commit()
+        
+        print(f"[ENHANCE] Enhancement complete for framework {framework_id}", flush=True)
+        
+    except Exception as e:
+        print(f"[ENHANCE] Error: {str(e)}", flush=True)
+    finally:
+        db.close()
+
+
+@router.post("/frameworks/{framework_id}/enhance")
+def enhance_framework_with_evidence(
+    framework_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Enhance all controls in a framework with AI-generated evidence requirements."""
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework not found"
+        )
+    
+    validate_framework_access(current_user, framework, db)
+    
+    if framework.upload_status == "enhancing":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Framework is already being enhanced"
+        )
+    
+    control_count = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id
+    ).count()
+    
+    if control_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No controls found to enhance"
+        )
+    
+    controls_with_evidence = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id,
+        ParsedFrameworkControl.evidence_requirements != None,
+        ParsedFrameworkControl.evidence_requirements != []
+    ).count()
+    
+    background_tasks.add_task(
+        enhance_framework_controls_background,
+        framework_id,
+        framework.name
+    )
+    
+    return {
+        "message": "Enhancement started",
+        "framework_id": framework_id,
+        "framework_name": framework.name,
+        "total_controls": control_count,
+        "controls_with_evidence": controls_with_evidence,
+        "estimated_time_minutes": max(1, (control_count // 10) * 0.5)
+    }
+
+
+@router.get("/frameworks/{framework_id}/enhancement-status")
+def get_enhancement_status(
+    framework_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get the enhancement status for a framework."""
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework not found"
+        )
+    
+    validate_framework_access(current_user, framework, db)
+    
+    total_controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id
+    ).count()
+    
+    controls_with_evidence = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id,
+        ParsedFrameworkControl.evidence_requirements != None,
+        func.jsonb_array_length(ParsedFrameworkControl.evidence_requirements) > 0
+    ).count()
+    
+    return {
+        "framework_id": framework_id,
+        "framework_name": framework.name,
+        "status": framework.upload_status,
+        "total_controls": total_controls,
+        "controls_with_evidence": controls_with_evidence,
+        "enhancement_progress": round((controls_with_evidence / total_controls * 100) if total_controls > 0 else 0, 1)
+    }
+
+
 parser_router = router
