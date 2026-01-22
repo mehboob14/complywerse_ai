@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from ....models import (
     UploadedFramework, ParsedFrameworkControl, FrameworkAssessment,
-    GRCUser, Tenant, get_db, EvidenceControlMapping, Evidence
+    GRCUser, Tenant, get_db, EvidenceControlMapping, Evidence, EvidenceAIAssessment
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -281,6 +281,9 @@ def delete_uploaded_framework(
     file_path = framework.file_path
     
     try:
+        # Get framework name for invalidating AI assessments
+        framework_name = framework.name
+        
         # Get all parsed control IDs for this framework
         parsed_control_ids = db.query(ParsedFrameworkControl.id).filter(
             ParsedFrameworkControl.uploaded_framework_id == framework_id
@@ -300,6 +303,28 @@ def delete_uploaded_framework(
         db.query(EvidenceControlMapping).filter(
             EvidenceControlMapping.uploaded_framework_id == framework_id
         ).delete(synchronize_session=False)
+        
+        # Invalidate AI assessments that reference this framework
+        # Get all assessments that have clause_mappings referencing this framework
+        assessments_to_update = db.query(EvidenceAIAssessment).filter(
+            EvidenceAIAssessment.clause_mappings.isnot(None)
+        ).all()
+        
+        for assessment in assessments_to_update:
+            if assessment.clause_mappings:
+                # Filter out mappings that reference the deleted framework
+                updated_mappings = [
+                    mapping for mapping in assessment.clause_mappings
+                    if mapping.get('framework_name') != framework_name
+                ]
+                # Only update if mappings changed
+                if len(updated_mappings) != len(assessment.clause_mappings):
+                    assessment.clause_mappings = updated_mappings
+                    # Unlock assessment so it can be re-run
+                    assessment.is_locked = False
+                    assessment.locked_at = None
+                    assessment.locked_by = None
+                    assessment.lock_reason = None
         
         db.delete(framework)
         db.commit()

@@ -2,8 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient, { frameworksApi } from '@/lib/api';
-import { Framework } from '@/types';
+import apiClient from '@/lib/api';
 import {
   Library,
   Loader2,
@@ -143,11 +142,11 @@ export default function ControlLibraryPage() {
     },
   });
 
-  const { data: frameworks } = useQuery({
-    queryKey: ['frameworks'],
+  const { data: uploadedFrameworks } = useQuery({
+    queryKey: ['uploaded-frameworks'],
     queryFn: async () => {
-      const response = await frameworksApi.getAll();
-      return response.data;
+      const response = await apiClient.get('/framework-upload/upload');
+      return response.data?.items || [];
     },
   });
 
@@ -353,10 +352,10 @@ export default function ControlLibraryPage() {
         />
         <StatCard
           title="Frameworks Covered"
-          value={groupsLoading ? '-' : frameworks?.length || 0}
+          value={groupsLoading ? '-' : uploadedFrameworks?.length || 0}
           icon={Layers}
           variant="success"
-          subtitle="Active frameworks"
+          subtitle="Uploaded frameworks"
         />
         <StatCard
           title="Evidence Coverage"
@@ -1007,13 +1006,13 @@ export default function ControlLibraryPage() {
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-300">Select Frameworks (optional)</label>
                   <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-slate-600 bg-slate-700 p-3">
-                    {frameworks?.map((fw: Framework) => (
+                    {uploadedFrameworks?.map((fw: any) => (
                       <label key={fw.id} className="flex items-center gap-2 text-sm text-slate-300">
                         <input
                           type="checkbox"
-                          checked={selectedFrameworks.includes(parseInt(fw.id))}
+                          checked={selectedFrameworks.includes(fw.id)}
                           onChange={(e) => {
-                            const id = parseInt(fw.id);
+                            const id = fw.id;
                             if (e.target.checked) {
                               setSelectedFrameworks([...selectedFrameworks, id]);
                             } else {
@@ -1025,8 +1024,8 @@ export default function ControlLibraryPage() {
                         {fw.name}
                       </label>
                     ))}
-                    {(!frameworks || frameworks.length === 0) && (
-                      <p className="text-sm text-slate-500">No frameworks available</p>
+                    {(!uploadedFrameworks || uploadedFrameworks.length === 0) && (
+                      <p className="text-sm text-slate-500">No frameworks uploaded. Please upload frameworks first.</p>
                     )}
                   </div>
                   <p className="mt-1 text-xs text-slate-500">Leave empty to analyze all frameworks</p>
@@ -1149,13 +1148,13 @@ export default function ControlLibraryPage() {
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-300">Select Frameworks (optional)</label>
                   <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-slate-600 bg-slate-700 p-3">
-                    {frameworks?.map((fw: Framework) => (
+                    {uploadedFrameworks?.map((fw: any) => (
                       <label key={fw.id} className="flex items-center gap-2 text-sm text-slate-300">
                         <input
                           type="checkbox"
-                          checked={selectedFrameworks.includes(parseInt(fw.id))}
+                          checked={selectedFrameworks.includes(fw.id)}
                           onChange={(e) => {
-                            const id = parseInt(fw.id);
+                            const id = fw.id;
                             if (e.target.checked) {
                               setSelectedFrameworks([...selectedFrameworks, id]);
                             } else {
@@ -1167,8 +1166,8 @@ export default function ControlLibraryPage() {
                         {fw.name}
                       </label>
                     ))}
-                    {(!frameworks || frameworks.length === 0) && (
-                      <p className="text-sm text-slate-500">No frameworks available</p>
+                    {(!uploadedFrameworks || uploadedFrameworks.length === 0) && (
+                      <p className="text-sm text-slate-500">No frameworks uploaded. Please upload frameworks first.</p>
                     )}
                   </div>
                   <p className="mt-1 text-xs text-slate-500">Leave empty to analyze all frameworks</p>
