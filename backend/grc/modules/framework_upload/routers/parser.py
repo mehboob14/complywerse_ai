@@ -613,6 +613,233 @@ Perform deep analysis and return JSON with:
         return {"sections": [], "total_expected_controls": 0}
 
 
+def extract_controls_lightweight(text: str, framework_name: str, chunk_number: int = 1, total_chunks: int = 1, doc_structure: dict = None) -> List[dict]:
+    """Extract controls with minimal fields for maximum quantity.
+    
+    This is Pass 1 of the two-pass extraction approach. It uses a lightweight
+    output format to maximize the number of controls extracted per API call.
+    """
+    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI integration not configured"
+        )
+    
+    client = OpenAI(
+        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
+        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+    )
+    
+    chunk_context = ""
+    if total_chunks > 1:
+        chunk_context = f"\n\nThis is chunk {chunk_number} of {total_chunks}. Extract ALL controls from this chunk."
+    
+    structure_hints = ""
+    if doc_structure:
+        control_patterns = doc_structure.get("control_patterns", {})
+        examples = control_patterns.get("examples", [])[:5]
+        if examples:
+            structure_hints = f"\nNumbering patterns in this document: {', '.join(examples)}"
+    
+    prompt = f"""EXTRACTION QUANTITY GOAL: You MUST extract at least 15-25 controls from this chunk.
+If you find fewer than 10, you are MISSING requirements - re-read more carefully.
+
+EVERY "shall", "must", "should", "require", "ensure", "maintain", "implement", "establish", "document", "review", "test", "assess", "monitor", "report" statement is a SEPARATE control.
+
+SPLITTING EXAMPLES (CRITICAL - follow these):
+- "shall implement, maintain, and review" = 3 SEPARATE controls (one for implement, one for maintain, one for review)
+- "must (a) document, (b) test, (c) update" = 3 SEPARATE controls
+- "requirements 5.1, 5.2, 5.3" = 3 SEPARATE controls (one for each number)
+- Any bullet points or numbered lists = SEPARATE control for EACH item
+- "shall ensure X and Y" = 2 SEPARATE controls
+- "(i) first, (ii) second, (iii) third" = 3 SEPARATE controls
+
+DOCUMENT: "{framework_name}"{chunk_context}{structure_hints}
+
+SKIP: Foreword, Introduction, Table of Contents, Definitions, Bibliography, page headers/footers.
+EXTRACT: Every SHALL, MUST, SHOULD, REQUIRE statement as a SEPARATE control.
+
+OUTPUT FORMAT - Return JSON with "controls" array. Each control needs ONLY these 7 fields:
+{{
+  "original_reference": "exact clause number (e.g., '5.1.a', 'A.9.2.3', 'Principle 4.2')",
+  "title": "brief descriptive title, max 100 chars",
+  "full_text": "verbatim requirement text from document",
+  "is_mandatory": true for shall/must/required, false for should/may,
+  "domain": "one word: Governance|Security|Risk|Access|Operations|Data|Compliance|Vendor|Network|Incident|BCP|HR|Physical|Crypto|Asset",
+  "category": "specific sub-category",
+  "priority": "high|medium|low"
+}}
+
+DOCUMENT TEXT:
+---
+{text}
+---
+
+Remember: Target 15-25+ controls per chunk. Split compound requirements. Every bullet point and sub-item with an obligation is a separate control."""
+
+    try:
+        import time
+        start_time = time.time()
+        print(f"[PARSE] Lightweight extraction chunk {chunk_number}/{total_chunks}...", flush=True)
+        
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a compliance expert extracting regulatory requirements. Extract the MAXIMUM number of individual controls by splitting compound requirements. Each shall/must/should statement is a separate control."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=16384,
+            temperature=0
+        )
+        
+        elapsed = time.time() - start_time
+        result_text = response.choices[0].message.content or "{}"
+        result = json.loads(result_text)
+        controls = result.get("controls", [])
+        print(f"[PARSE] Chunk {chunk_number}: extracted {len(controls)} controls in {elapsed:.1f}s", flush=True)
+        
+        return controls
+    
+    except json.JSONDecodeError as e:
+        print(f"[PARSE] JSON decode error in chunk {chunk_number}: {e}", flush=True)
+        return []
+    except Exception as e:
+        error_msg = str(e)
+        if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Cloud budget exceeded. Please upgrade your plan."
+            )
+        print(f"[PARSE] Error in chunk {chunk_number}: {error_msg}", flush=True)
+        return []
+
+
+def enhance_extracted_controls(controls: List[dict], framework_name: str) -> List[dict]:
+    """Enhance lightweight controls with additional details.
+    
+    This is Pass 2 of the two-pass extraction approach. It adds:
+    - Detailed description
+    - Evidence requirements (2-3 per control)
+    - Control type, implementation frequency
+    - AI confidence and notes
+    
+    Processes controls in batches of 10 for efficiency.
+    """
+    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
+        for control in controls:
+            control.setdefault("description", control.get("full_text", "")[:500])
+            control.setdefault("evidence_requirements", [])
+            control.setdefault("control_type", "preventive")
+            control.setdefault("implementation_frequency", "continuous")
+            control.setdefault("ai_confidence", 0.8)
+            control.setdefault("ai_notes", None)
+            control.setdefault("parent_reference", None)
+            control.setdefault("hierarchy_level", 1)
+            control["evidence_types"] = infer_evidence_types(control)
+        return controls
+    
+    client = OpenAI(
+        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
+        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+    )
+    
+    enhanced_controls = []
+    batch_size = 10
+    total_batches = (len(controls) + batch_size - 1) // batch_size
+    
+    for batch_num, i in enumerate(range(0, len(controls), batch_size), start=1):
+        batch = controls[i:i + batch_size]
+        print(f"[PARSE] Enhancing batch {batch_num}/{total_batches} ({len(batch)} controls)...", flush=True)
+        
+        controls_json = json.dumps(batch, indent=2)
+        
+        prompt = f"""For framework "{framework_name}", enhance these controls with additional audit-ready details.
+
+INPUT CONTROLS:
+{controls_json}
+
+For EACH control, add these fields while keeping all existing fields:
+- description: Plain English explanation (1-2 sentences)
+- parent_reference: Parent clause number if this is a sub-item, null otherwise
+- hierarchy_level: 1-5 (1=top clause, 2=sub, 3=sub-sub, etc.)
+- control_type: "preventive" | "detective" | "corrective" | "directive"
+- implementation_frequency: "one-time" | "daily" | "weekly" | "monthly" | "quarterly" | "annual" | "continuous" | "event-driven"
+- evidence_requirements: Array of 2-3 evidence items, each with:
+  {{
+    "type": "policy|procedure|configuration|log|report|contract|attestation|register",
+    "title": "specific evidence name",
+    "description": "what auditor looks for",
+    "is_required": true/false
+  }}
+- ai_confidence: 0.0-1.0 (1.0 for clear SHALL, lower for implicit)
+- ai_notes: Any relevant notes or null
+
+Return JSON with "controls" array containing the enhanced controls with ALL fields."""
+
+        try:
+            import time
+            start_time = time.time()
+            
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are a GRC expert adding audit-ready evidence requirements to compliance controls."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=16384,
+                temperature=0
+            )
+            
+            elapsed = time.time() - start_time
+            result_text = response.choices[0].message.content or "{}"
+            result = json.loads(result_text)
+            enhanced_batch = result.get("controls", batch)
+            
+            for original, enhanced in zip(batch, enhanced_batch):
+                merged = {**original, **enhanced}
+                merged.setdefault("description", merged.get("full_text", "")[:500])
+                merged.setdefault("evidence_requirements", [])
+                merged.setdefault("control_type", "preventive")
+                merged.setdefault("implementation_frequency", "continuous")
+                merged.setdefault("ai_confidence", 0.8)
+                merged.setdefault("ai_notes", None)
+                merged.setdefault("parent_reference", None)
+                merged.setdefault("hierarchy_level", 1)
+                if not merged.get("evidence_types"):
+                    merged["evidence_types"] = infer_evidence_types(merged)
+                
+                seen_types = set()
+                unique_evidence = []
+                for ev in merged.get("evidence_requirements", []):
+                    ev_type = ev.get("type", "document") if isinstance(ev, dict) else "document"
+                    if ev_type not in seen_types:
+                        seen_types.add(ev_type)
+                        unique_evidence.append(ev)
+                merged["evidence_requirements"] = unique_evidence
+                
+                enhanced_controls.append(merged)
+            
+            print(f"[PARSE] Batch {batch_num} enhanced in {elapsed:.1f}s", flush=True)
+            
+        except Exception as e:
+            print(f"[PARSE] Enhancement error in batch {batch_num}: {e}. Using defaults.", flush=True)
+            for control in batch:
+                control.setdefault("description", control.get("full_text", "")[:500])
+                control.setdefault("evidence_requirements", [])
+                control.setdefault("control_type", "preventive")
+                control.setdefault("implementation_frequency", "continuous")
+                control.setdefault("ai_confidence", 0.8)
+                control.setdefault("ai_notes", None)
+                control.setdefault("parent_reference", None)
+                control.setdefault("hierarchy_level", 1)
+                control["evidence_types"] = infer_evidence_types(control)
+                enhanced_controls.append(control)
+    
+    return enhanced_controls
+
+
 def parse_with_openai(text: str, framework_name: str, chunk_number: int = 1, total_chunks: int = 1, doc_structure: dict = None) -> List[dict]:
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
         raise HTTPException(
@@ -941,26 +1168,29 @@ Example control structure:
 
 
 def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
-    """Parse a document using a two-pass approach for comprehensive extraction.
+    """Parse a document using a three-pass approach for comprehensive extraction.
     
     Pass 1: Extract document structure to understand numbering patterns
-    Pass 2: Process each chunk with structure context for exhaustive extraction
+    Pass 2: Lightweight extraction of ALL controls with minimal fields (maximizes quantity)
+    Pass 3: Enhance unique controls with detailed evidence requirements
     """
     print(f"[PARSE] Starting document parsing for: {framework_name}", flush=True)
     print(f"[PARSE] Document text length: {len(text):,} characters", flush=True)
     
     print(f"[PARSE] Pass 1: Extracting document structure...", flush=True)
     doc_structure = extract_document_structure(text, framework_name)
-    print(f"[PARSE] Document structure extracted. Expected controls: {doc_structure.get('total_expected_controls', 'unknown')}", flush=True)
+    expected_controls = doc_structure.get('total_expected_controls', 50)
+    print(f"[PARSE] Document structure extracted. Expected controls: {expected_controls}", flush=True)
     
-    chunks = chunk_text(text, chunk_size=15000, overlap=2000)
+    chunks = chunk_text(text, chunk_size=20000, overlap=2500)
     print(f"[PARSE] Document split into {len(chunks)} chunks for processing", flush=True)
     
     all_controls = []
     
+    print(f"[PARSE] Pass 2: Lightweight extraction (maximizing control quantity)...", flush=True)
     for idx, chunk in enumerate(chunks, start=1):
-        print(f"[PARSE] Processing chunk {idx}/{len(chunks)} ({len(chunk):,} chars)... (AI processing, may take 1-3 min)", flush=True)
-        chunk_controls = parse_with_openai(
+        print(f"[PARSE] Extracting chunk {idx}/{len(chunks)} ({len(chunk):,} chars)...", flush=True)
+        chunk_controls = extract_controls_lightweight(
             chunk, 
             framework_name, 
             chunk_number=idx, 
@@ -968,19 +1198,24 @@ def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
             doc_structure=doc_structure
         )
         all_controls.extend(chunk_controls)
-        print(f"[PARSE] Chunk {idx}/{len(chunks)} complete. Found {len(chunk_controls)} controls. Total so far: {len(all_controls)}", flush=True)
+        
+        if len(chunk_controls) < 10 and len(chunk) > 5000:
+            print(f"[PARSE] WARNING: Only {len(chunk_controls)} controls from chunk {idx}. May need review.", flush=True)
     
-    print(f"[PARSE] All chunks processed. Total raw controls: {len(all_controls)}", flush=True)
+    print(f"[PARSE] Lightweight extraction complete. Total raw controls: {len(all_controls)}", flush=True)
+    
     print(f"[PARSE] Deduplicating controls...", flush=True)
     unique_controls = deduplicate_controls(all_controls)
     print(f"[PARSE] Deduplication complete. Unique controls: {len(unique_controls)}", flush=True)
     
-    expected_count = doc_structure.get("total_expected_controls", 0)
-    if expected_count > 0 and len(unique_controls) < expected_count * 0.7:
-        print(f"[PARSE] Warning: Found fewer controls than expected ({len(unique_controls)} vs {expected_count})", flush=True)
+    if expected_controls > 0 and len(unique_controls) < expected_controls * 0.3:
+        print(f"[PARSE] WARNING: Extracted {len(unique_controls)} controls but expected ~{expected_controls}. Review document for missed requirements.", flush=True)
     
-    print(f"[PARSE] Parsing complete! Returning {len(unique_controls)} controls", flush=True)
-    return unique_controls
+    print(f"[PARSE] Pass 3: Enhancing controls with evidence requirements...", flush=True)
+    enhanced_controls = enhance_extracted_controls(unique_controls, framework_name)
+    print(f"[PARSE] Enhancement complete. Final control count: {len(enhanced_controls)}", flush=True)
+    
+    return enhanced_controls
 
 
 def run_background_parsing(framework_id: int, file_path: str, file_type: str, framework_name: str):
