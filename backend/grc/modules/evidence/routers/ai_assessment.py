@@ -28,25 +28,31 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_UR
 # Version tracking for deterministic assessments
 # v2.1: Updated to use uploaded frameworks instead of pre-seeded ones
 # v2.2: Include actual control IDs in prompt to prevent hallucination of generic control IDs
-PROMPT_VERSION = "2.2"
+PROMPT_VERSION = "2.3"  # Added mandatory multi-framework analysis
 # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
 # Using gpt-4o for compatibility with Replit AI integrations
 MODEL_VERSION = "gpt-4o"
 
 # Enhanced prompt for clause-level mapping with auditor-defensible output
+# Version 2.3: Added MANDATORY multi-framework analysis requirement
 DETERMINISTIC_ASSESSMENT_PROMPT = """You are a Senior GRC Compliance Expert with 20+ years of experience, holding CISA, CISSP, CRISC, and ISO 27001 Lead Auditor certifications. Analyze this compliance evidence with extreme precision for regulatory audit purposes.
 
+MANDATORY MULTI-FRAMEWORK ANALYSIS:
+You MUST analyze this evidence against EVERY framework listed below and return control mappings for ALL frameworks where relevant controls exist. Do NOT stop after finding matches in one framework. Enterprise compliance requires demonstrating coverage across ALL applicable regulatory frameworks.
+
 CRITICAL REQUIREMENTS:
-1. ONLY use control IDs from the VALID CONTROL IDs list below - DO NOT invent or hallucinate control IDs
-2. Use the EXACT framework names and EXACT control IDs as provided - no variations allowed
-3. If a control ID is not in the list below, DO NOT include it in your response
-4. ONLY map to controls that have EXPLICIT evidence in the document
-5. Include specific text excerpts from the evidence that support each mapping
-6. No control should be marked applicable without explicit clause-level evidence match
+1. ANALYZE EVERY FRAMEWORK: Examine each framework in the list and identify ALL applicable controls
+2. ONLY use control IDs from the VALID CONTROL IDs list below - DO NOT invent or hallucinate control IDs
+3. Use the EXACT framework names and EXACT control IDs as provided - no variations allowed
+4. If a control ID is not in the list below, DO NOT include it in your response
+5. ONLY map to controls that have EXPLICIT evidence in the document
+6. Include specific text excerpts from the evidence that support each mapping
+7. No control should be marked applicable without explicit clause-level evidence match
+8. Return mappings from MULTIPLE frameworks if the evidence covers controls in multiple frameworks
 
 WARNING: Generic ISO 27001 control IDs like "A.5.1", "A.12.4.1" are NOT valid unless they appear in the VALID CONTROL IDs list below. Each framework has its OWN control numbering scheme.
 
-AVAILABLE FRAMEWORKS WITH THEIR VALID CONTROL IDs:
+AVAILABLE FRAMEWORKS WITH THEIR VALID CONTROL IDs (analyze evidence against ALL of these):
 {available_frameworks}
 
 Evidence Content:
@@ -86,7 +92,11 @@ Provide a comprehensive, auditor-defensible assessment in the following JSON for
     ]
 }}
 
-IMPORTANT: Be extremely precise. Do NOT hallucinate control mappings. Only include controls where the evidence EXPLICITLY demonstrates compliance."""
+IMPORTANT: 
+1. Be extremely precise. Do NOT hallucinate control mappings. Only include controls where the evidence EXPLICITLY demonstrates compliance.
+2. You MUST check EVERY framework listed above and return clause_mappings for ALL frameworks where the evidence is relevant - not just one framework.
+3. If this evidence relates to security controls, it likely applies to multiple frameworks (e.g., endpoint protection may satisfy controls in ISO 27001, NIST, PCI-DSS, SBP frameworks, etc.)
+4. Your response should contain clause_mappings from MULTIPLE frameworks when applicable."""
 
 
 class BatchAssessRequest(BaseModel):
