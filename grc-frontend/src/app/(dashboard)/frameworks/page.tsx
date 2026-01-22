@@ -46,6 +46,7 @@ export default function FrameworksPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [journeyDeleteConfirm, setJourneyDeleteConfirm] = useState<CertificationJourney | null>(null);
   const [journeyDeleteError, setJourneyDeleteError] = useState<string | null>(null);
+  const [enhancingFrameworkId, setEnhancingFrameworkId] = useState<number | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: async (frameworkId: number) => {
@@ -92,6 +93,24 @@ export default function FrameworksPage() {
       const errorMsg = error.response?.data?.detail || 'Failed to retry parsing';
       setRetryError(errorMsg);
       setRetrySuccess(null);
+      setTimeout(() => setRetryError(null), 5000);
+    }
+  });
+
+  const enhanceMutation = useMutation({
+    mutationFn: async (frameworkId: number) => {
+      return await apiClient.post(`/framework-upload/parser/frameworks/${frameworkId}/enhance`);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['uploaded-frameworks'] });
+      setEnhancingFrameworkId(null);
+      setRetrySuccess(`Enhancement started for ${data.data?.total_controls || 0} controls. Estimated time: ${data.data?.estimated_time_minutes || 1} minutes.`);
+      setTimeout(() => setRetrySuccess(null), 8000);
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.detail || 'Failed to start enhancement';
+      setRetryError(errorMsg);
+      setEnhancingFrameworkId(null);
       setTimeout(() => setRetryError(null), 5000);
     }
   });
@@ -498,24 +517,48 @@ export default function FrameworksPage() {
                   {getFrameworkTypeLabel(framework.framework_type)}
                 </div>
 
-                <div className="mt-4 border-t border-slate-700 pt-4 flex gap-2">
-                  <button
-                    onClick={() => handleStartCertification(framework)}
-                    className="btn-primary flex flex-1 items-center justify-center gap-2"
-                  >
-                    <Play className="h-4 w-4" />
-                    Start Certification
-                  </button>
+                <div className="mt-4 border-t border-slate-700 pt-4 flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleStartCertification(framework)}
+                      className="btn-primary flex flex-1 items-center justify-center gap-2"
+                    >
+                      <Play className="h-4 w-4" />
+                      Start Certification
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirm(framework);
+                        setDeleteError(null);
+                      }}
+                      className="rounded-lg bg-red-500/20 px-3 py-2 text-red-400 hover:bg-red-500/30 transition-colors"
+                      title="Delete Framework"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setDeleteConfirm(framework);
-                      setDeleteError(null);
+                      setEnhancingFrameworkId(framework.id);
+                      enhanceMutation.mutate(framework.id);
                     }}
-                    className="rounded-lg bg-red-500/20 px-3 py-2 text-red-400 hover:bg-red-500/30 transition-colors"
-                    title="Delete Framework"
+                    disabled={enhanceMutation.isPending && enhancingFrameworkId === framework.id}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-purple-500/20 px-3 py-2 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+                    title="Generate AI evidence recommendations for all controls"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    {enhanceMutation.isPending && enhancingFrameworkId === framework.id ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Enhancing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        Generate Evidence Recommendations
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
