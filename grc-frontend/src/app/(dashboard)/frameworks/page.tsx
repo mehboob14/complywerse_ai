@@ -109,7 +109,7 @@ export default function FrameworksPage() {
   const frameworksArray = Array.isArray(frameworks) ? frameworks : [];
   
   const completedFrameworks = frameworksArray.filter(
-    (f: UploadedFramework) => f.upload_status === 'completed'
+    (f: UploadedFramework) => f.upload_status === 'completed' || f.upload_status === 'published'
   );
 
   const availableFrameworks = completedFrameworks.filter(
