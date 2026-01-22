@@ -1923,10 +1923,11 @@ def seed_control_evidence(force_reseed: bool = False):
         
         db.commit()
         print(f"Successfully seeded {total_evidence} evidence items for {len(controls)} controls")
-        print(f"\nMatching summary:")
-        print(f"  - Name pattern matched: {name_matched} controls ({100*name_matched/len(controls):.1f}%)")
-        print(f"  - Keyword pattern matched: {keyword_matched} controls ({100*keyword_matched/len(controls):.1f}%)")
-        print(f"  - Fallback used: {fallback_used} controls ({100*fallback_used/len(controls):.1f}%)")
+        if len(controls) > 0:
+            print(f"\nMatching summary:")
+            print(f"  - Name pattern matched: {name_matched} controls ({100*name_matched/len(controls):.1f}%)")
+            print(f"  - Keyword pattern matched: {keyword_matched} controls ({100*keyword_matched/len(controls):.1f}%)")
+            print(f"  - Fallback used: {fallback_used} controls ({100*fallback_used/len(controls):.1f}%)")
         
     except Exception as e:
         db.rollback()

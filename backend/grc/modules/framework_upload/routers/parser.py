@@ -1167,12 +1167,15 @@ Example control structure:
         )
 
 
-def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
+def parse_document_with_chunking(text: str, framework_name: str) -> tuple:
     """Parse a document using a three-pass approach for comprehensive extraction.
     
     Pass 1: Extract document structure to understand numbering patterns
     Pass 2: Lightweight extraction of ALL controls with minimal fields (maximizes quantity)
     Pass 3: Enhance unique controls with detailed evidence requirements
+    
+    Returns:
+        tuple: (enhanced_controls, doc_structure)
     """
     print(f"[PARSE] Starting document parsing for: {framework_name}", flush=True)
     print(f"[PARSE] Document text length: {len(text):,} characters", flush=True)
@@ -1215,7 +1218,7 @@ def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
     enhanced_controls = enhance_extracted_controls(unique_controls, framework_name)
     print(f"[PARSE] Enhancement complete. Final control count: {len(enhanced_controls)}", flush=True)
     
-    return enhanced_controls
+    return enhanced_controls, doc_structure
 
 
 def run_background_parsing(framework_id: int, file_path: str, file_type: str, framework_name: str):
@@ -1270,7 +1273,7 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
                 db.commit()
             return
         
-        parsed_controls_data = parse_document_with_chunking(extracted_text, framework_name)
+        parsed_controls_data, doc_structure = parse_document_with_chunking(extracted_text, framework_name)
         
         if not parsed_controls_data:
             fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
@@ -1320,10 +1323,10 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
         db.flush()
         
         for idx, control_data in enumerate(parsed_controls_data, start=1):
-            control_id = f"FW-{framework_id:03d}-{idx:03d}"
-            
             raw_reference = control_data.get("original_reference", "")
             cleaned_reference = clean_section_reference(raw_reference) if raw_reference else None
+            
+            control_id = cleaned_reference if cleaned_reference else f"CTRL-{idx:03d}"
             
             parent_ref = control_data.get("parent_reference", "")
             cleaned_parent_ref = clean_section_reference(parent_ref) if parent_ref else None
@@ -1414,6 +1417,26 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
             fw_final.upload_status = "parsed"
             fw_final.parsed_at = datetime.utcnow()
             fw_final.parse_error = None
+            
+            # CRITICAL: Ensure document_structure always has at least minimal content for phases
+            # The uploaded-framework-only architecture requires phases to come from document_structure
+            if not doc_structure or not isinstance(doc_structure, dict) or not doc_structure.get("sections"):
+                print(f"[PARSE] Enforcing minimal document_structure - AI extraction returned empty or malformed", flush=True)
+                doc_structure = {
+                    "sections": [
+                        {
+                            "name": f"{framework_name} - Full Document",
+                            "number": "1",
+                            "description": "Complete framework document"
+                        }
+                    ],
+                    "total_expected_controls": len(parsed_controls_data) if parsed_controls_data else 0,
+                    "framework_type": "imported_framework",
+                    "note": "Minimal structure created due to empty AI extraction"
+                }
+                print(f"[PARSE] Created minimal document_structure with {len(doc_structure.get('sections', []))} section(s)", flush=True)
+            
+            fw_final.document_structure = doc_structure
         
         db.commit()
         
@@ -1600,7 +1623,7 @@ def parse_framework_document_sync(
                 detail="No text could be extracted from the document"
             )
         
-        parsed_controls_data = parse_document_with_chunking(extracted_text, framework_name)
+        parsed_controls_data, doc_structure = parse_document_with_chunking(extracted_text, framework_name)
         
         if not parsed_controls_data:
             fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
@@ -1658,10 +1681,10 @@ def parse_framework_document_sync(
         
         created_controls = []
         for idx, control_data in enumerate(parsed_controls_data, start=1):
-            control_id = f"FW-{framework_id:03d}-{idx:03d}"
-            
             raw_reference = control_data.get("original_reference", "")
             cleaned_reference = clean_section_reference(raw_reference) if raw_reference else None
+            
+            control_id = cleaned_reference if cleaned_reference else f"CTRL-{idx:03d}"
             
             parent_ref = control_data.get("parent_reference", "")
             cleaned_parent_ref = clean_section_reference(parent_ref) if parent_ref else None
@@ -1754,6 +1777,7 @@ def parse_framework_document_sync(
             fw_final.upload_status = "parsed"
             fw_final.parsed_at = datetime.utcnow()
             fw_final.parse_error = None
+            fw_final.document_structure = doc_structure
         
         db.commit()
         

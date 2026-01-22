@@ -2041,6 +2041,8 @@ class UploadedFramework(Base):
     is_shared = Column(Boolean, default=False)  # Available to all tenants
     is_active = Column(Boolean, default=True)
     
+    document_structure = Column(JSON, nullable=True)  # Extracted sections/chapters for phases
+    
     uploaded_by = Column(Integer, ForeignKey("grc_users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

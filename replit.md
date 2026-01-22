@@ -12,7 +12,7 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - PostgreSQL database
 
 ## System Architecture
-The platform utilizes a multi-tenant architecture with complete tenant isolation and row-level security. It supports 8 pre-seeded regulatory frameworks through a normalized control model for cross-framework mappings. Role-Based Access Control (RBAC) with fine-grained permissions ensures secure access.
+The platform utilizes a multi-tenant architecture with complete tenant isolation and row-level security. **No pre-seeded frameworks** - all regulatory frameworks must be uploaded by users via the Framework Upload feature. This ensures organizations use their exact framework versions and control IDs are preserved from original documents. Role-Based Access Control (RBAC) with fine-grained permissions ensures secure access.
 
 **UI/UX Decisions:**
 - Frontend built with Next.js 14, TypeScript, and Tailwind CSS.

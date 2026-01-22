@@ -1,10 +1,13 @@
 import os
 import uuid
 import random
+import logging
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
+
+logger = logging.getLogger(__name__)
 
 from ..models import (
     CertificationJourney, ControlImplementation, ImplementationEvidence,
@@ -24,6 +27,114 @@ router = APIRouter(prefix="/certifications", tags=["Certifications"])
 
 UPLOAD_DIR = "backend/uploads/certification_evidence"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def get_phases_from_document_structure(framework: Optional[UploadedFramework]) -> List[dict]:
+    """Extract certification phases from the framework's document structure.
+    
+    CRITICAL ARCHITECTURE: Phases MUST come from document_structure extracted during 
+    framework parsing. This ensures uploaded-framework-only architecture is enforced.
+    
+    The document_structure is populated by the AI parser during framework upload and 
+    contains the actual sections/chapters from the uploaded document. No fallback to 
+    control titles or other sources is permitted.
+    
+    Returns: List of phase objects extracted from document_structure.sections, 
+    or empty list if document_structure doesn't contain phases.
+    """
+    if not framework:
+        logger.warning("Framework is None - cannot extract document structure")
+        return []
+    
+    if not framework.document_structure:
+        logger.warning(f"Framework {framework.id} has no document_structure data - phases must be provided during parsing")
+        return []
+    
+    try:
+        doc_structure = framework.document_structure
+        if not isinstance(doc_structure, dict):
+            logger.warning(f"Framework {framework.id} document_structure is not a dict: {type(doc_structure)}")
+            return []
+    except Exception as e:
+        logger.error(f"Error accessing document_structure for framework {framework.id}: {str(e)}")
+        return []
+    
+    # Extract sections from document_structure - this is the ONLY source for phases
+    sections = doc_structure.get("sections", [])
+    if not isinstance(sections, list):
+        logger.warning(f"Framework {framework.id}: document_structure.sections is not a list: {type(sections)}")
+        return []
+    
+    if not sections:
+        logger.info(f"Framework {framework.id}: document_structure has no sections - returning empty phases list")
+        return []
+    
+    logger.debug(f"Framework {framework.id}: Extracting {len(sections)} sections from document_structure")
+    phases = _parse_sections_array(sections, 1)
+    
+    if not phases:
+        logger.warning(f"Framework {framework.id}: sections array present but failed to parse any phases")
+    
+    return phases
+
+
+def _parse_sections_array(sections: list, start_phase_num: int = 1) -> List[dict]:
+    """Parse a sections/chapters array and convert to phase objects.
+    
+    Handles both dict and string sections with defensive null checks.
+    """
+    phases = []
+    phase_num = start_phase_num
+    
+    for section in sections:
+        if section is None:
+            logger.debug(f"Skipping null section")
+            continue
+        
+        if isinstance(section, dict):
+            try:
+                phase_name = section.get("name") or section.get("title") or f"Section {phase_num}"
+                phase_number = section.get("number") or str(phase_num)
+                description = section.get("description") or ""
+                
+                # Ensure all values are strings
+                phase_name = str(phase_name) if phase_name else f"Section {phase_num}"
+                phase_number = str(phase_number) if phase_number else str(phase_num)
+                description = str(description) if description else ""
+                
+                phases.append({
+                    "id": phase_num,
+                    "phase_number": phase_num,
+                    "section_reference": phase_number,
+                    "name": phase_name,
+                    "description": description,
+                    "key_tasks": [],
+                    "deliverables": []
+                })
+                phase_num += 1
+            except Exception as e:
+                logger.warning(f"Failed to parse dict section: {str(e)}")
+                continue
+        elif isinstance(section, str):
+            try:
+                phases.append({
+                    "id": phase_num,
+                    "phase_number": phase_num,
+                    "section_reference": str(phase_num),
+                    "name": section,
+                    "description": "",
+                    "key_tasks": [],
+                    "deliverables": []
+                })
+                phase_num += 1
+            except Exception as e:
+                logger.warning(f"Failed to parse string section: {str(e)}")
+                continue
+        else:
+            logger.debug(f"Skipping section with unexpected type: {type(section)}")
+            continue
+    
+    return phases
 
 
 def get_curated_evidence_for_control(control_id: int, db: Session) -> List[dict]:
@@ -181,7 +292,7 @@ def get_certification(
         ControlImplementation.journey_id == journey_id
     ).all()
     
-    phases_list = []
+    phases_list = get_phases_from_document_structure(framework) if framework else []
     
     total = len(implementations)
     implemented = sum(1 for i in implementations if i.status in ["implemented", "verified"])
@@ -806,31 +917,58 @@ def get_gap_analysis(
     )
 
 
-@router.get("/frameworks/{framework_id}/phases", response_model=List[dict])
+@router.get("/uploaded-frameworks/{framework_id}/phases", response_model=List[dict])
+def get_uploaded_framework_phases(
+    framework_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get certification phases derived from an uploaded framework's document structure.
+    
+    Phases are extracted from the document_structure field populated during framework parsing.
+    The parser extracts sections/chapters from the uploaded document, which become the
+    phases for certification journeys.
+    
+    ARCHITECTURE REQUIREMENT: Phases MUST come from document_structure only.
+    No fallback to control titles or other sources is permitted to enforce
+    the uploaded-framework-only architecture.
+    """
+    framework = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uploaded framework not found"
+        )
+    
+    # Extract phases from document_structure (the ONLY allowed source)
+    phases = get_phases_from_document_structure(framework)
+    
+    if phases:
+        logger.debug(f"Successfully extracted {len(phases)} phases from document_structure for framework {framework_id}")
+    else:
+        logger.info(f"Framework {framework_id}: No phases in document_structure - returning empty list")
+    
+    return phases
+
+
+@router.get("/frameworks/{framework_id}/phases", status_code=status.HTTP_410_GONE)
 def get_framework_phases(
     framework_id: int,
     db: Session = Depends(get_db)
 ):
-    framework = db.query(Framework).filter(Framework.id == framework_id).first()
-    if not framework:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Framework not found"
-        )
+    """DEPRECATED: Legacy endpoint for pre-seeded frameworks - NO LONGER SUPPORTED.
     
-    phases = db.query(CertificationPhase).filter(
-        CertificationPhase.framework_id == framework_id
-    ).order_by(CertificationPhase.phase_number).all()
+    This endpoint is permanently disabled. Pre-seeded frameworks and CertificationPhase
+    records have been removed as part of the uploaded-framework-only architecture.
     
-    return [
-        {
-            "id": phase.id,
-            "framework_id": phase.framework_id,
-            "phase_number": phase.phase_number,
-            "name": phase.name,
-            "description": phase.description,
-            "key_tasks": phase.key_tasks or [],
-            "deliverables": phase.deliverables or []
-        }
-        for phase in phases
-    ]
+    MIGRATION: Use /certifications/uploaded-frameworks/{framework_id}/phases instead,
+    which provides phases extracted from uploaded framework document structures.
+    
+    The uploaded-framework-only architecture requires all frameworks and phases to come
+    from uploaded documents processed by the AI parser.
+    """
+    logger.warning(f"Deprecated endpoint /frameworks/{framework_id}/phases called - use /certifications/uploaded-frameworks/{framework_id}/phases instead")
+    
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="This endpoint is no longer supported. Pre-seeded frameworks have been removed. Use /certifications/uploaded-frameworks/{framework_id}/phases instead."
+    )
