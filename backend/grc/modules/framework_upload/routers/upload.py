@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from ....models import (
     UploadedFramework, ParsedFrameworkControl, FrameworkAssessment,
-    GRCUser, Tenant, get_db
+    GRCUser, Tenant, get_db, EvidenceControlMapping, Evidence
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -263,20 +263,60 @@ def delete_uploaded_framework(
             detail="Uploaded framework not found"
         )
     
+    # Enforce tenant access - framework must belong to user's tenant
     if framework.tenant_id and framework.tenant_id not in user_tenants:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to delete this framework"
         )
     
-    if os.path.exists(framework.file_path):
-        try:
-            os.remove(framework.file_path)
-        except OSError:
-            pass
+    # Prevent deletion of shared frameworks - they may be used across tenants
+    if getattr(framework, 'is_shared', False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete shared frameworks. Please unshare it first."
+        )
     
-    db.delete(framework)
-    db.commit()
+    # Store file path for cleanup after successful commit
+    file_path = framework.file_path
+    
+    try:
+        # Get all parsed control IDs for this framework
+        parsed_control_ids = db.query(ParsedFrameworkControl.id).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework_id
+        ).all()
+        parsed_control_ids = [pc[0] for pc in parsed_control_ids]
+        
+        # Delete ALL EvidenceControlMapping records that reference these parsed controls
+        # SECURITY NOTE: Framework ownership is verified above, so these controls belong
+        # to the user's tenant. Any mappings to these controls are derived from this
+        # framework and should be removed when the framework is deleted.
+        if parsed_control_ids:
+            db.query(EvidenceControlMapping).filter(
+                EvidenceControlMapping.parsed_control_id.in_(parsed_control_ids)
+            ).delete(synchronize_session=False)
+        
+        # Delete any mappings by uploaded_framework_id directly
+        db.query(EvidenceControlMapping).filter(
+            EvidenceControlMapping.uploaded_framework_id == framework_id
+        ).delete(synchronize_session=False)
+        
+        db.delete(framework)
+        db.commit()
+        
+        # Remove the file from disk AFTER successful commit
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete framework: {str(e)}"
+        )
     
     return None
 
