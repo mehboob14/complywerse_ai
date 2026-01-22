@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import apiClient, { certificationsApi } from '@/lib/api';
@@ -19,7 +19,11 @@ import {
   Upload,
   Trash2,
   X,
-  Tag
+  Tag,
+  RefreshCw,
+  FileText,
+  Sparkles,
+  CheckCircle
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -71,12 +75,21 @@ export default function FrameworksPage() {
     }
   });
 
-  const { data: frameworks, isLoading: frameworksLoading } = useQuery({
+  const { data: frameworks, isLoading: frameworksLoading, isFetching } = useQuery({
     queryKey: ['uploaded-frameworks'],
     queryFn: async () => {
       const response = await apiClient.get('/framework-upload/upload');
       const items = response.data?.items;
       return Array.isArray(items) ? items as UploadedFramework[] : [];
+    },
+    refetchInterval: (query) => {
+      const data = query.state.data as UploadedFramework[] | undefined;
+      const hasProcessing = data?.some(f => 
+        f.upload_status === 'draft' || 
+        f.upload_status === 'text_extracted' || 
+        f.upload_status === 'parsing'
+      );
+      return hasProcessing ? 3000 : false;
     },
   });
 
@@ -108,9 +121,70 @@ export default function FrameworksPage() {
 
   const frameworksArray = Array.isArray(frameworks) ? frameworks : [];
   
+  const processingFrameworks = frameworksArray.filter(
+    (f: UploadedFramework) => 
+      f.upload_status === 'draft' || 
+      f.upload_status === 'text_extracted' || 
+      f.upload_status === 'parsing'
+  );
+
   const completedFrameworks = frameworksArray.filter(
     (f: UploadedFramework) => f.upload_status === 'completed' || f.upload_status === 'published'
   );
+
+  const getUploadStatusInfo = (status: string) => {
+    switch (status) {
+      case 'draft':
+        return { 
+          label: 'Uploaded', 
+          color: 'bg-slate-500/20 text-slate-400',
+          icon: FileText,
+          description: 'File uploaded, waiting for text extraction'
+        };
+      case 'text_extracted':
+        return { 
+          label: 'Text Extracted', 
+          color: 'bg-blue-500/20 text-blue-400',
+          icon: FileText,
+          description: 'Text extracted, waiting for AI parsing'
+        };
+      case 'parsing':
+        return { 
+          label: 'Parsing Controls', 
+          color: 'bg-purple-500/20 text-purple-400',
+          icon: Sparkles,
+          description: 'AI is extracting controls and requirements'
+        };
+      case 'completed':
+        return { 
+          label: 'Ready', 
+          color: 'bg-green-500/20 text-green-400',
+          icon: CheckCircle,
+          description: 'Framework ready to use'
+        };
+      case 'published':
+        return { 
+          label: 'Published', 
+          color: 'bg-green-500/20 text-green-400',
+          icon: CheckCircle,
+          description: 'Framework published and active'
+        };
+      case 'error':
+        return { 
+          label: 'Error', 
+          color: 'bg-red-500/20 text-red-400',
+          icon: AlertCircle,
+          description: 'An error occurred during processing'
+        };
+      default:
+        return { 
+          label: status, 
+          color: 'bg-slate-500/20 text-slate-400',
+          icon: FileStack,
+          description: 'Processing'
+        };
+    }
+  };
 
   const availableFrameworks = completedFrameworks.filter(
     (f: UploadedFramework) => !activeCertificationFrameworkIds.has(String(f.id))
@@ -175,6 +249,77 @@ export default function FrameworksPage() {
           </Link>
         </div>
       </div>
+
+      {processingFrameworks.length > 0 && (
+        <section>
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+            <RefreshCw className={`h-5 w-5 text-purple-400 ${isFetching ? 'animate-spin' : ''}`} />
+            Processing Frameworks
+            <span className="ml-2 text-sm font-normal text-slate-400">
+              Auto-refreshing every 3s
+            </span>
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {processingFrameworks.map((framework: UploadedFramework) => {
+              const statusInfo = getUploadStatusInfo(framework.upload_status);
+              const StatusIcon = statusInfo.icon;
+              return (
+                <div 
+                  key={framework.id} 
+                  className="card border-purple-500/30 bg-gradient-to-br from-slate-800 to-slate-800/50"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-purple-500/20 p-2">
+                      <Sparkles className="h-6 w-6 text-purple-400 animate-pulse" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-white truncate">{framework.name}</h3>
+                      <p className="text-sm text-slate-400">v{framework.version}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${statusInfo.color}`}>
+                        {framework.upload_status === 'parsing' ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <StatusIcon className="h-3 w-3" />
+                        )}
+                        {statusInfo.label}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-400">{statusInfo.description}</p>
+
+                    {framework.upload_status === 'parsing' && (
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs text-slate-400">
+                          <span>AI parsing in progress...</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
+                          <div className="h-full w-full rounded-full bg-gradient-to-r from-purple-500 to-blue-500 animate-pulse" />
+                        </div>
+                      </div>
+                    )}
+
+                    {framework.controls_count > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-slate-400">
+                        <Shield className="h-3 w-3" />
+                        {framework.controls_count} controls extracted so far
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-1 text-xs text-slate-500 border-t border-slate-700 pt-3">
+                    <Clock className="h-3 w-3" />
+                    Started: {new Date(framework.created_at).toLocaleTimeString()}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {activeCertifications.length > 0 && (
         <section>
