@@ -546,8 +546,12 @@ def extract_document_structure(text: str, framework_name: str) -> dict:
     sample_text = text[:25000] if len(text) > 25000 else text
     
     try:
+        import time
+        start_time = time.time()
+        print(f"[PARSE] Extracting document structure with OpenAI (gpt-4o)...", flush=True)
+        
         response = client.chat.completions.create(
-            model="gpt-5.2",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": GRC_SME_SYSTEM_PROMPT},
                 {"role": "user", "content": f"""As a Senior GRC SME, analyze this regulatory framework document "{framework_name}" and provide comprehensive structural analysis.
@@ -593,12 +597,19 @@ Perform deep analysis and return JSON with:
 8. "evidence_focus_areas": ["Key areas where evidence will be most important"]"""}
             ],
             response_format={"type": "json_object"},
-            max_completion_tokens=4096
+            max_completion_tokens=4096,
+            temperature=0
         )
         
+        elapsed = time.time() - start_time
+        print(f"[PARSE] Document structure extracted in {elapsed:.1f}s", flush=True)
+        
         result = json.loads(response.choices[0].message.content or "{}")
+        expected = result.get("total_expected_controls", 0)
+        print(f"[PARSE] Expected controls from document structure: {expected}", flush=True)
         return result
-    except Exception:
+    except Exception as e:
+        print(f"[PARSE] Error extracting document structure: {e}", flush=True)
         return {"sections": [], "total_expected_controls": 0}
 
 
@@ -852,19 +863,28 @@ Example control structure:
 }}"""
 
     try:
+        import time
+        start_time = time.time()
+        print(f"[PARSE] Calling OpenAI API (model: gpt-4o)...", flush=True)
+        
         response = client.chat.completions.create(
-            model="gpt-5.2",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": GRC_SME_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            max_completion_tokens=16384
+            max_tokens=16384,
+            temperature=0
         )
+        
+        elapsed = time.time() - start_time
+        print(f"[PARSE] OpenAI API response received in {elapsed:.1f}s", flush=True)
         
         result_text = response.choices[0].message.content or "{}"
         result = json.loads(result_text)
         controls = result.get("controls", [])
+        print(f"[PARSE] Parsed {len(controls)} controls from API response", flush=True)
         
         for control in controls:
             if not control.get("evidence_types") or len(control.get("evidence_types", [])) == 0:
@@ -896,20 +916,20 @@ def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
     Pass 1: Extract document structure to understand numbering patterns
     Pass 2: Process each chunk with structure context for exhaustive extraction
     """
-    print(f"[PARSE] Starting document parsing for: {framework_name}")
-    print(f"[PARSE] Document text length: {len(text):,} characters")
+    print(f"[PARSE] Starting document parsing for: {framework_name}", flush=True)
+    print(f"[PARSE] Document text length: {len(text):,} characters", flush=True)
     
-    print(f"[PARSE] Pass 1: Extracting document structure...")
+    print(f"[PARSE] Pass 1: Extracting document structure...", flush=True)
     doc_structure = extract_document_structure(text, framework_name)
-    print(f"[PARSE] Document structure extracted. Expected controls: {doc_structure.get('total_expected_controls', 'unknown')}")
+    print(f"[PARSE] Document structure extracted. Expected controls: {doc_structure.get('total_expected_controls', 'unknown')}", flush=True)
     
     chunks = chunk_text(text, chunk_size=30000, overlap=3000)
-    print(f"[PARSE] Document split into {len(chunks)} chunks for processing")
+    print(f"[PARSE] Document split into {len(chunks)} chunks for processing", flush=True)
     
     all_controls = []
     
     for idx, chunk in enumerate(chunks, start=1):
-        print(f"[PARSE] Processing chunk {idx}/{len(chunks)} ({len(chunk):,} chars)...")
+        print(f"[PARSE] Processing chunk {idx}/{len(chunks)} ({len(chunk):,} chars)... (AI processing, may take 1-3 min)", flush=True)
         chunk_controls = parse_with_openai(
             chunk, 
             framework_name, 
@@ -918,44 +938,44 @@ def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
             doc_structure=doc_structure
         )
         all_controls.extend(chunk_controls)
-        print(f"[PARSE] Chunk {idx}/{len(chunks)} complete. Found {len(chunk_controls)} controls. Total so far: {len(all_controls)}")
+        print(f"[PARSE] Chunk {idx}/{len(chunks)} complete. Found {len(chunk_controls)} controls. Total so far: {len(all_controls)}", flush=True)
     
-    print(f"[PARSE] All chunks processed. Total raw controls: {len(all_controls)}")
-    print(f"[PARSE] Deduplicating controls...")
+    print(f"[PARSE] All chunks processed. Total raw controls: {len(all_controls)}", flush=True)
+    print(f"[PARSE] Deduplicating controls...", flush=True)
     unique_controls = deduplicate_controls(all_controls)
-    print(f"[PARSE] Deduplication complete. Unique controls: {len(unique_controls)}")
+    print(f"[PARSE] Deduplication complete. Unique controls: {len(unique_controls)}", flush=True)
     
     expected_count = doc_structure.get("total_expected_controls", 0)
     if expected_count > 0 and len(unique_controls) < expected_count * 0.7:
-        print(f"[PARSE] Warning: Found fewer controls than expected ({len(unique_controls)} vs {expected_count})")
+        print(f"[PARSE] Warning: Found fewer controls than expected ({len(unique_controls)} vs {expected_count})", flush=True)
     
-    print(f"[PARSE] Parsing complete! Returning {len(unique_controls)} controls")
+    print(f"[PARSE] Parsing complete! Returning {len(unique_controls)} controls", flush=True)
     return unique_controls
 
 
 def run_background_parsing(framework_id: int, file_path: str, file_type: str, framework_name: str):
     """Run parsing in a background thread to avoid HTTP timeout."""
-    print(f"[PARSE] ========================================")
-    print(f"[PARSE] Background parsing started for framework ID: {framework_id}")
-    print(f"[PARSE] Framework name: {framework_name}")
-    print(f"[PARSE] File: {file_path} ({file_type})")
-    print(f"[PARSE] ========================================")
+    print(f"[PARSE] ========================================", flush=True)
+    print(f"[PARSE] Background parsing started for framework ID: {framework_id}", flush=True)
+    print(f"[PARSE] Framework name: {framework_name}", flush=True)
+    print(f"[PARSE] File: {file_path} ({file_type})", flush=True)
+    print(f"[PARSE] ========================================", flush=True)
     
     db = SessionLocal()
     try:
         extracted_text = ""
         if file_type == "pdf":
-            print(f"[PARSE] Extracting text from PDF...")
+            print(f"[PARSE] Extracting text from PDF...", flush=True)
             from PyPDF2 import PdfReader
             reader = PdfReader(file_path)
-            print(f"[PARSE] PDF has {len(reader.pages)} pages")
+            print(f"[PARSE] PDF has {len(reader.pages)} pages", flush=True)
             text_parts = []
             for page in reader.pages:
                 page_text = page.extract_text()
                 if page_text:
                     text_parts.append(page_text)
             extracted_text = "\n\n".join(text_parts)
-            print(f"[PARSE] Text extraction complete. Total characters: {len(extracted_text):,}")
+            print(f"[PARSE] Text extraction complete. Total characters: {len(extracted_text):,}", flush=True)
         elif file_type == "docx":
             from docx import Document
             doc = Document(file_path)
