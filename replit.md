@@ -109,6 +109,28 @@ Set these environment variables for email notifications:
 - **SLA Check**: `POST /grc/vuln-management/escalations/run-sla-check`
 - **Dashboard Metrics**: `/grc/vuln-management/dashboard/department-metrics`, `sla-compliance-trends`, `department-workload`, `aging-by-department`, `escalation-metrics`
 
+## Framework Upload & Parsing
+
+The Framework Upload module handles regulatory framework document uploads with AI-powered parsing to extract controls, sub-controls, and document structure.
+
+### Retry Functionality for Stuck Frameworks
+If a framework parsing job gets stuck (e.g., due to server restart during processing), users can retry the parsing:
+
+1. Navigate to the **Frameworks** page
+2. Processing frameworks show a **Retry** button on their card
+3. Click **Retry** to restart parsing
+4. The system checks if the framework is truly stuck (>10 minutes since last activity)
+5. If stuck, existing partial data is cleared and parsing restarts from scratch
+
+**Technical Details:**
+- Staleness detection: 10-minute threshold since last `updated_at` heartbeat
+- Heartbeats update during: PDF/DOCX text extraction, AI parsing completion
+- Retry clears all `ParsedFrameworkControl` and `CertificationPhase` records for the framework
+- Prevents retry on already-completed or recently-active frameworks
+
+**API Endpoint:**
+- `POST /grc/framework-upload/upload/{id}/retry`
+
 ## Deterministic AI Evidence Assessment
 
 The Evidence Management module features a deterministic AI assessment system that produces auditor-defensible, regulator-ready output with exact clause-level control mappings. Same evidence inputs MUST produce identical framework, control, and clause mappings across multiple runs.
