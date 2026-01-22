@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { certificationsApi } from '@/lib/api';
+import apiClient from '@/lib/api';
 import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
 import { 
@@ -46,7 +47,8 @@ import {
   Award,
   TrendingUp,
   Radio,
-  Paperclip
+  Paperclip,
+  Sparkles
 } from 'lucide-react';
 
 const EVIDENCE_TYPE_MAP: Record<string, { label: string; color: string }> = {
@@ -214,6 +216,25 @@ export default function CertificationJourneyPage() {
     },
     onError: () => {
       setUploadingControlId(null);
+    }
+  });
+
+  const [enhanceSuccess, setEnhanceSuccess] = useState<string | null>(null);
+  const [enhanceError, setEnhanceError] = useState<string | null>(null);
+
+  const enhanceMutation = useMutation({
+    mutationFn: async (frameworkId: number) => {
+      return await apiClient.post(`/framework-upload/parser/frameworks/${frameworkId}/enhance`);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      setEnhanceSuccess(`Enhancement started for ${data.data?.total_controls || 0} controls. Estimated time: ${data.data?.estimated_time_minutes || 1} minutes.`);
+      setTimeout(() => setEnhanceSuccess(null), 8000);
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.detail || error?.message || 'Enhancement failed';
+      setEnhanceError(message);
+      setTimeout(() => setEnhanceError(null), 5000);
     }
   });
 
@@ -1414,6 +1435,24 @@ export default function CertificationJourneyPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => journey?.framework_id && enhanceMutation.mutate(journey.framework_id)}
+              disabled={enhanceMutation.isPending || !journey?.framework_id}
+              className="flex items-center gap-2 rounded-lg bg-purple-500/20 px-4 py-2 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+              title="Generate AI evidence recommendations for all controls"
+            >
+              {enhanceMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Enhancing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Generate Evidence Recommendations
+                </>
+              )}
+            </button>
             <button className="btn-secondary flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Generate Report
@@ -1424,6 +1463,24 @@ export default function CertificationJourneyPage() {
             </button>
           </div>
         </div>
+
+        {enhanceSuccess && (
+          <div className="mt-4 rounded-lg bg-green-500/20 border border-green-500/30 p-4 text-green-400">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              {enhanceSuccess}
+            </div>
+          </div>
+        )}
+
+        {enhanceError && (
+          <div className="mt-4 rounded-lg bg-red-500/20 border border-red-500/30 p-4 text-red-400">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              {enhanceError}
+            </div>
+          </div>
+        )}
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
           <div className="card flex items-center justify-center !p-6">
