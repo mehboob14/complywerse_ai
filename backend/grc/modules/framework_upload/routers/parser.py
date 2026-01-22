@@ -672,6 +672,18 @@ SECTIONS WITH ACTUAL REQUIREMENTS:
 
 === DOCUMENT: "{framework_name}" ==={chunk_context}{structure_context}
 
+=== CRITICAL EXTRACTION RULE ===
+CRITICAL: Extract EVERY SINGLE 'shall', 'must', 'should' statement as a SEPARATE control. Do NOT consolidate multiple requirements into one control.
+
+EXAMPLE OF SPLITTING:
+If text says: "The organization shall (a) maintain logs, (b) review logs monthly, and (c) retain logs for 1 year"
+→ Create 3 SEPARATE controls:
+  1. Control for "(a) maintain logs"
+  2. Control for "(b) review logs monthly" 
+  3. Control for "(c) retain logs for 1 year"
+
+TARGET: For a 30,000 character chunk of regulatory text, you should typically find 25-40 individual controls. If you find fewer than 15, you are likely consolidating too much - re-read the text more carefully.
+
 === YOUR EXPERT ANALYSIS PROCESS ===
 
 STEP 1: SKIP NON-REQUIREMENT CONTENT
@@ -726,6 +738,20 @@ STEP 4: GRANULAR EXTRACTION
 - If one clause has 5 requirements, create 5 controls with references like "4.1.a", "4.1.b", etc.
 - Sub-clauses within a bullet point still need individual extraction
 - Testing procedures (in PCI DSS, for example) are separate from requirements
+
+STEP 5: SPLIT COMPOUND REQUIREMENTS
+- If a single clause contains multiple obligations (a, b, c or i, ii, iii), create SEPARATE controls for each
+- Example: "shall implement and maintain" = 2 controls (implement + maintain)
+- Example: "shall establish, document, and review" = 3 controls
+- Each control should have ONE clear testable requirement
+- Look for conjunctions like "and", "or", commas separating distinct obligations
+
+STEP 6: EXTRACT SUB-POINTS
+- Bullet points under a requirement are separate controls
+- Lettered items (a), (b), (c) are separate controls
+- Numbered sub-items 1), 2), 3) are separate controls
+- Roman numerals (i), (ii), (iii) are separate controls
+- Even if grouped under one parent, each sub-point with its own obligation is a distinct control
 
 === OUTPUT FORMAT FOR EACH CONTROL ===
 
@@ -812,13 +838,17 @@ Every control in your output MUST include ALL of these fields (no exceptions):
 
 Before completing, verify you have:
 [ ] Skipped introductory/non-normative content appropriately
-[ ] Extracted EVERY SHALL/MUST/SHOULD statement as a separate control
+[ ] Extracted EVERY SHALL/MUST/SHOULD statement as a SEPARATE control (NOT consolidated)
+[ ] Split compound requirements - each (a), (b), (c) item is its own control
+[ ] Split verb phrases - "shall implement and maintain" = 2 controls
 [ ] Preserved EXACT clause numbering including all hierarchy levels (a, b, c, i, ii, iii)
 [ ] Set parent_reference and hierarchy_level for EVERY control (null parent for top-level)
 [ ] Provided SPECIFIC, PRACTICAL evidence with artifact_examples array for each control
 [ ] Included testing_procedure for EVERY control (how auditor verifies compliance)
 [ ] Set control_type and implementation_frequency for EVERY control
 [ ] Set appropriate ai_confidence levels (1.0 for explicit SHALL, lower for implicit)
+
+MINIMUM EXTRACTION TARGET: For a 30,000 character chunk, you should typically find 25-40 individual controls. If you find fewer than 15, re-read the text more carefully - you are likely consolidating multiple requirements into single controls.
 
 For a typical regulatory document, expect to extract 50-500+ controls. 
 If you extract fewer than 20, you may have missed requirements - review the text again.
@@ -923,7 +953,7 @@ def parse_document_with_chunking(text: str, framework_name: str) -> List[dict]:
     doc_structure = extract_document_structure(text, framework_name)
     print(f"[PARSE] Document structure extracted. Expected controls: {doc_structure.get('total_expected_controls', 'unknown')}", flush=True)
     
-    chunks = chunk_text(text, chunk_size=30000, overlap=3000)
+    chunks = chunk_text(text, chunk_size=15000, overlap=2000)
     print(f"[PARSE] Document split into {len(chunks)} chunks for processing", flush=True)
     
     all_controls = []
