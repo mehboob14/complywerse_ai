@@ -27,7 +27,8 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_UR
 
 # Version tracking for deterministic assessments
 # v2.1: Updated to use uploaded frameworks instead of pre-seeded ones
-PROMPT_VERSION = "2.1"
+# v2.2: Include actual control IDs in prompt to prevent hallucination of generic control IDs
+PROMPT_VERSION = "2.2"
 # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
 # Using gpt-4o for compatibility with Replit AI integrations
 MODEL_VERSION = "gpt-4o"
@@ -36,14 +37,16 @@ MODEL_VERSION = "gpt-4o"
 DETERMINISTIC_ASSESSMENT_PROMPT = """You are a Senior GRC Compliance Expert with 20+ years of experience, holding CISA, CISSP, CRISC, and ISO 27001 Lead Auditor certifications. Analyze this compliance evidence with extreme precision for regulatory audit purposes.
 
 CRITICAL REQUIREMENTS:
-- ONLY map to controls from the UPLOADED FRAMEWORKS listed below
-- Use the EXACT framework names as shown in the available frameworks list
-- ONLY map to controls that have EXPLICIT evidence in the document
-- Provide EXACT clause references (not just control numbers)
-- Include specific text excerpts from the evidence that support each mapping
-- No control should be marked applicable without explicit clause-level evidence match
+1. ONLY use control IDs from the VALID CONTROL IDs list below - DO NOT invent or hallucinate control IDs
+2. Use the EXACT framework names and EXACT control IDs as provided - no variations allowed
+3. If a control ID is not in the list below, DO NOT include it in your response
+4. ONLY map to controls that have EXPLICIT evidence in the document
+5. Include specific text excerpts from the evidence that support each mapping
+6. No control should be marked applicable without explicit clause-level evidence match
 
-UPLOADED FRAMEWORKS (Use these exact names in your mappings):
+WARNING: Generic ISO 27001 control IDs like "A.5.1", "A.12.4.1" are NOT valid unless they appear in the VALID CONTROL IDs list below. Each framework has its OWN control numbering scheme.
+
+AVAILABLE FRAMEWORKS WITH THEIR VALID CONTROL IDs:
 {available_frameworks}
 
 Evidence Content:
@@ -230,17 +233,21 @@ def format_assessment_response(assessment: EvidenceAIAssessment) -> AssessmentRe
 
 
 def get_available_frameworks(db: Session, tenant_id: int = None) -> str:
-    """Fetch available framework names from uploaded frameworks for AI context.
+    """Fetch available framework names AND their actual control IDs for AI context.
     
     IMPORTANT: This now queries UPLOADED frameworks (grc_uploaded_frameworks) 
     instead of pre-seeded frameworks (grc_frameworks) to ensure AI assessment 
     maps to user-uploaded framework versions.
+    
+    CRITICAL: We now include the actual control IDs from each framework so the
+    AI can ONLY map to controls that actually exist. This prevents hallucination
+    of generic ISO 27001 control IDs when assessing against custom frameworks.
     """
     framework_info = []
     
-    # Query uploaded frameworks with status 'parsed' or 'published'
+    # Query uploaded frameworks with status 'parsed', 'completed', or 'published'
     query = db.query(UploadedFramework).filter(
-        UploadedFramework.upload_status.in_(['parsed', 'published']),
+        UploadedFramework.upload_status.in_(['parsed', 'completed', 'published']),
         UploadedFramework.is_active == True
     )
     
@@ -255,12 +262,38 @@ def get_available_frameworks(db: Session, tenant_id: int = None) -> str:
     uploaded_frameworks = query.all()
     
     for fw in uploaded_frameworks:
-        control_count = db.query(ParsedFrameworkControl).filter(
+        # Fetch ALL actual control IDs from this framework
+        controls = db.query(ParsedFrameworkControl).filter(
             ParsedFrameworkControl.uploaded_framework_id == fw.id
-        ).count()
+        ).order_by(ParsedFrameworkControl.control_id).all()
         
         version_info = f" v{fw.version}" if fw.version else ""
-        framework_info.append(f"- {fw.name}{version_info} (ID: {fw.id}) - {control_count} controls")
+        
+        # Build control ID list with titles for context
+        control_list = []
+        for ctrl in controls:
+            ctrl_id = ctrl.original_reference or ctrl.control_id
+            ctrl_title = ctrl.title or ""
+            if ctrl_title:
+                control_list.append(f"    - {ctrl_id}: {ctrl_title[:80]}")
+            else:
+                control_list.append(f"    - {ctrl_id}")
+        
+        # Format framework with its controls
+        fw_header = f"\nFRAMEWORK: {fw.name}{version_info} (ID: {fw.id})"
+        fw_header += f"\nTotal Controls: {len(controls)}"
+        fw_header += f"\nVALID CONTROL IDs (use ONLY these exact IDs in mappings):"
+        
+        if control_list:
+            # Limit to first 150 controls to avoid token limits, but include all if fewer
+            displayed_controls = control_list[:150]
+            if len(control_list) > 150:
+                displayed_controls.append(f"    ... and {len(control_list) - 150} more controls")
+            fw_header += "\n" + "\n".join(displayed_controls)
+        else:
+            fw_header += "\n    (No controls parsed yet)"
+        
+        framework_info.append(fw_header)
     
     if not framework_info:
         return "No uploaded frameworks available. Please upload and parse frameworks first."
@@ -275,6 +308,108 @@ def normalize_control_code(code: str) -> str:
     normalized = re.sub(r'[\s\-_\.]+', '', normalized)
     normalized = re.sub(r'^(req|requirement|control|ctrl)[\s\-_\.]*', '', normalized)
     return normalized
+
+
+def validate_and_filter_clause_mappings(
+    clause_mappings: List[dict], 
+    db: Session, 
+    tenant_id: int
+) -> List[dict]:
+    """Validate AI-generated clause mappings against actual database controls.
+    
+    This is a CRITICAL security and accuracy layer that ensures:
+    1. Only control IDs that exist in ParsedFrameworkControl are kept
+    2. Hallucinated/invented control IDs are filtered out
+    3. Mappings to non-existent frameworks are removed
+    
+    Returns only valid mappings that reference actual database records.
+    """
+    if not clause_mappings:
+        return []
+    
+    # Get all uploaded frameworks for this tenant
+    uploaded_frameworks = db.query(UploadedFramework).filter(
+        UploadedFramework.upload_status.in_(['parsed', 'completed', 'published']),
+        UploadedFramework.is_active == True,
+        (UploadedFramework.tenant_id == tenant_id) | 
+        (UploadedFramework.is_shared == True) |
+        (UploadedFramework.tenant_id == None)
+    ).all()
+    
+    if not uploaded_frameworks:
+        logger.warning(f"No uploaded frameworks found for tenant {tenant_id} - rejecting all mappings")
+        return []
+    
+    # Build lookup: framework name -> set of valid control IDs
+    valid_controls_by_framework = {}
+    framework_by_name = {}
+    
+    for fw in uploaded_frameworks:
+        fw_name_lower = fw.name.lower()
+        framework_by_name[fw_name_lower] = fw
+        
+        # Get all control IDs for this framework
+        controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == fw.id
+        ).all()
+        
+        valid_ids = set()
+        for ctrl in controls:
+            # Add both control_id and original_reference as valid
+            if ctrl.control_id:
+                valid_ids.add(normalize_control_code(ctrl.control_id))
+            if ctrl.original_reference:
+                valid_ids.add(normalize_control_code(ctrl.original_reference))
+        
+        valid_controls_by_framework[fw_name_lower] = valid_ids
+    
+    # Filter mappings
+    validated_mappings = []
+    rejected_count = 0
+    
+    for mapping in clause_mappings:
+        framework_name = mapping.get("framework_name", "")
+        control_id = mapping.get("control_id", "")
+        
+        if not framework_name or not control_id:
+            rejected_count += 1
+            continue
+        
+        # Find matching framework
+        fw_name_lower = framework_name.lower()
+        matched_fw_key = None
+        
+        # Exact match first
+        if fw_name_lower in valid_controls_by_framework:
+            matched_fw_key = fw_name_lower
+        else:
+            # Partial match
+            for key in valid_controls_by_framework:
+                if key in fw_name_lower or fw_name_lower in key:
+                    matched_fw_key = key
+                    break
+        
+        if not matched_fw_key:
+            logger.warning(f"Rejected mapping: framework '{framework_name}' not found in uploaded frameworks")
+            rejected_count += 1
+            continue
+        
+        # Check if control ID exists in this framework
+        normalized_ctrl = normalize_control_code(control_id)
+        valid_ids = valid_controls_by_framework[matched_fw_key]
+        
+        if normalized_ctrl in valid_ids:
+            validated_mappings.append(mapping)
+        else:
+            # STRICT: No partial matching - only exact normalized matches allowed
+            # This prevents hallucinated control IDs like "A.12" from matching "A.12.4.1"
+            logger.warning(f"Rejected mapping: control '{control_id}' (normalized: '{normalized_ctrl}') not found in framework '{framework_name}'")
+            rejected_count += 1
+    
+    if rejected_count > 0:
+        logger.info(f"Clause mapping validation: {len(validated_mappings)} valid, {rejected_count} rejected (invalid control IDs)")
+    
+    return validated_mappings
 
 
 def get_cached_assessment(content_hash: str, tenant_id: int, db: Session) -> Optional[dict]:
@@ -503,7 +638,14 @@ def run_ai_assessment(
     if not force_refresh:
         cached_response = get_cached_assessment(content_hash, evidence.tenant_id, db)
         if cached_response:
-            # Create assessment from cache
+            # CRITICAL: Re-validate cached clause mappings against current database
+            # This ensures cached responses don't contain stale/invalid control IDs
+            raw_cached_mappings = cached_response.get("clause_mappings", [])
+            validated_cached_mappings = validate_and_filter_clause_mappings(
+                raw_cached_mappings, db, evidence.tenant_id
+            )
+            
+            # Create assessment from cache with validated mappings
             assessment = EvidenceAIAssessment(
                 evidence_id=evidence.id,
                 relevance_score=float(cached_response.get("relevance_score", 0)),
@@ -521,7 +663,7 @@ def run_ai_assessment(
                 model_version=MODEL_VERSION,
                 prompt_version=PROMPT_VERSION,
                 assessment_mode=mode,
-                clause_mappings=cached_response.get("clause_mappings", []),
+                clause_mappings=validated_cached_mappings,  # Use validated mappings only
                 matched_text_excerpts=cached_response.get("evidence_text_excerpts", []),
                 assessed_at=datetime.utcnow(),
                 created_by=user_id
@@ -530,9 +672,8 @@ def run_ai_assessment(
             db.add(assessment)
             db.flush()
             
-            # Link controls with clause data
-            clause_mappings = cached_response.get("clause_mappings", [])
-            auto_link_controls_with_clause_data(evidence, clause_mappings, db, assessment.id)
+            # Link controls with validated clause data
+            auto_link_controls_with_clause_data(evidence, validated_cached_mappings, db, assessment.id)
             
             quality_score = (
                 cached_response.get("relevance_score", 0) * 0.3 +
@@ -579,6 +720,18 @@ def run_ai_assessment(
         assessment_duration = int((time.time() - start_time) * 1000)
         ai_result = parse_ai_response(response.choices[0].message.content or "")
         
+        # CRITICAL: Validate and filter clause mappings against actual database controls
+        # This prevents hallucinated control IDs (like generic ISO 27001 IDs) from being saved
+        raw_clause_mappings = ai_result.get("clause_mappings", [])
+        validated_clause_mappings = validate_and_filter_clause_mappings(
+            raw_clause_mappings, db, evidence.tenant_id
+        )
+        
+        # Update ai_result with validated mappings for caching
+        ai_result["clause_mappings"] = validated_clause_mappings
+        ai_result["_original_mappings_count"] = len(raw_clause_mappings)
+        ai_result["_validated_mappings_count"] = len(validated_clause_mappings)
+        
         # Cache the response for future deterministic retrieval
         save_cached_assessment(content_hash, evidence.tenant_id, ai_result, db)
         
@@ -600,7 +753,7 @@ def run_ai_assessment(
             model_version=MODEL_VERSION,
             prompt_version=PROMPT_VERSION,
             assessment_mode=mode,
-            clause_mappings=ai_result.get("clause_mappings", []),
+            clause_mappings=validated_clause_mappings,  # Use validated mappings only
             matched_text_excerpts=ai_result.get("evidence_text_excerpts", []),
             assessed_at=datetime.utcnow(),
             assessment_duration_ms=assessment_duration,
@@ -610,9 +763,8 @@ def run_ai_assessment(
         db.add(assessment)
         db.flush()
         
-        # Link controls with clause-level data
-        clause_mappings = ai_result.get("clause_mappings", [])
-        auto_link_controls_with_clause_data(evidence, clause_mappings, db, assessment.id)
+        # Link controls with clause-level data (uses already validated mappings)
+        auto_link_controls_with_clause_data(evidence, validated_clause_mappings, db, assessment.id)
         
         # Update evidence quality score
         quality_score = (
