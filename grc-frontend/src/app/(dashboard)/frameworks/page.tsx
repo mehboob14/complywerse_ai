@@ -151,7 +151,7 @@ export default function FrameworksPage() {
   );
 
   const completedFrameworks = frameworksArray.filter(
-    (f: UploadedFramework) => f.upload_status === 'completed' || f.upload_status === 'published'
+    (f: UploadedFramework) => f.upload_status === 'completed' || f.upload_status === 'published' || f.upload_status === 'parsed'
   );
 
   const getUploadStatusInfo = (status: string) => {
@@ -183,6 +183,13 @@ export default function FrameworksPage() {
           color: 'bg-green-500/20 text-green-400',
           icon: CheckCircle,
           description: 'Framework ready to use'
+        };
+      case 'parsed':
+        return { 
+          label: 'Parsed', 
+          color: 'bg-blue-500/20 text-blue-400',
+          icon: CheckCircle,
+          description: 'Framework parsed, ready to publish or start certification'
         };
       case 'published':
         return { 
