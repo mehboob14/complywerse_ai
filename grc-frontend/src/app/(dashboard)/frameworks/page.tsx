@@ -83,8 +83,9 @@ export default function FrameworksPage() {
       return Array.isArray(items) ? items as UploadedFramework[] : [];
     },
     refetchInterval: (query) => {
-      const data = query.state.data as UploadedFramework[] | undefined;
-      const hasProcessing = data?.some(f => 
+      const data = query.state.data;
+      if (!Array.isArray(data)) return false;
+      const hasProcessing = data.some((f: UploadedFramework) => 
         f.upload_status === 'draft' || 
         f.upload_status === 'text_extracted' || 
         f.upload_status === 'parsing'
