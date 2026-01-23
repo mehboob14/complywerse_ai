@@ -109,6 +109,40 @@ Set these environment variables for email notifications:
 - **SLA Check**: `POST /grc/vuln-management/escalations/run-sla-check`
 - **Dashboard Metrics**: `/grc/vuln-management/dashboard/department-metrics`, `sla-compliance-trends`, `department-workload`, `aging-by-department`, `escalation-metrics`
 
+## Governance & Policy Management
+
+The Governance module provides comprehensive policy lifecycle management with approval workflows, attestation tracking, and policy-control mapping.
+
+### Key Features
+- **Document Lifecycle**: Create, draft, approve, publish, review, and archive policies, standards, procedures, and guidelines
+- **Approval Workflows**: Multi-step approval workflows with delegation support and approval history
+- **Policy Attestation**: Request and track user acknowledgments with recurring attestation support
+- **Review Calendar**: Visual calendar showing upcoming and overdue policy reviews
+- **Policy-Control Mapping**: Link policies to framework controls with coverage analysis
+- **Governance Dashboard**: KPIs, charts, and quick actions for governance oversight
+
+### Attestation System
+- **Attestation Types**: Acknowledgment, agreement, certification, review
+- **Status Tracking**: Pending, completed, revoked, expired
+- **Recurring Attestations**: Auto-renewal with parent-child linkage for audit trail
+- **Compliance Rate**: Real-time calculation of attestation compliance
+
+### Frontend Pages
+- `/governance` - Dashboard with KPIs, charts, and quick actions
+- `/governance/documents` - Policy document management
+- `/governance/approvals` - Pending approvals, approve/reject/delegate actions
+- `/governance/reviews` - Review management
+- `/governance/reviews/calendar` - Visual review calendar with color-coded indicators
+- `/governance/mappings` - Policy-control mapping interface
+- `/governance/workflows` - Workflow templates and management
+
+### API Endpoints
+- **Documents**: `/grc/governance/documents/*`
+- **Attestations**: `/grc/governance/attestations/request`, `/pending`, `/stats`, `/{id}/complete`
+- **Reviews**: `/grc/governance/reviews/upcoming`, `/overdue`, `/statistics`
+- **Mappings**: `/grc/governance/mappings/*`
+- **Dashboard**: `/grc/governance/dashboard/summary`, `/pending-approvals`, `/overdue-reviews`
+
 ## Framework Upload & Parsing
 
 The Framework Upload module handles regulatory framework document uploads with AI-powered parsing to extract controls, sub-controls, and document structure.

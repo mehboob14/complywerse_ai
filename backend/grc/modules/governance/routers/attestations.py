@@ -67,9 +67,16 @@ async def request_attestations(
     Request attestations from one or more users for a governance document.
     Only document owners or admins can request attestations.
     """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenant access"
+        )
+    
     document = db.query(GovernanceDocument).filter(
         GovernanceDocument.id == attestation_data.document_id,
-        GovernanceDocument.tenant_id == current_user.tenant_id
+        GovernanceDocument.tenant_id.in_(user_tenants)
     ).first()
     
     if not document:
@@ -89,7 +96,7 @@ async def request_attestations(
     for user_id in attestation_data.user_ids:
         user = db.query(GRCUser).filter(
             GRCUser.id == user_id,
-            GRCUser.tenant_id == current_user.tenant_id
+            GRCUser.tenant_id.in_(user_tenants)
         ).first()
         
         if not user:
@@ -105,7 +112,7 @@ async def request_attestations(
             continue
         
         attestation = PolicyAttestation(
-            tenant_id=current_user.tenant_id,
+            tenant_id=document.tenant_id,
             document_id=attestation_data.document_id,
             document_version_id=attestation_data.document_version_id or document.versions[0].id if document.versions else None,
             user_id=user_id,
@@ -179,10 +186,12 @@ async def complete_attestation(
     current_user: GRCUser = Depends(require_auth)
 ):
     """Complete an attestation (user acknowledges the policy)"""
+    user_tenants = get_user_tenants(current_user, db)
+    
     attestation = db.query(PolicyAttestation).filter(
         PolicyAttestation.id == attestation_id,
         PolicyAttestation.user_id == current_user.id,
-        PolicyAttestation.tenant_id == current_user.tenant_id
+        PolicyAttestation.tenant_id.in_(user_tenants) if user_tenants else False
     ).first()
     
     if not attestation:
@@ -241,9 +250,13 @@ async def get_document_attestations(
     current_user: GRCUser = Depends(require_auth)
 ):
     """Get all attestations for a specific document"""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant access")
+    
     document = db.query(GovernanceDocument).filter(
         GovernanceDocument.id == document_id,
-        GovernanceDocument.tenant_id == current_user.tenant_id
+        GovernanceDocument.tenant_id.in_(user_tenants)
     ).first()
     
     if not document:
@@ -254,7 +267,7 @@ async def get_document_attestations(
     
     query = db.query(PolicyAttestation).filter(
         PolicyAttestation.document_id == document_id,
-        PolicyAttestation.tenant_id == current_user.tenant_id
+        PolicyAttestation.tenant_id.in_(user_tenants)
     )
     
     if status_filter:
@@ -344,30 +357,34 @@ async def get_attestation_statistics(
     current_user: GRCUser = Depends(require_auth)
 ):
     """Get attestation statistics for the tenant"""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"total": 0, "pending": 0, "completed": 0, "overdue": 0, "expiring_soon": 0, "completed_this_month": 0, "compliance_rate": 0, "by_type": []}
+    
     now = datetime.utcnow()
     
     total = db.query(func.count(PolicyAttestation.id)).filter(
-        PolicyAttestation.tenant_id == current_user.tenant_id
+        PolicyAttestation.tenant_id.in_(user_tenants)
     ).scalar()
     
     pending = db.query(func.count(PolicyAttestation.id)).filter(
-        PolicyAttestation.tenant_id == current_user.tenant_id,
+        PolicyAttestation.tenant_id.in_(user_tenants),
         PolicyAttestation.status == "pending"
     ).scalar()
     
     completed = db.query(func.count(PolicyAttestation.id)).filter(
-        PolicyAttestation.tenant_id == current_user.tenant_id,
+        PolicyAttestation.tenant_id.in_(user_tenants),
         PolicyAttestation.status == "completed"
     ).scalar()
     
     overdue = db.query(func.count(PolicyAttestation.id)).filter(
-        PolicyAttestation.tenant_id == current_user.tenant_id,
+        PolicyAttestation.tenant_id.in_(user_tenants),
         PolicyAttestation.status == "pending",
         PolicyAttestation.due_date < now
     ).scalar()
     
     expiring_soon = db.query(func.count(PolicyAttestation.id)).filter(
-        PolicyAttestation.tenant_id == current_user.tenant_id,
+        PolicyAttestation.tenant_id.in_(user_tenants),
         PolicyAttestation.status == "completed",
         PolicyAttestation.expires_at.isnot(None),
         PolicyAttestation.expires_at < now + timedelta(days=30),
@@ -378,11 +395,11 @@ async def get_attestation_statistics(
         PolicyAttestation.attestation_type,
         func.count(PolicyAttestation.id).label("count")
     ).filter(
-        PolicyAttestation.tenant_id == current_user.tenant_id
+        PolicyAttestation.tenant_id.in_(user_tenants)
     ).group_by(PolicyAttestation.attestation_type).all()
     
     completed_this_month = db.query(func.count(PolicyAttestation.id)).filter(
-        PolicyAttestation.tenant_id == current_user.tenant_id,
+        PolicyAttestation.tenant_id.in_(user_tenants),
         PolicyAttestation.status == "completed",
         PolicyAttestation.completed_at >= now.replace(day=1)
     ).scalar()
@@ -406,9 +423,11 @@ async def revoke_attestation(
     current_user: GRCUser = Depends(require_auth)
 ):
     """Revoke/cancel a pending attestation request"""
+    user_tenants = get_user_tenants(current_user, db)
+    
     attestation = db.query(PolicyAttestation).filter(
         PolicyAttestation.id == attestation_id,
-        PolicyAttestation.tenant_id == current_user.tenant_id
+        PolicyAttestation.tenant_id.in_(user_tenants) if user_tenants else False
     ).first()
     
     if not attestation:
