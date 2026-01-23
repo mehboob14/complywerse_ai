@@ -1,0 +1,430 @@
+"""
+Policy Attestation Router - Manages user acknowledgments and attestations for governance documents
+"""
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_, func
+from datetime import datetime, timedelta
+from typing import Optional, List
+from pydantic import BaseModel
+
+from ....models import (
+    GRCUser, Tenant, GovernanceDocument, GovernanceDocumentVersion,
+    PolicyAttestation, get_db
+)
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+
+router = APIRouter(prefix="/attestations", tags=["Policy Attestations"])
+
+
+class AttestationCreate(BaseModel):
+    document_id: int
+    document_version_id: Optional[int] = None
+    user_ids: List[int]
+    attestation_type: str = "acknowledgment"
+    attestation_text: Optional[str] = None
+    due_date: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    is_recurring: bool = False
+    recurrence_months: Optional[int] = None
+
+
+class AttestationComplete(BaseModel):
+    user_comments: Optional[str] = None
+
+
+class AttestationResponse(BaseModel):
+    id: int
+    document_id: int
+    document_title: str
+    document_version: Optional[str] = None
+    user_id: int
+    user_name: str
+    user_email: str
+    attestation_type: str
+    status: str
+    attestation_text: Optional[str] = None
+    requested_at: datetime
+    due_date: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    user_comments: Optional[str] = None
+    is_overdue: bool = False
+    days_until_due: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+@router.post("/request", status_code=status.HTTP_201_CREATED)
+async def request_attestations(
+    attestation_data: AttestationCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Request attestations from one or more users for a governance document.
+    Only document owners or admins can request attestations.
+    """
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == attestation_data.document_id,
+        GovernanceDocument.tenant_id == current_user.tenant_id
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    if document.status not in ["published", "approved"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Attestations can only be requested for published or approved documents"
+        )
+    
+    created_attestations = []
+    
+    for user_id in attestation_data.user_ids:
+        user = db.query(GRCUser).filter(
+            GRCUser.id == user_id,
+            GRCUser.tenant_id == current_user.tenant_id
+        ).first()
+        
+        if not user:
+            continue
+        
+        existing = db.query(PolicyAttestation).filter(
+            PolicyAttestation.document_id == attestation_data.document_id,
+            PolicyAttestation.user_id == user_id,
+            PolicyAttestation.status == "pending"
+        ).first()
+        
+        if existing:
+            continue
+        
+        attestation = PolicyAttestation(
+            tenant_id=current_user.tenant_id,
+            document_id=attestation_data.document_id,
+            document_version_id=attestation_data.document_version_id or document.versions[0].id if document.versions else None,
+            user_id=user_id,
+            attestation_type=attestation_data.attestation_type,
+            attestation_text=attestation_data.attestation_text or f"I acknowledge that I have read, understood, and agree to comply with the {document.title}.",
+            due_date=attestation_data.due_date or (datetime.utcnow() + timedelta(days=14)),
+            expires_at=attestation_data.expires_at,
+            is_recurring=attestation_data.is_recurring,
+            recurrence_months=attestation_data.recurrence_months,
+            requested_by=current_user.id,
+            status="pending"
+        )
+        db.add(attestation)
+        created_attestations.append(attestation)
+    
+    db.commit()
+    
+    return {
+        "message": f"Attestation requests sent to {len(created_attestations)} users",
+        "attestation_ids": [a.id for a in created_attestations]
+    }
+
+
+@router.get("/pending")
+async def get_pending_attestations(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get all pending attestations for the current user"""
+    attestations = db.query(PolicyAttestation).filter(
+        PolicyAttestation.user_id == current_user.id,
+        PolicyAttestation.status == "pending"
+    ).order_by(PolicyAttestation.due_date.asc()).all()
+    
+    result = []
+    now = datetime.utcnow()
+    
+    for att in attestations:
+        document = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == att.document_id
+        ).first()
+        
+        is_overdue = att.due_date and att.due_date < now
+        days_until_due = None
+        if att.due_date:
+            days_until_due = (att.due_date - now).days
+        
+        result.append({
+            "id": att.id,
+            "document_id": att.document_id,
+            "document_title": document.title if document else "Unknown",
+            "document_type": document.doc_type if document else None,
+            "attestation_type": att.attestation_type,
+            "attestation_text": att.attestation_text,
+            "status": att.status,
+            "requested_at": att.requested_at,
+            "due_date": att.due_date,
+            "is_overdue": is_overdue,
+            "days_until_due": days_until_due
+        })
+    
+    return result
+
+
+@router.post("/{attestation_id}/complete")
+async def complete_attestation(
+    attestation_id: int,
+    completion_data: AttestationComplete,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Complete an attestation (user acknowledges the policy)"""
+    attestation = db.query(PolicyAttestation).filter(
+        PolicyAttestation.id == attestation_id,
+        PolicyAttestation.user_id == current_user.id,
+        PolicyAttestation.tenant_id == current_user.tenant_id
+    ).first()
+    
+    if not attestation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attestation not found or not assigned to you"
+        )
+    
+    if attestation.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Attestation is already {attestation.status}"
+        )
+    
+    attestation.status = "completed"
+    attestation.completed_at = datetime.utcnow()
+    attestation.user_comments = completion_data.user_comments
+    attestation.ip_address = request.client.host if request.client else None
+    attestation.user_agent = request.headers.get("user-agent", "")[:500]
+    
+    if attestation.is_recurring and attestation.recurrence_months:
+        next_due = datetime.utcnow() + timedelta(days=attestation.recurrence_months * 30)
+        next_expiry = next_due + timedelta(days=14) if attestation.expires_at else None
+        
+        next_attestation = PolicyAttestation(
+            tenant_id=attestation.tenant_id,
+            document_id=attestation.document_id,
+            document_version_id=attestation.document_version_id,
+            user_id=attestation.user_id,
+            attestation_type=attestation.attestation_type,
+            attestation_text=attestation.attestation_text,
+            due_date=next_due,
+            expires_at=next_expiry,
+            is_recurring=True,
+            recurrence_months=attestation.recurrence_months,
+            parent_attestation_id=attestation.id,
+            requested_by=attestation.requested_by,
+            status="pending"
+        )
+        db.add(next_attestation)
+    
+    db.commit()
+    
+    return {
+        "message": "Attestation completed successfully",
+        "attestation_id": attestation.id,
+        "completed_at": attestation.completed_at
+    }
+
+
+@router.get("/document/{document_id}")
+async def get_document_attestations(
+    document_id: int,
+    status_filter: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get all attestations for a specific document"""
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id == current_user.tenant_id
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    query = db.query(PolicyAttestation).filter(
+        PolicyAttestation.document_id == document_id,
+        PolicyAttestation.tenant_id == current_user.tenant_id
+    )
+    
+    if status_filter:
+        query = query.filter(PolicyAttestation.status == status_filter)
+    
+    attestations = query.order_by(PolicyAttestation.requested_at.desc()).all()
+    
+    now = datetime.utcnow()
+    result = []
+    
+    for att in attestations:
+        user = db.query(GRCUser).filter(GRCUser.id == att.user_id).first()
+        
+        is_overdue = att.status == "pending" and att.due_date and att.due_date < now
+        
+        result.append({
+            "id": att.id,
+            "user_id": att.user_id,
+            "user_name": user.name if user else "Unknown",
+            "user_email": user.email if user else "Unknown",
+            "attestation_type": att.attestation_type,
+            "status": att.status,
+            "requested_at": att.requested_at,
+            "due_date": att.due_date,
+            "completed_at": att.completed_at,
+            "expires_at": att.expires_at,
+            "user_comments": att.user_comments,
+            "is_overdue": is_overdue,
+            "is_recurring": att.is_recurring
+        })
+    
+    pending_count = len([a for a in result if a["status"] == "pending"])
+    completed_count = len([a for a in result if a["status"] == "completed"])
+    overdue_count = len([a for a in result if a["is_overdue"]])
+    
+    return {
+        "document_id": document_id,
+        "document_title": document.title,
+        "attestations": result,
+        "summary": {
+            "total": len(result),
+            "pending": pending_count,
+            "completed": completed_count,
+            "overdue": overdue_count,
+            "compliance_rate": round((completed_count / len(result) * 100), 1) if result else 0
+        }
+    }
+
+
+@router.get("/history")
+async def get_attestation_history(
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get attestation history for the current user"""
+    attestations = db.query(PolicyAttestation).filter(
+        PolicyAttestation.user_id == current_user.id,
+        PolicyAttestation.status.in_(["completed", "expired"])
+    ).order_by(
+        PolicyAttestation.completed_at.desc()
+    ).offset(offset).limit(limit).all()
+    
+    result = []
+    for att in attestations:
+        document = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == att.document_id
+        ).first()
+        
+        result.append({
+            "id": att.id,
+            "document_id": att.document_id,
+            "document_title": document.title if document else "Unknown",
+            "attestation_type": att.attestation_type,
+            "status": att.status,
+            "completed_at": att.completed_at,
+            "expires_at": att.expires_at
+        })
+    
+    return result
+
+
+@router.get("/stats")
+async def get_attestation_statistics(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get attestation statistics for the tenant"""
+    now = datetime.utcnow()
+    
+    total = db.query(func.count(PolicyAttestation.id)).filter(
+        PolicyAttestation.tenant_id == current_user.tenant_id
+    ).scalar()
+    
+    pending = db.query(func.count(PolicyAttestation.id)).filter(
+        PolicyAttestation.tenant_id == current_user.tenant_id,
+        PolicyAttestation.status == "pending"
+    ).scalar()
+    
+    completed = db.query(func.count(PolicyAttestation.id)).filter(
+        PolicyAttestation.tenant_id == current_user.tenant_id,
+        PolicyAttestation.status == "completed"
+    ).scalar()
+    
+    overdue = db.query(func.count(PolicyAttestation.id)).filter(
+        PolicyAttestation.tenant_id == current_user.tenant_id,
+        PolicyAttestation.status == "pending",
+        PolicyAttestation.due_date < now
+    ).scalar()
+    
+    expiring_soon = db.query(func.count(PolicyAttestation.id)).filter(
+        PolicyAttestation.tenant_id == current_user.tenant_id,
+        PolicyAttestation.status == "completed",
+        PolicyAttestation.expires_at.isnot(None),
+        PolicyAttestation.expires_at < now + timedelta(days=30),
+        PolicyAttestation.expires_at > now
+    ).scalar()
+    
+    by_type = db.query(
+        PolicyAttestation.attestation_type,
+        func.count(PolicyAttestation.id).label("count")
+    ).filter(
+        PolicyAttestation.tenant_id == current_user.tenant_id
+    ).group_by(PolicyAttestation.attestation_type).all()
+    
+    completed_this_month = db.query(func.count(PolicyAttestation.id)).filter(
+        PolicyAttestation.tenant_id == current_user.tenant_id,
+        PolicyAttestation.status == "completed",
+        PolicyAttestation.completed_at >= now.replace(day=1)
+    ).scalar()
+    
+    return {
+        "total": total,
+        "pending": pending,
+        "completed": completed,
+        "overdue": overdue,
+        "expiring_soon": expiring_soon,
+        "completed_this_month": completed_this_month,
+        "compliance_rate": round((completed / total * 100), 1) if total > 0 else 0,
+        "by_type": [{"type": t[0], "count": t[1]} for t in by_type]
+    }
+
+
+@router.delete("/{attestation_id}")
+async def revoke_attestation(
+    attestation_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Revoke/cancel a pending attestation request"""
+    attestation = db.query(PolicyAttestation).filter(
+        PolicyAttestation.id == attestation_id,
+        PolicyAttestation.tenant_id == current_user.tenant_id
+    ).first()
+    
+    if not attestation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attestation not found"
+        )
+    
+    if attestation.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only pending attestations can be revoked"
+        )
+    
+    attestation.status = "revoked"
+    attestation.updated_at = datetime.utcnow()
+    db.commit()
+    
+    return {"message": "Attestation revoked successfully"}

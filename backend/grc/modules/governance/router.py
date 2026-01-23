@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from .routers import documents_router, versions_router, workflows_router, workflow_templates_router, reviews_router, mappings_router, dashboard_router, policy_parser_router, document_workflow_router
+from .routers import documents_router, versions_router, workflows_router, workflow_templates_router, reviews_router, mappings_router, dashboard_router, policy_parser_router, document_workflow_router, attestations_router
 
 router = APIRouter(prefix="/governance", tags=["Governance Module"])
 
@@ -12,6 +12,7 @@ router.include_router(mappings_router, tags=["Governance Mappings"])
 router.include_router(dashboard_router, tags=["Governance Dashboard"])
 router.include_router(policy_parser_router, tags=["Governance Policy Parser"])
 router.include_router(document_workflow_router, tags=["Governance Document Workflow"])
+router.include_router(attestations_router, tags=["Policy Attestations"])
 
 
 @router.get("")
@@ -44,6 +45,7 @@ def governance_module_info():
             "/workflows",
             "/reviews",
             "/mappings",
-            "/dashboard"
+            "/dashboard",
+            "/attestations"
         ]
     }

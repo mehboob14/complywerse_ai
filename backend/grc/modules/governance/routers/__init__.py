@@ -7,6 +7,7 @@ from .mappings import router as mappings_router
 from .dashboard import router as dashboard_router
 from .policy_parser import router as policy_parser_router
 from .document_workflow import router as document_workflow_router
+from .attestations import router as attestations_router
 
 __all__ = [
     "documents_router",
@@ -18,4 +19,5 @@ __all__ = [
     "dashboard_router",
     "policy_parser_router",
     "document_workflow_router",
+    "attestations_router",
 ]

@@ -2391,6 +2391,62 @@ class PolicyStatementCompliance(Base):
     )
 
 
+class PolicyAttestation(Base):
+    """Tracks user attestations/acknowledgments for policies and governance documents"""
+    __tablename__ = "grc_policy_attestations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    # What is being attested
+    document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
+    document_version_id = Column(Integer, ForeignKey("grc_governance_document_versions.id"), nullable=True, index=True)
+    
+    # Who is attesting
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    
+    # Attestation details
+    attestation_type = Column(String(50), default="acknowledgment")  # acknowledgment, compliance, training, review
+    status = Column(String(50), default="pending")  # pending, completed, expired, revoked
+    
+    # Dates
+    requested_at = Column(DateTime, default=datetime.utcnow)
+    requested_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    
+    # Attestation content
+    attestation_text = Column(Text, nullable=True)  # The statement they're agreeing to
+    user_comments = Column(Text, nullable=True)  # Optional comments from the user
+    ip_address = Column(String(50), nullable=True)  # For audit trail
+    user_agent = Column(String(500), nullable=True)  # For audit trail
+    
+    # Recurrence
+    is_recurring = Column(Boolean, default=False)
+    recurrence_months = Column(Integer, nullable=True)  # How often attestation needs to be renewed
+    parent_attestation_id = Column(Integer, ForeignKey("grc_policy_attestations.id"), nullable=True)  # For recurring attestations
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    tenant = relationship("Tenant")
+    document = relationship("GovernanceDocument", backref="attestations")
+    document_version = relationship("GovernanceDocumentVersion")
+    user = relationship("GRCUser", foreign_keys=[user_id], backref="attestations")
+    requester = relationship("GRCUser", foreign_keys=[requested_by])
+    parent_attestation = relationship("PolicyAttestation", remote_side=[id])
+    
+    __table_args__ = (
+        Index("ix_attestation_tenant", "tenant_id"),
+        Index("ix_attestation_document", "document_id"),
+        Index("ix_attestation_user", "user_id"),
+        Index("ix_attestation_status", "status"),
+        Index("ix_attestation_due_date", "due_date"),
+    )
+
+
 # =============================================================================
 # 16. Customizable Workflow Models
 # =============================================================================
