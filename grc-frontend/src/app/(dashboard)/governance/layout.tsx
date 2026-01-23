@@ -7,13 +7,17 @@ import {
   FileText,
   GitPullRequest,
   Calendar,
+  CheckSquare,
+  Link2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const governanceNavigation = [
   { name: 'Overview', href: '/governance', icon: LayoutDashboard },
   { name: 'Documents', href: '/governance/documents', icon: FileText },
+  { name: 'Mappings', href: '/governance/mappings', icon: Link2 },
   { name: 'Workflows', href: '/governance/workflows', icon: GitPullRequest },
+  { name: 'Approvals', href: '/governance/approvals', icon: CheckSquare },
   { name: 'Reviews', href: '/governance/reviews', icon: Calendar },
 ];
 

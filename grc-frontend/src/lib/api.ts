@@ -189,6 +189,10 @@ export const governanceApi = {
     apiClient.post(`/governance/workflows/steps/${stepId}/approve`, { comments }),
   rejectStep: (stepId: number, comments?: string) =>
     apiClient.post(`/governance/workflows/steps/${stepId}/reject`, { comments }),
+  delegateStep: (stepId: number, delegateToUserId: number, reason?: string) =>
+    apiClient.post(`/governance/workflows/steps/${stepId}/delegate`, { delegate_to_user_id: delegateToUserId, reason }),
+  getApprovalHistory: (status?: string, skip?: number, limit?: number) =>
+    apiClient.get('/governance/workflows/history', { params: { status, skip, limit } }),
   uploadDocumentWithFile: (formData: FormData) =>
     apiClient.post('/governance/documents/upload-with-file', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -229,6 +233,18 @@ export const governanceApi = {
     apiClient.delete(`/governance/workflows/templates/${templateId}/steps/${stepId}/approvers/${approverId}`),
   seedDefaultTemplates: (tenantId: number) =>
     apiClient.post('/governance/workflows/templates/seed-defaults', null, { params: { tenant_id: tenantId } }),
+  getDocumentMappings: (documentId: number) =>
+    apiClient.get(`/governance/mappings/document/${documentId}`),
+  linkControl: (data: { document_id: number; normalized_control_id: number; link_type?: string; notes?: string }) =>
+    apiClient.post('/governance/mappings/control', data),
+  unlinkControl: (linkId: number) =>
+    apiClient.delete(`/governance/mappings/control/${linkId}`),
+  getMappingCoverage: () =>
+    apiClient.get('/governance/mappings/coverage'),
+  getComplianceCoverage: () =>
+    apiClient.get('/governance/dashboard/compliance-coverage'),
+  getTrends: (months: number = 12) =>
+    apiClient.get(`/governance/dashboard/trends?months=${months}`),
 };
 
 export const documentsApi = {

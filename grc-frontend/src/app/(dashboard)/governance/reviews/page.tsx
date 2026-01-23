@@ -196,9 +196,18 @@ export default function GovernanceReviewsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Document Reviews</h1>
-        <p className="text-slate-400">Track and complete document review schedules</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Document Reviews</h1>
+          <p className="text-slate-400">Track and complete document review schedules</p>
+        </div>
+        <a
+          href="/governance/reviews/calendar"
+          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+        >
+          <CalendarDays className="h-4 w-4" />
+          Calendar View
+        </a>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
