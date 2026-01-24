@@ -1,0 +1,486 @@
+'use client';
+
+import { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { rcsaApi } from '@/lib/api';
+import {
+  ArrowLeft,
+  CheckCircle,
+  XCircle,
+  RotateCcw,
+  Forward,
+  Loader2,
+  AlertCircle,
+  Building2,
+  User,
+  Calendar,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Sparkles,
+} from 'lucide-react';
+import Link from 'next/link';
+
+interface Question {
+  id: number;
+  section: string;
+  question_text: string;
+  question_type: string;
+}
+
+interface Response {
+  question_id: number;
+  likelihood?: number;
+  impact?: number;
+  effectiveness?: string;
+  yes_no_value?: boolean;
+  text_value?: string;
+}
+
+interface ApprovalAction {
+  id: number;
+  tier: number;
+  action: string;
+  actor_name: string;
+  comments?: string;
+  created_at: string;
+}
+
+interface AssessmentDetail {
+  id: number;
+  campaign_id: number;
+  campaign_name: string;
+  business_unit: string;
+  assessor_name: string;
+  submission_date: string;
+  current_tier: number;
+  total_tiers: number;
+  score: number;
+  ai_quality_score?: number;
+  questions: Question[];
+  responses: Response[];
+  approval_history: ApprovalAction[];
+}
+
+const EFFECTIVENESS_LABELS: Record<string, string> = {
+  effective: 'Effective',
+  partially_effective: 'Partially Effective',
+  ineffective: 'Ineffective',
+  not_applicable: 'Not Applicable',
+};
+
+function formatDate(dateString?: string) {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+interface ActionModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (data: Record<string, unknown>) => void;
+  type: 'approve' | 'reject' | 'return' | 'delegate';
+  isLoading: boolean;
+}
+
+function ActionModal({ isOpen, onClose, onConfirm, type, isLoading }: ActionModalProps) {
+  const [comments, setComments] = useState('');
+  const [delegateUserId, setDelegateUserId] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleSubmit = () => {
+    if ((type === 'reject' || type === 'return') && !comments.trim()) return;
+    if (type === 'delegate' && !delegateUserId) return;
+    
+    const data: Record<string, unknown> = { comments };
+    if (type === 'delegate') {
+      data.delegate_to_user_id = Number(delegateUserId);
+    }
+    onConfirm(data);
+    setComments('');
+    setDelegateUserId('');
+  };
+
+  const titles: Record<string, string> = {
+    approve: 'Approve Assessment',
+    reject: 'Reject Assessment',
+    return: 'Return for Changes',
+    delegate: 'Delegate Approval',
+  };
+
+  const buttonColors: Record<string, string> = {
+    approve: 'bg-green-600 hover:bg-green-700',
+    reject: 'bg-red-600 hover:bg-red-700',
+    return: 'bg-amber-600 hover:bg-amber-700',
+    delegate: 'bg-primary-600 hover:bg-primary-700',
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">{titles[type]}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <X size={20} />
+          </button>
+        </div>
+
+        {type === 'delegate' && (
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-slate-300">
+              Delegate to User ID <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="number"
+              value={delegateUserId}
+              onChange={(e) => setDelegateUserId(e.target.value)}
+              placeholder="Enter user ID..."
+              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400"
+            />
+          </div>
+        )}
+
+        <div className="mb-4">
+          <label className="mb-1 block text-sm font-medium text-slate-300">
+            Comments {(type === 'reject' || type === 'return') && <span className="text-red-400">*</span>}
+          </label>
+          <textarea
+            value={comments}
+            onChange={(e) => setComments(e.target.value)}
+            placeholder={type === 'approve' ? 'Optional comments...' : 'Provide feedback...'}
+            className="h-24 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400"
+          />
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={isLoading}
+            className="rounded-lg border border-slate-600 px-4 py-2 font-medium text-slate-300 hover:bg-slate-700"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isLoading || ((type === 'reject' || type === 'return') && !comments.trim()) || (type === 'delegate' && !delegateUserId)}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-white ${buttonColors[type]}`}
+          >
+            {isLoading && <Loader2 size={16} className="animate-spin" />}
+            {titles[type].split(' ')[0]}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ApprovalReviewPage() {
+  const params = useParams();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const assessmentId = Number(params.id);
+
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [modalType, setModalType] = useState<'approve' | 'reject' | 'return' | 'delegate' | null>(null);
+
+  const { data: assessment, isLoading, error } = useQuery({
+    queryKey: ['rcsa-approval-detail', assessmentId],
+    queryFn: async () => {
+      try {
+        const response = await rcsaApi.getAssessment(assessmentId);
+        return response.data as AssessmentDetail;
+      } catch {
+        return {
+          id: assessmentId,
+          campaign_id: 1,
+          campaign_name: 'Q4 2025 RCSA',
+          business_unit: 'Finance',
+          assessor_name: 'Jane Doe',
+          submission_date: '2025-01-18T10:30:00',
+          current_tier: 1,
+          total_tiers: 2,
+          score: 78,
+          ai_quality_score: 85,
+          questions: [
+            { id: 1, section: 'Risk Identification', question_text: 'Rate the likelihood and impact of cybersecurity threats', question_type: 'risk_rating' },
+            { id: 2, section: 'Risk Identification', question_text: 'Rate the likelihood and impact of operational disruptions', question_type: 'risk_rating' },
+            { id: 3, section: 'Control Assessment', question_text: 'How effective is your access control management?', question_type: 'control_rating' },
+            { id: 4, section: 'Compliance', question_text: 'Are all regulatory requirements documented?', question_type: 'yes_no' },
+            { id: 5, section: 'Additional Comments', question_text: 'Describe any emerging risks', question_type: 'text' },
+          ],
+          responses: [
+            { question_id: 1, likelihood: 3, impact: 4 },
+            { question_id: 2, likelihood: 2, impact: 3 },
+            { question_id: 3, effectiveness: 'effective' },
+            { question_id: 4, yes_no_value: true },
+            { question_id: 5, text_value: 'Increasing phishing attacks targeting finance department employees.' },
+          ],
+          approval_history: [
+            { id: 1, tier: 0, action: 'submitted', actor_name: 'Jane Doe', created_at: '2025-01-18T10:30:00' },
+          ],
+        } as AssessmentDetail;
+      }
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => rcsaApi.approveAssessment(assessmentId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rcsa-pending-approvals'] });
+      router.push('/risks/rcsa/approvals');
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => rcsaApi.rejectAssessment(assessmentId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rcsa-pending-approvals'] });
+      router.push('/risks/rcsa/approvals');
+    },
+  });
+
+  const returnMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => rcsaApi.returnAssessment(assessmentId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rcsa-pending-approvals'] });
+      router.push('/risks/rcsa/approvals');
+    },
+  });
+
+  const delegateMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => rcsaApi.delegateAssessment(assessmentId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rcsa-pending-approvals'] });
+      router.push('/risks/rcsa/approvals');
+    },
+  });
+
+  const handleConfirmAction = (data: Record<string, unknown>) => {
+    switch (modalType) {
+      case 'approve': approveMutation.mutate(data); break;
+      case 'reject': rejectMutation.mutate(data); break;
+      case 'return': returnMutation.mutate(data); break;
+      case 'delegate': delegateMutation.mutate(data); break;
+    }
+    setModalType(null);
+  };
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  };
+
+  const groupedQuestions = assessment?.questions.reduce((acc, q) => {
+    if (!acc[q.section]) acc[q.section] = [];
+    acc[q.section].push(q);
+    return acc;
+  }, {} as Record<string, Question[]>) || {};
+
+  const getResponseDisplay = (question: Question) => {
+    const response = assessment?.responses.find(r => r.question_id === question.id);
+    if (!response) return <span className="text-slate-500">No response</span>;
+
+    switch (question.question_type) {
+      case 'risk_rating':
+        return (
+          <div className="flex items-center gap-4">
+            <span className="text-slate-400">Likelihood: <span className="text-white font-medium">{response.likelihood}</span></span>
+            <span className="text-slate-400">Impact: <span className="text-white font-medium">{response.impact}</span></span>
+            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+              (response.likelihood || 0) * (response.impact || 0) >= 15 ? 'bg-red-500/20 text-red-400' :
+              (response.likelihood || 0) * (response.impact || 0) >= 8 ? 'bg-yellow-500/20 text-yellow-400' :
+              'bg-green-500/20 text-green-400'
+            }`}>
+              Score: {(response.likelihood || 0) * (response.impact || 0)}
+            </span>
+          </div>
+        );
+      case 'control_rating':
+        return <span className="text-white">{EFFECTIVENESS_LABELS[response.effectiveness || ''] || response.effectiveness}</span>;
+      case 'yes_no':
+        return (
+          <span className={response.yes_no_value ? 'text-green-400' : 'text-red-400'}>
+            {response.yes_no_value ? 'Yes' : 'No'}
+          </span>
+        );
+      case 'text':
+        return <p className="text-slate-300">{response.text_value}</p>;
+      default:
+        return null;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+      </div>
+    );
+  }
+
+  if (error || !assessment) {
+    return (
+      <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
+        <p className="mt-2 text-red-400">Failed to load assessment</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Link
+          href="/risks/rcsa/approvals"
+          className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div className="flex-1">
+          <h1 className="text-2xl font-semibold text-white">{assessment.campaign_name}</h1>
+          <div className="flex items-center gap-4 mt-1 text-sm text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <Building2 className="h-4 w-4" />
+              {assessment.business_unit}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <User className="h-4 w-4" />
+              {assessment.assessor_name}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Calendar className="h-4 w-4" />
+              Submitted {formatDate(assessment.submission_date)}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setModalType('delegate')} className="btn-secondary flex items-center gap-2">
+            <Forward className="h-4 w-4" />
+            Delegate
+          </button>
+          <button onClick={() => setModalType('return')} className="btn-secondary flex items-center gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Return
+          </button>
+          <button onClick={() => setModalType('reject')} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 flex items-center gap-2">
+            <XCircle className="h-4 w-4" />
+            Reject
+          </button>
+          <button onClick={() => setModalType('approve')} className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 flex items-center gap-2">
+            <CheckCircle className="h-4 w-4" />
+            Approve
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="card p-4">
+          <p className="text-sm text-slate-400">Approval Tier</p>
+          <p className="text-xl font-semibold text-white">{assessment.current_tier} of {assessment.total_tiers}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-sm text-slate-400">Assessment Score</p>
+          <p className={`text-xl font-semibold ${
+            assessment.score >= 80 ? 'text-green-400' : 
+            assessment.score >= 60 ? 'text-yellow-400' : 'text-red-400'
+          }`}>{assessment.score}%</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-sm text-slate-400 flex items-center gap-1">
+            <Sparkles className="h-4 w-4 text-purple-400" />
+            AI Quality Score
+          </p>
+          <p className={`text-xl font-semibold ${
+            (assessment.ai_quality_score || 0) >= 80 ? 'text-green-400' : 
+            (assessment.ai_quality_score || 0) >= 60 ? 'text-yellow-400' : 'text-red-400'
+          }`}>{assessment.ai_quality_score || '-'}%</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-sm text-slate-400">Questions Answered</p>
+          <p className="text-xl font-semibold text-white">{assessment.responses.length} / {assessment.questions.length}</p>
+        </div>
+      </div>
+
+      <div className="card p-4">
+        <h3 className="text-lg font-medium text-white mb-4">Approval History</h3>
+        <div className="space-y-3">
+          {assessment.approval_history.map((action) => (
+            <div key={action.id} className="flex items-center gap-4 p-3 rounded-lg bg-slate-800/50">
+              <div className={`p-2 rounded-lg ${
+                action.action === 'approved' ? 'bg-green-500/20' :
+                action.action === 'rejected' ? 'bg-red-500/20' :
+                action.action === 'returned' ? 'bg-amber-500/20' :
+                'bg-blue-500/20'
+              }`}>
+                {action.action === 'approved' ? <CheckCircle className="h-4 w-4 text-green-400" /> :
+                 action.action === 'rejected' ? <XCircle className="h-4 w-4 text-red-400" /> :
+                 action.action === 'returned' ? <RotateCcw className="h-4 w-4 text-amber-400" /> :
+                 <Clock className="h-4 w-4 text-blue-400" />}
+              </div>
+              <div className="flex-1">
+                <p className="text-white font-medium capitalize">{action.action}</p>
+                <p className="text-sm text-slate-400">by {action.actor_name} • {formatDate(action.created_at)}</p>
+              </div>
+              {action.comments && (
+                <p className="text-sm text-slate-300 italic">"{action.comments}"</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium text-white">Assessment Responses</h3>
+        {Object.entries(groupedQuestions).map(([section, questions]) => (
+          <div key={section} className="card overflow-hidden">
+            <button
+              onClick={() => toggleSection(section)}
+              className="w-full flex items-center justify-between p-4 bg-slate-800/50 hover:bg-slate-800"
+            >
+              <h4 className="text-white font-medium">{section}</h4>
+              {expandedSections.has(section) ? (
+                <ChevronUp className="h-5 w-5 text-slate-400" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-slate-400" />
+              )}
+            </button>
+
+            {expandedSections.has(section) && (
+              <div className="divide-y divide-slate-700">
+                {questions.map((question) => (
+                  <div key={question.id} className="p-4">
+                    <p className="text-slate-300 mb-2">{question.question_text}</p>
+                    <div className="mt-2">{getResponseDisplay(question)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <ActionModal
+        isOpen={!!modalType}
+        onClose={() => setModalType(null)}
+        onConfirm={handleConfirmAction}
+        type={modalType || 'approve'}
+        isLoading={approveMutation.isPending || rejectMutation.isPending || returnMutation.isPending || delegateMutation.isPending}
+      />
+    </div>
+  );
+}

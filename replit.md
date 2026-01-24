@@ -1,7 +1,7 @@
 # Enterprise GRC Platform
 
 ## Overview
-A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platform with multi-tenancy support. It integrates 8 regulatory frameworks with a normalized control model, evidence management, enterprise risk management, governance orchestration, policy management, and IT asset inventory. The platform aims to streamline GRC processes, provide a single source of truth for compliance, and enable real-time risk assessment and management for enterprises, offering significant market potential.
+A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platform with multi-tenancy support. It aims to streamline GRC processes, provide a single source of truth for compliance, and enable real-time risk assessment and management for enterprises. Key capabilities include integration of 8 regulatory frameworks with a normalized control model, evidence management, enterprise risk management, governance orchestration, policy management, and IT asset inventory. The platform targets significant market potential by offering a unified solution for complex GRC needs.
 
 ## User Preferences
 - Backend in Python only
@@ -12,12 +12,10 @@ A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platfor
 - PostgreSQL database
 
 ## System Architecture
-The platform utilizes a multi-tenant architecture with complete tenant isolation and row-level security. **No pre-seeded frameworks** - all regulatory frameworks must be uploaded by users via the Framework Upload feature. This ensures organizations use their exact framework versions and control IDs are preserved from original documents. Role-Based Access Control (RBAC) with fine-grained permissions ensures secure access.
+The platform utilizes a multi-tenant architecture with complete tenant isolation and row-level security. All regulatory frameworks must be uploaded by users, ensuring organizations use their exact framework versions and control IDs. Role-Based Access Control (RBAC) with fine-grained permissions ensures secure access.
 
 **UI/UX Decisions:**
-- Frontend built with Next.js 14, TypeScript, and Tailwind CSS.
-- Dark theme (slate-900/slate-800) implemented across the UI.
-- App Router for streamlined navigation.
+- Frontend built with Next.js 14, TypeScript, and Tailwind CSS, utilizing a dark theme (slate-900/slate-800) and App Router.
 
 **Technical Implementations:**
 - **Backend**: Python 3.11, FastAPI, SQLAlchemy.
@@ -27,198 +25,22 @@ The platform utilizes a multi-tenant architecture with complete tenant isolation
 
 **Feature Specifications:**
 - **Multi-Tenancy**: Complete isolation and row-level security.
-- **Multi-Framework Support**: Integration of 8 regulatory frameworks.
+- **Multi-Framework Support**: Integration and user-upload of 8 regulatory frameworks.
 - **Normalized Control Model**: For cross-framework control mapping.
-- **Evidence Management**: Upload, versioning, AI assessment, and linking to controls.
-- **Enterprise Risk Management (ERM)**: Risk register, mitigation actions, appetite management, KRIs, incidents, and reporting, including an Internal Control Register sub-module for managing organization-specific internal controls with workflow, testing, and risk linking.
-- **Governance Orchestration**: Lifecycle management for policies, standards, and procedures with version control and approval workflows.
-- **Policy/Document Management**: Comprehensive document lifecycle, versioning, and approval.
+- **Evidence Management**: Upload, versioning, AI assessment, and linking to controls with deterministic AI for reproducible results and clause-level mapping.
+- **Enterprise Risk Management (ERM)**: Risk register, mitigation actions, appetite management, KRIs, incidents, including an Internal Control Register and RCSA module with AI-powered suggestions and multi-tier approval workflows.
+- **Governance Orchestration & Policy Management**: Lifecycle management for policies, standards, and procedures with version control, approval workflows, and attestation tracking.
 - **IT Asset Inventory**: Asset classification, valuation, linking to GRC elements, and bulk import via CSV/Excel templates.
 - **Role-Based Access Control (RBAC)**: Fine-grained permissions per tenant.
-- **Unified Control Library**: AI-powered control mapping across frameworks with evidence recommendations and gap analysis, including common control groups, AI similarity analysis, control inheritance, and harmonization reports.
-- **Vulnerability Management**: A module for managing vulnerability and penetration testing reports with AI-powered fix recommendations, SLA tracking, compliance mapping, department-based workflow, and escalation systems.
-
-## IT Asset Bulk Import
-
-The IT Asset module supports bulk import of assets via CSV or Excel files.
-
-### How to Use
-1. Navigate to **Assets** page
-2. Click **Template** button to download the CSV template
-3. Fill in your assets using the template columns:
-   - `name` (Required) - Asset name
-   - `description` - Description of the asset
-   - `asset_type` (Required) - One of: application, infrastructure, data, cloud, third_party
-   - `criticality` - One of: low, medium, high, critical (default: medium)
-   - `vendor` - Vendor name
-   - `location` - Physical or logical location
-   - `confidentiality_rating` - 1-5 scale
-   - `integrity_rating` - 1-5 scale
-   - `availability_rating` - 1-5 scale
-   - `valuation` - Monetary value in USD
-   - `status` - One of: active, inactive, decommissioned (default: active)
-4. Click **Import** button and upload the filled file
-5. View import results showing successful imports and any errors
-
-### API Endpoints
-- **Download Template**: `GET /grc/assets/template/download`
-- **Import Assets**: `POST /grc/assets/import/upload`
-
-## Vulnerability Management Module
-
-A comprehensive module for managing vulnerability and penetration testing reports with department-based assignment, email notifications, SLA tracking, and escalation systems.
-
-### Key Capabilities
-- **Report Upload** - Upload Excel/CSV vulnerability scan reports with intelligent parsing
-- **Vulnerability Register** - Central list with CVSS scores, CVE/CWE tracking, severity levels
-- **AI-Powered Analysis** - OpenAI-powered fix recommendations and impact assessment
-- **SLA Management** - Configurable remediation SLAs by severity (Critical: 7d, High: 30d, Medium: 90d, Low: 180d)
-- **Department-Based Assignment** - Assign vulnerabilities to organizational departments (IT Security, Network Ops, Development, etc.)
-- **Bulk Assignment** - Multi-select vulnerabilities and assign to departments in one action
-- **Email Notifications** - SMTP-based email alerts for assignments, status changes, SLA warnings, and escalations
-- **Escalation Paths** - Configurable 3-level escalation chains (Member → Lead → Head → Parent Dept Head)
-- **SLA-Triggered Escalations** - Automatic escalation at 75% and 100% SLA thresholds
-- **Dashboard** - Department SLA compliance, MTTR by department, workload distribution, aging analysis, escalation metrics
-
-### Backend Structure
-```
-backend/grc/modules/vuln_management/
-├── router.py                    # Main router
-├── routers/
-│   ├── departments.py           # Department management, bulk assignment
-│   ├── vulnerabilities.py       # CRUD, assignment, status changes
-│   ├── workflows.py             # Workflow states and transitions
-│   ├── escalations.py           # SLA check, escalation triggers, notifications
-│   ├── dashboard.py             # Metrics, SLA trends, workload
-│   └── ...
-└── services/
-    ├── email_service.py         # SMTP email sending with HTML templates
-    ├── escalation_service.py    # SLA check and escalation logic
-    └── notification_service.py  # In-app notification management
-```
-
-### Email Configuration (Optional)
-Set these environment variables for email notifications:
-- SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM_EMAIL
-- If not configured, emails are logged for development/demo
-
-### API Endpoints
-- **Departments**: `/grc/vuln-management/departments/*`
-- **Bulk Assign**: `POST /grc/vuln-management/vulnerabilities/bulk-assign`
-- **Escalation Paths**: `/grc/vuln-management/departments/{id}/escalation-paths`
-- **SLA Check**: `POST /grc/vuln-management/escalations/run-sla-check`
-- **Dashboard Metrics**: `/grc/vuln-management/dashboard/department-metrics`, `sla-compliance-trends`, `department-workload`, `aging-by-department`, `escalation-metrics`
-
-## Governance & Policy Management
-
-The Governance module provides comprehensive policy lifecycle management with approval workflows, attestation tracking, and policy-control mapping.
-
-### Key Features
-- **Document Lifecycle**: Create, draft, approve, publish, review, and archive policies, standards, procedures, and guidelines
-- **Approval Workflows**: Multi-step approval workflows with delegation support and approval history
-- **Policy Attestation**: Request and track user acknowledgments with recurring attestation support
-- **Review Calendar**: Visual calendar showing upcoming and overdue policy reviews
-- **Policy-Control Mapping**: Link policies to framework controls with coverage analysis
-- **Governance Dashboard**: KPIs, charts, and quick actions for governance oversight
-
-### Attestation System
-- **Attestation Types**: Acknowledgment, agreement, certification, review
-- **Status Tracking**: Pending, completed, revoked, expired
-- **Recurring Attestations**: Auto-renewal with parent-child linkage for audit trail
-- **Compliance Rate**: Real-time calculation of attestation compliance
-
-### Frontend Pages
-- `/governance` - Dashboard with KPIs, charts, and quick actions
-- `/governance/documents` - Policy document management
-- `/governance/approvals` - Pending approvals, approve/reject/delegate actions
-- `/governance/reviews` - Review management
-- `/governance/reviews/calendar` - Visual review calendar with color-coded indicators
-- `/governance/mappings` - Policy-control mapping interface
-- `/governance/workflows` - Workflow templates and management
-
-### API Endpoints
-- **Documents**: `/grc/governance/documents/*`
-- **Attestations**: `/grc/governance/attestations/request`, `/pending`, `/stats`, `/{id}/complete`
-- **Reviews**: `/grc/governance/reviews/upcoming`, `/overdue`, `/statistics`
-- **Mappings**: `/grc/governance/mappings/*`
-- **Dashboard**: `/grc/governance/dashboard/summary`, `/pending-approvals`, `/overdue-reviews`
-
-## Framework Upload & Parsing
-
-The Framework Upload module handles regulatory framework document uploads with AI-powered parsing to extract controls, sub-controls, and document structure.
-
-### Retry Functionality for Stuck Frameworks
-If a framework parsing job gets stuck (e.g., due to server restart during processing), users can retry the parsing:
-
-1. Navigate to the **Frameworks** page
-2. Processing frameworks show a **Retry** button on their card
-3. Click **Retry** to restart parsing
-4. The system checks if the framework is truly stuck (>10 minutes since last activity)
-5. If stuck, existing partial data is cleared and parsing restarts from scratch
-
-**Technical Details:**
-- Staleness detection: 10-minute threshold since last `updated_at` heartbeat
-- Heartbeats update during: PDF/DOCX text extraction, AI parsing completion
-- Retry clears all `ParsedFrameworkControl` and `CertificationPhase` records for the framework
-- Prevents retry on already-completed or recently-active frameworks
-
-**API Endpoint:**
-- `POST /grc/framework-upload/upload/{id}/retry`
-
-## Deterministic AI Evidence Assessment
-
-The Evidence Management module features a deterministic AI assessment system that produces auditor-defensible, regulator-ready output with exact clause-level control mappings. Same evidence inputs MUST produce identical framework, control, and clause mappings across multiple runs.
-
-**IMPORTANT**: AI assessments now map evidence against UPLOADED FRAMEWORKS (user-uploaded via Framework Upload) instead of pre-seeded frameworks. This ensures assessments use the exact framework versions your organization has uploaded and parsed.
-
-### Key Features
-- **Uploaded Framework Mapping**: AI maps evidence to controls in `grc_uploaded_frameworks` and `grc_parsed_framework_controls` tables (not pre-seeded frameworks)
-- **Deterministic AI**: Uses `temperature=0` with GPT-4o for reproducible results
-- **Content Hash Caching**: SHA-256 hash of OCR content ensures identical evidence returns cached results
-- **Clause-Level Mapping**: Exact framework name, control ID, clause reference, matching rationale, confidence score, and coverage type
-- **Assessment Locking**: Lock validated mappings to prevent drift; only unlock on evidence deletion, framework version change, or explicit user re-trigger
-- **Assessment Modes**:
-  - `initial`: Full assessment (default)
-  - `incremental`: Only assess changes/delta
-  - `locked_audit`: Read-only mode, returns locked assessment if exists
-- **Explainability Panel**: Frontend displays model version, content hash, timestamps, clause mappings, text excerpts, and lock controls
-
-### Audit Trail Fields
-- `content_hash`: SHA-256 hash of evidence content
-- `model_version`: AI model used (e.g., "gpt-4o-2024-08-06")
-- `prompt_version`: Prompt template version for tracking
-- `assessment_duration_ms`: Time taken for AI assessment
-- `is_locked`, `locked_at`, `locked_by`, `lock_reason`: Locking controls
-
-### Clause Mapping Structure
-```json
-{
-  "framework_name": "ISO 27001:2022",
-  "control_id": "A.5.1",
-  "clause_reference": "A.5.1.1",
-  "control_title": "Policies for information security",
-  "matching_rationale": "Evidence explicitly demonstrates...",
-  "confidence": 85,
-  "coverage_type": "full",
-  "matched_text_excerpt": "Exact text from evidence..."
-}
-```
-
-### API Endpoints
-- **Run Assessment**: `POST /grc/evidence-mgmt/ai/{evidence_id}/assess?mode=initial&force_refresh=false`
-- **Get Clause Mappings**: `GET /grc/evidence-mgmt/ai/{evidence_id}/clause-mappings`
-- **Lock Assessment**: `POST /grc/evidence-mgmt/ai/{evidence_id}/lock`
-- **Unlock Assessment**: `POST /grc/evidence-mgmt/ai/{evidence_id}/unlock`
-
-## Documentation
-- **Database Schema**: See `docs/DATABASE_SCHEMA.md` for comprehensive documentation of all 80+ database tables, columns, relationships, and data flows.
+- **Unified Control Library**: AI-powered control mapping across frameworks with evidence recommendations, gap analysis, and control inheritance.
+- **Vulnerability Management**: Module for managing vulnerability and penetration testing reports with AI-powered fix recommendations, SLA tracking, department-based workflow, and escalation systems.
 
 ## External Dependencies
-- **PostgreSQL**: Primary database.
-- **FastAPI**: Backend API framework.
-- **SQLAlchemy**: Python ORM for database interactions.
-- **Next.js 14**: Frontend framework.
-- **TypeScript**: Frontend language.
-- **Tailwind CSS**: Frontend styling.
-- **React Query**: Frontend data management.
-- **OpenAI (via Replit AI Integrations)**: Used for AI-powered document parsing, control extraction, evidence quality assessment, vulnerability fix recommendations, and control similarity analysis (GPT-4o).
+- **PostgreSQL**: Primary relational database.
+- **FastAPI**: Python web framework for building APIs.
+- **SQLAlchemy**: Python SQL toolkit and Object-Relational Mapper.
+- **Next.js 14**: React framework for frontend development.
+- **TypeScript**: Statically typed superset of JavaScript.
+- **Tailwind CSS**: Utility-first CSS framework.
+- **React Query**: Library for fetching, caching, and updating asynchronous data in React.
+- **OpenAI (via Replit AI Integrations)**: Used for AI-powered features including document parsing, control extraction, evidence quality assessment, vulnerability fix recommendations, and control similarity analysis (specifically GPT-4o).

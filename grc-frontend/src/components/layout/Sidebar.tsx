@@ -25,6 +25,7 @@ import {
   Users,
   BookOpen,
   Layers,
+  ClipboardList,
   type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -64,6 +65,7 @@ const navigation: NavEntry[] = [
     items: [
       { name: 'ERM Overview', href: '/erm', icon: BarChart3 },
       { name: 'Risk Register', href: '/risks', icon: AlertTriangle },
+      { name: 'RCSA', href: '/risks/rcsa', icon: ClipboardList },
       { name: 'Internal Controls', href: '/erm/internal-controls', icon: Target },
       { name: 'KRIs', href: '/erm/kris', icon: Activity },
       { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle },
