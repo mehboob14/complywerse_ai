@@ -123,7 +123,10 @@ export default function TemplateDetailPage() {
 
   useEffect(() => {
     if (template?.questions) {
-      setQuestions(template.questions);
+      const sortedQuestions = [...template.questions].sort((a, b) => 
+        (a.question_order || a.sequence || 0) - (b.question_order || b.sequence || 0)
+      );
+      setQuestions(sortedQuestions);
     }
   }, [template]);
 

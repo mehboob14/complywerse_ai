@@ -3645,6 +3645,25 @@ class RCSAResponse(Base):
     )
 
 
+class RCSAResponseEvidence(Base):
+    """Link table between RCSA responses and evidence"""
+    __tablename__ = "grc_rcsa_response_evidence"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    response_id = Column(Integer, ForeignKey("grc_rcsa_responses.id"), nullable=False, index=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    uploaded_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    response = relationship("RCSAResponse", backref="evidence_links")
+    evidence = relationship("Evidence")
+    uploader = relationship("GRCUser", foreign_keys=[uploaded_by])
+    
+    __table_args__ = (
+        UniqueConstraint("response_id", "evidence_id", name="uq_rcsa_response_evidence"),
+    )
+
+
 class RCSAFinding(Base):
     """Findings/gaps identified during RCSA assessments"""
     __tablename__ = "grc_rcsa_findings"

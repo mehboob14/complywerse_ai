@@ -2246,3 +2246,158 @@ def get_business_unit_progress(
         )
         for bu_id, stats in bu_stats.items()
     ]
+
+
+# RCSA Evidence Upload Endpoints
+from fastapi import UploadFile, File, Form
+import os
+import uuid
+
+@router.post("/evidence/upload")
+async def upload_rcsa_evidence(
+    file: UploadFile = File(...),
+    assessment_id: int = Form(...),
+    question_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Upload evidence file for an RCSA response"""
+    from ....models import Evidence, RCSAResponseEvidence, RCSAResponse, RCSAAssessment
+    
+    if not assessment_id or not question_id:
+        raise HTTPException(status_code=400, detail="assessment_id and question_id are required")
+    
+    # Get assessment to verify access
+    assessment = db.query(RCSAAssessment).filter(RCSAAssessment.id == assessment_id).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    
+    validate_tenant_access(current_user, assessment.tenant_id, db)
+    
+    # Create uploads directory if it doesn't exist
+    upload_dir = os.path.join(os.getcwd(), "uploads", "rcsa_evidence")
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    # Generate unique filename
+    file_ext = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4()}{file_ext}"
+    file_path = os.path.join(upload_dir, unique_filename)
+    
+    # Save file
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    # Create evidence record
+    evidence = Evidence(
+        tenant_id=assessment.tenant_id,
+        name=file.filename,
+        description=f"RCSA evidence for assessment {assessment_id}, question {question_id}",
+        file_path=file_path,
+        file_name=file.filename,
+        file_type=file.content_type,
+        uploaded_by=current_user.id,
+        uploaded_at=datetime.utcnow(),
+        status="approved",
+        evidence_type="rcsa_evidence"
+    )
+    db.add(evidence)
+    db.flush()
+    
+    # Get or create response record
+    response = db.query(RCSAResponse).filter(
+        RCSAResponse.assessment_id == assessment_id,
+        RCSAResponse.question_id == question_id
+    ).first()
+    
+    if not response:
+        response = RCSAResponse(
+            assessment_id=assessment_id,
+            question_id=question_id,
+            responded_by=current_user.id,
+            responded_at=datetime.utcnow()
+        )
+        db.add(response)
+        db.flush()
+    
+    # Link evidence to response
+    evidence_link = RCSAResponseEvidence(
+        response_id=response.id,
+        evidence_id=evidence.id,
+        uploaded_by=current_user.id
+    )
+    db.add(evidence_link)
+    db.commit()
+    
+    return {
+        "id": evidence.id,
+        "filename": file.filename,
+        "file_size": len(content),
+        "uploaded_at": evidence.uploaded_at.isoformat()
+    }
+
+
+@router.delete("/evidence/{evidence_id}")
+def delete_rcsa_evidence(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Delete an RCSA evidence file"""
+    from ....models import Evidence, RCSAResponseEvidence
+    
+    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    
+    validate_tenant_access(current_user, evidence.tenant_id, db)
+    
+    # Delete file from disk
+    if evidence.file_path and os.path.exists(evidence.file_path):
+        os.remove(evidence.file_path)
+    
+    # Delete link records
+    db.query(RCSAResponseEvidence).filter(RCSAResponseEvidence.evidence_id == evidence_id).delete()
+    
+    # Delete evidence record
+    db.delete(evidence)
+    db.commit()
+    
+    return {"message": "Evidence deleted successfully"}
+
+
+@router.get("/evidence/response/{response_id}")
+def get_response_evidence(
+    response_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get all evidence files for a specific response"""
+    from ....models import Evidence, RCSAResponseEvidence, RCSAResponse, RCSAAssessment
+    
+    response = db.query(RCSAResponse).filter(RCSAResponse.id == response_id).first()
+    if not response:
+        raise HTTPException(status_code=404, detail="Response not found")
+    
+    assessment = db.query(RCSAAssessment).filter(RCSAAssessment.id == response.assessment_id).first()
+    validate_tenant_access(current_user, assessment.tenant_id, db)
+    
+    evidence_links = db.query(RCSAResponseEvidence).filter(
+        RCSAResponseEvidence.response_id == response_id
+    ).all()
+    
+    result = []
+    for link in evidence_links:
+        evidence = db.query(Evidence).filter(Evidence.id == link.evidence_id).first()
+        if evidence:
+            file_size = 0
+            if evidence.file_path and os.path.exists(evidence.file_path):
+                file_size = os.path.getsize(evidence.file_path)
+            result.append({
+                "id": evidence.id,
+                "filename": evidence.file_name,
+                "file_size": file_size,
+                "uploaded_at": evidence.uploaded_at.isoformat() if evidence.uploaded_at else None
+            })
+    
+    return result
