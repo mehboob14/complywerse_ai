@@ -28,14 +28,20 @@ import Link from 'next/link';
 
 interface Question {
   id: number;
-  sequence: number;
+  sequence?: number;
+  question_order?: number;
   question_text: string;
   question_type: 'risk_rating' | 'control_rating' | 'yes_no' | 'text' | 'multiple_choice';
   options?: string[];
   is_required: boolean;
   category?: string;
+  section?: string;
   weight?: number;
   guidance?: string;
+  guidance_text?: string;
+  risk_category?: string;
+  control_objective?: string;
+  ai_suggestion_enabled?: boolean;
 }
 
 interface Template {
@@ -82,34 +88,36 @@ export default function TemplateDetailPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [expandedQuestionId, setExpandedQuestionId] = useState<number | null>(null);
 
   const { data: template, isLoading, error } = useQuery({
     queryKey: ['rcsa-template', templateId],
     queryFn: async () => {
-      try {
-        const response = await rcsaApi.getTemplate(templateId);
-        return response.data as Template;
-      } catch {
-        return {
-          id: templateId,
-          name: 'SAMA CSF RCSA Template',
-          description: 'Risk and Control Self-Assessment based on SAMA Cybersecurity Framework',
-          source: 'system' as const,
-          category: 'Cybersecurity',
-          framework_type: 'SAMA',
-          question_count: 5,
-          questions: [
-            { id: 1, sequence: 1, question_text: 'What is the inherent risk level for this process?', question_type: 'risk_rating' as const, is_required: true, category: 'Risk Assessment', weight: 1 },
-            { id: 2, sequence: 2, question_text: 'Are access controls implemented and effective?', question_type: 'yes_no' as const, is_required: true, category: 'Access Control', weight: 1 },
-            { id: 3, sequence: 3, question_text: 'Rate the effectiveness of existing controls', question_type: 'control_rating' as const, is_required: true, category: 'Control Assessment', weight: 1 },
-            { id: 4, sequence: 4, question_text: 'Describe any gaps or weaknesses identified', question_type: 'text' as const, is_required: false, category: 'Gap Analysis', weight: 1 },
-            { id: 5, sequence: 5, question_text: 'What is the frequency of control testing?', question_type: 'multiple_choice' as const, options: ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'], is_required: true, category: 'Control Testing', weight: 1 },
-          ],
-          created_at: '2025-01-01',
-          updated_at: '2025-01-15',
-          is_active: true,
-        } as Template;
-      }
+      const response = await rcsaApi.getTemplate(templateId);
+      const data = response.data;
+      // Map backend fields to frontend expected format
+      const mappedQuestions = (data.questions || []).map((q: Record<string, unknown>, index: number) => ({
+        id: q.id,
+        sequence: q.question_order || index + 1,
+        question_order: q.question_order,
+        question_text: q.question_text,
+        question_type: q.question_type,
+        options: q.options,
+        is_required: q.is_required,
+        category: q.section || q.risk_category,
+        section: q.section,
+        weight: 1,
+        guidance: q.guidance_text,
+        guidance_text: q.guidance_text,
+        risk_category: q.risk_category,
+        control_objective: q.control_objective,
+        ai_suggestion_enabled: q.ai_suggestion_enabled,
+      }));
+      return {
+        ...data,
+        framework_type: data.category || 'Custom',
+        questions: mappedQuestions,
+      } as Template;
     },
   });
 
@@ -324,63 +332,168 @@ export default function TemplateDetailPage() {
         </div>
 
         <div className="space-y-3">
-          {questions.map((question, index) => (
-            <div
-              key={question.id}
-              draggable={isEditable}
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDragEnd={handleDragEnd}
-              className={`card p-4 ${isEditable ? 'cursor-move' : ''} ${draggedIndex === index ? 'opacity-50' : ''} hover:border-primary-500/30`}
-            >
-              <div className="flex items-start gap-4">
-                {isEditable && (
-                  <div className="text-slate-500 mt-1">
-                    <GripVertical className="h-5 w-5" />
-                  </div>
-                )}
-                <div className="text-slate-400 font-medium w-8">{question.sequence}.</div>
-                <div className="flex-1">
-                  <p className="text-white mb-2">{question.question_text}</p>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${TYPE_COLORS[question.question_type]?.bg} ${TYPE_COLORS[question.question_type]?.text}`}>
-                      {QUESTION_TYPES.find(t => t.value === question.question_type)?.label || question.question_type}
-                    </span>
-                    {question.category && (
-                      <span className="text-xs text-slate-500">{question.category}</span>
-                    )}
-                    {question.is_required && (
-                      <span className="text-xs text-rose-400">Required</span>
-                    )}
-                    {question.question_type === 'multiple_choice' && question.options && (
-                      <span className="text-xs text-slate-500">
-                        {question.options.length} options
+          {questions.map((question, index) => {
+            const isExpanded = expandedQuestionId === question.id;
+            return (
+              <div
+                key={question.id}
+                draggable={isEditable}
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragEnd={handleDragEnd}
+                className={`card p-4 ${isEditable ? 'cursor-move' : 'cursor-pointer'} ${draggedIndex === index ? 'opacity-50' : ''} hover:border-primary-500/30 transition-all`}
+              >
+                <div 
+                  className="flex items-start gap-4"
+                  onClick={() => !isEditable && setExpandedQuestionId(isExpanded ? null : question.id)}
+                >
+                  {isEditable && (
+                    <div className="text-slate-500 mt-1">
+                      <GripVertical className="h-5 w-5" />
+                    </div>
+                  )}
+                  <div className="text-slate-400 font-medium w-8">{question.sequence || question.question_order || index + 1}.</div>
+                  <div className="flex-1">
+                    <p className="text-white mb-2">{question.question_text}</p>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${TYPE_COLORS[question.question_type]?.bg} ${TYPE_COLORS[question.question_type]?.text}`}>
+                        {QUESTION_TYPES.find(t => t.value === question.question_type)?.label || question.question_type}
                       </span>
-                    )}
+                      {(question.category || question.section) && (
+                        <span className="text-xs text-slate-500">{question.category || question.section}</span>
+                      )}
+                      {question.is_required && (
+                        <span className="text-xs text-rose-400">Required</span>
+                      )}
+                      {question.question_type === 'multiple_choice' && question.options && (
+                        <span className="text-xs text-slate-500">
+                          {question.options.length} options
+                        </span>
+                      )}
+                      {!isEditable && (
+                        <span className="text-xs text-primary-400 ml-auto">
+                          {isExpanded ? <ChevronUp className="h-4 w-4 inline" /> : <ChevronDown className="h-4 w-4 inline" />}
+                          {isExpanded ? ' Collapse' : ' Click to expand'}
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {isEditable && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingQuestion(question);
+                          setIsQuestionModalOpen(true);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteQuestion(question.id);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 rounded"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {isEditable && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setEditingQuestion(question);
-                        setIsQuestionModalOpen(true);
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteQuestion(question.id)}
-                      className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 rounded"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                
+                {/* Expanded Details */}
+                {isExpanded && !isEditable && (
+                  <div className="mt-4 pt-4 border-t border-slate-700 space-y-4">
+                    {/* Risk Category */}
+                    {question.risk_category && (
+                      <div>
+                        <p className="text-sm text-slate-400 mb-1">Risk Category</p>
+                        <p className="text-white">{question.risk_category}</p>
+                      </div>
+                    )}
+                    
+                    {/* Control Objective */}
+                    {question.control_objective && (
+                      <div>
+                        <p className="text-sm text-slate-400 mb-1">Control Objective</p>
+                        <p className="text-white">{question.control_objective}</p>
+                      </div>
+                    )}
+                    
+                    {/* Guidance */}
+                    {(question.guidance || question.guidance_text) && (
+                      <div>
+                        <p className="text-sm text-slate-400 mb-1">Guidance</p>
+                        <p className="text-white bg-slate-700/50 p-3 rounded-lg text-sm">{question.guidance || question.guidance_text}</p>
+                      </div>
+                    )}
+                    
+                    {/* Multiple Choice Options */}
+                    {question.question_type === 'multiple_choice' && question.options && question.options.length > 0 && (
+                      <div>
+                        <p className="text-sm text-slate-400 mb-2">Available Options</p>
+                        <div className="flex flex-wrap gap-2">
+                          {question.options.map((opt, i) => (
+                            <span key={i} className="px-3 py-1 bg-slate-700 text-white rounded-lg text-sm">
+                              {opt}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Rating Scale Info */}
+                    {question.question_type === 'risk_rating' && (
+                      <div>
+                        <p className="text-sm text-slate-400 mb-2">Risk Rating Scale</p>
+                        <div className="flex gap-2">
+                          {[1, 2, 3, 4, 5].map((rating) => (
+                            <div key={rating} className={`px-3 py-2 rounded-lg text-center text-sm ${
+                              rating <= 2 ? 'bg-emerald-500/20 text-emerald-400' :
+                              rating <= 3 ? 'bg-amber-500/20 text-amber-400' :
+                              'bg-rose-500/20 text-rose-400'
+                            }`}>
+                              {rating}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">1 = Low Risk, 5 = Critical Risk</p>
+                      </div>
+                    )}
+                    
+                    {/* Control Rating Info */}
+                    {question.question_type === 'control_rating' && (
+                      <div>
+                        <p className="text-sm text-slate-400 mb-2">Control Effectiveness Scale</p>
+                        <div className="flex gap-2">
+                          {['Effective', 'Partially Effective', 'Ineffective', 'Not Applicable'].map((rating) => (
+                            <span key={rating} className={`px-3 py-1 rounded-lg text-sm ${
+                              rating === 'Effective' ? 'bg-emerald-500/20 text-emerald-400' :
+                              rating === 'Partially Effective' ? 'bg-amber-500/20 text-amber-400' :
+                              rating === 'Ineffective' ? 'bg-rose-500/20 text-rose-400' :
+                              'bg-slate-500/20 text-slate-400'
+                            }`}>
+                              {rating}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* AI Suggestion Badge */}
+                    {question.ai_suggestion_enabled && (
+                      <div className="flex items-center gap-2 text-primary-400">
+                        <Star className="h-4 w-4" />
+                        <span className="text-sm">AI suggestions enabled for this question</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {questions.length === 0 && (

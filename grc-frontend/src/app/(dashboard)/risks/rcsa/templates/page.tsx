@@ -61,18 +61,20 @@ export default function RCSATemplatesPage() {
   const { data: templates, isLoading, error } = useQuery({
     queryKey: ['rcsa-templates'],
     queryFn: async () => {
-      try {
-        const response = await rcsaApi.getTemplates();
-        return response.data as Template[];
-      } catch {
-        return [
-          { id: 1, name: 'SAMA CSF RCSA Template', description: 'Risk and Control Self-Assessment based on SAMA Cybersecurity Framework', source: 'system', category: 'Cybersecurity', framework_type: 'SAMA', question_count: 45, created_at: '2025-01-01', updated_at: '2025-01-15', is_active: true },
-          { id: 2, name: 'SBP Guidelines Template', description: 'State Bank of Pakistan Technology Risk Management Guidelines', source: 'system', category: 'IT Risk', framework_type: 'SBP', question_count: 38, created_at: '2025-01-01', updated_at: '2025-01-10', is_active: true },
-          { id: 3, name: 'Basel II OpRisk Template', description: 'Basel II Operational Risk Assessment Template', source: 'system', category: 'Operational Risk', framework_type: 'Basel', question_count: 52, created_at: '2025-01-01', updated_at: '2025-01-12', is_active: true },
-          { id: 4, name: 'Custom IT Risk Assessment', description: 'Custom template for IT department risk assessment', source: 'custom', category: 'IT Risk', framework_type: 'Custom', question_count: 28, created_at: '2025-01-05', updated_at: '2025-01-18', is_active: true },
-          { id: 5, name: 'Branch Operations RCSA', description: 'Risk assessment for branch operations', source: 'custom', category: 'Operational Risk', framework_type: 'Custom', question_count: 35, created_at: '2025-01-08', updated_at: '2025-01-20', is_active: true },
-        ] as Template[];
-      }
+      const response = await rcsaApi.getTemplates();
+      const data = response.data as Record<string, unknown>[];
+      return data.map((t) => ({
+        id: t.id as number,
+        name: t.name as string,
+        description: t.description as string,
+        source: (t.is_system_template ? 'system' : 'custom') as 'system' | 'custom',
+        category: t.category as string,
+        framework_type: t.source as string || t.category as string,
+        question_count: t.question_count as number,
+        created_at: t.created_at as string,
+        updated_at: t.updated_at as string,
+        is_active: t.is_active as boolean,
+      })) as Template[];
     },
   });
 

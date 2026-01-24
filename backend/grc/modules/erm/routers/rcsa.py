@@ -4,6 +4,7 @@ from io import BytesIO
 import os
 import json
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
@@ -312,10 +313,14 @@ def delete_template(
     return MessageResponse(message="Template deleted successfully", id=template_id)
 
 
+class CloneTemplateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
 @router.post("/templates/{template_id}/clone", response_model=RCSATemplateResponse)
 def clone_template(
     template_id: int,
-    new_name: Optional[str] = None,
+    clone_data: Optional[CloneTemplateRequest] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -335,10 +340,13 @@ def clone_template(
     if not source_template:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     
+    new_name = clone_data.name if clone_data and clone_data.name else None
+    new_description = clone_data.description if clone_data and clone_data.description else None
+    
     cloned_template = RCSATemplate(
         tenant_id=tenant_id,
         name=new_name or f"{source_template.name} (Copy)",
-        description=source_template.description,
+        description=new_description or source_template.description,
         category=source_template.category,
         source="custom",
         version="1.0",
