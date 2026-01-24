@@ -191,13 +191,19 @@ export default function RCSADashboardPage() {
     queryFn: async () => {
       try {
         const response = await rcsaApi.getFindingsBySeverity();
-        return response.data as FindingsBySeverity[];
+        const data = response.data as { critical: number; high: number; medium: number; low: number };
+        return [
+          { severity: 'critical', count: data.critical || 0 },
+          { severity: 'high', count: data.high || 0 },
+          { severity: 'medium', count: data.medium || 0 },
+          { severity: 'low', count: data.low || 0 },
+        ] as FindingsBySeverity[];
       } catch {
         return [
-          { severity: 'critical', count: 3 },
-          { severity: 'high', count: 8 },
-          { severity: 'medium', count: 15 },
-          { severity: 'low', count: 6 },
+          { severity: 'critical', count: 0 },
+          { severity: 'high', count: 0 },
+          { severity: 'medium', count: 0 },
+          { severity: 'low', count: 0 },
         ] as FindingsBySeverity[];
       }
     },
