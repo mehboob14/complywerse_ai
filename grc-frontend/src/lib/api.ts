@@ -856,7 +856,7 @@ export const rcsaApi = {
   getRecentCampaigns: () => apiClient.get('/erm/rcsa/dashboard/recent-campaigns'),
 
   getAssessments: (params?: Record<string, unknown>) => apiClient.get('/erm/rcsa/assessments', { params }),
-  getAssessment: (id: number) => apiClient.get(`/erm/rcsa/assessments/${id}`),
+  getAssessment: (id: number) => apiClient.get(`/erm/rcsa/assessments/${id}/detail`),
   startAssessment: (id: number) => apiClient.post(`/erm/rcsa/assessments/${id}/start`),
   saveResponses: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/save`, data),
   submitAssessment: (id: number) => apiClient.post(`/erm/rcsa/assessments/${id}/submit`),

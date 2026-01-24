@@ -2771,6 +2771,45 @@ class RCSAAssessmentResponse(BaseModel):
         from_attributes = True
 
 
+class RCSAQuestionWithResponse(BaseModel):
+    id: int
+    section: Optional[str] = None
+    question_text: str
+    guidance: Optional[str] = None
+    question_type: str
+    is_required: bool = True
+    sequence: int = 0
+    question_order: int = 0
+    ai_suggestion_enabled: bool = False
+    risk_category: Optional[str] = None
+    control_objective: Optional[str] = None
+
+
+class RCSAResponseDetail(BaseModel):
+    question_id: int
+    likelihood: Optional[int] = None
+    impact: Optional[int] = None
+    effectiveness: Optional[str] = None
+    yes_no_value: Optional[bool] = None
+    text_value: Optional[str] = None
+
+
+class RCSAAssessmentDetailResponse(BaseModel):
+    id: int
+    campaign_id: int
+    campaign_name: Optional[str] = None
+    business_unit: Optional[str] = None
+    assessor_name: Optional[str] = None
+    status: str
+    due_date: Optional[datetime] = None
+    progress: float = 0
+    questions: List[RCSAQuestionWithResponse] = []
+    responses: List[RCSAResponseDetail] = []
+
+    class Config:
+        from_attributes = True
+
+
 class RCSAResponseCreate(BaseModel):
     question_id: int
     response_value: Optional[str] = None

@@ -32,7 +32,8 @@ from ....schemas import (
     RCSATemplateCreate, RCSATemplateUpdate, RCSATemplateResponse, RCSATemplateDetailResponse,
     RCSAQuestionCreate, RCSAQuestionUpdate, RCSAQuestionResponse,
     RCSACampaignCreate, RCSACampaignUpdate, RCSACampaignResponse,
-    RCSAAssessmentResponse, RCSAResponseCreate, RCSAResponseUpdate, RCSAResponseResponse,
+    RCSAAssessmentResponse, RCSAAssessmentDetailResponse, RCSAQuestionWithResponse, RCSAResponseDetail,
+    RCSAResponseCreate, RCSAResponseUpdate, RCSAResponseResponse,
     RCSABulkResponseSave, RCSAFindingCreate, RCSAFindingUpdate, RCSAFindingResponse,
     RCSAApprovalWorkflowCreate, RCSAApprovalWorkflowUpdate, RCSAApprovalWorkflowResponse,
     RCSAApprovalTierCreate, RCSAApprovalTierResponse, RCSAApprovalHistoryResponse,
@@ -1060,6 +1061,84 @@ def get_assessment(
         updated_at=assessment.updated_at,
         response_count=len(assessment.responses),
         finding_count=len(assessment.findings)
+    )
+
+
+@router.get("/assessments/{assessment_id}/detail", response_model=RCSAAssessmentDetailResponse)
+def get_assessment_detail(
+    assessment_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get detailed assessment with questions and responses for the assessment form"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    assessment = db.query(RCSAAssessment).options(
+        joinedload(RCSAAssessment.business_unit),
+        joinedload(RCSAAssessment.assessor),
+        joinedload(RCSAAssessment.responses),
+        joinedload(RCSAAssessment.campaign)
+    ).filter(
+        RCSAAssessment.id == assessment_id,
+        RCSAAssessment.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
+    
+    campaign = assessment.campaign
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    
+    template = db.query(RCSATemplate).options(
+        joinedload(RCSATemplate.questions)
+    ).filter(RCSATemplate.id == campaign.template_id).first()
+    
+    if not template:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    
+    questions = []
+    for q in sorted(template.questions, key=lambda x: (x.section or "", x.question_order or 0)):
+        questions.append(RCSAQuestionWithResponse(
+            id=q.id,
+            section=q.section,
+            question_text=q.question_text,
+            guidance=q.guidance_text,
+            question_type=q.question_type,
+            is_required=q.is_required,
+            sequence=q.sequence or 0,
+            question_order=q.question_order or 0,
+            ai_suggestion_enabled=q.ai_suggestion_enabled or False,
+            risk_category=q.risk_category,
+            control_objective=q.control_objective
+        ))
+    
+    responses = []
+    for r in assessment.responses:
+        responses.append(RCSAResponseDetail(
+            question_id=r.question_id,
+            likelihood=r.likelihood_rating,
+            impact=r.impact_rating,
+            effectiveness=r.control_effectiveness,
+            yes_no_value=r.response_value == "yes" if r.response_value in ["yes", "no"] else None,
+            text_value=r.response_value if r.response_value not in ["yes", "no"] else None
+        ))
+    
+    total_required = len([q for q in questions if q.is_required])
+    answered = len([r for r in responses if r.likelihood or r.impact or r.effectiveness or r.yes_no_value is not None or r.text_value])
+    progress = (answered / total_required * 100) if total_required > 0 else 0
+    
+    return RCSAAssessmentDetailResponse(
+        id=assessment.id,
+        campaign_id=assessment.campaign_id,
+        campaign_name=campaign.name,
+        business_unit=assessment.business_unit.name if assessment.business_unit else None,
+        assessor_name=assessment.assessor.display_name if assessment.assessor else None,
+        status=assessment.status,
+        due_date=campaign.due_date,
+        progress=progress,
+        questions=questions,
+        responses=responses
     )
 
 

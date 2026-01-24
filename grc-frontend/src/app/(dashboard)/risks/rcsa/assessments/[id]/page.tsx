@@ -636,6 +636,59 @@ export default function AssessmentDetailPage() {
                 className="input w-full h-32"
               />
             )}
+
+            {/* Evidence Upload in Step View */}
+            <div className="mt-6 pt-6 border-t border-slate-700">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm text-slate-400 flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Supporting Evidence
+                </p>
+                {isEditable && (
+                  <label className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer">
+                    <Upload className="h-3.5 w-3.5" />
+                    Upload
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => e.target.files && handleFileUpload(currentQuestion.id, e.target.files)}
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                    />
+                  </label>
+                )}
+              </div>
+              
+              {uploadingQuestion === currentQuestion.id && (
+                <div className="flex items-center gap-2 text-sm text-primary-400">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Uploading...
+                </div>
+              )}
+              
+              {(evidenceFiles[currentQuestion.id] || []).length > 0 ? (
+                <div className="space-y-2">
+                  {evidenceFiles[currentQuestion.id].map(file => (
+                    <div key={file.id} className="flex items-center justify-between p-2 bg-slate-700/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-primary-400" />
+                        <span className="text-sm text-white">{file.filename}</span>
+                        <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
+                      </div>
+                      {isEditable && (
+                        <button
+                          onClick={() => handleRemoveEvidence(currentQuestion.id, file.id)}
+                          className="p-1 text-slate-400 hover:text-rose-400"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500 italic">No evidence attached</p>
+              )}
+            </div>
           </div>
 
           {/* Step Navigation */}
