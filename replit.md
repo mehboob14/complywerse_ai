@@ -30,6 +30,9 @@ The platform utilizes a multi-tenant architecture with complete tenant isolation
 - **Evidence Management**: Upload, versioning, AI assessment, and linking to controls with deterministic AI for reproducible results and clause-level mapping.
 - **Enterprise Risk Management (ERM)**: Risk register, mitigation actions, appetite management, KRIs, incidents, including an Internal Control Register and RCSA module with AI-powered suggestions and multi-tier approval workflows.
 - **Governance Orchestration & Policy Management**: Lifecycle management for policies, standards, and procedures with version control, approval workflows, and attestation tracking.
+- **Attestation & Certification Management**: Campaign-based attestations for SOX 302/404 certifications, policy sign-offs, BCP/DR awareness, and training acknowledgments with cascade reminders (CRO → VP → Staff) and escalation workflows. Completed attestations integrate as evidence.
+- **Regulatory Change Management**: Register for tracking regulatory changes from sources (OCC, Fed, EBA, PRA, SEC, FINRA), impact assessments linking to policies/controls, implementation task tracking, and AI-powered gap analysis.
+- **Board & Committee Management**: Governance committee setup with charters, meeting management with auto-populated agendas from pending approvals, minutes approval workflows, and oversight action tracking for Basel/EBA board governance requirements.
 - **IT Asset Inventory**: Asset classification, valuation, linking to GRC elements, and bulk import via CSV/Excel templates.
 - **Role-Based Access Control (RBAC)**: Fine-grained permissions per tenant.
 - **Unified Control Library**: AI-powered control mapping across frameworks with evidence recommendations, gap analysis, and control inheritance.
