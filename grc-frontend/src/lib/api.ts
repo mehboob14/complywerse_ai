@@ -829,6 +829,23 @@ export const vulnManagementApi = {
   },
 };
 
+export const regulatoryApi = {
+  getChanges: (params?: { source?: string; status?: string; priority?: string; search?: string }) => 
+    apiClient.get('/governance/regulatory-changes/changes', { params }),
+  getChange: (id: number) => apiClient.get(`/governance/regulatory-changes/changes/${id}`),
+  createChange: (data: Record<string, unknown>) => apiClient.post('/governance/regulatory-changes/changes', data),
+  updateChange: (id: number, data: Record<string, unknown>) => apiClient.put(`/governance/regulatory-changes/changes/${id}`, data),
+  deleteChange: (id: number) => apiClient.delete(`/governance/regulatory-changes/changes/${id}`),
+  getAssessments: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/assessments`),
+  createAssessment: (changeId: number, data: Record<string, unknown>) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/assessments`, data),
+  getTasks: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/tasks`),
+  createTask: (changeId: number, data: Record<string, unknown>) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/tasks`, data),
+  updateTask: (taskId: number, data: Record<string, unknown>) => apiClient.patch(`/governance/regulatory-changes/tasks/${taskId}`, data),
+  deleteTask: (taskId: number) => apiClient.delete(`/governance/regulatory-changes/tasks/${taskId}`),
+  getDashboard: () => apiClient.get('/governance/regulatory-changes/dashboard'),
+  getGapAnalysis: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/gap-analysis`),
+};
+
 export const rcsaApi = {
   getTemplates: () => apiClient.get('/erm/rcsa/templates'),
   getTemplate: (id: number) => apiClient.get(`/erm/rcsa/templates/${id}`),
@@ -884,6 +901,50 @@ export const rcsaApi = {
 export const dashboardApi = {
   getStats: () => apiClient.get('/dashboard/stats'),
   getFrameworkCompliance: (frameworkId: number) => apiClient.get(`/dashboard/compliance/${frameworkId}`),
+};
+
+export const attestationApi = {
+  getCampaigns: (params?: { status?: string }) => apiClient.get('/governance/attestation-campaigns/campaigns', { params }),
+  getCampaign: (id: number) => apiClient.get(`/governance/attestation-campaigns/campaigns/${id}`),
+  createCampaign: (data: Record<string, unknown>) => apiClient.post('/governance/attestation-campaigns/campaigns', data),
+  updateCampaign: (id: number, data: Record<string, unknown>) => apiClient.put(`/governance/attestation-campaigns/campaigns/${id}`, data),
+  deleteCampaign: (id: number) => apiClient.delete(`/governance/attestation-campaigns/campaigns/${id}`),
+  activateCampaign: (id: number) => apiClient.post(`/governance/attestation-campaigns/campaigns/${id}/activate`),
+  closeCampaign: (id: number) => apiClient.post(`/governance/attestation-campaigns/campaigns/${id}/close`),
+  getCampaignRequests: (id: number, params?: { status?: string }) => apiClient.get(`/governance/attestation-campaigns/campaigns/${id}/requests`, { params }),
+  completeAttestation: (id: number, data: Record<string, unknown>) => apiClient.post(`/governance/attestation-campaigns/requests/${id}/complete`, data),
+  sendReminder: (id: number) => apiClient.post(`/governance/attestation-campaigns/requests/${id}/remind`),
+  escalateRequest: (id: number) => apiClient.post(`/governance/attestation-campaigns/requests/${id}/escalate`),
+  getMyAttestations: (params?: { status?: string }) => apiClient.get('/governance/attestation-campaigns/my-attestations', { params }),
+  getDashboard: () => apiClient.get('/governance/attestation-campaigns/dashboard'),
+  getAttestation: (id: number) => apiClient.get(`/governance/attestation-campaigns/requests/${id}`),
+};
+
+export const committeeApi = {
+  getCommittees: () => apiClient.get('/governance/committees/committees'),
+  getCommittee: (id: number) => apiClient.get(`/governance/committees/committees/${id}`),
+  createCommittee: (data: any) => apiClient.post('/governance/committees/committees', data),
+  updateCommittee: (id: number, data: any) => apiClient.put(`/governance/committees/committees/${id}`, data),
+  deleteCommittee: (id: number) => apiClient.delete(`/governance/committees/committees/${id}`),
+  getMembers: (committeeId: number) => apiClient.get(`/governance/committees/committees/${committeeId}/members`),
+  addMember: (committeeId: number, data: any) => apiClient.post(`/governance/committees/committees/${committeeId}/members`, data),
+  removeMember: (committeeId: number, userId: number) => apiClient.delete(`/governance/committees/committees/${committeeId}/members/${userId}`),
+  getCharters: (committeeId: number) => apiClient.get(`/governance/committees/committees/${committeeId}/charters`),
+  createCharter: (committeeId: number, data: any) => apiClient.post(`/governance/committees/committees/${committeeId}/charters`, data),
+  updateCharter: (charterId: number, data: any) => apiClient.put(`/governance/committees/charters/${charterId}`, data),
+  getMeetings: (committeeId: number) => apiClient.get(`/governance/committees/committees/${committeeId}/meetings`),
+  createMeeting: (committeeId: number, data: any) => apiClient.post(`/governance/committees/committees/${committeeId}/meetings`, data),
+  getMeeting: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}`),
+  updateMeeting: (meetingId: number, data: any) => apiClient.put(`/governance/committees/meetings/${meetingId}`, data),
+  getAgenda: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}/agenda`),
+  addAgendaItem: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/agenda`, data),
+  updateAgendaItem: (itemId: number, data: any) => apiClient.put(`/governance/committees/agenda/${itemId}`, data),
+  createMinutes: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/minutes`, data),
+  updateMinutes: (minutesId: number, data: any) => apiClient.put(`/governance/committees/minutes/${minutesId}`, data),
+  createAction: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/actions`, data),
+  getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean }) => apiClient.get('/governance/committees/actions', { params }),
+  updateAction: (actionId: number, data: any) => apiClient.patch(`/governance/committees/actions/${actionId}`, data),
+  getDashboard: () => apiClient.get('/governance/committees/dashboard'),
 };
 
 export default apiClient;

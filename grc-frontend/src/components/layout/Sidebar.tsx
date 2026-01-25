@@ -55,8 +55,11 @@ const navigation: NavEntry[] = [
     items: [
       { name: 'Policies', href: '/governance', icon: BookOpen },
       { name: 'Documents', href: '/governance/documents', icon: FileText },
+      { name: 'Attestations', href: '/governance/attestations', icon: ClipboardCheck },
+      { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: FileCheck },
+      { name: 'Committees', href: '/governance/committees', icon: Users },
       { name: 'Workflows', href: '/governance/workflows', icon: GitBranch },
-      { name: 'Reviews', href: '/governance/reviews', icon: ClipboardCheck },
+      { name: 'Reviews', href: '/governance/reviews', icon: ClipboardList },
     ],
   },
   {

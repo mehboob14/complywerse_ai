@@ -9,12 +9,14 @@ import {
   Calendar,
   CheckSquare,
   Link2,
+  Users,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const governanceNavigation = [
   { name: 'Overview', href: '/governance', icon: LayoutDashboard },
   { name: 'Documents', href: '/governance/documents', icon: FileText },
+  { name: 'Committees', href: '/governance/committees', icon: Users },
   { name: 'Mappings', href: '/governance/mappings', icon: Link2 },
   { name: 'Workflows', href: '/governance/workflows', icon: GitPullRequest },
   { name: 'Approvals', href: '/governance/approvals', icon: CheckSquare },

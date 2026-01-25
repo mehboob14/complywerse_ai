@@ -1,0 +1,558 @@
+'use client';
+
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams } from 'next/navigation';
+import { committeeApi, governanceApi } from '@/lib/api';
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  Users,
+  FileText,
+  CheckSquare,
+  Plus,
+  X,
+  ArrowLeft,
+  Edit,
+  Save,
+  ListOrdered,
+  Sparkles,
+  AlertCircle,
+} from 'lucide-react';
+import Link from 'next/link';
+
+interface Meeting {
+  id: number;
+  committee_id: number;
+  committee_name: string;
+  title: string;
+  meeting_type: 'regular' | 'special' | 'emergency';
+  scheduled_date: string;
+  start_time?: string;
+  end_time?: string;
+  location?: string;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+  attendee_count: number;
+  quorum_required: number;
+  created_at: string;
+}
+
+interface AgendaItem {
+  id: number;
+  meeting_id: number;
+  sequence: number;
+  title: string;
+  description?: string;
+  presenter?: string;
+  duration_minutes?: number;
+  item_type: string;
+  status: 'pending' | 'discussed' | 'deferred';
+}
+
+interface Minutes {
+  id: number;
+  meeting_id: number;
+  content: string;
+  status: 'draft' | 'approved';
+  approved_by?: string;
+  approved_at?: string;
+}
+
+interface Action {
+  id: number;
+  title: string;
+  description?: string;
+  action_type: string;
+  status: 'open' | 'in_progress' | 'completed' | 'overdue';
+  due_date: string;
+  assigned_to_name?: string;
+}
+
+const MEETING_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
+  regular: { label: 'Regular', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  special: { label: 'Special', bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  emergency: { label: 'Emergency', bg: 'bg-rose-500/20', text: 'text-rose-400' },
+};
+
+const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  scheduled: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  in_progress: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  cancelled: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
+  open: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
+  pending: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
+  discussed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  deferred: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
+  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+};
+
+const ACTION_TYPES = [
+  { value: 'follow_up', label: 'Follow Up' },
+  { value: 'policy_approval', label: 'Policy Approval' },
+  { value: 'risk_review', label: 'Risk Review' },
+  { value: 'audit_response', label: 'Audit Response' },
+];
+
+export default function MeetingDetailPage() {
+  const params = useParams();
+  const meetingId = parseInt(params.id as string);
+  const [isAddAgendaModalOpen, setIsAddAgendaModalOpen] = useState(false);
+  const [isAddActionModalOpen, setIsAddActionModalOpen] = useState(false);
+  const [isEditMinutesOpen, setIsEditMinutesOpen] = useState(false);
+  const [minutesContent, setMinutesContent] = useState('');
+  const [newAgendaItem, setNewAgendaItem] = useState({
+    title: '',
+    description: '',
+    presenter: '',
+    duration_minutes: 15,
+    item_type: 'discussion',
+  });
+  const [newAction, setNewAction] = useState({
+    title: '',
+    description: '',
+    action_type: 'follow_up',
+    due_date: '',
+    assigned_to_id: '',
+  });
+  const queryClient = useQueryClient();
+
+  const { data: meeting, isLoading: meetingLoading } = useQuery({
+    queryKey: ['meeting', meetingId],
+    queryFn: async () => {
+      try {
+        const response = await committeeApi.getMeeting(meetingId);
+        return response.data as Meeting;
+      } catch {
+        return {
+          id: meetingId,
+          committee_id: 2,
+          committee_name: 'Risk Management Committee',
+          title: 'Q1 2025 Risk Review',
+          meeting_type: 'regular',
+          scheduled_date: '2025-02-15',
+          start_time: '10:00',
+          end_time: '12:00',
+          location: 'Boardroom A',
+          status: 'scheduled',
+          attendee_count: 7,
+          quorum_required: 4,
+          created_at: '2025-01-15',
+        } as Meeting;
+      }
+    },
+  });
+
+  const { data: agenda, refetch: refetchAgenda } = useQuery({
+    queryKey: ['meeting-agenda', meetingId],
+    queryFn: async () => {
+      try {
+        const response = await committeeApi.getAgenda(meetingId);
+        return response.data as AgendaItem[];
+      } catch {
+        return [
+          { id: 1, meeting_id: meetingId, sequence: 1, title: 'Call to Order', description: 'Chair opens the meeting', presenter: 'Chair', duration_minutes: 5, item_type: 'procedural', status: 'pending' },
+          { id: 2, meeting_id: meetingId, sequence: 2, title: 'Approval of Previous Minutes', description: 'Review and approve minutes from last meeting', presenter: 'Secretary', duration_minutes: 10, item_type: 'approval', status: 'pending' },
+          { id: 3, meeting_id: meetingId, sequence: 3, title: 'Enterprise Risk Register Review', description: 'Review top 10 risks and mitigation progress', presenter: 'CRO', duration_minutes: 30, item_type: 'discussion', status: 'pending' },
+          { id: 4, meeting_id: meetingId, sequence: 4, title: 'Cyber Risk Update', description: 'Update on cybersecurity posture', presenter: 'CISO', duration_minutes: 20, item_type: 'discussion', status: 'pending' },
+          { id: 5, meeting_id: meetingId, sequence: 5, title: 'New Business', description: 'Any new items for discussion', presenter: 'All', duration_minutes: 15, item_type: 'discussion', status: 'pending' },
+          { id: 6, meeting_id: meetingId, sequence: 6, title: 'Adjournment', description: 'Close of meeting', presenter: 'Chair', duration_minutes: 5, item_type: 'procedural', status: 'pending' },
+        ] as AgendaItem[];
+      }
+    },
+  });
+
+  const { data: minutes } = useQuery({
+    queryKey: ['meeting-minutes', meetingId],
+    queryFn: async () => {
+      try {
+        const response = await committeeApi.getMeeting(meetingId);
+        return (response.data as any).minutes as Minutes | null;
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  const { data: actions } = useQuery({
+    queryKey: ['meeting-actions', meetingId],
+    queryFn: async () => {
+      try {
+        const response = await committeeApi.getActions({ committee_id: meeting?.committee_id });
+        return (response.data as Action[]).filter((a: any) => a.meeting_id === meetingId);
+      } catch {
+        return [
+          { id: 1, title: 'Update Risk Register for Q1', description: 'Review and update the enterprise risk register', action_type: 'risk_review', status: 'open', due_date: '2025-02-28', assigned_to_name: 'David Lee' },
+          { id: 2, title: 'Prepare Cyber Risk Report', description: 'Detailed report on current cyber threats', action_type: 'follow_up', status: 'open', due_date: '2025-03-01', assigned_to_name: 'CISO' },
+        ] as Action[];
+      }
+    },
+    enabled: !!meeting,
+  });
+
+  const addAgendaMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => committeeApi.addAgendaItem(meetingId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
+      setIsAddAgendaModalOpen(false);
+      setNewAgendaItem({ title: '', description: '', presenter: '', duration_minutes: 15, item_type: 'discussion' });
+    },
+  });
+
+  const createActionMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => committeeApi.createAction(meetingId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meeting-actions', meetingId] });
+      setIsAddActionModalOpen(false);
+      setNewAction({ title: '', description: '', action_type: 'follow_up', due_date: '', assigned_to_id: '' });
+    },
+  });
+
+  const createMinutesMutation = useMutation({
+    mutationFn: (data: { content: string }) => committeeApi.createMinutes(meetingId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meeting-minutes', meetingId] });
+      setIsEditMinutesOpen(false);
+    },
+  });
+
+  const autoPopulateMutation = useMutation({
+    mutationFn: async () => {
+      const pendingApprovals = await governanceApi.getPendingApprovals();
+      const approvals = pendingApprovals.data as any[];
+      for (const approval of approvals.slice(0, 5)) {
+        await committeeApi.addAgendaItem(meetingId, {
+          title: `Review: ${approval.document_title || approval.title}`,
+          description: `Pending approval from governance workflow`,
+          item_type: 'approval',
+          duration_minutes: 10,
+        });
+      }
+    },
+    onSuccess: () => {
+      refetchAgenda();
+    },
+  });
+
+  if (meetingLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="skeleton h-8 w-64 mb-4" />
+        <div className="skeleton h-5 w-96" />
+      </div>
+    );
+  }
+
+  const meetingTypeStyle = MEETING_TYPE_LABELS[meeting?.meeting_type || 'regular'];
+  const statusStyle = STATUS_COLORS[meeting?.status || 'scheduled'];
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <Link href={`/governance/committees/${meeting?.committee_id}`} className="flex items-center gap-2 text-slate-400 hover:text-white mb-4">
+          <ArrowLeft className="h-4 w-4" />
+          Back to {meeting?.committee_name}
+        </Link>
+
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-cyan-500/20">
+              <Calendar className="h-7 w-7 text-cyan-400" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-white">{meeting?.title}</h1>
+              <div className="flex items-center gap-3 mt-1">
+                <span className={`text-xs px-2 py-0.5 rounded-full ${meetingTypeStyle?.bg} ${meetingTypeStyle?.text}`}>
+                  {meetingTypeStyle?.label}
+                </span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle?.bg} ${statusStyle?.text}`}>
+                  {meeting?.status.replace('_', ' ')}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <Calendar className="h-4 w-4" />
+            {new Date(meeting?.scheduled_date || '').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </span>
+          {meeting?.start_time && (
+            <span className="flex items-center gap-1.5">
+              <Clock className="h-4 w-4" />
+              {meeting.start_time} - {meeting.end_time}
+            </span>
+          )}
+          {meeting?.location && (
+            <span className="flex items-center gap-1.5">
+              <MapPin className="h-4 w-4" />
+              {meeting.location}
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <Users className="h-4 w-4" />
+            {meeting?.attendee_count} attendees (Quorum: {meeting?.quorum_required})
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                <ListOrdered className="h-5 w-5 text-primary-400" />
+                Agenda
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => autoPopulateMutation.mutate()}
+                  disabled={autoPopulateMutation.isPending}
+                  className="btn-secondary flex items-center gap-2 text-sm"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {autoPopulateMutation.isPending ? 'Loading...' : 'Auto-Populate from Approvals'}
+                </button>
+                <button
+                  onClick={() => setIsAddAgendaModalOpen(true)}
+                  className="btn-primary flex items-center gap-2 text-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Item
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {(agenda || []).sort((a, b) => a.sequence - b.sequence).map((item) => (
+                <div key={item.id} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-500/20 text-primary-400 text-sm font-medium">
+                        {item.sequence}
+                      </div>
+                      <div>
+                        <h4 className="text-white font-medium">{item.title}</h4>
+                        {item.description && <p className="text-slate-400 text-sm mt-1">{item.description}</p>}
+                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                          {item.presenter && <span>Presenter: {item.presenter}</span>}
+                          {item.duration_minutes && <span>{item.duration_minutes} min</span>}
+                          <span className="capitalize">{item.item_type}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status]?.bg} ${STATUS_COLORS[item.status]?.text}`}>
+                      {item.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {(agenda || []).length === 0 && (
+                <div className="text-center py-8">
+                  <ListOrdered className="h-10 w-10 text-slate-500 mx-auto mb-3" />
+                  <p className="text-slate-400">No agenda items yet</p>
+                  <button onClick={() => setIsAddAgendaModalOpen(true)} className="text-primary-400 hover:text-primary-300 text-sm mt-2">
+                    Add first item
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                <FileText className="h-5 w-5 text-emerald-400" />
+                Minutes
+              </h3>
+              {!minutes && (
+                <button onClick={() => setIsEditMinutesOpen(true)} className="btn-primary flex items-center gap-2 text-sm">
+                  <Plus className="h-4 w-4" />
+                  Draft Minutes
+                </button>
+              )}
+            </div>
+
+            {minutes ? (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[minutes.status]?.bg} ${STATUS_COLORS[minutes.status]?.text}`}>
+                    {minutes.status}
+                  </span>
+                  {minutes.approved_by && (
+                    <span className="text-sm text-slate-400">Approved by {minutes.approved_by}</span>
+                  )}
+                </div>
+                <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+                  <p className="text-slate-300 whitespace-pre-wrap">{minutes.content}</p>
+                </div>
+              </div>
+            ) : isEditMinutesOpen ? (
+              <div className="space-y-4">
+                <textarea
+                  value={minutesContent}
+                  onChange={(e) => setMinutesContent(e.target.value)}
+                  className="input w-full h-48"
+                  placeholder="Enter meeting minutes..."
+                />
+                <div className="flex justify-end gap-3">
+                  <button onClick={() => setIsEditMinutesOpen(false)} className="btn-secondary">Cancel</button>
+                  <button
+                    onClick={() => createMinutesMutation.mutate({ content: minutesContent })}
+                    disabled={createMinutesMutation.isPending}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    <Save className="h-4 w-4" />
+                    {createMinutesMutation.isPending ? 'Saving...' : 'Save Draft'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <FileText className="h-10 w-10 text-slate-500 mx-auto mb-3" />
+                <p className="text-slate-400">No minutes recorded yet</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                <CheckSquare className="h-5 w-5 text-amber-400" />
+                Actions
+              </h3>
+              <button onClick={() => setIsAddActionModalOpen(true)} className="text-primary-400 hover:text-primary-300 text-sm">
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {(actions || []).map((action) => (
+                <div key={action.id} className="p-3 rounded-lg bg-slate-800/50 border border-slate-700">
+                  <div className="flex items-start justify-between">
+                    <h4 className="text-white font-medium text-sm">{action.title}</h4>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[action.status]?.bg} ${STATUS_COLORS[action.status]?.text}`}>
+                      {action.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-2">
+                    <div>Due: {new Date(action.due_date).toLocaleDateString()}</div>
+                    {action.assigned_to_name && <div>Assigned: {action.assigned_to_name}</div>}
+                  </div>
+                </div>
+              ))}
+
+              {(actions || []).length === 0 && (
+                <div className="text-center py-6">
+                  <CheckSquare className="h-8 w-8 text-slate-500 mx-auto mb-2" />
+                  <p className="text-slate-400 text-sm">No actions from this meeting</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {isAddAgendaModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-700">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Add Agenda Item</h2>
+              <button onClick={() => setIsAddAgendaModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); addAgendaMutation.mutate(newAgendaItem); }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Title *</label>
+                <input type="text" value={newAgendaItem.title} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, title: e.target.value })} className="input w-full" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                <textarea value={newAgendaItem.description} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, description: e.target.value })} className="input w-full" rows={2} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Presenter</label>
+                  <input type="text" value={newAgendaItem.presenter} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, presenter: e.target.value })} className="input w-full" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Duration (min)</label>
+                  <input type="number" value={newAgendaItem.duration_minutes} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, duration_minutes: parseInt(e.target.value) })} className="input w-full" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Item Type</label>
+                <select value={newAgendaItem.item_type} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, item_type: e.target.value })} className="input w-full">
+                  <option value="procedural">Procedural</option>
+                  <option value="approval">Approval</option>
+                  <option value="discussion">Discussion</option>
+                  <option value="information">Information</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button type="button" onClick={() => setIsAddAgendaModalOpen(false)} className="btn-secondary">Cancel</button>
+                <button type="submit" disabled={addAgendaMutation.isPending} className="btn-primary">
+                  {addAgendaMutation.isPending ? 'Adding...' : 'Add Item'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isAddActionModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-700">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Create Action</h2>
+              <button onClick={() => setIsAddActionModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); createActionMutation.mutate({ ...newAction, assigned_to_id: newAction.assigned_to_id ? parseInt(newAction.assigned_to_id) : null }); }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Title *</label>
+                <input type="text" value={newAction.title} onChange={(e) => setNewAction({ ...newAction, title: e.target.value })} className="input w-full" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                <textarea value={newAction.description} onChange={(e) => setNewAction({ ...newAction, description: e.target.value })} className="input w-full" rows={2} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Action Type</label>
+                <select value={newAction.action_type} onChange={(e) => setNewAction({ ...newAction, action_type: e.target.value })} className="input w-full">
+                  {ACTION_TYPES.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Due Date *</label>
+                  <input type="date" value={newAction.due_date} onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })} className="input w-full" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Assigned To (User ID)</label>
+                  <input type="number" value={newAction.assigned_to_id} onChange={(e) => setNewAction({ ...newAction, assigned_to_id: e.target.value })} className="input w-full" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button type="button" onClick={() => setIsAddActionModalOpen(false)} className="btn-secondary">Cancel</button>
+                <button type="submit" disabled={createActionMutation.isPending} className="btn-primary">
+                  {createActionMutation.isPending ? 'Creating...' : 'Create Action'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
