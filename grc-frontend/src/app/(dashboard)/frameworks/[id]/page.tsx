@@ -223,7 +223,7 @@ export default function CertificationJourneyPage() {
 
   const assessEvidenceMutation = useMutation({
     mutationFn: async (evidenceId: number) => {
-      return apiClient.post(`/evidence/${evidenceId}/ai/assess`);
+      return apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
