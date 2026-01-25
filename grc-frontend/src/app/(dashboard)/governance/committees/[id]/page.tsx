@@ -162,7 +162,8 @@ export default function CommitteeDetailPage() {
     queryKey: ['committee-meetings', committeeId],
     queryFn: async () => {
       const response = await committeeApi.getMeetings(committeeId);
-      return response.data as Meeting[];
+      const data = response.data as { items: Meeting[]; total: number };
+      return data.items || [];
     },
     enabled: !!committee,
   });
@@ -171,7 +172,8 @@ export default function CommitteeDetailPage() {
     queryKey: ['committee-actions', committeeId],
     queryFn: async () => {
       const response = await committeeApi.getActions({ committee_id: committeeId });
-      return response.data as Action[];
+      const data = response.data as { items: Action[]; total: number };
+      return data.items || [];
     },
     enabled: !!committee,
   });
