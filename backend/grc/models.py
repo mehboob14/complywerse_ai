@@ -4313,6 +4313,9 @@ def init_grc_db():
     
     from .seed_rcsa_templates import seed_rcsa_templates
     seed_rcsa_templates()
+    
+    from .seed_committees import seed_committees
+    seed_committees()
 
 
 def get_db():
