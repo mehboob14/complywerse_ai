@@ -2746,12 +2746,14 @@ class RCSAAssessmentResponse(BaseModel):
     id: int
     tenant_id: int
     campaign_id: int
+    campaign_name: Optional[str] = None
     business_unit_id: int
     business_unit_name: Optional[str] = None
     status: str
     current_approval_tier: int
     assessor_id: Optional[int]
     assessor_name: Optional[str] = None
+    due_date: Optional[datetime] = None
     assigned_at: Optional[datetime]
     started_at: Optional[datetime]
     submitted_at: Optional[datetime]
@@ -2785,6 +2787,16 @@ class RCSAQuestionWithResponse(BaseModel):
     control_objective: Optional[str] = None
 
 
+class RCSAEvidenceFile(BaseModel):
+    id: int
+    filename: str
+    file_size: int = 0
+    uploaded_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class RCSAResponseDetail(BaseModel):
     question_id: int
     likelihood: Optional[int] = None
@@ -2792,6 +2804,7 @@ class RCSAResponseDetail(BaseModel):
     effectiveness: Optional[str] = None
     yes_no_value: Optional[bool] = None
     text_value: Optional[str] = None
+    evidence: List[RCSAEvidenceFile] = []
 
 
 class RCSAAssessmentDetailResponse(BaseModel):

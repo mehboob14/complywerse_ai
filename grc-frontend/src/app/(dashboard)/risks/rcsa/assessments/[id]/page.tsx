@@ -11,6 +11,7 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
+  XCircle,
   Sparkles,
   HelpCircle,
   Building2,
@@ -48,6 +49,7 @@ interface Response {
   yes_no_value?: boolean;
   text_value?: string;
   evidence_files?: EvidenceFile[];
+  evidence?: EvidenceFile[];
 }
 
 interface EvidenceFile {
@@ -123,6 +125,8 @@ export default function AssessmentDetailPage() {
   const [viewMode, setViewMode] = useState<'list' | 'step'>('list');
   const [uploadingQuestion, setUploadingQuestion] = useState<number | null>(null);
   const [evidenceFiles, setEvidenceFiles] = useState<Record<number, EvidenceFile[]>>({});
+  const [reviewComments, setReviewComments] = useState('');
+  const [showRejectModal, setShowRejectModal] = useState(false);
 
   const { data: assessment, isLoading, error } = useQuery({
     queryKey: ['rcsa-assessment', assessmentId],
@@ -178,10 +182,15 @@ export default function AssessmentDetailPage() {
   useEffect(() => {
     if (assessment?.responses) {
       const responseMap: Record<number, Response> = {};
+      const evidenceMap: Record<number, EvidenceFile[]> = {};
       assessment.responses.forEach(r => {
         responseMap[r.question_id] = r;
+        if (r.evidence && r.evidence.length > 0) {
+          evidenceMap[r.question_id] = r.evidence;
+        }
       });
       setResponses(responseMap);
+      setEvidenceFiles(evidenceMap);
     }
     if (assessment?.questions) {
       const sections = new Set(assessment.questions.map(q => q.section));
@@ -202,6 +211,26 @@ export default function AssessmentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
       queryClient.invalidateQueries({ queryKey: ['rcsa-assessments'] });
       router.push('/risks/rcsa/assessments');
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (comments: string) => rcsaApi.approveAssessment(assessmentId, { comments }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
+      queryClient.invalidateQueries({ queryKey: ['rcsa-assessments'] });
+      queryClient.invalidateQueries({ queryKey: ['rcsa-pending-reviews'] });
+      router.push('/risks/rcsa');
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (comments: string) => rcsaApi.rejectAssessment(assessmentId, { comments, reason: comments }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
+      queryClient.invalidateQueries({ queryKey: ['rcsa-assessments'] });
+      queryClient.invalidateQueries({ queryKey: ['rcsa-pending-reviews'] });
+      router.push('/risks/rcsa');
     },
   });
 
@@ -371,6 +400,7 @@ export default function AssessmentDetailPage() {
   };
 
   const isEditable = assessment?.status === 'in_progress' || assessment?.status === 'rejected';
+  const isReviewMode = assessment?.status === 'submitted' || assessment?.status === 'under_review';
   const statusStyle = STATUS_STYLES[assessment?.status || 'not_started'];
 
   if (isLoading) {
@@ -435,7 +465,63 @@ export default function AssessmentDetailPage() {
             </button>
           </div>
         )}
+        {isReviewMode && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => approveMutation.mutate(reviewComments || 'Approved')}
+              disabled={approveMutation.isPending}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
+            >
+              {approveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              Approve
+            </button>
+            <button
+              onClick={() => setShowRejectModal(true)}
+              disabled={rejectMutation.isPending}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors"
+            >
+              {rejectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+              Reject
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md mx-4 border border-slate-700">
+            <h3 className="text-lg font-medium text-white mb-4">Reject Assessment</h3>
+            <p className="text-slate-400 text-sm mb-4">Please provide a reason for rejecting this assessment. This will be shared with the assessor.</p>
+            <textarea
+              value={reviewComments}
+              onChange={(e) => setReviewComments(e.target.value)}
+              placeholder="Enter rejection reason..."
+              className="w-full h-32 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+            />
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => setShowRejectModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (reviewComments.trim()) {
+                    rejectMutation.mutate(reviewComments);
+                    setShowRejectModal(false);
+                  }
+                }}
+                disabled={!reviewComments.trim() || rejectMutation.isPending}
+                className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {rejectMutation.isPending ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card p-4">
         <div className="flex items-center justify-between">

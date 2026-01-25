@@ -18,6 +18,10 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
+  PlayCircle,
+  Edit3,
+  CheckSquare,
+  XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -25,6 +29,12 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   draft: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
   active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
   closed: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  not_started: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
+  in_progress: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  submitted: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  under_review: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  rejected: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -64,6 +74,16 @@ interface BUProgress {
 interface FindingsBySeverity {
   severity: string;
   count: number;
+}
+
+interface Assessment {
+  id: number;
+  campaign_id: number;
+  campaign_name: string;
+  business_unit_name: string;
+  status: string;
+  due_date: string;
+  progress: number;
 }
 
 function DonutChart({ data, total }: { data: { label: string; value: number; color: string }[]; total: number }) {
@@ -209,7 +229,31 @@ export default function RCSADashboardPage() {
     },
   });
 
-  const isLoading = summaryLoading || campaignsLoading || buLoading || findingsLoading;
+  const { data: myAssessments, isLoading: assessmentsLoading } = useQuery({
+    queryKey: ['rcsa-my-assessments'],
+    queryFn: async () => {
+      try {
+        const response = await rcsaApi.getAssessments();
+        return response.data as Assessment[];
+      } catch {
+        return [] as Assessment[];
+      }
+    },
+  });
+
+  const { data: pendingReviews, isLoading: pendingReviewsLoading } = useQuery({
+    queryKey: ['rcsa-pending-reviews'],
+    queryFn: async () => {
+      try {
+        const response = await rcsaApi.getAssessments({ status: 'submitted' });
+        return response.data as Assessment[];
+      } catch {
+        return [] as Assessment[];
+      }
+    },
+  });
+
+  const isLoading = summaryLoading || campaignsLoading || buLoading || findingsLoading || assessmentsLoading || pendingReviewsLoading;
 
   if (isLoading) {
     return (
@@ -414,6 +458,130 @@ export default function RCSADashboardPage() {
           </table>
         </div>
       </div>
+
+      {/* My Assessments Section */}
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-medium text-white flex items-center gap-2">
+            <Edit3 className="h-5 w-5 text-primary-400" />
+            My Assessments
+          </h3>
+          <span className="text-slate-400 text-sm">Assessments assigned to you</span>
+        </div>
+        {myAssessments && myAssessments.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-700">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Assessment</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Business Unit</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Due Date</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Status</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myAssessments.map((assessment) => (
+                  <tr key={assessment.id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                    <td className="py-3 px-4">
+                      <p className="text-white font-medium">{assessment.campaign_name}</p>
+                    </td>
+                    <td className="py-3 px-4 text-slate-300">{assessment.business_unit_name}</td>
+                    <td className="py-3 px-4 text-slate-300">
+                      {assessment.due_date ? new Date(assessment.due_date).toLocaleDateString() : 'No due date'}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[assessment.status]?.bg || 'bg-slate-500/20'} ${STATUS_COLORS[assessment.status]?.text || 'text-slate-400'}`}>
+                        {assessment.status?.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <Link 
+                        href={`/risks/rcsa/assessments/${assessment.id}`}
+                        className={`inline-flex items-center gap-1 text-sm ${
+                          assessment.status === 'in_progress' || assessment.status === 'not_started'
+                            ? 'text-primary-400 hover:text-primary-300'
+                            : 'text-slate-400 hover:text-slate-300'
+                        }`}
+                      >
+                        {assessment.status === 'in_progress' || assessment.status === 'not_started' ? (
+                          <>
+                            <PlayCircle className="h-4 w-4" />
+                            Continue
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="h-4 w-4" />
+                            View
+                          </>
+                        )}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <ClipboardList className="h-12 w-12 text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-400">No assessments assigned to you yet</p>
+            <p className="text-slate-500 text-sm mt-1">Assessments will appear here when a campaign assigns your business unit</p>
+          </div>
+        )}
+      </div>
+
+      {/* Pending Reviews Section - for reviewers/approvers */}
+      {pendingReviews && pendingReviews.length > 0 && (
+        <div className="card p-6 border-amber-500/30">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-medium text-white flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-400" />
+              Pending Reviews
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-sm">
+                {pendingReviews.length}
+              </span>
+            </h3>
+            <span className="text-slate-400 text-sm">Assessments awaiting your review</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-700">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Assessment</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Business Unit</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Submitted</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingReviews.map((assessment) => (
+                  <tr key={assessment.id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                    <td className="py-3 px-4">
+                      <p className="text-white font-medium">{assessment.campaign_name}</p>
+                    </td>
+                    <td className="py-3 px-4 text-slate-300">{assessment.business_unit_name}</td>
+                    <td className="py-3 px-4 text-slate-300">
+                      {assessment.due_date ? new Date(assessment.due_date).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <Link 
+                          href={`/risks/rcsa/assessments/${assessment.id}?mode=review`}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary-500/20 text-primary-400 text-sm hover:bg-primary-500/30 transition-colors"
+                        >
+                          <Eye className="h-4 w-4" />
+                          Review
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link href="/risks/rcsa/campaigns?action=new" className="card p-6 hover:border-primary-500/50 transition-all cursor-pointer group">

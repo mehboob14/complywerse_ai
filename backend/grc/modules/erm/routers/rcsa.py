@@ -32,7 +32,7 @@ from ....schemas import (
     RCSATemplateCreate, RCSATemplateUpdate, RCSATemplateResponse, RCSATemplateDetailResponse,
     RCSAQuestionCreate, RCSAQuestionUpdate, RCSAQuestionResponse,
     RCSACampaignCreate, RCSACampaignUpdate, RCSACampaignResponse,
-    RCSAAssessmentResponse, RCSAAssessmentDetailResponse, RCSAQuestionWithResponse, RCSAResponseDetail,
+    RCSAAssessmentResponse, RCSAAssessmentDetailResponse, RCSAQuestionWithResponse, RCSAResponseDetail, RCSAEvidenceFile,
     RCSAResponseCreate, RCSAResponseUpdate, RCSAResponseResponse,
     RCSABulkResponseSave, RCSAFindingCreate, RCSAFindingUpdate, RCSAFindingResponse,
     RCSAApprovalWorkflowCreate, RCSAApprovalWorkflowUpdate, RCSAApprovalWorkflowResponse,
@@ -970,6 +970,7 @@ def list_assessments(
     query = db.query(RCSAAssessment).options(
         joinedload(RCSAAssessment.business_unit),
         joinedload(RCSAAssessment.assessor),
+        joinedload(RCSAAssessment.campaign),
         joinedload(RCSAAssessment.responses),
         joinedload(RCSAAssessment.findings)
     ).filter(RCSAAssessment.tenant_id.in_(user_tenants))
@@ -990,12 +991,14 @@ def list_assessments(
             id=a.id,
             tenant_id=a.tenant_id,
             campaign_id=a.campaign_id,
+            campaign_name=a.campaign.name if a.campaign else None,
             business_unit_id=a.business_unit_id,
             business_unit_name=a.business_unit.name if a.business_unit else None,
             status=a.status,
             current_approval_tier=a.current_approval_tier,
             assessor_id=a.assessor_id,
             assessor_name=a.assessor.display_name if a.assessor else None,
+            due_date=a.campaign.end_date if a.campaign else None,
             assigned_at=a.assigned_at,
             started_at=a.started_at,
             submitted_at=a.submitted_at,
@@ -1076,7 +1079,7 @@ def get_assessment_detail(
     assessment = db.query(RCSAAssessment).options(
         joinedload(RCSAAssessment.business_unit),
         joinedload(RCSAAssessment.assessor),
-        joinedload(RCSAAssessment.responses),
+        joinedload(RCSAAssessment.responses).joinedload(RCSAResponse.evidence_links).joinedload(RCSAResponseEvidence.evidence),
         joinedload(RCSAAssessment.campaign)
     ).filter(
         RCSAAssessment.id == assessment_id,
@@ -1115,13 +1118,24 @@ def get_assessment_detail(
     
     responses = []
     for r in assessment.responses:
+        evidence_files = []
+        if hasattr(r, 'evidence_links') and r.evidence_links:
+            for link in r.evidence_links:
+                if link.evidence:
+                    evidence_files.append(RCSAEvidenceFile(
+                        id=link.evidence.id,
+                        filename=link.evidence.file_name or link.evidence.name,
+                        file_size=0,
+                        uploaded_at=link.evidence.uploaded_at
+                    ))
         responses.append(RCSAResponseDetail(
             question_id=r.question_id,
             likelihood=r.likelihood_rating,
             impact=r.impact_rating,
             effectiveness=r.control_effectiveness,
             yes_no_value=r.response_value == "yes" if r.response_value in ["yes", "no"] else None,
-            text_value=r.response_value if r.response_value not in ["yes", "no"] else None
+            text_value=r.response_value if r.response_value not in ["yes", "no"] else None,
+            evidence=evidence_files
         ))
     
     total_required = len([q for q in questions if q.is_required])
