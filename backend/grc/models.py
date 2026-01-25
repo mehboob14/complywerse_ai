@@ -600,6 +600,7 @@ class Evidence(Base):
     incident_links = relationship("EvidenceIncidentLink", back_populates="evidence", cascade="all, delete-orphan")
     policy_links = relationship("EvidencePolicyLink", back_populates="evidence", cascade="all, delete-orphan")
     audit_package_items = relationship("AuditPackageEvidence", back_populates="evidence", cascade="all, delete-orphan")
+    assessment_evidence_links = relationship("AssessmentEvidence", back_populates="linked_evidence", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_evidence_tenant_status", "tenant_id", "status"),
@@ -2234,6 +2235,9 @@ class AssessmentEvidence(Base):
     id = Column(Integer, primary_key=True, index=True)
     assessment_item_id = Column(Integer, ForeignKey("grc_assessment_items.id"), nullable=False, index=True)
     
+    # Link to main Evidence table for unified evidence management
+    linked_evidence_id = Column(Integer, ForeignKey("grc_evidence.id", ondelete="CASCADE"), nullable=True, index=True)
+    
     evidence_type = Column(String(50), nullable=False)  # policy, procedure, configuration, log, report, contract
     file_name = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
@@ -2243,7 +2247,7 @@ class AssessmentEvidence(Base):
     description = Column(Text, nullable=True)
     collection_date = Column(DateTime, nullable=True)
     
-    review_status = Column(String(50), default="pending")  # pending, accepted, rejected
+    review_status = Column(String(50), default="pending")  # pending, accepted, rejected, ai_assessed
     reviewed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     review_notes = Column(Text, nullable=True)
@@ -2254,9 +2258,11 @@ class AssessmentEvidence(Base):
     assessment_item = relationship("AssessmentItem", back_populates="evidence_uploads")
     uploader = relationship("GRCUser", foreign_keys=[uploaded_by])
     reviewer = relationship("GRCUser", foreign_keys=[reviewed_by])
+    linked_evidence = relationship("Evidence", back_populates="assessment_evidence_links")
     
     __table_args__ = (
         Index("ix_assessment_evidence_item", "assessment_item_id"),
+        Index("ix_assessment_evidence_linked", "linked_evidence_id"),
     )
 
 
