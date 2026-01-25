@@ -79,38 +79,8 @@ export default function CampaignDetailPage() {
   const { data: campaign, isLoading, error } = useQuery({
     queryKey: ['attestation-campaign', campaignId],
     queryFn: async () => {
-      try {
-        const response = await attestationApi.getCampaign(campaignId);
-        return response.data as Campaign;
-      } catch {
-        return {
-          id: campaignId,
-          name: 'Q4 2025 Policy Attestation',
-          description: 'Quarterly policy acknowledgment for all employees',
-          status: 'active' as const,
-          attestation_type: 'policy_acknowledgment',
-          attestation_text: 'I have read and understand the Information Security Policy and agree to abide by its requirements.',
-          start_date: '2025-01-01',
-          end_date: '2025-01-31',
-          total_requests: 150,
-          completed_requests: 108,
-          overdue_requests: 12,
-          progress: 72,
-          requires_evidence: false,
-          requests: [
-            { id: 1, user_id: 1, user_name: 'John Smith', user_email: 'john.smith@company.com', department: 'IT Operations', status: 'completed', completed_at: '2025-01-15', has_evidence: false },
-            { id: 2, user_id: 2, user_name: 'Jane Doe', user_email: 'jane.doe@company.com', department: 'Finance', status: 'completed', completed_at: '2025-01-16', has_evidence: false },
-            { id: 3, user_id: 3, user_name: 'Mike Johnson', user_email: 'mike.johnson@company.com', department: 'Retail Banking', status: 'pending', has_evidence: false },
-            { id: 4, user_id: 4, user_name: 'Sarah Wilson', user_email: 'sarah.wilson@company.com', department: 'Corporate Banking', status: 'overdue', has_evidence: false },
-            { id: 5, user_id: 5, user_name: 'David Brown', user_email: 'david.brown@company.com', department: 'Treasury', status: 'pending', has_evidence: false },
-            { id: 6, user_id: 6, user_name: 'Lisa Chen', user_email: 'lisa.chen@company.com', department: 'Risk Management', status: 'completed', completed_at: '2025-01-14', has_evidence: false },
-            { id: 7, user_id: 7, user_name: 'Tom Harris', user_email: 'tom.harris@company.com', department: 'Compliance', status: 'escalated', has_evidence: false },
-            { id: 8, user_id: 8, user_name: 'Emily Davis', user_email: 'emily.davis@company.com', department: 'Internal Audit', status: 'pending', has_evidence: false },
-          ],
-          created_at: '2024-12-15',
-          updated_at: '2025-01-20',
-        } as Campaign;
-      }
+      const response = await attestationApi.getCampaign(campaignId);
+      return response.data as Campaign;
     },
   });
 
@@ -185,13 +155,20 @@ export default function CampaignDetailPage() {
 
   if (error || !campaign) {
     return (
-      <div className="card p-8 text-center">
-        <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-white mb-2">Campaign Not Found</h3>
-        <p className="text-slate-400 mb-4">The requested campaign could not be loaded.</p>
-        <Link href="/governance/attestations/campaigns" className="btn-primary">
+      <div className="space-y-8">
+        <Link href="/governance/attestations/campaigns" className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="h-4 w-4" />
           Back to Campaigns
         </Link>
+        <div className="card p-12 text-center">
+          <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-white mb-2">Campaign Not Found</h2>
+          <p className="text-slate-400 mb-6">The campaign you're looking for doesn't exist or you don't have access to it.</p>
+          <Link href="/governance/attestations/campaigns" className="btn-primary inline-flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Go Back
+          </Link>
+        </div>
       </div>
     );
   }

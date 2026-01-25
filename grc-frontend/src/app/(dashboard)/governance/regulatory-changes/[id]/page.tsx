@@ -192,41 +192,29 @@ export default function RegulatoryChangeDetailPage() {
     },
   });
 
-  const { data: assessments, isLoading: assessmentsLoading } = useQuery({
+  const { data: assessments, isLoading: assessmentsLoading, error: assessmentsError } = useQuery({
     queryKey: ['regulatory-assessments', changeId],
     queryFn: async () => {
-      try {
-        const response = await regulatoryApi.getAssessments(changeId);
-        return response.data as Assessment[];
-      } catch {
-        return [];
-      }
+      const response = await regulatoryApi.getAssessments(changeId);
+      return response.data as Assessment[];
     },
     enabled: activeTab === 'assessments' || activeTab === 'overview',
   });
 
-  const { data: tasks, isLoading: tasksLoading } = useQuery({
+  const { data: tasks, isLoading: tasksLoading, error: tasksError } = useQuery({
     queryKey: ['regulatory-tasks', changeId],
     queryFn: async () => {
-      try {
-        const response = await regulatoryApi.getTasks(changeId);
-        return response.data as Task[];
-      } catch {
-        return [];
-      }
+      const response = await regulatoryApi.getTasks(changeId);
+      return response.data as Task[];
     },
     enabled: activeTab === 'tasks' || activeTab === 'overview',
   });
 
-  const { data: gaps, isLoading: gapsLoading, refetch: refetchGaps } = useQuery({
+  const { data: gaps, isLoading: gapsLoading, error: gapsError, refetch: refetchGaps } = useQuery({
     queryKey: ['regulatory-gaps', changeId],
     queryFn: async () => {
-      try {
-        const response = await regulatoryApi.getGapAnalysis(changeId);
-        return response.data as GapAnalysis[];
-      } catch {
-        return [];
-      }
+      const response = await regulatoryApi.getGapAnalysis(changeId);
+      return response.data as GapAnalysis[];
     },
     enabled: activeTab === 'gaps',
   });
@@ -394,6 +382,8 @@ export default function RegulatoryChangeDetailPage() {
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
                 </div>
+              ) : assessmentsError ? (
+                <p className="text-rose-400 text-center py-8">Failed to load assessments</p>
               ) : (!assessments || assessments.length === 0) ? (
                 <p className="text-slate-400 text-center py-8">No assessments yet</p>
               ) : (
@@ -510,6 +500,12 @@ export default function RegulatoryChangeDetailPage() {
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
               </div>
+            ) : assessmentsError ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <AlertCircle className="h-12 w-12 mb-4 text-rose-400" />
+                <p className="text-lg font-medium text-white mb-2">Failed to load assessments</p>
+                <p className="text-sm text-slate-400">There was an error loading the impact assessments</p>
+              </div>
             ) : (!assessments || assessments.length === 0) ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                 <Target className="h-12 w-12 mb-4" />
@@ -572,6 +568,12 @@ export default function RegulatoryChangeDetailPage() {
             {tasksLoading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+              </div>
+            ) : tasksError ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <AlertCircle className="h-12 w-12 mb-4 text-rose-400" />
+                <p className="text-lg font-medium text-white mb-2">Failed to load tasks</p>
+                <p className="text-sm text-slate-400">There was an error loading the implementation tasks</p>
               </div>
             ) : (!tasks || tasks.length === 0) ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400">
@@ -665,6 +667,12 @@ export default function RegulatoryChangeDetailPage() {
             {gapsLoading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+              </div>
+            ) : gapsError ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <AlertCircle className="h-12 w-12 mb-4 text-rose-400" />
+                <p className="text-lg font-medium text-white mb-2">Failed to load gap analysis</p>
+                <p className="text-sm text-slate-400">There was an error loading the gap analysis data</p>
               </div>
             ) : (!gaps || gaps.length === 0) ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400">

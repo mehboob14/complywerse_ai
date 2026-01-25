@@ -132,92 +132,48 @@ export default function CommitteeDetailPage() {
   });
   const queryClient = useQueryClient();
 
-  const { data: committee, isLoading: committeeLoading } = useQuery({
+  const { data: committee, isLoading: committeeLoading, error: committeeError } = useQuery({
     queryKey: ['committee', committeeId],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getCommittee(committeeId);
-        return response.data as Committee;
-      } catch {
-        return {
-          id: committeeId,
-          name: 'Risk Management Committee',
-          description: 'Oversees enterprise risk management and ensures appropriate risk governance',
-          committee_type: 'risk_committee',
-          chair_name: 'Michael Chen',
-          secretary_name: 'Sarah Wilson',
-          meeting_frequency: 'monthly',
-          member_count: 7,
-          created_at: '2024-01-15',
-          updated_at: '2025-01-18',
-        } as Committee;
-      }
+      const response = await committeeApi.getCommittee(committeeId);
+      return response.data as Committee;
     },
   });
 
   const { data: members } = useQuery({
     queryKey: ['committee-members', committeeId],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getMembers(committeeId);
-        return response.data as Member[];
-      } catch {
-        return [
-          { id: 1, user_id: 1, user_name: 'Michael Chen', user_email: 'michael.chen@company.com', role: 'chair', joined_at: '2024-01-15' },
-          { id: 2, user_id: 2, user_name: 'Sarah Wilson', user_email: 'sarah.wilson@company.com', role: 'secretary', joined_at: '2024-01-15' },
-          { id: 3, user_id: 3, user_name: 'David Lee', user_email: 'david.lee@company.com', role: 'member', joined_at: '2024-02-01' },
-          { id: 4, user_id: 4, user_name: 'Emily Brown', user_email: 'emily.brown@company.com', role: 'member', joined_at: '2024-02-15' },
-          { id: 5, user_id: 5, user_name: 'Robert Johnson', user_email: 'robert.johnson@company.com', role: 'member', joined_at: '2024-03-01' },
-        ] as Member[];
-      }
+      const response = await committeeApi.getMembers(committeeId);
+      return response.data as Member[];
     },
+    enabled: !!committee,
   });
 
   const { data: charters } = useQuery({
     queryKey: ['committee-charters', committeeId],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getCharters(committeeId);
-        return response.data as Charter[];
-      } catch {
-        return [
-          { id: 1, title: 'Risk Management Committee Charter', content: 'This charter defines the purpose, authority, and responsibilities of the Risk Management Committee...', version: '2.0', status: 'active', effective_date: '2024-06-01', approved_by: 'Board of Directors', approved_at: '2024-05-28' },
-          { id: 2, title: 'Risk Management Committee Charter', content: 'Previous version of the charter...', version: '1.0', status: 'superseded', effective_date: '2023-01-01', approved_by: 'Board of Directors', approved_at: '2022-12-15' },
-        ] as Charter[];
-      }
+      const response = await committeeApi.getCharters(committeeId);
+      return response.data as Charter[];
     },
+    enabled: !!committee,
   });
 
   const { data: meetings } = useQuery({
     queryKey: ['committee-meetings', committeeId],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getMeetings(committeeId);
-        return response.data as Meeting[];
-      } catch {
-        return [
-          { id: 1, title: 'Q1 2025 Risk Review', meeting_type: 'regular', scheduled_date: '2025-02-15', start_time: '10:00', end_time: '12:00', location: 'Boardroom A', status: 'scheduled', attendee_count: 7 },
-          { id: 2, title: 'January Risk Update', meeting_type: 'regular', scheduled_date: '2025-01-20', start_time: '14:00', end_time: '15:30', location: 'Virtual', status: 'completed', attendee_count: 6 },
-          { id: 3, title: 'Emergency Cyber Incident Review', meeting_type: 'emergency', scheduled_date: '2025-01-10', start_time: '09:00', end_time: '10:00', location: 'Virtual', status: 'completed', attendee_count: 5 },
-        ] as Meeting[];
-      }
+      const response = await committeeApi.getMeetings(committeeId);
+      return response.data as Meeting[];
     },
+    enabled: !!committee,
   });
 
   const { data: actions } = useQuery({
     queryKey: ['committee-actions', committeeId],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getActions({ committee_id: committeeId });
-        return response.data as Action[];
-      } catch {
-        return [
-          { id: 1, title: 'Update Risk Register for Q1', description: 'Review and update the enterprise risk register', action_type: 'risk_review', status: 'in_progress', due_date: '2025-02-01', assigned_to_name: 'David Lee', meeting_id: 2 },
-          { id: 2, title: 'Review Cyber Insurance Policy', description: 'Evaluate current cyber insurance coverage', action_type: 'policy_approval', status: 'open', due_date: '2025-02-15', assigned_to_name: 'Emily Brown', meeting_id: 2 },
-          { id: 3, title: 'Incident Response Improvement Plan', description: 'Develop improvement plan based on incident review', action_type: 'follow_up', status: 'overdue', due_date: '2025-01-25', assigned_to_name: 'Robert Johnson', meeting_id: 3 },
-        ] as Action[];
-      }
+      const response = await committeeApi.getActions({ committee_id: committeeId });
+      return response.data as Action[];
     },
+    enabled: !!committee,
   });
 
   const addMemberMutation = useMutation({
@@ -254,7 +210,27 @@ export default function CommitteeDetailPage() {
     );
   }
 
-  const typeStyle = COMMITTEE_TYPE_LABELS[committee?.committee_type || 'custom'] || COMMITTEE_TYPE_LABELS.custom;
+  if (committeeError || !committee) {
+    return (
+      <div className="space-y-8">
+        <Link href="/governance/committees" className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Committees
+        </Link>
+        <div className="card p-12 text-center">
+          <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-white mb-2">Committee Not Found</h2>
+          <p className="text-slate-400 mb-6">The committee you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.</p>
+          <Link href="/governance/committees" className="btn-primary inline-flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Go Back
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const typeStyle = COMMITTEE_TYPE_LABELS[committee.committee_type] || COMMITTEE_TYPE_LABELS.custom;
   const activeCharter = charters?.find(c => c.status === 'active');
 
   return (
