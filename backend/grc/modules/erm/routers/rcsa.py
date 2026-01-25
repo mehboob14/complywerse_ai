@@ -998,7 +998,7 @@ def list_assessments(
             current_approval_tier=a.current_approval_tier,
             assessor_id=a.assessor_id,
             assessor_name=a.assessor.display_name if a.assessor else None,
-            due_date=a.campaign.end_date if a.campaign else None,
+            due_date=a.campaign.due_date if a.campaign else None,
             assigned_at=a.assigned_at,
             started_at=a.started_at,
             submitted_at=a.submitted_at,

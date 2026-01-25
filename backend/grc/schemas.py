@@ -2723,18 +2723,18 @@ class RCSACampaignResponse(BaseModel):
     template_id: int
     template_name: Optional[str] = None
     name: str
-    description: Optional[str]
-    period_type: str
-    period_label: Optional[str]
+    description: Optional[str] = None
+    period_type: str = "quarterly"
+    period_label: Optional[str] = None
     start_date: datetime
     due_date: datetime
-    status: str
-    approval_workflow_id: Optional[int]
-    reminder_days_before: int
-    escalation_days_after: int
-    created_by: Optional[int]
-    created_at: datetime
-    updated_at: datetime
+    status: str = "draft"
+    approval_workflow_id: Optional[int] = None
+    reminder_days_before: int = 7
+    escalation_days_after: int = 3
+    created_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     assessment_count: int = 0
     completed_count: int = 0
 

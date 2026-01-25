@@ -363,13 +363,17 @@ export default function RCSACampaignsPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
+                const periodValue = formData.get('period') as string;
+                const periodType = periodValue.startsWith('Q') ? 'quarterly' : 'annual';
                 createMutation.mutate({
                   name: formData.get('name') as string,
                   description: formData.get('description') as string,
                   template_id: Number(formData.get('template_id')),
-                  period: formData.get('period') as string,
-                  start_date: formData.get('start_date') as string,
-                  end_date: formData.get('end_date') as string,
+                  period_type: periodType,
+                  period_label: periodValue,
+                  start_date: new Date(formData.get('start_date') as string).toISOString(),
+                  due_date: new Date(formData.get('end_date') as string).toISOString(),
+                  business_unit_ids: [],
                 });
               }}
             >
