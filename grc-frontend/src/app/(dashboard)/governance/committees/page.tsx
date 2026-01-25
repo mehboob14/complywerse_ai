@@ -76,35 +76,17 @@ export default function CommitteesPage() {
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
     queryKey: ['committee-dashboard'],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getDashboard();
-        return response.data as DashboardData;
-      } catch {
-        return {
-          total_committees: 6,
-          upcoming_meetings: 4,
-          open_actions: 12,
-          overdue_actions: 2,
-        } as DashboardData;
-      }
+      const response = await committeeApi.getDashboard();
+      return response.data as DashboardData;
     },
   });
 
-  const { data: committees, isLoading: committeesLoading } = useQuery({
+  const { data: committees, isLoading: committeesLoading, error: committeesError } = useQuery({
     queryKey: ['committees', typeFilter],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getCommittees();
-        return response.data as Committee[];
-      } catch {
-        return [
-          { id: 1, name: 'Board of Directors', description: 'Main governing body', committee_type: 'board', chair_name: 'John Smith', secretary_name: 'Jane Doe', meeting_frequency: 'quarterly', member_count: 9, created_at: '2024-01-01', updated_at: '2025-01-15' },
-          { id: 2, name: 'Risk Management Committee', description: 'Oversees enterprise risk management', committee_type: 'risk_committee', chair_name: 'Michael Chen', secretary_name: 'Sarah Wilson', meeting_frequency: 'monthly', member_count: 7, created_at: '2024-01-15', updated_at: '2025-01-18' },
-          { id: 3, name: 'Audit Committee', description: 'Reviews financial statements and internal controls', committee_type: 'audit_committee', chair_name: 'Emily Brown', secretary_name: 'David Lee', meeting_frequency: 'quarterly', member_count: 5, created_at: '2024-02-01', updated_at: '2025-01-10' },
-          { id: 4, name: 'Compliance Committee', description: 'Ensures regulatory compliance', committee_type: 'compliance_committee', chair_name: 'Robert Johnson', meeting_frequency: 'monthly', member_count: 6, created_at: '2024-03-01', updated_at: '2025-01-20' },
-          { id: 5, name: 'IT Steering Committee', description: 'Oversees technology initiatives', committee_type: 'it_steering', chair_name: 'Lisa Wang', meeting_frequency: 'bi-weekly', member_count: 8, created_at: '2024-04-01', updated_at: '2025-01-22' },
-        ] as Committee[];
-      }
+      const response = await committeeApi.getCommittees();
+      const data = response.data as { items: Committee[]; total: number };
+      return data.items || [];
     },
   });
 
