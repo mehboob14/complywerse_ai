@@ -1087,11 +1087,11 @@ export default function CertificationJourneyPage() {
                               }`}>
                                 {ev.review_status}
                               </span>
-                              {canAssess && (
+                              {canAssess && ev.linked_evidence_id && (
                                 <button
                                   onClick={() => {
                                     setAssessingEvidenceId(ev.id);
-                                    assessEvidenceMutation.mutate(ev.id);
+                                    assessEvidenceMutation.mutate(ev.linked_evidence_id);
                                   }}
                                   disabled={isAssessing}
                                   className="flex items-center gap-1 rounded bg-primary-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
