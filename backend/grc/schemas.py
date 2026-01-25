@@ -2730,8 +2730,8 @@ class RCSACampaignResponse(BaseModel):
     due_date: datetime
     status: str = "draft"
     approval_workflow_id: Optional[int] = None
-    reminder_days_before: int = 7
-    escalation_days_after: int = 3
+    reminder_days_before: Optional[int] = 7
+    escalation_days_after: Optional[int] = 3
     created_by: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -2764,8 +2764,8 @@ class RCSAAssessmentResponse(BaseModel):
     ai_suggestions_used: int
     ai_gaps_identified: int
     notes: Optional[str]
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     response_count: int = 0
     finding_count: int = 0
 
