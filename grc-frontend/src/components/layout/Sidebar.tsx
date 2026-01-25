@@ -80,6 +80,7 @@ const navigation: NavEntry[] = [
     items: [
       { name: 'Frameworks', href: '/frameworks', icon: Layers },
       { name: 'Controls', href: '/controls', icon: Shield },
+      { name: 'Statements', href: '/compliance/statements', icon: FileText },
       { name: 'Evidence', href: '/evidence', icon: FileCheck },
       { name: 'Control Library', href: '/control-library', icon: Library },
     ],
