@@ -8,6 +8,9 @@ from .dashboard import router as dashboard_router
 from .policy_parser import router as policy_parser_router
 from .document_workflow import router as document_workflow_router
 from .attestations import router as attestations_router
+from .attestation_campaigns import router as attestation_campaigns_router
+from .regulatory_changes import router as regulatory_changes_router
+from .committees import router as committees_router
 
 __all__ = [
     "documents_router",
@@ -20,4 +23,7 @@ __all__ = [
     "policy_parser_router",
     "document_workflow_router",
     "attestations_router",
+    "attestation_campaigns_router",
+    "regulatory_changes_router",
+    "committees_router",
 ]

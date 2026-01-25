@@ -3046,3 +3046,658 @@ class RCSAAISuggestionResponse(BaseModel):
     confidence: float
     reasoning: Optional[str] = None
     gaps_detected: List[str] = []
+
+
+# =============================================================================
+# Attestation & Certification Management Schemas
+# =============================================================================
+
+class EscalationChainCreate(BaseModel):
+    tier: int
+    tier_name: Optional[str] = None
+    approver_id: Optional[int] = None
+    business_unit_id: Optional[int] = None
+    role_id: Optional[int] = None
+    escalation_delay_days: int = 3
+    notify_on_escalation: bool = True
+
+
+class EscalationChainResponse(BaseModel):
+    id: int
+    tenant_id: int
+    campaign_id: int
+    tier: int
+    tier_name: Optional[str]
+    approver_id: Optional[int]
+    approver_name: Optional[str] = None
+    business_unit_id: Optional[int]
+    business_unit_name: Optional[str] = None
+    role_id: Optional[int]
+    role_name: Optional[str] = None
+    escalation_delay_days: int
+    notify_on_escalation: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AttestationCampaignCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    campaign_type: str  # sox_302, sox_404, policy_signoff, bcp_awareness, training_acknowledgment, annual_certification
+    start_date: Optional[datetime] = None
+    due_date: datetime
+    target_type: str = "all_users"  # all_users, by_department, by_role, custom
+    target_department_ids: List[int] = []
+    target_role_ids: List[int] = []
+    target_user_ids: List[int] = []
+    escalation_enabled: bool = True
+    reminder_days_before: int = 7
+    escalation_days_after: int = 3
+    attestation_text: Optional[str] = None
+    requires_evidence: bool = False
+    linked_document_id: Optional[int] = None
+    escalation_chains: List[EscalationChainCreate] = []
+
+
+class AttestationCampaignUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    due_date: Optional[datetime] = None
+    status: Optional[str] = None
+    target_type: Optional[str] = None
+    target_department_ids: Optional[List[int]] = None
+    target_role_ids: Optional[List[int]] = None
+    target_user_ids: Optional[List[int]] = None
+    escalation_enabled: Optional[bool] = None
+    reminder_days_before: Optional[int] = None
+    escalation_days_after: Optional[int] = None
+    attestation_text: Optional[str] = None
+    requires_evidence: Optional[bool] = None
+    linked_document_id: Optional[int] = None
+
+
+class AttestationCampaignResponse(BaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    description: Optional[str]
+    campaign_type: str
+    start_date: Optional[datetime]
+    due_date: datetime
+    status: str
+    target_type: str
+    target_department_ids: List[int] = []
+    target_role_ids: List[int] = []
+    target_user_ids: List[int] = []
+    escalation_enabled: bool
+    reminder_days_before: int
+    escalation_days_after: int
+    attestation_text: Optional[str]
+    requires_evidence: bool
+    linked_document_id: Optional[int]
+    created_by: Optional[int]
+    created_at: datetime
+    updated_at: datetime
+    total_requests: int = 0
+    completed_requests: int = 0
+    completion_rate: float = 0.0
+
+    class Config:
+        from_attributes = True
+
+
+class AttestationCampaignDetailResponse(AttestationCampaignResponse):
+    escalation_chains: List[EscalationChainResponse] = []
+    creator_name: Optional[str] = None
+    linked_document_title: Optional[str] = None
+
+
+class AttestationRequestCreate(BaseModel):
+    user_id: int
+    attestation_type: Optional[str] = None
+    due_date: Optional[datetime] = None
+    attestation_text: Optional[str] = None
+
+
+class AttestationRequestUpdate(BaseModel):
+    status: Optional[str] = None
+    due_date: Optional[datetime] = None
+    attestation_text: Optional[str] = None
+
+
+class AttestationRequestResponse(BaseModel):
+    id: int
+    tenant_id: int
+    campaign_id: int
+    campaign_name: Optional[str] = None
+    user_id: int
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
+    attestation_type: str
+    status: str
+    assigned_at: datetime
+    due_date: datetime
+    completed_at: Optional[datetime]
+    escalation_tier: int
+    escalated_to_id: Optional[int]
+    escalated_to_name: Optional[str] = None
+    reminder_sent_at: Optional[datetime]
+    reminder_count: int
+    escalation_sent_at: Optional[datetime]
+    user_comments: Optional[str]
+    attestation_text: Optional[str]
+    evidence_id: Optional[int]
+    is_overdue: bool = False
+    days_until_due: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AttestationCompleteRequest(BaseModel):
+    user_comments: Optional[str] = None
+    evidence_id: Optional[int] = None
+
+
+class AttestationDashboardStats(BaseModel):
+    total_campaigns: int
+    active_campaigns: int
+    draft_campaigns: int
+    closed_campaigns: int
+    total_requests: int
+    pending_requests: int
+    completed_requests: int
+    overdue_requests: int
+    escalated_requests: int
+    completion_rate: float
+    by_campaign_type: Dict[str, int] = {}
+    by_status: Dict[str, int] = {}
+    upcoming_deadlines: List[Dict[str, Any]] = []
+
+
+class AttestationReminderResponse(BaseModel):
+    message: str
+    reminder_count: int
+    reminder_sent_at: datetime
+
+
+class AttestationEscalateResponse(BaseModel):
+    message: str
+    new_tier: int
+    escalated_to_id: Optional[int]
+    escalated_to_name: Optional[str]
+
+
+# =============================================================================
+# Regulatory Change Management Schemas
+# =============================================================================
+
+class RegulatoryChangeCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    source: str  # OCC, Fed, EBA, PRA, SEC, FINRA, custom
+    regulation_reference: Optional[str] = None
+    effective_date: Optional[datetime] = None
+    published_date: Optional[datetime] = None
+    status: str = "identified"
+    priority: str = "medium"
+    assigned_to: Optional[int] = None
+
+
+class RegulatoryChangeUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    source: Optional[str] = None
+    regulation_reference: Optional[str] = None
+    effective_date: Optional[datetime] = None
+    published_date: Optional[datetime] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assigned_to: Optional[int] = None
+
+
+class RegulatoryChangeResponse(BaseModel):
+    id: int
+    tenant_id: int
+    title: str
+    description: Optional[str]
+    source: str
+    regulation_reference: Optional[str]
+    effective_date: Optional[datetime]
+    published_date: Optional[datetime]
+    status: str
+    priority: str
+    assigned_to: Optional[int]
+    assignee_name: Optional[str] = None
+    created_by: Optional[int]
+    creator_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    assessment_count: int = 0
+    task_count: int = 0
+    completed_task_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class RegulatoryImpactAssessmentCreate(BaseModel):
+    assessment_type: str  # policy, control, process, technology
+    impacted_item_id: Optional[int] = None
+    impacted_item_type: Optional[str] = None  # policy, control, asset, process
+    impact_level: str = "medium"
+    impact_description: Optional[str] = None
+    gap_identified: bool = False
+    gap_description: Optional[str] = None
+
+
+class RegulatoryImpactAssessmentResponse(BaseModel):
+    id: int
+    tenant_id: int
+    regulatory_change_id: int
+    assessment_type: str
+    impacted_item_id: Optional[int]
+    impacted_item_type: Optional[str]
+    impacted_item_name: Optional[str] = None
+    impact_level: str
+    impact_description: Optional[str]
+    gap_identified: bool
+    gap_description: Optional[str]
+    assessed_by: Optional[int]
+    assessor_name: Optional[str] = None
+    assessed_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RegulatoryImplementationTaskCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    task_type: str  # policy_update, control_update, process_change, training, communication
+    priority: str = "medium"
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
+    linked_policy_id: Optional[int] = None
+    linked_control_id: Optional[int] = None
+    impact_assessment_id: Optional[int] = None
+
+
+class RegulatoryImplementationTaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    task_type: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
+    linked_policy_id: Optional[int] = None
+    linked_control_id: Optional[int] = None
+
+
+class RegulatoryImplementationTaskResponse(BaseModel):
+    id: int
+    tenant_id: int
+    regulatory_change_id: int
+    impact_assessment_id: Optional[int]
+    title: str
+    description: Optional[str]
+    task_type: str
+    status: str
+    priority: str
+    assigned_to: Optional[int]
+    assignee_name: Optional[str] = None
+    due_date: Optional[datetime]
+    completed_at: Optional[datetime]
+    linked_policy_id: Optional[int]
+    linked_policy_title: Optional[str] = None
+    linked_control_id: Optional[int]
+    linked_control_name: Optional[str] = None
+    created_by: Optional[int]
+    creator_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    is_overdue: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class RegulatoryChangeDashboardStats(BaseModel):
+    total_changes: int
+    by_status: Dict[str, int]
+    by_priority: Dict[str, int]
+    by_source: Dict[str, int]
+    total_assessments: int
+    assessments_with_gaps: int
+    total_tasks: int
+    pending_tasks: int
+    in_progress_tasks: int
+    completed_tasks: int
+    blocked_tasks: int
+    overdue_tasks: int
+    upcoming_effective_dates: List[Dict[str, Any]] = []
+    task_completion_rate: float = 0.0
+
+
+class RegulatoryGapAnalysisResponse(BaseModel):
+    regulatory_change_id: int
+    regulatory_change_title: str
+    analysis_summary: str
+    impacted_policies: List[Dict[str, Any]] = []
+    impacted_controls: List[Dict[str, Any]] = []
+    identified_gaps: List[Dict[str, Any]] = []
+    recommended_actions: List[str] = []
+    risk_level: str
+    confidence_score: float
+
+
+# =============================================================================
+# Board & Committee Management Schemas
+# =============================================================================
+
+class GovernanceCommitteeCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    committee_type: str  # board, risk_committee, audit_committee, compliance_committee, it_steering, custom
+    chair_id: Optional[int] = None
+    secretary_id: Optional[int] = None
+    meeting_frequency: str = "quarterly"  # monthly, quarterly, annual, ad_hoc
+
+
+class GovernanceCommitteeUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    committee_type: Optional[str] = None
+    chair_id: Optional[int] = None
+    secretary_id: Optional[int] = None
+    meeting_frequency: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class GovernanceCommitteeResponse(BaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    description: Optional[str]
+    committee_type: str
+    chair_id: Optional[int]
+    chair_name: Optional[str] = None
+    secretary_id: Optional[int]
+    secretary_name: Optional[str] = None
+    meeting_frequency: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    member_count: int = 0
+    meeting_count: int = 0
+    pending_actions_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class CommitteeMemberCreate(BaseModel):
+    user_id: int
+    role: str = "member"  # chair, secretary, member, observer
+
+
+class CommitteeMemberResponse(BaseModel):
+    id: int
+    tenant_id: int
+    committee_id: int
+    user_id: int
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
+    role: str
+    joined_at: datetime
+    left_at: Optional[datetime]
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class CommitteeCharterCreate(BaseModel):
+    version: str = "1.0"
+    title: str
+    content: Optional[str] = None
+    effective_date: Optional[datetime] = None
+    expiry_date: Optional[datetime] = None
+    status: str = "draft"
+
+
+class CommitteeCharterUpdate(BaseModel):
+    version: Optional[str] = None
+    title: Optional[str] = None
+    content: Optional[str] = None
+    effective_date: Optional[datetime] = None
+    expiry_date: Optional[datetime] = None
+    status: Optional[str] = None
+
+
+class CommitteeCharterResponse(BaseModel):
+    id: int
+    tenant_id: int
+    committee_id: int
+    version: str
+    title: str
+    content: Optional[str]
+    effective_date: Optional[datetime]
+    expiry_date: Optional[datetime]
+    status: str
+    approved_by: Optional[int]
+    approver_name: Optional[str] = None
+    approved_at: Optional[datetime]
+    created_by: Optional[int]
+    creator_name: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CommitteeMeetingCreate(BaseModel):
+    meeting_number: Optional[str] = None
+    title: str
+    meeting_type: str = "regular"  # regular, special, emergency
+    scheduled_date: datetime
+    location: Optional[str] = None
+    virtual_link: Optional[str] = None
+    quorum_required: Optional[int] = None
+
+
+class CommitteeMeetingUpdate(BaseModel):
+    meeting_number: Optional[str] = None
+    title: Optional[str] = None
+    meeting_type: Optional[str] = None
+    scheduled_date: Optional[datetime] = None
+    location: Optional[str] = None
+    virtual_link: Optional[str] = None
+    status: Optional[str] = None
+    quorum_required: Optional[int] = None
+    quorum_present: Optional[int] = None
+
+
+class CommitteeMeetingResponse(BaseModel):
+    id: int
+    tenant_id: int
+    committee_id: int
+    committee_name: Optional[str] = None
+    meeting_number: Optional[str]
+    title: str
+    meeting_type: str
+    scheduled_date: datetime
+    location: Optional[str]
+    virtual_link: Optional[str]
+    status: str
+    quorum_required: Optional[int]
+    quorum_present: Optional[int]
+    created_by: Optional[int]
+    creator_name: Optional[str] = None
+    created_at: datetime
+    agenda_item_count: int = 0
+    action_count: int = 0
+    has_minutes: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class MeetingAgendaItemCreate(BaseModel):
+    item_number: int
+    title: str
+    description: Optional[str] = None
+    item_type: str = "discussion"  # approval, discussion, information, action_review
+    presenter_id: Optional[int] = None
+    linked_document_id: Optional[int] = None
+    linked_risk_id: Optional[int] = None
+    linked_regulatory_change_id: Optional[int] = None
+    time_allocated_minutes: Optional[int] = None
+
+
+class MeetingAgendaItemUpdate(BaseModel):
+    item_number: Optional[int] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    item_type: Optional[str] = None
+    presenter_id: Optional[int] = None
+    linked_document_id: Optional[int] = None
+    linked_risk_id: Optional[int] = None
+    linked_regulatory_change_id: Optional[int] = None
+    time_allocated_minutes: Optional[int] = None
+    status: Optional[str] = None
+    outcome: Optional[str] = None
+    decision_made: Optional[str] = None
+
+
+class MeetingAgendaItemResponse(BaseModel):
+    id: int
+    tenant_id: int
+    meeting_id: int
+    item_number: int
+    title: str
+    description: Optional[str]
+    item_type: str
+    presenter_id: Optional[int]
+    presenter_name: Optional[str] = None
+    linked_document_id: Optional[int]
+    linked_document_title: Optional[str] = None
+    linked_risk_id: Optional[int]
+    linked_risk_title: Optional[str] = None
+    linked_regulatory_change_id: Optional[int]
+    linked_regulatory_change_title: Optional[str] = None
+    time_allocated_minutes: Optional[int]
+    status: str
+    outcome: Optional[str]
+    decision_made: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class MeetingMinutesCreate(BaseModel):
+    content: Optional[str] = None
+    attendees: List[Dict[str, Any]] = []
+    status: str = "draft"
+
+
+class MeetingMinutesUpdate(BaseModel):
+    content: Optional[str] = None
+    attendees: Optional[List[Dict[str, Any]]] = None
+    status: Optional[str] = None
+
+
+class MeetingMinutesResponse(BaseModel):
+    id: int
+    tenant_id: int
+    meeting_id: int
+    content: Optional[str]
+    attendees: List[Dict[str, Any]]
+    status: str
+    drafted_by: Optional[int]
+    drafter_name: Optional[str] = None
+    drafted_at: datetime
+    approved_by: Optional[int]
+    approver_name: Optional[str] = None
+    approved_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class OversightActionCreate(BaseModel):
+    action_number: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    action_type: str = "follow_up"  # follow_up, policy_approval, risk_review, audit_response
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
+    linked_policy_id: Optional[int] = None
+    linked_risk_id: Optional[int] = None
+    agenda_item_id: Optional[int] = None
+
+
+class OversightActionUpdate(BaseModel):
+    action_number: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    action_type: Optional[str] = None
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
+    status: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    completion_notes: Optional[str] = None
+    linked_policy_id: Optional[int] = None
+    linked_risk_id: Optional[int] = None
+
+
+class OversightActionResponse(BaseModel):
+    id: int
+    tenant_id: int
+    committee_id: int
+    committee_name: Optional[str] = None
+    meeting_id: Optional[int]
+    meeting_title: Optional[str] = None
+    agenda_item_id: Optional[int]
+    action_number: Optional[str]
+    title: str
+    description: Optional[str]
+    action_type: str
+    assigned_to: Optional[int]
+    assignee_name: Optional[str] = None
+    due_date: Optional[datetime]
+    status: str
+    completed_at: Optional[datetime]
+    completion_notes: Optional[str]
+    linked_policy_id: Optional[int]
+    linked_policy_title: Optional[str] = None
+    linked_risk_id: Optional[int]
+    linked_risk_title: Optional[str] = None
+    created_by: Optional[int]
+    creator_name: Optional[str] = None
+    created_at: datetime
+    is_overdue: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class CommitteeDashboardStats(BaseModel):
+    total_committees: int
+    active_committees: int
+    by_type: Dict[str, int]
+    total_meetings: int
+    upcoming_meetings: int
+    completed_meetings: int
+    total_actions: int
+    open_actions: int
+    overdue_actions: int
+    in_progress_actions: int
+    completed_actions: int
+    action_completion_rate: float = 0.0
+    upcoming_meetings_list: List[Dict[str, Any]] = []
+    overdue_actions_list: List[Dict[str, Any]] = []

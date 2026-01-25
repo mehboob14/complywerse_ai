@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from .routers import documents_router, versions_router, workflows_router, workflow_templates_router, reviews_router, mappings_router, dashboard_router, policy_parser_router, document_workflow_router, attestations_router
+from .routers import documents_router, versions_router, workflows_router, workflow_templates_router, reviews_router, mappings_router, dashboard_router, policy_parser_router, document_workflow_router, attestations_router, attestation_campaigns_router, regulatory_changes_router, committees_router
 
 router = APIRouter(prefix="/governance", tags=["Governance Module"])
 
@@ -13,6 +13,9 @@ router.include_router(dashboard_router, tags=["Governance Dashboard"])
 router.include_router(policy_parser_router, tags=["Governance Policy Parser"])
 router.include_router(document_workflow_router, tags=["Governance Document Workflow"])
 router.include_router(attestations_router, tags=["Policy Attestations"])
+router.include_router(attestation_campaigns_router, tags=["Attestation & Certification Management"])
+router.include_router(regulatory_changes_router, tags=["Regulatory Change Management"])
+router.include_router(committees_router, tags=["Board & Committee Management"])
 
 
 @router.get("")
@@ -39,6 +42,23 @@ def governance_module_info():
             "archived",
             "exception_applied"
         ],
+        "campaign_types": [
+            "sox_302",
+            "sox_404",
+            "policy_signoff",
+            "bcp_awareness",
+            "training_acknowledgment",
+            "annual_certification"
+        ],
+        "regulatory_change_sources": [
+            "OCC",
+            "Fed",
+            "EBA",
+            "PRA",
+            "SEC",
+            "FINRA",
+            "custom"
+        ],
         "endpoints": [
             "/documents",
             "/versions",
@@ -46,6 +66,28 @@ def governance_module_info():
             "/reviews",
             "/mappings",
             "/dashboard",
-            "/attestations"
+            "/attestations",
+            "/attestation-campaigns",
+            "/regulatory-changes",
+            "/committees"
+        ],
+        "committee_types": [
+            "board",
+            "risk_committee",
+            "audit_committee",
+            "compliance_committee",
+            "it_steering",
+            "custom"
+        ],
+        "meeting_types": [
+            "regular",
+            "special",
+            "emergency"
+        ],
+        "action_types": [
+            "follow_up",
+            "policy_approval",
+            "risk_review",
+            "audit_response"
         ]
     }

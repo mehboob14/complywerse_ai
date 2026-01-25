@@ -3794,6 +3794,492 @@ class RCSAApprovalHistory(Base):
 
 
 # =============================================================================
+# 16. Attestation & Certification Management Models
+# =============================================================================
+
+class AttestationCampaign(Base):
+    """Campaign for organizing attestations (SOX 302/404, policy sign-offs, BCP/DR awareness)"""
+    __tablename__ = "grc_attestation_campaigns"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    campaign_type = Column(String(50), nullable=False)  # sox_302, sox_404, policy_signoff, bcp_awareness, training_acknowledgment, annual_certification
+    start_date = Column(DateTime, nullable=True)
+    due_date = Column(DateTime, nullable=False)
+    status = Column(String(50), default="draft")  # draft, active, closed, archived
+    
+    target_type = Column(String(50), nullable=False, default="all_users")  # all_users, by_department, by_role, custom
+    target_department_ids = Column(JSON, default=[])
+    target_role_ids = Column(JSON, default=[])
+    target_user_ids = Column(JSON, default=[])
+    
+    escalation_enabled = Column(Boolean, default=True)
+    reminder_days_before = Column(Integer, default=7)
+    escalation_days_after = Column(Integer, default=3)
+    
+    attestation_text = Column(Text, nullable=True)
+    requires_evidence = Column(Boolean, default=False)
+    
+    linked_document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=True, index=True)
+    
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    linked_document = relationship("GovernanceDocument")
+    escalation_chains = relationship("EscalationChain", back_populates="campaign", cascade="all, delete-orphan")
+    attestation_requests = relationship("AttestationRequest", back_populates="campaign", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_attestation_campaign_tenant", "tenant_id"),
+        Index("ix_attestation_campaign_status", "status"),
+        Index("ix_attestation_campaign_type", "campaign_type"),
+        Index("ix_attestation_campaign_due_date", "due_date"),
+    )
+
+
+class EscalationChain(Base):
+    """Defines cascade hierarchy for attestation escalations"""
+    __tablename__ = "grc_escalation_chains"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    campaign_id = Column(Integer, ForeignKey("grc_attestation_campaigns.id"), nullable=False, index=True)
+    
+    tier = Column(Integer, nullable=False)  # 1=staff, 2=manager, 3=vp, 4=cro
+    tier_name = Column(String(100), nullable=True)  # Optional descriptive name
+    
+    approver_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    business_unit_id = Column(Integer, ForeignKey("grc_business_units.id"), nullable=True, index=True)
+    role_id = Column(Integer, ForeignKey("grc_roles.id"), nullable=True, index=True)
+    
+    escalation_delay_days = Column(Integer, default=3)
+    notify_on_escalation = Column(Boolean, default=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    campaign = relationship("AttestationCampaign", back_populates="escalation_chains")
+    approver = relationship("GRCUser", foreign_keys=[approver_id])
+    business_unit = relationship("BusinessUnit")
+    role = relationship("Role")
+    
+    __table_args__ = (
+        Index("ix_escalation_chain_tenant", "tenant_id"),
+        Index("ix_escalation_chain_campaign", "campaign_id"),
+        Index("ix_escalation_chain_tier", "campaign_id", "tier"),
+        UniqueConstraint("campaign_id", "tier", "business_unit_id", name="uq_escalation_campaign_tier_bu"),
+    )
+
+
+class AttestationRequest(Base):
+    """Individual attestation assignments to users"""
+    __tablename__ = "grc_attestation_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    campaign_id = Column(Integer, ForeignKey("grc_attestation_campaigns.id"), nullable=False, index=True)
+    
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    attestation_type = Column(String(50), nullable=False)  # Same as campaign_type or more specific
+    
+    status = Column(String(50), default="pending")  # pending, completed, overdue, escalated
+    
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+    due_date = Column(DateTime, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    
+    escalation_tier = Column(Integer, default=1)
+    escalated_to_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    
+    reminder_sent_at = Column(DateTime, nullable=True)
+    reminder_count = Column(Integer, default=0)
+    escalation_sent_at = Column(DateTime, nullable=True)
+    
+    user_comments = Column(Text, nullable=True)
+    attestation_text = Column(Text, nullable=True)
+    
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=True, index=True)
+    
+    ip_address = Column(String(50), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    campaign = relationship("AttestationCampaign", back_populates="attestation_requests")
+    user = relationship("GRCUser", foreign_keys=[user_id])
+    escalated_to = relationship("GRCUser", foreign_keys=[escalated_to_id])
+    evidence = relationship("Evidence")
+    
+    __table_args__ = (
+        Index("ix_attestation_request_tenant", "tenant_id"),
+        Index("ix_attestation_request_campaign", "campaign_id"),
+        Index("ix_attestation_request_user", "user_id"),
+        Index("ix_attestation_request_status", "status"),
+        Index("ix_attestation_request_due_date", "due_date"),
+        UniqueConstraint("campaign_id", "user_id", name="uq_attestation_campaign_user"),
+    )
+
+
+# =============================================================================
+# 17. Regulatory Change Management Models
+# =============================================================================
+
+class RegulatoryChange(Base):
+    """Register for tracking new regulations and regulatory changes"""
+    __tablename__ = "grc_regulatory_changes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    source = Column(String(50), nullable=False)  # OCC, Fed, EBA, PRA, SEC, FINRA, custom
+    regulation_reference = Column(String(255), nullable=True)  # e.g., "12 CFR 30.5"
+    
+    effective_date = Column(DateTime, nullable=True)
+    published_date = Column(DateTime, nullable=True)
+    
+    status = Column(String(50), default="identified")  # identified, under_assessment, implementation, completed, not_applicable
+    priority = Column(String(20), default="medium")  # critical, high, medium, low
+    
+    assigned_to = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    assignee = relationship("GRCUser", foreign_keys=[assigned_to])
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    impact_assessments = relationship("RegulatoryImpactAssessment", back_populates="regulatory_change", cascade="all, delete-orphan")
+    implementation_tasks = relationship("RegulatoryImplementationTask", back_populates="regulatory_change", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_regulatory_change_tenant", "tenant_id"),
+        Index("ix_regulatory_change_status", "status"),
+        Index("ix_regulatory_change_priority", "priority"),
+        Index("ix_regulatory_change_source", "source"),
+        Index("ix_regulatory_change_effective_date", "effective_date"),
+    )
+
+
+class RegulatoryImpactAssessment(Base):
+    """Impact analysis for regulatory changes"""
+    __tablename__ = "grc_regulatory_impact_assessments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    regulatory_change_id = Column(Integer, ForeignKey("grc_regulatory_changes.id"), nullable=False, index=True)
+    
+    assessment_type = Column(String(50), nullable=False)  # policy, control, process, technology
+    impacted_item_id = Column(Integer, nullable=True)  # polymorphic - could be policy_id, control_id, etc.
+    impacted_item_type = Column(String(50), nullable=True)  # policy, control, asset, process
+    
+    impact_level = Column(String(20), default="medium")  # high, medium, low, none
+    impact_description = Column(Text, nullable=True)
+    
+    gap_identified = Column(Boolean, default=False)
+    gap_description = Column(Text, nullable=True)
+    
+    assessed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    assessed_at = Column(DateTime, default=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    regulatory_change = relationship("RegulatoryChange", back_populates="impact_assessments")
+    assessor = relationship("GRCUser", foreign_keys=[assessed_by])
+    implementation_tasks = relationship("RegulatoryImplementationTask", back_populates="impact_assessment")
+    
+    __table_args__ = (
+        Index("ix_regulatory_impact_tenant", "tenant_id"),
+        Index("ix_regulatory_impact_change", "regulatory_change_id"),
+        Index("ix_regulatory_impact_type", "assessment_type"),
+        Index("ix_regulatory_impact_level", "impact_level"),
+    )
+
+
+class RegulatoryImplementationTask(Base):
+    """Tasks for implementing regulatory changes"""
+    __tablename__ = "grc_regulatory_implementation_tasks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    regulatory_change_id = Column(Integer, ForeignKey("grc_regulatory_changes.id"), nullable=False, index=True)
+    impact_assessment_id = Column(Integer, ForeignKey("grc_regulatory_impact_assessments.id"), nullable=True, index=True)
+    
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    task_type = Column(String(50), nullable=False)  # policy_update, control_update, process_change, training, communication
+    status = Column(String(50), default="pending")  # pending, in_progress, completed, blocked
+    priority = Column(String(20), default="medium")  # critical, high, medium, low
+    
+    assigned_to = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    due_date = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    
+    linked_policy_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=True, index=True)
+    linked_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=True, index=True)
+    
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    regulatory_change = relationship("RegulatoryChange", back_populates="implementation_tasks")
+    impact_assessment = relationship("RegulatoryImpactAssessment", back_populates="implementation_tasks")
+    assignee = relationship("GRCUser", foreign_keys=[assigned_to])
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    linked_policy = relationship("GovernanceDocument")
+    linked_control = relationship("NormalizedControl")
+    
+    __table_args__ = (
+        Index("ix_regulatory_task_tenant", "tenant_id"),
+        Index("ix_regulatory_task_change", "regulatory_change_id"),
+        Index("ix_regulatory_task_status", "status"),
+        Index("ix_regulatory_task_due_date", "due_date"),
+        Index("ix_regulatory_task_type", "task_type"),
+    )
+
+
+# =============================================================================
+# Board & Committee Management Models
+# =============================================================================
+
+class GovernanceCommittee(Base):
+    """Committee setup for governance oversight"""
+    __tablename__ = "grc_governance_committees"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    committee_type = Column(String(50), nullable=False)  # board, risk_committee, audit_committee, compliance_committee, it_steering, custom
+    chair_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    secretary_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    meeting_frequency = Column(String(50), default="quarterly")  # monthly, quarterly, annual, ad_hoc
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    chair = relationship("GRCUser", foreign_keys=[chair_id])
+    secretary = relationship("GRCUser", foreign_keys=[secretary_id])
+    members = relationship("CommitteeMember", back_populates="committee", cascade="all, delete-orphan")
+    charters = relationship("CommitteeCharter", back_populates="committee", cascade="all, delete-orphan")
+    meetings = relationship("CommitteeMeeting", back_populates="committee", cascade="all, delete-orphan")
+    oversight_actions = relationship("OversightAction", back_populates="committee", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_governance_committee_tenant", "tenant_id"),
+        Index("ix_governance_committee_type", "committee_type"),
+        Index("ix_governance_committee_active", "is_active"),
+    )
+
+
+class CommitteeMember(Base):
+    """Committee membership records"""
+    __tablename__ = "grc_committee_members"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    committee_id = Column(Integer, ForeignKey("grc_governance_committees.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    role = Column(String(50), default="member")  # chair, secretary, member, observer
+    joined_at = Column(DateTime, default=datetime.utcnow)
+    left_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    
+    tenant = relationship("Tenant")
+    committee = relationship("GovernanceCommittee", back_populates="members")
+    user = relationship("GRCUser")
+    
+    __table_args__ = (
+        Index("ix_committee_member_tenant", "tenant_id"),
+        Index("ix_committee_member_committee", "committee_id"),
+        Index("ix_committee_member_user", "user_id"),
+        Index("ix_committee_member_active", "is_active"),
+        UniqueConstraint("committee_id", "user_id", name="uq_committee_member_user"),
+    )
+
+
+class CommitteeCharter(Base):
+    """Charter documents for committees"""
+    __tablename__ = "grc_committee_charters"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    committee_id = Column(Integer, ForeignKey("grc_governance_committees.id"), nullable=False, index=True)
+    version = Column(String(50), default="1.0")
+    title = Column(String(500), nullable=False)
+    content = Column(Text, nullable=True)
+    effective_date = Column(DateTime, nullable=True)
+    expiry_date = Column(DateTime, nullable=True)
+    status = Column(String(50), default="draft")  # draft, active, expired
+    approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    approved_at = Column(DateTime, nullable=True)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    committee = relationship("GovernanceCommittee", back_populates="charters")
+    approver = relationship("GRCUser", foreign_keys=[approved_by])
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    
+    __table_args__ = (
+        Index("ix_committee_charter_tenant", "tenant_id"),
+        Index("ix_committee_charter_committee", "committee_id"),
+        Index("ix_committee_charter_status", "status"),
+    )
+
+
+class CommitteeMeeting(Base):
+    """Meeting management for committees"""
+    __tablename__ = "grc_committee_meetings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    committee_id = Column(Integer, ForeignKey("grc_governance_committees.id"), nullable=False, index=True)
+    meeting_number = Column(String(50), nullable=True)
+    title = Column(String(500), nullable=False)
+    meeting_type = Column(String(50), default="regular")  # regular, special, emergency
+    scheduled_date = Column(DateTime, nullable=False)
+    location = Column(String(500), nullable=True)
+    virtual_link = Column(String(1000), nullable=True)
+    status = Column(String(50), default="scheduled")  # scheduled, in_progress, completed, cancelled
+    quorum_required = Column(Integer, nullable=True)
+    quorum_present = Column(Integer, nullable=True)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    committee = relationship("GovernanceCommittee", back_populates="meetings")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    agenda_items = relationship("MeetingAgendaItem", back_populates="meeting", cascade="all, delete-orphan")
+    minutes = relationship("MeetingMinutes", back_populates="meeting", uselist=False, cascade="all, delete-orphan")
+    oversight_actions = relationship("OversightAction", back_populates="meeting")
+    
+    __table_args__ = (
+        Index("ix_committee_meeting_tenant", "tenant_id"),
+        Index("ix_committee_meeting_committee", "committee_id"),
+        Index("ix_committee_meeting_status", "status"),
+        Index("ix_committee_meeting_date", "scheduled_date"),
+    )
+
+
+class MeetingAgendaItem(Base):
+    """Agenda items for meetings"""
+    __tablename__ = "grc_meeting_agenda_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    meeting_id = Column(Integer, ForeignKey("grc_committee_meetings.id"), nullable=False, index=True)
+    item_number = Column(Integer, nullable=False)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    item_type = Column(String(50), default="discussion")  # approval, discussion, information, action_review
+    presenter_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    linked_document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=True, index=True)
+    linked_risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=True, index=True)
+    linked_regulatory_change_id = Column(Integer, ForeignKey("grc_regulatory_changes.id"), nullable=True, index=True)
+    time_allocated_minutes = Column(Integer, nullable=True)
+    status = Column(String(50), default="pending")  # pending, discussed, deferred
+    outcome = Column(Text, nullable=True)
+    decision_made = Column(Text, nullable=True)
+    
+    tenant = relationship("Tenant")
+    meeting = relationship("CommitteeMeeting", back_populates="agenda_items")
+    presenter = relationship("GRCUser")
+    linked_document = relationship("GovernanceDocument")
+    linked_risk = relationship("Risk")
+    linked_regulatory_change = relationship("RegulatoryChange")
+    oversight_actions = relationship("OversightAction", back_populates="agenda_item")
+    
+    __table_args__ = (
+        Index("ix_meeting_agenda_tenant", "tenant_id"),
+        Index("ix_meeting_agenda_meeting", "meeting_id"),
+        Index("ix_meeting_agenda_status", "status"),
+    )
+
+
+class MeetingMinutes(Base):
+    """Minutes record for meetings"""
+    __tablename__ = "grc_meeting_minutes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    meeting_id = Column(Integer, ForeignKey("grc_committee_meetings.id"), nullable=False, unique=True, index=True)
+    content = Column(Text, nullable=True)
+    attendees = Column(JSON, default=[])
+    status = Column(String(50), default="draft")  # draft, pending_approval, approved
+    drafted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    drafted_at = Column(DateTime, default=datetime.utcnow)
+    approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    approved_at = Column(DateTime, nullable=True)
+    
+    tenant = relationship("Tenant")
+    meeting = relationship("CommitteeMeeting", back_populates="minutes")
+    drafter = relationship("GRCUser", foreign_keys=[drafted_by])
+    approver = relationship("GRCUser", foreign_keys=[approved_by])
+    
+    __table_args__ = (
+        Index("ix_meeting_minutes_tenant", "tenant_id"),
+        Index("ix_meeting_minutes_status", "status"),
+    )
+
+
+class OversightAction(Base):
+    """Action tracking for oversight activities"""
+    __tablename__ = "grc_oversight_actions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    committee_id = Column(Integer, ForeignKey("grc_governance_committees.id"), nullable=False, index=True)
+    meeting_id = Column(Integer, ForeignKey("grc_committee_meetings.id"), nullable=True, index=True)
+    agenda_item_id = Column(Integer, ForeignKey("grc_meeting_agenda_items.id"), nullable=True, index=True)
+    action_number = Column(String(50), nullable=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    action_type = Column(String(50), default="follow_up")  # follow_up, policy_approval, risk_review, audit_response
+    assigned_to = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    due_date = Column(DateTime, nullable=True)
+    status = Column(String(50), default="open")  # open, in_progress, completed, overdue
+    completed_at = Column(DateTime, nullable=True)
+    completion_notes = Column(Text, nullable=True)
+    linked_policy_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=True, index=True)
+    linked_risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=True, index=True)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    tenant = relationship("Tenant")
+    committee = relationship("GovernanceCommittee", back_populates="oversight_actions")
+    meeting = relationship("CommitteeMeeting", back_populates="oversight_actions")
+    agenda_item = relationship("MeetingAgendaItem", back_populates="oversight_actions")
+    assignee = relationship("GRCUser", foreign_keys=[assigned_to])
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    linked_policy = relationship("GovernanceDocument")
+    linked_risk = relationship("Risk")
+    
+    __table_args__ = (
+        Index("ix_oversight_action_tenant", "tenant_id"),
+        Index("ix_oversight_action_committee", "committee_id"),
+        Index("ix_oversight_action_meeting", "meeting_id"),
+        Index("ix_oversight_action_status", "status"),
+        Index("ix_oversight_action_due_date", "due_date"),
+        Index("ix_oversight_action_assigned", "assigned_to"),
+    )
+
+
+# =============================================================================
 # Database Initialization Functions
 # =============================================================================
 
