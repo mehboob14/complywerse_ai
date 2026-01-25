@@ -484,6 +484,8 @@ export interface ControlEvidence {
   uploaded_at: string;
   ai_confidence_score?: number;
   review_status: 'pending' | 'approved' | 'rejected';
+  ai_assessment_status?: 'completed' | 'processing' | 'pending_assessment' | 'pending_ocr' | 'pending';
+  ai_assessment_summary?: string;
 }
 
 export interface CertificationControl {

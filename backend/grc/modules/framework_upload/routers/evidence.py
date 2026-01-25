@@ -15,6 +15,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ...evidence.routers.ai_assessment import run_ai_assessment
+from ...evidence.routers.ocr import process_evidence_ocr
 
 logger = logging.getLogger(__name__)
 
@@ -126,21 +127,39 @@ def get_evidence_types(
     }
 
 
-def trigger_ai_assessment_background(evidence_id: int, user_id: int):
-    """Background task to run AI assessment on evidence after OCR is complete."""
+def trigger_ocr_and_assessment_background(evidence_id: int, user_id: int):
+    """Background task to run OCR and then AI assessment on evidence."""
     from ....models import get_db as get_db_session
     
     db = next(get_db_session())
     try:
         evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
-        if evidence and evidence.ocr_content:
+        if not evidence:
+            logger.error(f"Evidence {evidence_id} not found")
+            return
+        
+        # Step 1: Run OCR to extract text content
+        if not evidence.ocr_content:
+            try:
+                logger.info(f"Running OCR for evidence {evidence_id}")
+                ocr_result = process_evidence_ocr(evidence, db)
+                logger.info(f"OCR completed for evidence {evidence_id}: {ocr_result.status}")
+                
+                # Refresh evidence after OCR
+                db.refresh(evidence)
+            except Exception as e:
+                logger.error(f"OCR failed for evidence {evidence_id}: {str(e)}")
+                return
+        
+        # Step 2: Run AI assessment if OCR was successful
+        if evidence.ocr_content:
             try:
                 run_ai_assessment(evidence, db, mode="initial", user_id=user_id)
                 logger.info(f"AI assessment completed for evidence {evidence_id}")
             except Exception as e:
                 logger.error(f"AI assessment failed for evidence {evidence_id}: {str(e)}")
         else:
-            logger.info(f"Skipping AI assessment for evidence {evidence_id} - no OCR content yet")
+            logger.warning(f"Cannot run AI assessment for evidence {evidence_id} - no OCR content extracted")
     finally:
         db.close()
 
@@ -226,7 +245,7 @@ async def upload_evidence(
     db.refresh(assessment_evidence)
     db.refresh(linked_evidence)
     
-    background_tasks.add_task(trigger_ai_assessment_background, linked_evidence.id, current_user.id)
+    background_tasks.add_task(trigger_ocr_and_assessment_background, linked_evidence.id, current_user.id)
     
     assessment_evidence = db.query(AssessmentEvidence).options(
         joinedload(AssessmentEvidence.uploader),

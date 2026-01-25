@@ -219,6 +219,21 @@ export default function CertificationJourneyPage() {
     }
   });
 
+  const [assessingEvidenceId, setAssessingEvidenceId] = useState<number | null>(null);
+
+  const assessEvidenceMutation = useMutation({
+    mutationFn: async (evidenceId: number) => {
+      return apiClient.post(`/grc/evidence/${evidenceId}/ai/assess`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      setAssessingEvidenceId(null);
+    },
+    onError: () => {
+      setAssessingEvidenceId(null);
+    }
+  });
+
   const [enhanceSuccess, setEnhanceSuccess] = useState<string | null>(null);
   const [enhanceError, setEnhanceError] = useState<string | null>(null);
 
@@ -1033,22 +1048,73 @@ export default function CertificationJourneyPage() {
                 </div>
                 {control.evidence?.length > 0 ? (
                   <div className="space-y-2">
-                    {control.evidence.map((ev: ControlEvidence) => (
-                      <div key={ev.id} className="flex items-center gap-3 rounded-lg bg-slate-900/50 p-3">
-                        <Paperclip className="h-4 w-4 text-slate-400" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white truncate">{ev.file_name || 'Evidence file'}</p>
-                          <p className="text-xs text-slate-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
+                    {control.evidence.map((ev: ControlEvidence) => {
+                      const getAIAssessmentBadge = () => {
+                        const status = ev.ai_assessment_status || 'pending';
+                        switch (status) {
+                          case 'completed':
+                            return { label: 'Assessed', className: 'bg-green-500/20 text-green-400' };
+                          case 'processing':
+                            return { label: 'Assessing...', className: 'bg-yellow-500/20 text-yellow-400' };
+                          case 'pending_assessment':
+                            return { label: 'Ready for Assessment', className: 'bg-blue-500/20 text-blue-400' };
+                          case 'pending_ocr':
+                            return { label: 'Processing...', className: 'bg-slate-500/20 text-slate-400' };
+                          default:
+                            return { label: 'Pending', className: 'bg-slate-500/20 text-slate-400' };
+                        }
+                      };
+                      const aiBadge = getAIAssessmentBadge();
+                      const canAssess = ev.ai_assessment_status === 'pending_assessment' || ev.ai_assessment_status === 'pending' || !ev.ai_assessment_status;
+                      const isAssessing = assessingEvidenceId === ev.id;
+                      
+                      return (
+                        <div key={ev.id} className="rounded-lg bg-slate-900/50 p-3">
+                          <div className="flex items-center gap-3">
+                            <Paperclip className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-white truncate">{ev.file_name || 'Evidence file'}</p>
+                              <p className="text-xs text-slate-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className={`rounded px-2 py-0.5 text-xs ${aiBadge.className}`} title={ev.ai_assessment_summary || ''}>
+                                {aiBadge.label}
+                              </span>
+                              <span className={`rounded px-2 py-0.5 text-xs ${
+                                ev.review_status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                                ev.review_status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                                'bg-yellow-500/20 text-yellow-400'
+                              }`}>
+                                {ev.review_status}
+                              </span>
+                              {canAssess && (
+                                <button
+                                  onClick={() => {
+                                    setAssessingEvidenceId(ev.id);
+                                    assessEvidenceMutation.mutate(ev.id);
+                                  }}
+                                  disabled={isAssessing}
+                                  className="flex items-center gap-1 rounded bg-primary-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+                                  title="Trigger AI assessment"
+                                >
+                                  {isAssessing ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-3 w-3" />
+                                  )}
+                                  Assess
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {ev.ai_assessment_summary && (
+                            <div className="mt-2 ml-7 rounded bg-slate-800/50 p-2">
+                              <p className="text-xs text-slate-300">{ev.ai_assessment_summary}</p>
+                            </div>
+                          )}
                         </div>
-                        <span className={`rounded px-2 py-0.5 text-xs ${
-                          ev.review_status === 'approved' ? 'bg-green-500/20 text-green-400' :
-                          ev.review_status === 'rejected' ? 'bg-red-500/20 text-red-400' :
-                          'bg-yellow-500/20 text-yellow-400'
-                        }`}>
-                          {ev.review_status}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6 text-center">
