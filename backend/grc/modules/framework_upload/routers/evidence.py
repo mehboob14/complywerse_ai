@@ -1,18 +1,22 @@
 import os
 import uuid
 import shutil
+import logging
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from pydantic import BaseModel
 
 from ....models import (
     AssessmentEvidence, AssessmentItem, FrameworkAssessment,
-    GRCUser, get_db
+    GRCUser, get_db, Evidence, EvidenceAIAssessment
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ...evidence.routers.ai_assessment import run_ai_assessment
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/evidence", tags=["Framework Upload - Evidence"])
 
@@ -27,8 +31,8 @@ class EvidenceReview(BaseModel):
     review_notes: Optional[str] = None
 
 
-def serialize_evidence(evidence: AssessmentEvidence) -> dict:
-    return {
+def serialize_evidence(evidence: AssessmentEvidence, db: Session = None) -> dict:
+    result = {
         "id": evidence.id,
         "assessment_item_id": evidence.assessment_item_id,
         "evidence_type": evidence.evidence_type,
@@ -45,8 +49,30 @@ def serialize_evidence(evidence: AssessmentEvidence) -> dict:
         "review_notes": evidence.review_notes,
         "uploaded_by": evidence.uploaded_by,
         "uploader_name": evidence.uploader.display_name if evidence.uploader else None,
-        "uploaded_at": evidence.uploaded_at.isoformat() if evidence.uploaded_at else None
+        "uploaded_at": evidence.uploaded_at.isoformat() if evidence.uploaded_at else None,
+        "linked_evidence_id": evidence.linked_evidence_id,
+        "ai_assessment_status": None,
+        "ai_assessment_summary": None
     }
+    
+    if evidence.linked_evidence_id and db:
+        linked_evidence = db.query(Evidence).filter(Evidence.id == evidence.linked_evidence_id).first()
+        if linked_evidence:
+            latest_assessment = db.query(EvidenceAIAssessment).filter(
+                EvidenceAIAssessment.evidence_id == linked_evidence.id
+            ).order_by(EvidenceAIAssessment.assessed_at.desc()).first()
+            
+            if latest_assessment:
+                result["ai_assessment_status"] = "completed"
+                result["ai_assessment_summary"] = latest_assessment.content_summary
+            elif linked_evidence.ocr_status == "processing":
+                result["ai_assessment_status"] = "processing"
+            elif linked_evidence.ocr_status == "completed" and not latest_assessment:
+                result["ai_assessment_status"] = "pending_assessment"
+            else:
+                result["ai_assessment_status"] = "pending_ocr"
+    
+    return result
 
 
 def get_item_with_access_check(item_id: int, user_tenants: List[int], db: Session) -> AssessmentItem:
@@ -100,9 +126,29 @@ def get_evidence_types(
     }
 
 
+def trigger_ai_assessment_background(evidence_id: int, user_id: int):
+    """Background task to run AI assessment on evidence after OCR is complete."""
+    from ....models import get_db as get_db_session
+    
+    db = next(get_db_session())
+    try:
+        evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+        if evidence and evidence.ocr_content:
+            try:
+                run_ai_assessment(evidence, db, mode="initial", user_id=user_id)
+                logger.info(f"AI assessment completed for evidence {evidence_id}")
+            except Exception as e:
+                logger.error(f"AI assessment failed for evidence {evidence_id}: {str(e)}")
+        else:
+            logger.info(f"Skipping AI assessment for evidence {evidence_id} - no OCR content yet")
+    finally:
+        db.close()
+
+
 @router.post("/item/{item_id}", status_code=status.HTTP_201_CREATED)
 async def upload_evidence(
     item_id: int,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     evidence_type: str = Form(...),
     description: Optional[str] = Form(None),
@@ -144,8 +190,27 @@ async def upload_evidence(
             except ValueError:
                 pass
     
-    evidence = AssessmentEvidence(
+    tenant_id = item.assessment.tenant_id
+    
+    linked_evidence = Evidence(
+        tenant_id=tenant_id,
+        name=file.filename or "Uploaded Evidence",
+        description=description,
+        file_path=file_path,
+        file_name=file.filename,
+        file_type=file.content_type,
+        evidence_type=evidence_type,
+        collection_date=parsed_collection_date,
+        uploaded_by=current_user.id,
+        status="pending",
+        ocr_status="pending"
+    )
+    db.add(linked_evidence)
+    db.flush()
+    
+    assessment_evidence = AssessmentEvidence(
         assessment_item_id=item_id,
+        linked_evidence_id=linked_evidence.id,
         evidence_type=evidence_type,
         file_name=file.filename,
         file_path=file_path,
@@ -156,16 +221,19 @@ async def upload_evidence(
         review_status="pending",
         uploaded_by=current_user.id
     )
-    db.add(evidence)
+    db.add(assessment_evidence)
     db.commit()
-    db.refresh(evidence)
+    db.refresh(assessment_evidence)
+    db.refresh(linked_evidence)
     
-    evidence = db.query(AssessmentEvidence).options(
+    background_tasks.add_task(trigger_ai_assessment_background, linked_evidence.id, current_user.id)
+    
+    assessment_evidence = db.query(AssessmentEvidence).options(
         joinedload(AssessmentEvidence.uploader),
         joinedload(AssessmentEvidence.reviewer)
-    ).filter(AssessmentEvidence.id == evidence.id).first()
+    ).filter(AssessmentEvidence.id == assessment_evidence.id).first()
     
-    return serialize_evidence(evidence)
+    return serialize_evidence(assessment_evidence, db)
 
 
 @router.get("/item/{item_id}")
@@ -186,7 +254,7 @@ def list_item_evidence(
     
     return {
         "assessment_item_id": item_id,
-        "items": [serialize_evidence(e) for e in evidence_list],
+        "items": [serialize_evidence(e, db) for e in evidence_list],
         "total": len(evidence_list)
     }
 
@@ -245,7 +313,7 @@ def list_assessment_evidence(
                 "assessment_item_id": item_id,
                 "evidence": []
             }
-        grouped_evidence[item_id]["evidence"].append(serialize_evidence(e))
+        grouped_evidence[item_id]["evidence"].append(serialize_evidence(e, db))
     
     return {
         "assessment_id": assessment_id,
@@ -263,7 +331,7 @@ def get_evidence(
 ):
     user_tenants = get_user_tenants(current_user, db)
     evidence = get_evidence_with_access_check(evidence_id, user_tenants, db)
-    return serialize_evidence(evidence)
+    return serialize_evidence(evidence, db)
 
 
 @router.delete("/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -317,4 +385,4 @@ def review_evidence(
         joinedload(AssessmentEvidence.reviewer)
     ).filter(AssessmentEvidence.id == evidence.id).first()
     
-    return serialize_evidence(evidence)
+    return serialize_evidence(evidence, db)
