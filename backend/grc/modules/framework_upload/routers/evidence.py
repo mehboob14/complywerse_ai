@@ -350,6 +350,20 @@ def delete_evidence(
         except Exception:
             pass
     
+    # Cascade delete: Also delete the linked Evidence record from main Evidence table
+    if evidence.linked_evidence_id:
+        linked_evidence = db.query(Evidence).filter(
+            Evidence.id == evidence.linked_evidence_id
+        ).first()
+        if linked_evidence:
+            # Delete the linked evidence file if exists
+            if linked_evidence.file_path and os.path.exists(linked_evidence.file_path):
+                try:
+                    os.remove(linked_evidence.file_path)
+                except Exception:
+                    pass
+            db.delete(linked_evidence)
+    
     db.delete(evidence)
     db.commit()
     
