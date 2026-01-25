@@ -2655,11 +2655,16 @@ class InternalControl(Base):
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     approved_at = Column(DateTime, nullable=True)
     
+    source_document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=True, index=True)
+    source_statement_id = Column(Integer, ForeignKey("grc_policy_statements.id"), nullable=True, index=True)
+    
     department = relationship("BusinessUnit", foreign_keys=[department_id])
     owner = relationship("GRCUser", foreign_keys=[owner_id])
     backup_owner = relationship("GRCUser", foreign_keys=[backup_owner_id])
     creator = relationship("GRCUser", foreign_keys=[created_by])
     approver = relationship("GRCUser", foreign_keys=[approved_by])
+    source_document = relationship("GovernanceDocument", foreign_keys=[source_document_id])
+    source_statement = relationship("PolicyStatement")
     
     tests = relationship("InternalControlTest", back_populates="control", cascade="all, delete-orphan")
     risk_links = relationship("InternalControlRiskLink", back_populates="control", cascade="all, delete-orphan")
@@ -4129,6 +4134,10 @@ class CommitteeCharter(Base):
     approved_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    file_path = Column(String(500), nullable=True)
+    file_name = Column(String(255), nullable=True)
+    file_type = Column(String(50), nullable=True)
+    file_size = Column(Integer, nullable=True)
     
     tenant = relationship("Tenant")
     committee = relationship("GovernanceCommittee", back_populates="charters")
@@ -4302,8 +4311,8 @@ def init_grc_db():
     from .seed_certification_phases import seed_certification_phases
     seed_certification_phases()
     
-    from .seed_internal_controls import seed_internal_controls
-    seed_internal_controls()
+    # Internal controls are now only created when users upload policies and select statements to convert
+    # No pre-seeded controls - all controls come from user-uploaded policy documents
     
     from .seed_vulnerabilities import seed_vulnerability_data
     seed_vulnerability_data()

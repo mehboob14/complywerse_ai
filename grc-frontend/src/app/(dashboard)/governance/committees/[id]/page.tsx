@@ -19,6 +19,9 @@ import {
   Eye,
   Edit,
   Building2,
+  Upload,
+  Download,
+  Paperclip,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -55,6 +58,10 @@ interface Charter {
   effective_date: string;
   approved_by?: string;
   approved_at?: string;
+  file_path?: string;
+  file_name?: string;
+  file_type?: string;
+  file_size?: number;
 }
 
 interface Meeting {
@@ -202,6 +209,48 @@ export default function CommitteeDetailPage() {
       setNewMeeting({ title: '', meeting_type: 'regular', scheduled_date: '', start_time: '', end_time: '', location: '' });
     },
   });
+
+  const uploadCharterFileMutation = useMutation({
+    mutationFn: ({ charterId, file }: { charterId: number; file: File }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return committeeApi.uploadCharterFile(committeeId, charterId, formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['committee-charters', committeeId] });
+    },
+  });
+
+  const handleFileUpload = (charterId: number, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      uploadCharterFileMutation.mutate({ charterId, file });
+    }
+  };
+
+  const handleDownloadFile = async (charterId: number, fileName: string) => {
+    try {
+      const response = await committeeApi.downloadCharterFile(charterId);
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName || 'charter_file';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   if (committeeLoading) {
     return (
@@ -459,8 +508,43 @@ export default function CommitteeDetailPage() {
                   </div>
                   <p className="text-slate-400 text-sm mt-1">Version {charter.version}</p>
                 </div>
+                <div className="flex items-center gap-2">
+                  {charter.file_name ? (
+                    <button
+                      onClick={() => handleDownloadFile(charter.id, charter.file_name!)}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors text-sm"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download
+                    </button>
+                  ) : null}
+                  <label className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer text-sm">
+                    <Upload className="h-4 w-4" />
+                    {uploadCharterFileMutation.isPending ? 'Uploading...' : 'Upload File'}
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.txt"
+                      onChange={(e) => handleFileUpload(charter.id, e)}
+                      disabled={uploadCharterFileMutation.isPending}
+                    />
+                  </label>
+                </div>
               </div>
               <p className="text-slate-400 mt-4 line-clamp-2">{charter.content}</p>
+              
+              {charter.file_name && (
+                <div className="flex items-center gap-3 mt-4 p-3 bg-slate-800/50 rounded-lg">
+                  <Paperclip className="h-4 w-4 text-primary-400" />
+                  <div className="flex-1">
+                    <p className="text-sm text-white">{charter.file_name}</p>
+                    <p className="text-xs text-slate-500">
+                      {charter.file_type?.toUpperCase()} {charter.file_size ? `• ${formatFileSize(charter.file_size)}` : ''}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
               <div className="flex items-center gap-6 mt-4 text-sm text-slate-500">
                 <span>Effective: {new Date(charter.effective_date).toLocaleDateString()}</span>
                 {charter.approved_by && <span>Approved by: {charter.approved_by}</span>}

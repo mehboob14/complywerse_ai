@@ -3701,3 +3701,26 @@ class CommitteeDashboardStats(BaseModel):
     action_completion_rate: float = 0.0
     upcoming_meetings_list: List[Dict[str, Any]] = []
     overdue_actions_list: List[Dict[str, Any]] = []
+
+
+class ConvertStatementsRequest(BaseModel):
+    statement_ids: List[int]
+    category: Optional[str] = None
+    priority: Optional[str] = None
+
+
+class InternalControlFromStatementResponse(BaseModel):
+    id: int
+    control_id: str
+    name: str
+    description: Optional[str]
+    category: Optional[str]
+    priority: str
+    source_document_id: int
+    source_statement_id: int
+    tenant_id: int
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

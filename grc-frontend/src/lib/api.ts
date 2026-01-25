@@ -610,6 +610,8 @@ export const complianceApi = {
     }) => apiClient.put(`/compliance/policies/statements/${id}/compliance`, data),
     linkEvidence: (id: number, evidenceIds: number[]) =>
       apiClient.post(`/compliance/policies/statements/${id}/evidence`, { evidence_ids: evidenceIds }),
+    convertToControls: (documentId: number, data: { statement_ids: number[]; category?: string; priority?: string }) =>
+      apiClient.post(`/governance/documents/${documentId}/statements/convert-to-controls`, data),
   },
 };
 
@@ -932,6 +934,12 @@ export const committeeApi = {
   getCharters: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/charters`),
   createCharter: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/charters`, data),
   updateCharter: (charterId: number, data: any) => apiClient.put(`/governance/committees/charters/${charterId}`, data),
+  uploadCharterFile: (committeeId: number, charterId: number, formData: FormData) => 
+    apiClient.post(`/governance/committees/${committeeId}/charters/${charterId}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+  downloadCharterFile: (charterId: number) => 
+    apiClient.get(`/governance/committees/charters/${charterId}/download`, { responseType: 'blob' }),
   getMeetings: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/meetings`),
   createMeeting: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/meetings`, data),
   getMeeting: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}`),

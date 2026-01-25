@@ -1,7 +1,11 @@
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import os
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, or_
 
@@ -101,6 +105,10 @@ def serialize_charter(charter: CommitteeCharter) -> dict:
         "created_by": charter.created_by,
         "creator_name": charter.creator.display_name if charter.creator else None,
         "created_at": charter.created_at,
+        "file_path": charter.file_path,
+        "file_name": charter.file_name,
+        "file_type": charter.file_type,
+        "file_size": charter.file_size,
     }
 
 
@@ -585,6 +593,81 @@ def update_charter(
     db.refresh(charter)
     
     return serialize_charter(charter)
+
+
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))), "uploads", "charters")
+
+
+@router.post("/{committee_id}/charters/{charter_id}/upload")
+async def upload_charter_file(
+    committee_id: int,
+    charter_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    charter = db.query(CommitteeCharter).options(
+        joinedload(CommitteeCharter.approver),
+        joinedload(CommitteeCharter.creator)
+    ).filter(
+        CommitteeCharter.id == charter_id,
+        CommitteeCharter.committee_id == committee_id,
+        CommitteeCharter.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not charter:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Charter not found")
+    
+    tenant_upload_dir = os.path.join(UPLOAD_DIR, str(charter.tenant_id))
+    os.makedirs(tenant_upload_dir, exist_ok=True)
+    
+    file_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    unique_filename = f"{charter_id}_{uuid.uuid4().hex[:8]}{file_ext}"
+    file_path = os.path.join(tenant_upload_dir, unique_filename)
+    
+    content = await file.read()
+    file_size = len(content)
+    
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    charter.file_path = file_path
+    charter.file_name = file.filename
+    charter.file_type = file_ext.lstrip(".") if file_ext else None
+    charter.file_size = file_size
+    
+    db.commit()
+    db.refresh(charter)
+    
+    return serialize_charter(charter)
+
+
+@router.get("/charters/{charter_id}/download")
+def download_charter_file(
+    charter_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    charter = db.query(CommitteeCharter).filter(
+        CommitteeCharter.id == charter_id,
+        CommitteeCharter.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not charter:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Charter not found")
+    
+    if not charter.file_path or not os.path.exists(charter.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No file attached to this charter")
+    
+    return FileResponse(
+        path=charter.file_path,
+        filename=charter.file_name or "charter_file",
+        media_type="application/octet-stream"
+    )
 
 
 # =============================================================================

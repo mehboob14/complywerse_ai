@@ -9,8 +9,9 @@ from openai import OpenAI
 
 from ....models import (
     GovernanceDocument, GovernanceDocumentVersion, PolicyStatement,
-    PolicyStatementCompliance, GRCUser, get_db
+    PolicyStatementCompliance, InternalControl, GRCUser, get_db
 )
+from ....schemas import ConvertStatementsRequest, InternalControlFromStatementResponse
 from ....routers.auth_router import require_auth, get_user_tenants
 
 router = APIRouter(prefix="/documents", tags=["Governance - Policy Parser"])
@@ -363,3 +364,70 @@ def get_document_policy_statements(
         "statements": result,
         "total_statements": len(result)
     }
+
+
+@router.post("/{document_id}/statements/convert-to-controls", response_model=List[InternalControlFromStatementResponse])
+def convert_statements_to_controls(
+    document_id: int,
+    request: ConvertStatementsRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Governance document not found"
+        )
+    
+    validate_document_access(current_user, document, db)
+    
+    statements = db.query(PolicyStatement).filter(
+        PolicyStatement.id.in_(request.statement_ids),
+        PolicyStatement.document_id == document_id
+    ).all()
+    
+    if not statements:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No valid statements found for conversion"
+        )
+    
+    existing_count = db.query(InternalControl).filter(
+        InternalControl.tenant_id == document.tenant_id
+    ).count()
+    
+    created_controls = []
+    for idx, statement in enumerate(statements):
+        control_num = existing_count + idx + 1
+        control_id = f"IC-{document.tenant_id}-{control_num:04d}"
+        
+        name = (statement.statement_summary or statement.statement_text)[:200]
+        
+        category = request.category or statement.category
+        priority = request.priority or statement.priority or "medium"
+        
+        control = InternalControl(
+            tenant_id=document.tenant_id,
+            control_id=control_id,
+            name=name,
+            description=statement.statement_text,
+            category=category,
+            priority=priority,
+            source_document_id=document_id,
+            source_statement_id=statement.id,
+            status="draft",
+            created_by=current_user.id
+        )
+        db.add(control)
+        created_controls.append(control)
+    
+    db.commit()
+    
+    for control in created_controls:
+        db.refresh(control)
+    
+    return created_controls

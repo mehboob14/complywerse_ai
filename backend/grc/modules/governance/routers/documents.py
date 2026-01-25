@@ -10,7 +10,8 @@ from pydantic import BaseModel
 
 from ....models import (
     GovernanceDocument, GovernanceDocumentVersion, DocumentReviewer,
-    DocumentApprovalStep, DocumentAuditLog, GRCUser, Tenant, PolicyStatement, get_db
+    DocumentApprovalStep, DocumentAuditLog, GRCUser, Tenant, PolicyStatement, 
+    InternalControl, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -651,6 +652,8 @@ def delete_document(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot delete document with {child_count} child documents. Delete or reassign child documents first."
         )
+    
+    db.query(InternalControl).filter(InternalControl.source_document_id == document_id).delete()
     
     db.delete(document)
     db.commit()

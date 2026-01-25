@@ -15,6 +15,7 @@ import {
   CheckCircle,
   Link as LinkIcon,
   Save,
+  Shield,
 } from 'lucide-react';
 
 interface Statement {
@@ -91,6 +92,30 @@ const PRIORITY_OPTIONS = [
   { value: 'low', label: 'Low' },
 ];
 
+const CONTROL_CATEGORY_OPTIONS = [
+  { value: '', label: 'No Category' },
+  { value: 'security', label: 'Security' },
+  { value: 'privacy', label: 'Privacy' },
+  { value: 'operational', label: 'Operational' },
+  { value: 'compliance', label: 'Compliance' },
+  { value: 'governance', label: 'Governance' },
+  { value: 'risk_management', label: 'Risk Management' },
+  { value: 'hr', label: 'HR' },
+  { value: 'it', label: 'IT' },
+  { value: 'financial', label: 'Financial' },
+  { value: 'legal', label: 'Legal' },
+  { value: 'environmental', label: 'Environmental' },
+  { value: 'quality', label: 'Quality' },
+];
+
+const CONTROL_PRIORITY_OPTIONS = [
+  { value: '', label: 'No Priority' },
+  { value: 'critical', label: 'Critical' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+];
+
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   compliant: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Compliant' },
   partially_compliant: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Partially Compliant' },
@@ -122,6 +147,13 @@ export default function PolicyStatementsPage() {
     next_assessment_date: '',
   });
   const [evidenceToLink, setEvidenceToLink] = useState<number[]>([]);
+  const [selectedStatementIds, setSelectedStatementIds] = useState<number[]>([]);
+  const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+  const [convertForm, setConvertForm] = useState({
+    category: '',
+    priority: '',
+  });
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -171,6 +203,27 @@ export default function PolicyStatementsPage() {
     },
   });
 
+  const convertMutation = useMutation({
+    mutationFn: (data: { documentId: number; statement_ids: number[]; category?: string; priority?: string }) =>
+      complianceApi.statements.convertToControls(data.documentId, {
+        statement_ids: data.statement_ids,
+        category: data.category,
+        priority: data.priority,
+      }),
+    onSuccess: (response) => {
+      const controlsCreated = (response.data as any)?.controls_created || selectedStatementIds.length;
+      setSuccessMessage(`Successfully created ${controlsCreated} internal control(s) from selected statements.`);
+      setSelectedStatementIds([]);
+      setIsConvertModalOpen(false);
+      setConvertForm({ category: '', priority: '' });
+      queryClient.invalidateQueries({ queryKey: ['compliance-statements'] });
+      setTimeout(() => setSuccessMessage(null), 5000);
+    },
+    onError: (error: any) => {
+      console.error('Failed to convert statements to controls', error);
+    },
+  });
+
   const handleOpenModal = async (statementId: number) => {
     try {
       const response = await complianceApi.statements.getById(statementId);
@@ -205,11 +258,49 @@ export default function PolicyStatementsPage() {
     }
   };
 
+  const handleToggleStatement = (statementId: number) => {
+    setSelectedStatementIds((prev) =>
+      prev.includes(statementId)
+        ? prev.filter((id) => id !== statementId)
+        : [...prev, statementId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedStatementIds.length === filteredStatements.length) {
+      setSelectedStatementIds([]);
+    } else {
+      setSelectedStatementIds(filteredStatements.map((s: Statement) => s.id));
+    }
+  };
+
+  const handleConvertToControls = () => {
+    if (selectedStatementIds.length === 0) return;
+    
+    const selectedStmts = filteredStatements.filter((s: Statement) => selectedStatementIds.includes(s.id));
+    if (selectedStmts.length === 0) return;
+    
+    const uniqueDocumentIds = [...new Set(selectedStmts.map((s: Statement) => s.document_id))];
+    
+    if (uniqueDocumentIds.length > 1) {
+      alert('Please select statements from a single policy document only. The selected statements belong to ' + uniqueDocumentIds.length + ' different documents.');
+      return;
+    }
+
+    const documentId = uniqueDocumentIds[0];
+    convertMutation.mutate({
+      documentId,
+      statement_ids: selectedStatementIds,
+      category: convertForm.category || undefined,
+      priority: convertForm.priority || undefined,
+    });
+  };
+
   const statements = data?.statements || [];
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / pageSize);
 
-  const categories = Array.from(new Set(statements.map((s: Statement) => s.category).filter(Boolean)));
+  const categories: string[] = Array.from(new Set(statements.map((s: Statement) => s.category).filter(Boolean))) as string[];
 
   const filteredStatements = searchTerm
     ? statements.filter((s: Statement) =>
@@ -218,6 +309,8 @@ export default function PolicyStatementsPage() {
         s.document_title?.toLowerCase().includes(searchTerm.toLowerCase())
       )
     : statements;
+
+  const allSelected = filteredStatements.length > 0 && selectedStatementIds.length === filteredStatements.length;
 
   if (error) {
     return (
@@ -232,6 +325,19 @@ export default function PolicyStatementsPage() {
 
   return (
     <div className="space-y-6">
+      {successMessage && (
+        <div className="bg-emerald-500/20 border border-emerald-500/30 rounded-lg p-4 flex items-center gap-3">
+          <CheckCircle className="h-5 w-5 text-emerald-400" />
+          <p className="text-emerald-300">{successMessage}</p>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="ml-auto text-emerald-400 hover:text-emerald-300"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -244,6 +350,15 @@ export default function PolicyStatementsPage() {
           />
         </div>
         <div className="flex flex-wrap gap-2">
+          {selectedStatementIds.length > 0 && (
+            <button
+              onClick={() => setIsConvertModalOpen(true)}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Shield className="h-4 w-4" />
+              Convert to Controls ({selectedStatementIds.length})
+            </button>
+          )}
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
@@ -281,6 +396,14 @@ export default function PolicyStatementsPage() {
         <table className="table">
           <thead>
             <tr>
+              <th className="w-12">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={handleSelectAll}
+                  className="rounded border-slate-600 bg-slate-800 text-primary-500"
+                />
+              </th>
               <th>Code</th>
               <th>Statement</th>
               <th>Document</th>
@@ -293,13 +416,13 @@ export default function PolicyStatementsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="text-center py-8">
+                <td colSpan={8} className="text-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-400" />
                 </td>
               </tr>
             ) : filteredStatements.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-8">
+                <td colSpan={8} className="text-center py-8">
                   <FileText className="h-12 w-12 text-slate-500 mx-auto mb-3" />
                   <p className="text-slate-400">No policy statements found</p>
                 </td>
@@ -308,8 +431,17 @@ export default function PolicyStatementsPage() {
               filteredStatements.map((stmt: Statement) => {
                 const statusStyle = STATUS_STYLES[stmt.compliance_status] || STATUS_STYLES.not_assessed;
                 const priorityStyle = PRIORITY_STYLES[stmt.priority || 'medium'] || PRIORITY_STYLES.medium;
+                const isSelected = selectedStatementIds.includes(stmt.id);
                 return (
-                  <tr key={stmt.id}>
+                  <tr key={stmt.id} className={isSelected ? 'bg-primary-500/10' : ''}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleStatement(stmt.id)}
+                        className="rounded border-slate-600 bg-slate-800 text-primary-500"
+                      />
+                    </td>
                     <td className="font-mono text-xs">{stmt.statement_code || '-'}</td>
                     <td className="max-w-xs">
                       <p className="truncate text-sm">
@@ -372,6 +504,74 @@ export default function PolicyStatementsPage() {
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {isConvertModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-slate-700">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Convert to Internal Controls</h2>
+                <p className="text-sm text-slate-400">Create controls from {selectedStatementIds.length} selected statement(s)</p>
+              </div>
+              <button onClick={() => setIsConvertModalOpen(false)} className="btn-ghost btn-sm">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div className="bg-slate-900 rounded-lg p-4">
+                <p className="text-sm text-slate-300">
+                  <span className="font-semibold text-white">{selectedStatementIds.length}</span> statement(s) will be converted to internal controls.
+                </p>
+              </div>
+
+              <div>
+                <label className="label">Category (Optional)</label>
+                <select
+                  value={convertForm.category}
+                  onChange={(e) => setConvertForm({ ...convertForm, category: e.target.value })}
+                  className="select"
+                >
+                  {CONTROL_CATEGORY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Priority (Optional)</label>
+                <select
+                  value={convertForm.priority}
+                  onChange={(e) => setConvertForm({ ...convertForm, priority: e.target.value })}
+                  className="select"
+                >
+                  {CONTROL_PRIORITY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-700">
+              <button onClick={() => setIsConvertModalOpen(false)} className="btn-secondary">
+                Cancel
+              </button>
+              <button
+                onClick={handleConvertToControls}
+                disabled={convertMutation.isPending}
+                className="btn-primary flex items-center gap-2"
+              >
+                {convertMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Shield className="h-4 w-4" />
+                )}
+                Convert to Controls
+              </button>
+            </div>
           </div>
         </div>
       )}
