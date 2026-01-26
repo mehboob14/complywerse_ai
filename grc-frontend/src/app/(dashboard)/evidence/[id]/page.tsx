@@ -812,6 +812,13 @@ export default function EvidenceDetailPage() {
             isLocking={lockAssessmentMutation.isPending}
             isUnlocking={unlockAssessmentMutation.isPending}
             formatDateTime={formatDateTime}
+            isClauseLinked={isClauseLinked}
+            onLinkFromAI={(clause: ClauseMapping) => {
+              linkFromAIMutation.mutate(clause);
+            }}
+            linkingClauseIndex={linkingClauseIndex}
+            setLinkingClauseIndex={setLinkingClauseIndex}
+            isLinkingPending={linkFromAIMutation.isPending}
           />
         )}
         {activeTab === 'controls' && (
@@ -1037,7 +1044,12 @@ function AssessmentTab({
   isRunning,
   isLocking,
   isUnlocking,
-  formatDateTime
+  formatDateTime,
+  isClauseLinked,
+  onLinkFromAI,
+  linkingClauseIndex,
+  setLinkingClauseIndex,
+  isLinkingPending
 }: { 
   evidence: EvidenceDetail;
   assessment?: LatestAssessment;
@@ -1051,6 +1063,11 @@ function AssessmentTab({
   isLocking: boolean;
   isUnlocking: boolean;
   formatDateTime: (d?: string | null) => string;
+  isClauseLinked: (clause: ClauseMapping) => boolean;
+  onLinkFromAI: (clause: ClauseMapping) => void;
+  linkingClauseIndex: number | null;
+  setLinkingClauseIndex: (index: number | null) => void;
+  isLinkingPending: boolean;
 }) {
   const [expandedClauses, setExpandedClauses] = useState<Set<number>>(new Set());
 
@@ -1309,9 +1326,9 @@ function AssessmentTab({
                             onClick={(e) => {
                               e.stopPropagation();
                               setLinkingClauseIndex(index);
-                              linkFromAIMutation.mutate(clause);
+                              onLinkFromAI(clause);
                             }}
-                            disabled={linkingClauseIndex === index || linkFromAIMutation.isPending}
+                            disabled={linkingClauseIndex === index || isLinkingPending}
                             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {linkingClauseIndex === index ? (
