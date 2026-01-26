@@ -271,6 +271,20 @@ export default function EvidenceDetailPage() {
     retry: false,
   });
 
+  const { data: aiLinkStatus, refetch: refetchLinkStatus } = useQuery<{
+    evidence_id: number;
+    linked_controls: Record<string, { mapping_id: number; control_id: string; original_reference: string; framework_name: string }>;
+    total_linked: number;
+  }>({
+    queryKey: ['evidence-ai-link-status', evidenceId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/evidence-mgmt/links/${evidenceId}/ai-link-status`);
+      return response.data;
+    },
+    enabled: activeTab === 'assessment',
+    retry: false,
+  });
+
   const processOCRMutation = useMutation({
     mutationFn: () => apiClient.post(`/evidence-mgmt/ocr/${evidenceId}/process-ocr`),
     onSuccess: () => {
@@ -345,6 +359,35 @@ export default function EvidenceDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
     },
   });
+
+  const [linkingClauseIndex, setLinkingClauseIndex] = useState<number | null>(null);
+
+  const linkFromAIMutation = useMutation({
+    mutationFn: (clause: ClauseMapping) => 
+      apiClient.post(`/evidence-mgmt/links/${evidenceId}/link-from-ai`, {
+        framework_name: clause.framework_name,
+        control_id: clause.control_id,
+        clause_reference: clause.clause_reference,
+        confidence: clause.confidence,
+        matching_rationale: clause.matching_rationale
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-ai-link-status', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-controls', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+      setLinkingClauseIndex(null);
+      refetchLinkStatus();
+    },
+    onError: () => {
+      setLinkingClauseIndex(null);
+    }
+  });
+
+  const isClauseLinked = (clause: ClauseMapping): boolean => {
+    if (!aiLinkStatus?.linked_controls) return false;
+    const key = `${clause.framework_name}:${clause.control_id}`;
+    return !!aiLinkStatus.linked_controls[key];
+  };
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return '-';
@@ -1208,6 +1251,16 @@ function AssessmentTab({
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
+                      {isClauseLinked(clause) ? (
+                        <span className="rounded-full px-2 py-0.5 text-xs font-medium border bg-green-500/20 text-green-400 border-green-500/30 flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3" />
+                          Linked
+                        </span>
+                      ) : (
+                        <span className="rounded-full px-2 py-0.5 text-xs font-medium border bg-slate-500/20 text-slate-400 border-slate-500/30">
+                          Not Linked
+                        </span>
+                      )}
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium border ${getCoverageTypeStyle(clause.coverage_type)}`}>
                         {clause.coverage_type}
                       </span>
@@ -1244,6 +1297,36 @@ function AssessmentTab({
                         <blockquote className="border-l-4 border-cyan-500 bg-slate-900 pl-4 py-2 rounded-r-lg">
                           <p className="text-sm text-cyan-300 italic">&quot;{clause.matched_text_excerpt}&quot;</p>
                         </blockquote>
+                      </div>
+                      <div className="pt-2 border-t border-slate-700">
+                        {isClauseLinked(clause) ? (
+                          <div className="flex items-center gap-2 text-green-400">
+                            <CheckCircle className="h-4 w-4" />
+                            <span className="text-sm font-medium">Linked to Requirement</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLinkingClauseIndex(index);
+                              linkFromAIMutation.mutate(clause);
+                            }}
+                            disabled={linkingClauseIndex === index || linkFromAIMutation.isPending}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {linkingClauseIndex === index ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Linking...
+                              </>
+                            ) : (
+                              <>
+                                <Link2 className="h-4 w-4" />
+                                Link to Requirement
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
