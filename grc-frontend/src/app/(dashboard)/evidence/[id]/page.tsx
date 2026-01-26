@@ -361,6 +361,7 @@ export default function EvidenceDetailPage() {
   });
 
   const [linkingClauseIndex, setLinkingClauseIndex] = useState<number | null>(null);
+  const [linkFeedback, setLinkFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const linkFromAIMutation = useMutation({
     mutationFn: (clause: ClauseMapping) => 
@@ -371,15 +372,25 @@ export default function EvidenceDetailPage() {
         confidence: clause.confidence,
         matching_rationale: clause.matching_rationale
       }),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['evidence-ai-link-status', evidenceId] });
       queryClient.invalidateQueries({ queryKey: ['evidence-controls', evidenceId] });
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
       setLinkingClauseIndex(null);
       refetchLinkStatus();
+      const data = response.data;
+      if (data.already_linked) {
+        setLinkFeedback({ type: 'success', message: `Already linked to ${data.control_id}` });
+      } else {
+        setLinkFeedback({ type: 'success', message: `Successfully linked to ${data.control_id}: ${data.control_title}` });
+      }
+      setTimeout(() => setLinkFeedback(null), 5000);
     },
-    onError: () => {
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
       setLinkingClauseIndex(null);
+      const errorMessage = error.response?.data?.detail || 'Failed to create link. Please try again.';
+      setLinkFeedback({ type: 'error', message: errorMessage });
+      setTimeout(() => setLinkFeedback(null), 5000);
     }
   });
 
@@ -819,6 +830,7 @@ export default function EvidenceDetailPage() {
             linkingClauseIndex={linkingClauseIndex}
             setLinkingClauseIndex={setLinkingClauseIndex}
             isLinkingPending={linkFromAIMutation.isPending}
+            linkFeedback={linkFeedback}
           />
         )}
         {activeTab === 'controls' && (
@@ -1049,7 +1061,8 @@ function AssessmentTab({
   onLinkFromAI,
   linkingClauseIndex,
   setLinkingClauseIndex,
-  isLinkingPending
+  isLinkingPending,
+  linkFeedback
 }: { 
   evidence: EvidenceDetail;
   assessment?: LatestAssessment;
@@ -1068,6 +1081,7 @@ function AssessmentTab({
   linkingClauseIndex: number | null;
   setLinkingClauseIndex: (index: number | null) => void;
   isLinkingPending: boolean;
+  linkFeedback: { type: 'success' | 'error'; message: string } | null;
 }) {
   const [expandedClauses, setExpandedClauses] = useState<Set<number>>(new Set());
 
@@ -1239,6 +1253,21 @@ function AssessmentTab({
             </div>
           </div>
         </div>
+
+        {linkFeedback && (
+          <div className={`mt-4 rounded-lg p-3 flex items-center gap-2 ${
+            linkFeedback.type === 'success' 
+              ? 'bg-green-500/20 border border-green-500/30 text-green-400' 
+              : 'bg-red-500/20 border border-red-500/30 text-red-400'
+          }`}>
+            {linkFeedback.type === 'success' ? (
+              <CheckCircle className="h-4 w-4 shrink-0" />
+            ) : (
+              <XCircle className="h-4 w-4 shrink-0" />
+            )}
+            <span className="text-sm">{linkFeedback.message}</span>
+          </div>
+        )}
 
         {((clauseMappings && clauseMappings.length > 0) || (assessment?.clause_mappings && assessment.clause_mappings.length > 0)) && (
           <div className="mt-4">
