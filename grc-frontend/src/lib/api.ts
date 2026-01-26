@@ -903,6 +903,7 @@ export const rcsaApi = {
 export const dashboardApi = {
   getStats: () => apiClient.get('/dashboard/stats'),
   getFrameworkCompliance: (frameworkId: number) => apiClient.get(`/dashboard/compliance/${frameworkId}`),
+  getUnified: (tenantId?: number) => apiClient.get('/dashboard/unified', { params: tenantId ? { tenant_id: tenantId } : {} }),
 };
 
 export const attestationApi = {
