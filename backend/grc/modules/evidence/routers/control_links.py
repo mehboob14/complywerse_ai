@@ -7,7 +7,8 @@ from pydantic import BaseModel
 
 from ....models import (
     Evidence, EvidenceControlMapping, NormalizedControl, FrameworkControl,
-    ControlObjective, FrameworkDomain, Framework, GRCUser, get_db
+    ControlObjective, FrameworkDomain, Framework, GRCUser, get_db,
+    ParsedFrameworkControl, UploadedFramework
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -21,6 +22,15 @@ class ControlLinkCreate(BaseModel):
 
 class BulkControlLinkCreate(BaseModel):
     control_links: List[ControlLinkCreate]
+
+
+class AIClauseLinkCreate(BaseModel):
+    """Create a control link based on AI clause mapping suggestion"""
+    framework_name: str
+    control_id: str
+    clause_reference: Optional[str] = None
+    confidence: Optional[float] = None
+    matching_rationale: Optional[str] = None
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -263,6 +273,161 @@ def unlink_evidence_from_control(
     db.commit()
     
     return {"message": "Control mapping removed successfully"}
+
+
+@router.post("/{evidence_id}/link-from-ai", status_code=status.HTTP_201_CREATED)
+def link_evidence_from_ai_suggestion(
+    evidence_id: int,
+    link_data: AIClauseLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Create a control mapping based on an AI clause mapping suggestion.
+    This allows users to confirm AI-suggested links with a single click.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    
+    # Verify evidence access
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not evidence:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence not found"
+        )
+    
+    # Find the framework by name (case-insensitive partial match)
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        UploadedFramework.name.ilike(f"%{link_data.framework_name}%")
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Framework '{link_data.framework_name}' not found"
+        )
+    
+    # Find the control by control_id within this framework
+    # Try matching control_id or original_reference
+    control = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework.id
+    ).filter(
+        (ParsedFrameworkControl.control_id == link_data.control_id) |
+        (ParsedFrameworkControl.original_reference == link_data.control_id)
+    ).first()
+    
+    if not control:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Control '{link_data.control_id}' not found in framework '{framework.name}'"
+        )
+    
+    # Check if mapping already exists
+    existing = db.query(EvidenceControlMapping).filter(
+        EvidenceControlMapping.evidence_id == evidence_id,
+        EvidenceControlMapping.parsed_control_id == control.id
+    ).first()
+    
+    if existing:
+        return {
+            "message": "Link already exists",
+            "already_linked": True,
+            "mapping_id": existing.id,
+            "evidence_id": evidence_id,
+            "framework_name": framework.name,
+            "control_id": control.control_id,
+            "control_title": control.title
+        }
+    
+    # Create the mapping
+    mapping = EvidenceControlMapping(
+        evidence_id=evidence_id,
+        parsed_control_id=control.id,
+        uploaded_framework_id=framework.id,
+        framework_name=framework.name,
+        control_code=control.control_id,
+        clause_reference=link_data.clause_reference,
+        control_title=control.title,
+        confidence_score=link_data.confidence,
+        matching_rationale=link_data.matching_rationale,
+        coverage_type="ai_suggested"
+    )
+    db.add(mapping)
+    db.commit()
+    db.refresh(mapping)
+    
+    return {
+        "message": "Evidence linked to control successfully",
+        "already_linked": False,
+        "mapping_id": mapping.id,
+        "evidence_id": evidence_id,
+        "framework_name": framework.name,
+        "control_id": control.control_id,
+        "control_title": control.title,
+        "original_reference": control.original_reference
+    }
+
+
+@router.get("/{evidence_id}/ai-link-status")
+def get_ai_link_status(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Get the link status for all AI-suggested clause mappings for an evidence.
+    Returns which controls are already linked vs pending.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    
+    # Verify evidence access
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not evidence:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence not found"
+        )
+    
+    # Get all existing mappings for this evidence (to parsed controls)
+    existing_mappings = db.query(EvidenceControlMapping).filter(
+        EvidenceControlMapping.evidence_id == evidence_id,
+        EvidenceControlMapping.parsed_control_id.isnot(None)
+    ).all()
+    
+    # Build a lookup of linked control IDs
+    linked_controls = {}
+    for mapping in existing_mappings:
+        if mapping.parsed_control_id:
+            control = db.query(ParsedFrameworkControl).filter(
+                ParsedFrameworkControl.id == mapping.parsed_control_id
+            ).first()
+            if control:
+                framework = db.query(UploadedFramework).filter(
+                    UploadedFramework.id == control.uploaded_framework_id
+                ).first()
+                if framework:
+                    key = f"{framework.name}:{control.control_id}"
+                    linked_controls[key] = {
+                        "mapping_id": mapping.id,
+                        "control_id": control.control_id,
+                        "original_reference": control.original_reference,
+                        "framework_name": framework.name
+                    }
+    
+    return {
+        "evidence_id": evidence_id,
+        "linked_controls": linked_controls,
+        "total_linked": len(linked_controls)
+    }
 
 
 @router.get("/coverage")
