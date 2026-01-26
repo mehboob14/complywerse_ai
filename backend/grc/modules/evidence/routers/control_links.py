@@ -8,7 +8,8 @@ from pydantic import BaseModel
 from ....models import (
     Evidence, EvidenceControlMapping, NormalizedControl, FrameworkControl,
     ControlObjective, FrameworkDomain, Framework, GRCUser, get_db,
-    ParsedFrameworkControl, UploadedFramework
+    ParsedFrameworkControl, UploadedFramework, ControlImplementation, 
+    ImplementationEvidence, CertificationJourney
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -374,9 +375,38 @@ def link_evidence_from_ai_suggestion(
         control_title=control.title,
         confidence_score=link_data.confidence,
         matching_rationale=link_data.matching_rationale,
-        coverage_type="ai_suggested"
+        coverage_type="user_confirmed"
     )
     db.add(mapping)
+    db.flush()
+    
+    # Also create ImplementationEvidence records for any certification journeys 
+    # that include this control, so it appears on the certification controls page
+    control_implementations = db.query(ControlImplementation).filter(
+        ControlImplementation.parsed_control_id == control.id
+    ).all()
+    
+    impl_evidence_created = 0
+    for impl in control_implementations:
+        # Check if this evidence is already linked to this implementation
+        existing_impl_evidence = db.query(ImplementationEvidence).filter(
+            ImplementationEvidence.implementation_id == impl.id,
+            ImplementationEvidence.evidence_id == evidence_id
+        ).first()
+        
+        if not existing_impl_evidence:
+            impl_evidence = ImplementationEvidence(
+                implementation_id=impl.id,
+                evidence_id=evidence_id,
+                file_name=evidence.name,
+                uploaded_by=current_user.id,
+                ai_confidence_score=link_data.confidence,
+                ai_assessment_notes=link_data.matching_rationale,
+                review_status="pending"
+            )
+            db.add(impl_evidence)
+            impl_evidence_created += 1
+    
     db.commit()
     db.refresh(mapping)
     
@@ -388,7 +418,8 @@ def link_evidence_from_ai_suggestion(
         "framework_name": framework.name,
         "control_id": control.control_id,
         "control_title": control.title,
-        "original_reference": control.original_reference
+        "original_reference": control.original_reference,
+        "implementation_evidence_created": impl_evidence_created
     }
 
 
