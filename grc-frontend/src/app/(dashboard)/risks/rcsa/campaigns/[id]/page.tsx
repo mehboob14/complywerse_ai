@@ -334,7 +334,7 @@ export default function CampaignDetailPage() {
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-medium text-white flex items-center gap-2">
             <Users className="h-5 w-5 text-primary-400" />
-            Assessment Progress ({campaign.assessments.length} Business Units)
+            Assessment Progress ({(campaign.assessments || []).length} Business Units)
           </h3>
           <div className="flex items-center gap-3">
             {selectedAssessments.length > 0 && (
@@ -363,7 +363,7 @@ export default function CampaignDetailPage() {
                 <th className="text-left py-3 px-4">
                   <input
                     type="checkbox"
-                    checked={selectedAssessments.length === campaign.assessments.length}
+                    checked={selectedAssessments.length === (campaign.assessments || []).length}
                     onChange={(e) => handleSelectAll(e.target.checked)}
                     className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
                   />
@@ -379,7 +379,7 @@ export default function CampaignDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {campaign.assessments.map((assessment) => {
+              {(campaign.assessments || []).map((assessment) => {
                 const astyle = ASSESSMENT_STATUS_COLORS[assessment.status] || ASSESSMENT_STATUS_COLORS.not_started;
                 const StatusIcon = astyle.icon;
 
@@ -480,7 +480,7 @@ export default function CampaignDetailPage() {
           </h3>
           <div className="space-y-3">
             {Object.entries(ASSESSMENT_STATUS_COLORS).map(([status, style]) => {
-              const count = campaign.assessments.filter(a => a.status === status).length;
+              const count = (campaign.assessments || []).filter(a => a.status === status).length;
               const StatusIcon = style.icon;
               return (
                 <div key={status} className="flex items-center justify-between">
