@@ -300,11 +300,30 @@ def link_evidence_from_ai_suggestion(
             detail="Evidence not found"
         )
     
-    # Find the framework by name (case-insensitive partial match)
+    # Find the framework by name using multiple matching strategies
+    # Strategy 1: Exact match (case-insensitive)
     framework = db.query(UploadedFramework).filter(
         UploadedFramework.tenant_id.in_(user_tenants),
-        UploadedFramework.name.ilike(f"%{link_data.framework_name}%")
+        func.lower(UploadedFramework.name) == func.lower(link_data.framework_name)
     ).first()
+    
+    # Strategy 2: Framework name contains search term
+    if not framework:
+        framework = db.query(UploadedFramework).filter(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.name.ilike(f"%{link_data.framework_name}%")
+        ).first()
+    
+    # Strategy 3: Search term contains framework name (handles "SBP ETGRMF v2018" matching "SBP ETGRMF")
+    if not framework:
+        all_frameworks = db.query(UploadedFramework).filter(
+            UploadedFramework.tenant_id.in_(user_tenants)
+        ).all()
+        search_lower = link_data.framework_name.lower()
+        for fw in all_frameworks:
+            if fw.name.lower() in search_lower:
+                framework = fw
+                break
     
     if not framework:
         raise HTTPException(
