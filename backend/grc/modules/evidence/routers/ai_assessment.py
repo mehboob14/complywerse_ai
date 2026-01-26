@@ -682,8 +682,8 @@ def run_ai_assessment(
             db.add(assessment)
             db.flush()
             
-            # Link controls with validated clause data
-            auto_link_controls_with_clause_data(evidence, validated_cached_mappings, db, assessment.id)
+            # AI clause mappings are stored as suggestions only
+            # Users must manually click "Link to Requirement" to create actual links
             
             quality_score = (
                 cached_response.get("relevance_score", 0) * 0.3 +
@@ -773,8 +773,8 @@ def run_ai_assessment(
         db.add(assessment)
         db.flush()
         
-        # Link controls with clause-level data (uses already validated mappings)
-        auto_link_controls_with_clause_data(evidence, validated_clause_mappings, db, assessment.id)
+        # AI clause mappings are stored as suggestions only
+        # Users must manually click "Link to Requirement" to create actual links
         
         # Update evidence quality score
         quality_score = (
