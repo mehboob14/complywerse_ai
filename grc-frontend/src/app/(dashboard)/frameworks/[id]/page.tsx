@@ -239,7 +239,7 @@ export default function CertificationJourneyPage() {
 
   const deleteEvidenceMutation = useMutation({
     mutationFn: async (evidenceId: number) => {
-      return apiClient.delete(`/framework-upload/evidence/${evidenceId}`);
+      return apiClient.delete(`/certifications/evidence/${evidenceId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });

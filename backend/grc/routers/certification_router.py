@@ -1006,6 +1006,63 @@ def get_uploaded_framework_phases(
     return phases
 
 
+@router.delete("/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_implementation_evidence(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Delete an ImplementationEvidence record by ID."""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(ImplementationEvidence).filter(
+        ImplementationEvidence.id == evidence_id
+    ).first()
+    
+    if not evidence:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence not found"
+        )
+    
+    impl = db.query(ControlImplementation).filter(
+        ControlImplementation.id == evidence.implementation_id
+    ).first()
+    
+    if impl:
+        journey = db.query(CertificationJourney).filter(
+            CertificationJourney.id == impl.journey_id
+        ).first()
+        if journey and journey.tenant_id not in user_tenants:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+    
+    if evidence.file_path and os.path.exists(evidence.file_path):
+        try:
+            os.remove(evidence.file_path)
+        except Exception:
+            pass
+    
+    if evidence.evidence_id:
+        linked_evidence = db.query(Evidence).filter(
+            Evidence.id == evidence.evidence_id
+        ).first()
+        if linked_evidence:
+            if linked_evidence.file_path and os.path.exists(linked_evidence.file_path):
+                try:
+                    os.remove(linked_evidence.file_path)
+                except Exception:
+                    pass
+            db.delete(linked_evidence)
+    
+    db.delete(evidence)
+    db.commit()
+    
+    return None
+
+
 @router.get("/frameworks/{framework_id}/phases", status_code=status.HTTP_410_GONE)
 def get_framework_phases(
     framework_id: int,
