@@ -996,21 +996,62 @@ def get_clause_mappings(
     ).order_by(EvidenceAIAssessment.assessed_at.desc()).first()
     
     if latest_assessment and latest_assessment.clause_mappings:
-        # Return clause mappings from the AI assessment directly
-        return [
-            {
+        # Build a cache of framework controls for verification
+        user_tenants = get_user_tenants(current_user, db)
+        frameworks = db.query(UploadedFramework).filter(
+            UploadedFramework.tenant_id.in_(user_tenants)
+        ).all()
+        
+        # Build control lookup: (framework_name_lower_part, control_id) -> (actual_title, actual_framework_name)
+        control_lookup = {}
+        for fw in frameworks:
+            controls = db.query(ParsedFrameworkControl).filter(
+                ParsedFrameworkControl.uploaded_framework_id == fw.id
+            ).all()
+            fw_name_lower = fw.name.lower()
+            for ctrl in controls:
+                # Use multiple keys for flexible matching
+                key1 = (fw_name_lower, ctrl.control_id.lower() if ctrl.control_id else "")
+                key2 = (fw_name_lower, ctrl.original_reference.lower() if ctrl.original_reference else "")
+                control_lookup[key1] = (ctrl.title, fw.name, ctrl.control_id)
+                if key2 != key1:
+                    control_lookup[key2] = (ctrl.title, fw.name, ctrl.control_id)
+        
+        # Return clause mappings with verified control titles from database
+        result = []
+        for idx, mapping in enumerate(latest_assessment.clause_mappings):
+            ai_framework = mapping.get("framework_name", "")
+            ai_control_id = mapping.get("control_id", "")
+            ai_title = mapping.get("control_title", "")
+            
+            # Try to find the actual control in our lookup
+            verified_title = ai_title
+            verified_framework = ai_framework
+            verified_control_id = ai_control_id
+            
+            # Try matching with different framework name variations
+            for fw in frameworks:
+                fw_lower = fw.name.lower()
+                # Check if AI framework name contains or is contained in actual framework name
+                if fw_lower in ai_framework.lower() or ai_framework.lower() in fw_lower:
+                    key = (fw_lower, ai_control_id.lower())
+                    if key in control_lookup:
+                        verified_title, verified_framework, verified_control_id = control_lookup[key]
+                        break
+            
+            result.append({
                 "id": idx,
-                "framework_name": mapping.get("framework_name", ""),
-                "control_id": mapping.get("control_id", ""),
+                "framework_name": verified_framework,
+                "control_id": verified_control_id,
                 "clause_reference": mapping.get("clause_reference", ""),
-                "control_title": mapping.get("control_title", ""),
+                "control_title": verified_title,
                 "matching_rationale": mapping.get("matching_rationale", ""),
                 "confidence": mapping.get("confidence", 0),
                 "coverage_type": mapping.get("coverage_type", "partial"),
                 "matched_text_excerpt": mapping.get("matched_text_excerpt", ""),
-            }
-            for idx, mapping in enumerate(latest_assessment.clause_mappings)
-        ]
+            })
+        
+        return result
     
     # Fallback to EvidenceControlMapping table for backward compatibility
     mappings = db.query(EvidenceControlMapping).filter(
