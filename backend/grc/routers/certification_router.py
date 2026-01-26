@@ -467,9 +467,10 @@ def list_journey_controls(
         for ev in impl.evidence_attachments:
             ai_assessment_status = None
             ai_assessment_summary = None
+            linked_ev_id = getattr(ev, 'linked_evidence_id', None)
             
-            if ev.linked_evidence_id:
-                linked_evidence = db.query(Evidence).filter(Evidence.id == ev.linked_evidence_id).first()
+            if linked_ev_id:
+                linked_evidence = db.query(Evidence).filter(Evidence.id == linked_ev_id).first()
                 if linked_evidence:
                     latest_assessment = db.query(EvidenceAIAssessment).filter(
                         EvidenceAIAssessment.evidence_id == linked_evidence.id
@@ -490,9 +491,9 @@ def list_journey_controls(
                 "file_name": ev.file_name,
                 "file_size": ev.file_size,
                 "uploaded_at": ev.uploaded_at.isoformat() if ev.uploaded_at else None,
-                "ai_confidence_score": ev.ai_confidence_score,
-                "review_status": ev.review_status,
-                "linked_evidence_id": ev.linked_evidence_id,
+                "ai_confidence_score": getattr(ev, 'ai_confidence_score', None),
+                "review_status": getattr(ev, 'review_status', None),
+                "linked_evidence_id": linked_ev_id,
                 "ai_assessment_status": ai_assessment_status,
                 "ai_assessment_summary": ai_assessment_summary
             })
