@@ -224,7 +224,7 @@ export default function CampaignDetailPage() {
   }
 
   const statusStyle = STATUS_COLORS[campaign.status] || STATUS_COLORS.draft;
-  const pendingAssessments = campaign.assessments.filter(a => a.status === 'not_started' || a.status === 'in_progress');
+  const pendingAssessments = (campaign.assessments || []).filter(a => a.status === 'not_started' || a.status === 'in_progress');
 
   return (
     <div className="space-y-8">
