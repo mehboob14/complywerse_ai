@@ -346,7 +346,7 @@ def get_unified_dashboard(
         ).all()
         
         fw_total = len(controls)
-        fw_implemented = sum(1 for c in controls if c.implementation_status in ['implemented', 'partial'])
+        fw_implemented = sum(1 for c in controls if getattr(c, 'implementation_status', None) in ['implemented', 'partial'] or getattr(c, 'is_verified', False))
         
         total_controls += fw_total
         implemented_controls += fw_implemented
@@ -357,8 +357,8 @@ def get_unified_dashboard(
         framework_coverage.append({
             "framework_id": fw.id,
             "name": fw.name,
-            "short_code": fw.short_code or fw.name[:10],
-            "version": fw.version,
+            "short_code": getattr(fw, 'short_code', None) or fw.name[:10] if fw.name else "FW",
+            "version": getattr(fw, 'version', None) or "1.0",
             "total_controls": fw_total,
             "implemented_controls": fw_implemented,
             "score": score,
