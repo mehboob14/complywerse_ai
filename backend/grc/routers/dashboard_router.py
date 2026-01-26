@@ -409,9 +409,11 @@ def get_unified_dashboard(
         RiskIncident.status.in_(['reported', 'investigating', 'open'])
     ).scalar() or 0
     
-    # Overdue mitigations
-    mitigations_overdue = db.query(func.count(RiskMitigationAction.id)).filter(
-        RiskMitigationAction.tenant_id.in_(tenant_filter),
+    # Overdue mitigations (join through Risk for tenant filtering)
+    mitigations_overdue = db.query(func.count(RiskMitigationAction.id)).join(
+        Risk, RiskMitigationAction.risk_id == Risk.id
+    ).filter(
+        Risk.tenant_id.in_(tenant_filter),
         RiskMitigationAction.due_date < now,
         RiskMitigationAction.status.notin_(['completed', 'cancelled'])
     ).scalar() or 0
@@ -461,10 +463,10 @@ def get_unified_dashboard(
     # ===== REGULATORY CHANGES =====
     reg_changes = db.query(RegulatoryChange).filter(
         RegulatoryChange.tenant_id.in_(tenant_filter)
-    ).order_by(RegulatoryChange.publication_date.desc()).limit(10).all()
+    ).order_by(RegulatoryChange.created_at.desc()).limit(10).all()
     
-    pending_review_changes = sum(1 for rc in reg_changes if rc.status in ['pending', 'under_review'])
-    high_impact_changes = sum(1 for rc in reg_changes if rc.impact_level in ['high', 'critical'])
+    pending_review_changes = sum(1 for rc in reg_changes if getattr(rc, 'status', None) in ['pending', 'under_review'])
+    high_impact_changes = sum(1 for rc in reg_changes if getattr(rc, 'priority', None) in ['high', 'critical'])
     
     # ===== COMPLIANCE / STATEMENTS =====
     statements = db.query(PolicyStatement).filter(
@@ -506,9 +508,11 @@ def get_unified_dashboard(
             "link": f"/governance/documents/{doc.id}"
         })
     
-    # Overdue mitigations (top 5)
-    overdue_actions = db.query(RiskMitigationAction).filter(
-        RiskMitigationAction.tenant_id.in_(tenant_filter),
+    # Overdue mitigations (top 5) - join through Risk for tenant filtering
+    overdue_actions = db.query(RiskMitigationAction).join(
+        Risk, RiskMitigationAction.risk_id == Risk.id
+    ).filter(
+        Risk.tenant_id.in_(tenant_filter),
         RiskMitigationAction.due_date < now,
         RiskMitigationAction.status.notin_(['completed', 'cancelled'])
     ).order_by(RiskMitigationAction.due_date.asc()).limit(5).all()
@@ -517,7 +521,7 @@ def get_unified_dashboard(
         days_overdue = (now - action.due_date).days
         deadlines.append({
             "type": "mitigation_overdue",
-            "title": f"Overdue: {action.action_title or action.title}",
+            "title": f"Overdue: {getattr(action, 'action_title', None) or action.title}",
             "due_date": action.due_date.isoformat(),
             "days_remaining": -days_overdue,
             "urgency": "critical",
@@ -563,15 +567,16 @@ def get_unified_dashboard(
     # Recent incidents
     recent_incidents = db.query(RiskIncident).filter(
         RiskIncident.tenant_id.in_(tenant_filter)
-    ).order_by(RiskIncident.reported_at.desc()).limit(3).all()
+    ).order_by(RiskIncident.created_at.desc()).limit(3).all()
     
     for inc in recent_incidents:
+        incident_timestamp = getattr(inc, 'incident_date', None) or getattr(inc, 'created_at', None) or now
         activity.append({
             "type": "incident",
             "action": "reported",
             "title": inc.title,
-            "timestamp": inc.reported_at.isoformat() if inc.reported_at else now.isoformat(),
-            "status": inc.status,
+            "timestamp": incident_timestamp.isoformat() if incident_timestamp else now.isoformat(),
+            "status": getattr(inc, 'status', None) or "open",
             "link": f"/erm/incidents"
         })
     
@@ -684,10 +689,10 @@ def get_unified_dashboard(
                 {
                     "id": rc.id,
                     "title": rc.title,
-                    "regulator": rc.regulator,
-                    "impact_level": rc.impact_level,
-                    "status": rc.status,
-                    "publication_date": rc.publication_date.isoformat() if rc.publication_date else None
+                    "regulator": getattr(rc, 'source', None) or "Unknown",
+                    "impact_level": getattr(rc, 'priority', None) or "medium",
+                    "status": getattr(rc, 'status', None) or "pending",
+                    "publication_date": rc.published_date.isoformat() if getattr(rc, 'published_date', None) else None
                 }
                 for rc in reg_changes[:5]
             ]
