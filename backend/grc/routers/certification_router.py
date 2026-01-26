@@ -13,7 +13,8 @@ from ..models import (
     CertificationJourney, ControlImplementation, ImplementationEvidence,
     Framework, FrameworkControl, FrameworkDomain, ControlObjective,
     FrameworkSubControl, Evidence, GRCUser, Tenant, CuratedEvidenceItem, 
-    CertificationPhase, UploadedFramework, ParsedFrameworkControl, get_db
+    CertificationPhase, UploadedFramework, ParsedFrameworkControl, get_db,
+    EvidenceAIAssessment
 )
 from ..schemas import (
     CertificationJourneyCreate, CertificationJourneyUpdate, CertificationJourneyResponse,
@@ -464,13 +465,36 @@ def list_journey_controls(
         
         evidence_list = []
         for ev in impl.evidence_attachments:
+            ai_assessment_status = None
+            ai_assessment_summary = None
+            
+            if ev.linked_evidence_id:
+                linked_evidence = db.query(Evidence).filter(Evidence.id == ev.linked_evidence_id).first()
+                if linked_evidence:
+                    latest_assessment = db.query(EvidenceAIAssessment).filter(
+                        EvidenceAIAssessment.evidence_id == linked_evidence.id
+                    ).order_by(EvidenceAIAssessment.assessed_at.desc()).first()
+                    
+                    if latest_assessment:
+                        ai_assessment_status = "completed"
+                        ai_assessment_summary = latest_assessment.content_summary
+                    elif linked_evidence.ocr_status == "processing":
+                        ai_assessment_status = "processing"
+                    elif linked_evidence.ocr_status == "completed" and not latest_assessment:
+                        ai_assessment_status = "pending_assessment"
+                    else:
+                        ai_assessment_status = "pending_ocr"
+            
             evidence_list.append({
                 "id": ev.id,
                 "file_name": ev.file_name,
                 "file_size": ev.file_size,
                 "uploaded_at": ev.uploaded_at.isoformat() if ev.uploaded_at else None,
                 "ai_confidence_score": ev.ai_confidence_score,
-                "review_status": ev.review_status
+                "review_status": ev.review_status,
+                "linked_evidence_id": ev.linked_evidence_id,
+                "ai_assessment_status": ai_assessment_status,
+                "ai_assessment_summary": ai_assessment_summary
             })
         
         result.append({

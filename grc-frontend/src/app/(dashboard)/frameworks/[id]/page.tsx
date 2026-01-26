@@ -48,7 +48,8 @@ import {
   TrendingUp,
   Radio,
   Paperclip,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 
 const EVIDENCE_TYPE_MAP: Record<string, { label: string; color: string }> = {
@@ -231,6 +232,21 @@ export default function CertificationJourneyPage() {
     },
     onError: () => {
       setAssessingEvidenceId(null);
+    }
+  });
+
+  const [deletingEvidenceId, setDeletingEvidenceId] = useState<number | null>(null);
+
+  const deleteEvidenceMutation = useMutation({
+    mutationFn: async (evidenceId: number) => {
+      return apiClient.delete(`/framework-upload/evidence/${evidenceId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      setDeletingEvidenceId(null);
+    },
+    onError: () => {
+      setDeletingEvidenceId(null);
     }
   });
 
@@ -1105,6 +1121,23 @@ export default function CertificationJourneyPage() {
                                   Assess
                                 </button>
                               )}
+                              <button
+                                onClick={() => {
+                                  if (window.confirm('Are you sure you want to delete this evidence?')) {
+                                    setDeletingEvidenceId(ev.id);
+                                    deleteEvidenceMutation.mutate(ev.id);
+                                  }
+                                }}
+                                disabled={deletingEvidenceId === ev.id}
+                                className="flex items-center gap-1 rounded bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400 hover:bg-red-500/30 disabled:opacity-50"
+                                title="Delete evidence"
+                              >
+                                {deletingEvidenceId === ev.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3 w-3" />
+                                )}
+                              </button>
                             </div>
                           </div>
                           {ev.ai_assessment_summary && (
