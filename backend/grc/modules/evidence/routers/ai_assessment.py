@@ -1017,62 +1017,99 @@ def get_clause_mappings(
     ).order_by(EvidenceAIAssessment.assessed_at.desc()).first()
     
     if latest_assessment and latest_assessment.clause_mappings:
-        # Build a cache of framework controls for verification
-        user_tenants = get_user_tenants(current_user, db)
-        frameworks = db.query(UploadedFramework).filter(
-            UploadedFramework.tenant_id.in_(user_tenants)
-        ).all()
-        
-        # Build control lookup: (framework_name_lower_part, control_id) -> (actual_title, actual_framework_name)
-        control_lookup = {}
-        for fw in frameworks:
-            controls = db.query(ParsedFrameworkControl).filter(
-                ParsedFrameworkControl.uploaded_framework_id == fw.id
+        try:
+            # Build a cache of framework controls for verification
+            user_tenants = get_user_tenants(current_user, db)
+            frameworks = db.query(UploadedFramework).filter(
+                UploadedFramework.upload_status.in_(['parsed', 'completed', 'published']),
+                UploadedFramework.is_active == True,
+                (UploadedFramework.tenant_id.in_(user_tenants)) | 
+                (UploadedFramework.is_shared == True) |
+                (UploadedFramework.tenant_id == None)
             ).all()
-            fw_name_lower = fw.name.lower()
-            for ctrl in controls:
-                # Use multiple keys for flexible matching
-                key1 = (fw_name_lower, ctrl.control_id.lower() if ctrl.control_id else "")
-                key2 = (fw_name_lower, ctrl.original_reference.lower() if ctrl.original_reference else "")
-                control_lookup[key1] = (ctrl.title, fw.name, ctrl.control_id)
-                if key2 != key1:
-                    control_lookup[key2] = (ctrl.title, fw.name, ctrl.control_id)
-        
-        # Return clause mappings with verified control titles from database
-        result = []
-        for idx, mapping in enumerate(latest_assessment.clause_mappings):
-            ai_framework = mapping.get("framework_name", "")
-            ai_control_id = mapping.get("control_id", "")
-            ai_title = mapping.get("control_title", "")
             
-            # Try to find the actual control in our lookup
-            verified_title = ai_title
-            verified_framework = ai_framework
-            verified_control_id = ai_control_id
+            # Build control lookup with multiple key formats for flexible matching
+            control_lookup = {}
+            framework_name_map = {}  # AI name variations -> actual framework
             
-            # Try matching with different framework name variations
             for fw in frameworks:
-                fw_lower = fw.name.lower()
-                # Check if AI framework name contains or is contained in actual framework name
-                if fw_lower in ai_framework.lower() or ai_framework.lower() in fw_lower:
-                    key = (fw_lower, ai_control_id.lower())
-                    if key in control_lookup:
-                        verified_title, verified_framework, verified_control_id = control_lookup[key]
-                        break
+                fw_name_lower = fw.name.lower()
+                framework_name_map[fw_name_lower] = fw.name
+                
+                controls = db.query(ParsedFrameworkControl).filter(
+                    ParsedFrameworkControl.uploaded_framework_id == fw.id
+                ).all()
+                
+                for ctrl in controls:
+                    ctrl_id_lower = (ctrl.control_id or "").lower().strip()
+                    orig_ref_lower = (ctrl.original_reference or "").lower().strip()
+                    
+                    # Store with multiple key variations
+                    if ctrl_id_lower:
+                        control_lookup[(fw_name_lower, ctrl_id_lower)] = (ctrl.title, fw.name, ctrl.control_id)
+                    if orig_ref_lower and orig_ref_lower != ctrl_id_lower:
+                        control_lookup[(fw_name_lower, orig_ref_lower)] = (ctrl.title, fw.name, ctrl.control_id)
             
-            result.append({
-                "id": idx,
-                "framework_name": verified_framework,
-                "control_id": verified_control_id,
-                "clause_reference": mapping.get("clause_reference", ""),
-                "control_title": verified_title,
-                "matching_rationale": mapping.get("matching_rationale", ""),
-                "confidence": mapping.get("confidence", 0),
-                "coverage_type": mapping.get("coverage_type", "partial"),
-                "matched_text_excerpt": mapping.get("matched_text_excerpt", ""),
-            })
-        
-        return result
+            # Return clause mappings with verified control titles from database
+            result = []
+            for idx, mapping in enumerate(latest_assessment.clause_mappings):
+                ai_framework = mapping.get("framework_name", "")
+                ai_control_id = mapping.get("control_id", "")
+                ai_title = mapping.get("control_title", "")
+                
+                # Default to AI-provided values
+                verified_title = ai_title
+                verified_framework = ai_framework
+                verified_control_id = ai_control_id
+                
+                # Try to find matching framework and verify control
+                ai_fw_lower = ai_framework.lower()
+                matched_fw_name = None
+                
+                for fw in frameworks:
+                    fw_lower = fw.name.lower()
+                    # Flexible framework name matching
+                    if (fw_lower in ai_fw_lower or ai_fw_lower in fw_lower or
+                        any(word in ai_fw_lower for word in fw_lower.split() if len(word) >= 4)):
+                        matched_fw_name = fw_lower
+                        break
+                
+                if matched_fw_name:
+                    # Try to find the control in this framework
+                    ctrl_key = (matched_fw_name, ai_control_id.lower().strip())
+                    if ctrl_key in control_lookup:
+                        verified_title, verified_framework, verified_control_id = control_lookup[ctrl_key]
+                
+                result.append({
+                    "id": idx,
+                    "framework_name": verified_framework,
+                    "control_id": verified_control_id,
+                    "clause_reference": mapping.get("clause_reference", ""),
+                    "control_title": verified_title,
+                    "matching_rationale": mapping.get("matching_rationale", ""),
+                    "confidence": mapping.get("confidence", 0),
+                    "coverage_type": mapping.get("coverage_type", "partial"),
+                    "matched_text_excerpt": mapping.get("matched_text_excerpt", ""),
+                })
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error verifying clause mappings: {e}")
+            # Fallback: return raw mappings without verification
+            return [
+                {
+                    "id": idx,
+                    "framework_name": mapping.get("framework_name", ""),
+                    "control_id": mapping.get("control_id", ""),
+                    "clause_reference": mapping.get("clause_reference", ""),
+                    "control_title": mapping.get("control_title", ""),
+                    "matching_rationale": mapping.get("matching_rationale", ""),
+                    "confidence": mapping.get("confidence", 0),
+                    "coverage_type": mapping.get("coverage_type", "partial"),
+                    "matched_text_excerpt": mapping.get("matched_text_excerpt", ""),
+                }
+                for idx, mapping in enumerate(latest_assessment.clause_mappings)
+            ]
     
     # Fallback to EvidenceControlMapping table for backward compatibility
     mappings = db.query(EvidenceControlMapping).filter(
