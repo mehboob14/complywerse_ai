@@ -393,9 +393,21 @@ def validate_and_filter_clause_mappings(
         if fw_name_lower in valid_controls_by_framework:
             matched_fw_key = fw_name_lower
         else:
-            # Partial match
+            # Partial match - try containment
             for key in valid_controls_by_framework:
                 if key in fw_name_lower or fw_name_lower in key:
+                    matched_fw_key = key
+                    break
+        
+        # If still no match, try word-based matching (handles typos like "framrwork" vs "framework")
+        if not matched_fw_key:
+            ai_words = set(fw_name_lower.replace('-', ' ').split())
+            for key in valid_controls_by_framework:
+                db_words = set(key.replace('-', ' ').split())
+                # If at least 2 significant words match, consider it a match
+                common_words = ai_words & db_words
+                significant_common = [w for w in common_words if len(w) >= 3]
+                if len(significant_common) >= 2:
                     matched_fw_key = key
                     break
         
@@ -411,10 +423,19 @@ def validate_and_filter_clause_mappings(
         if normalized_ctrl in valid_ids:
             validated_mappings.append(mapping)
         else:
-            # STRICT: No partial matching - only exact normalized matches allowed
-            # This prevents hallucinated control IDs like "A.12" from matching "A.12.4.1"
-            logger.warning(f"Rejected mapping: control '{control_id}' (normalized: '{normalized_ctrl}') not found in framework '{framework_name}'")
-            rejected_count += 1
+            # Try prefix matching: AI might return "3.3.3" when database has "3.3.3.a"
+            # Find any control that starts with the normalized AI control
+            matched_by_prefix = False
+            for valid_id in valid_ids:
+                if valid_id.startswith(normalized_ctrl) and len(normalized_ctrl) >= 2:
+                    # Found a match - AI returned parent control, database has more specific
+                    matched_by_prefix = True
+                    validated_mappings.append(mapping)
+                    break
+            
+            if not matched_by_prefix:
+                logger.warning(f"Rejected mapping: control '{control_id}' (normalized: '{normalized_ctrl}') not found in framework '{framework_name}'")
+                rejected_count += 1
     
     if rejected_count > 0:
         logger.info(f"Clause mapping validation: {len(validated_mappings)} valid, {rejected_count} rejected (invalid control IDs)")
