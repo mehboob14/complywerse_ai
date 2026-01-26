@@ -1006,6 +1006,62 @@ def get_uploaded_framework_phases(
     return phases
 
 
+@router.put("/evidence/{evidence_id}/review")
+def review_implementation_evidence(
+    evidence_id: int,
+    review_data: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Approve or reject an ImplementationEvidence record."""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    evidence = db.query(ImplementationEvidence).filter(
+        ImplementationEvidence.id == evidence_id
+    ).first()
+    
+    if not evidence:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence not found"
+        )
+    
+    impl = db.query(ControlImplementation).filter(
+        ControlImplementation.id == evidence.implementation_id
+    ).first()
+    
+    if impl:
+        journey = db.query(CertificationJourney).filter(
+            CertificationJourney.id == impl.journey_id
+        ).first()
+        if journey and journey.tenant_id not in user_tenants:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+    
+    action = review_data.get("action")
+    if action not in ["approve", "reject"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid action. Must be 'approve' or 'reject'"
+        )
+    
+    evidence.review_status = "approved" if action == "approve" else "rejected"
+    evidence.reviewed_by = current_user.id
+    evidence.reviewed_at = datetime.utcnow()
+    evidence.review_notes = review_data.get("notes", "")
+    
+    db.commit()
+    
+    return {
+        "id": evidence.id,
+        "review_status": evidence.review_status,
+        "reviewed_by": current_user.id,
+        "message": f"Evidence {action}d successfully"
+    }
+
+
 @router.delete("/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_implementation_evidence(
     evidence_id: int,

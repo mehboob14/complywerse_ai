@@ -49,7 +49,8 @@ import {
   Radio,
   Paperclip,
   Sparkles,
-  Trash2
+  Trash2,
+  CheckCircle
 } from 'lucide-react';
 
 const EVIDENCE_TYPE_MAP: Record<string, { label: string; color: string }> = {
@@ -247,6 +248,15 @@ export default function CertificationJourneyPage() {
     },
     onError: () => {
       setDeletingEvidenceId(null);
+    }
+  });
+
+  const reviewEvidenceMutation = useMutation({
+    mutationFn: async ({ evidenceId, action }: { evidenceId: number; action: 'approve' | 'reject' }) => {
+      return apiClient.put(`/certifications/evidence/${evidenceId}/review`, { action });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
     }
   });
 
@@ -966,6 +976,159 @@ export default function CertificationJourneyPage() {
             )}
             
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Linked Evidence - Now appears FIRST (left column) */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <Paperclip className="h-4 w-4 text-primary-400" />
+                    Linked Evidence ({control.evidence_count})
+                  </h4>
+                  {showUpload && (
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => handleFileUpload(control.id, e)}
+                        disabled={uploadingControlId === control.id}
+                      />
+                      <span className="flex items-center gap-1 rounded bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600">
+                        {uploadingControlId === control.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Upload className="h-3 w-3" />
+                        )}
+                        Upload
+                      </span>
+                    </label>
+                  )}
+                </div>
+                {control.evidence?.length > 0 ? (
+                  <div className="space-y-2">
+                    {control.evidence.map((ev: ControlEvidence) => {
+                      const getAIAssessmentBadge = () => {
+                        const status = ev.ai_assessment_status || 'pending';
+                        switch (status) {
+                          case 'completed':
+                            return { label: 'Assessed', className: 'bg-green-500/20 text-green-400' };
+                          case 'processing':
+                            return { label: 'Assessing...', className: 'bg-yellow-500/20 text-yellow-400' };
+                          case 'pending_assessment':
+                            return { label: 'Ready for Assessment', className: 'bg-blue-500/20 text-blue-400' };
+                          case 'pending_ocr':
+                            return { label: 'Processing...', className: 'bg-slate-500/20 text-slate-400' };
+                          default:
+                            return { label: 'Pending', className: 'bg-slate-500/20 text-slate-400' };
+                        }
+                      };
+                      const aiBadge = getAIAssessmentBadge();
+                      const canAssess = ev.ai_assessment_status === 'pending_assessment' || ev.ai_assessment_status === 'pending' || !ev.ai_assessment_status;
+                      const isAssessing = assessingEvidenceId === ev.id;
+                      const isPendingReview = ev.review_status === 'pending';
+                      
+                      return (
+                        <div key={ev.id} className="rounded-lg bg-slate-900/50 p-3">
+                          <div className="flex items-center gap-3">
+                            <Paperclip className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-white truncate">{ev.file_name || 'Evidence file'}</p>
+                              <p className="text-xs text-slate-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className={`rounded px-2 py-0.5 text-xs ${aiBadge.className}`} title={ev.ai_assessment_summary || ''}>
+                                {aiBadge.label}
+                              </span>
+                              <span className={`rounded px-2 py-0.5 text-xs ${
+                                ev.review_status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                                ev.review_status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                                'bg-yellow-500/20 text-yellow-400'
+                              }`}>
+                                {ev.review_status}
+                              </span>
+                            </div>
+                          </div>
+                          {ev.ai_assessment_summary && (
+                            <div className="mt-2 ml-7 rounded bg-slate-800/50 p-2">
+                              <p className="text-xs text-slate-300">{ev.ai_assessment_summary}</p>
+                            </div>
+                          )}
+                          {/* Action buttons row */}
+                          <div className="mt-3 ml-7 flex items-center gap-2 flex-wrap">
+                            {isPendingReview && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    reviewEvidenceMutation.mutate({ evidenceId: ev.id, action: 'approve' });
+                                  }}
+                                  disabled={reviewEvidenceMutation.isPending}
+                                  className="flex items-center gap-1 rounded bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400 hover:bg-green-500/30 disabled:opacity-50"
+                                  title="Approve evidence"
+                                >
+                                  <CheckCircle className="h-3 w-3" />
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    reviewEvidenceMutation.mutate({ evidenceId: ev.id, action: 'reject' });
+                                  }}
+                                  disabled={reviewEvidenceMutation.isPending}
+                                  className="flex items-center gap-1 rounded bg-red-500/20 px-2 py-1 text-xs font-medium text-red-400 hover:bg-red-500/30 disabled:opacity-50"
+                                  title="Reject evidence"
+                                >
+                                  <XCircle className="h-3 w-3" />
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                            {canAssess && ev.linked_evidence_id && (
+                              <button
+                                onClick={() => {
+                                  setAssessingEvidenceId(ev.id);
+                                  assessEvidenceMutation.mutate(ev.linked_evidence_id);
+                                }}
+                                disabled={isAssessing}
+                                className="flex items-center gap-1 rounded bg-primary-500 px-2 py-1 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+                                title="Trigger AI assessment"
+                              >
+                                {isAssessing ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3" />
+                                )}
+                                Assess
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                if (window.confirm('Are you sure you want to delete this evidence?')) {
+                                  setDeletingEvidenceId(ev.id);
+                                  deleteEvidenceMutation.mutate(ev.id);
+                                }
+                              }}
+                              disabled={deletingEvidenceId === ev.id}
+                              className="flex items-center gap-1 rounded bg-red-500/20 px-2 py-1 text-xs font-medium text-red-400 hover:bg-red-500/30 disabled:opacity-50"
+                              title="Delete evidence"
+                            >
+                              {deletingEvidenceId === ev.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )}
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6 text-center">
+                    <Paperclip className="mx-auto h-8 w-8 text-slate-600 mb-2" />
+                    <p className="text-sm text-slate-400">No evidence linked yet</p>
+                    <p className="text-xs text-slate-500 mt-1">Upload evidence to comply</p>
+                  </div>
+                )}
+              </div>
+              {/* Required Evidence - Now appears SECOND (right column) */}
               <div>
                 <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
                   <FileCheck className="h-4 w-4 text-slate-400" />
@@ -1035,125 +1198,6 @@ export default function CertificationJourneyPage() {
                 ) : (
                   <div className="rounded-lg bg-slate-900/50 p-4 text-center">
                     <p className="text-sm text-slate-400">No evidence requirements defined</p>
-                  </div>
-                )}
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-semibold text-white">
-                    Linked Evidence ({control.evidence_count})
-                  </h4>
-                  {showUpload && (
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        className="hidden"
-                        onChange={(e) => handleFileUpload(control.id, e)}
-                        disabled={uploadingControlId === control.id}
-                      />
-                      <span className="flex items-center gap-1 rounded bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600">
-                        {uploadingControlId === control.id ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Upload className="h-3 w-3" />
-                        )}
-                        Upload
-                      </span>
-                    </label>
-                  )}
-                </div>
-                {control.evidence?.length > 0 ? (
-                  <div className="space-y-2">
-                    {control.evidence.map((ev: ControlEvidence) => {
-                      const getAIAssessmentBadge = () => {
-                        const status = ev.ai_assessment_status || 'pending';
-                        switch (status) {
-                          case 'completed':
-                            return { label: 'Assessed', className: 'bg-green-500/20 text-green-400' };
-                          case 'processing':
-                            return { label: 'Assessing...', className: 'bg-yellow-500/20 text-yellow-400' };
-                          case 'pending_assessment':
-                            return { label: 'Ready for Assessment', className: 'bg-blue-500/20 text-blue-400' };
-                          case 'pending_ocr':
-                            return { label: 'Processing...', className: 'bg-slate-500/20 text-slate-400' };
-                          default:
-                            return { label: 'Pending', className: 'bg-slate-500/20 text-slate-400' };
-                        }
-                      };
-                      const aiBadge = getAIAssessmentBadge();
-                      const canAssess = ev.ai_assessment_status === 'pending_assessment' || ev.ai_assessment_status === 'pending' || !ev.ai_assessment_status;
-                      const isAssessing = assessingEvidenceId === ev.id;
-                      
-                      return (
-                        <div key={ev.id} className="rounded-lg bg-slate-900/50 p-3">
-                          <div className="flex items-center gap-3">
-                            <Paperclip className="h-4 w-4 text-slate-400 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-white truncate">{ev.file_name || 'Evidence file'}</p>
-                              <p className="text-xs text-slate-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className={`rounded px-2 py-0.5 text-xs ${aiBadge.className}`} title={ev.ai_assessment_summary || ''}>
-                                {aiBadge.label}
-                              </span>
-                              <span className={`rounded px-2 py-0.5 text-xs ${
-                                ev.review_status === 'approved' ? 'bg-green-500/20 text-green-400' :
-                                ev.review_status === 'rejected' ? 'bg-red-500/20 text-red-400' :
-                                'bg-yellow-500/20 text-yellow-400'
-                              }`}>
-                                {ev.review_status}
-                              </span>
-                              {canAssess && ev.linked_evidence_id && (
-                                <button
-                                  onClick={() => {
-                                    setAssessingEvidenceId(ev.id);
-                                    assessEvidenceMutation.mutate(ev.linked_evidence_id);
-                                  }}
-                                  disabled={isAssessing}
-                                  className="flex items-center gap-1 rounded bg-primary-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
-                                  title="Trigger AI assessment"
-                                >
-                                  {isAssessing ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Sparkles className="h-3 w-3" />
-                                  )}
-                                  Assess
-                                </button>
-                              )}
-                              <button
-                                onClick={() => {
-                                  if (window.confirm('Are you sure you want to delete this evidence?')) {
-                                    setDeletingEvidenceId(ev.id);
-                                    deleteEvidenceMutation.mutate(ev.id);
-                                  }
-                                }}
-                                disabled={deletingEvidenceId === ev.id}
-                                className="flex items-center gap-1 rounded bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400 hover:bg-red-500/30 disabled:opacity-50"
-                                title="Delete evidence"
-                              >
-                                {deletingEvidenceId === ev.id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-3 w-3" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                          {ev.ai_assessment_summary && (
-                            <div className="mt-2 ml-7 rounded bg-slate-800/50 p-2">
-                              <p className="text-xs text-slate-300">{ev.ai_assessment_summary}</p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6 text-center">
-                    <Paperclip className="mx-auto h-8 w-8 text-slate-600 mb-2" />
-                    <p className="text-sm text-slate-400">No evidence linked yet</p>
-                    <p className="text-xs text-slate-500 mt-1">Upload evidence to comply</p>
                   </div>
                 )}
               </div>
