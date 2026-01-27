@@ -131,10 +131,16 @@ export default function AssessmentsPage() {
 
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const response = await apiClient.post('/compliance/assessments/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const response = await fetch('/api/compliance/assessments/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
       });
-      return response.data;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        throw new Error(errorData.detail || 'Failed to upload assessment');
+      }
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['compliance-assessments'] });
@@ -142,7 +148,7 @@ export default function AssessmentsPage() {
       resetUploadForm();
     },
     onError: (error: any) => {
-      setUploadError(error.response?.data?.detail || 'Failed to upload assessment');
+      setUploadError(error.message || 'Failed to upload assessment');
     },
   });
 
