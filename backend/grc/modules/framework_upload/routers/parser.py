@@ -22,6 +22,36 @@ AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY"
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
 
+def get_openai_client() -> OpenAI:
+    """Get OpenAI client with runtime API key reading."""
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    return OpenAI(
+        api_key=api_key,
+        base_url=base_url
+    )
+
+
+def check_ai_available() -> bool:
+    """Check if OpenAI API key is configured (at runtime)."""
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return False
+    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+        return False
+    return True
+
+
 class ParsedControlUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
@@ -535,13 +565,10 @@ def get_framework_category(framework_name: str, text_sample: str) -> str:
 
 def extract_document_structure(text: str, framework_name: str) -> dict:
     """First pass: Extract the document's structure and classify the framework type using GRC SME expertise."""
-    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
+    if not check_ai_available():
         return {"sections": [], "total_expected_controls": 0}
     
-    client = OpenAI(
-        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
-        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
-    )
+    client = get_openai_client()
     
     sample_text = text[:25000] if len(text) > 25000 else text
     
@@ -619,16 +646,7 @@ def extract_controls_lightweight(text: str, framework_name: str, chunk_number: i
     This is Pass 1 of the two-pass extraction approach. It uses a lightweight
     output format to maximize the number of controls extracted per API call.
     """
-    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI integration not configured"
-        )
-    
-    client = OpenAI(
-        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
-        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
-    )
+    client = get_openai_client()
     
     chunk_context = ""
     if total_chunks > 1:
@@ -726,7 +744,7 @@ def enhance_extracted_controls(controls: List[dict], framework_name: str) -> Lis
     
     Processes controls in batches of 10 for efficiency.
     """
-    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
+    if not check_ai_available():
         for control in controls:
             control.setdefault("description", control.get("full_text", "")[:500])
             control.setdefault("evidence_requirements", [])
@@ -739,10 +757,7 @@ def enhance_extracted_controls(controls: List[dict], framework_name: str) -> Lis
             control["evidence_types"] = infer_evidence_types(control)
         return controls
     
-    client = OpenAI(
-        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
-        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
-    )
+    client = get_openai_client()
     
     enhanced_controls = []
     batch_size = 10
@@ -841,16 +856,7 @@ Return JSON with "controls" array containing the enhanced controls with ALL fiel
 
 
 def parse_with_openai(text: str, framework_name: str, chunk_number: int = 1, total_chunks: int = 1, doc_structure: dict = None) -> List[dict]:
-    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI integration not configured"
-        )
-    
-    client = OpenAI(
-        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
-        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
-    )
+    client = get_openai_client()
     
     chunk_context = ""
     if total_chunks > 1:
@@ -2106,14 +2112,11 @@ def enhance_framework_controls_background(framework_id: int, framework_name: str
     """Background task to enhance all controls with evidence requirements."""
     db = SessionLocal()
     try:
-        if not AI_INTEGRATIONS_OPENAI_API_KEY:
+        if not check_ai_available():
             print("[ENHANCE] OpenAI API key not configured", flush=True)
             return
         
-        client = OpenAI(
-            api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
-            base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
-        )
+        client = get_openai_client()
         
         controls = db.query(ParsedFrameworkControl).filter(
             ParsedFrameworkControl.uploaded_framework_id == framework_id

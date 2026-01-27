@@ -85,13 +85,12 @@ class SimilarityAnalysisResult(BaseModel):
 
 def check_ai_available() -> bool:
     """Check if OpenAI API is configured (Replit AI Integrations or direct API key)."""
-    ai_integration_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    if ai_integration_key:
-        return True
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if api_key and not api_key.startswith("your-") and len(api_key) >= 20:
-        return True
-    return False
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return False
+    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+        return False
+    return True
 
 
 def raise_ai_unavailable(fallback_available: bool = False):

@@ -80,7 +80,35 @@ export default function PendingApprovalsPage() {
     queryKey: ['pending-approvals'],
     queryFn: async () => {
       const response = await apiClient.get('/compliance/assessments/pending-approvals');
-      return response.data;
+      const data = response.data?.pending_approvals || response.data || [];
+      return Array.isArray(data) ? data.map((item: any) => ({
+        id: item.id,
+        assessment_item_id: item.assessment_item_id,
+        evidence_id: item.evidence_id,
+        status: item.status,
+        current_tier: item.current_tier,
+        submitted_at: item.submitted_at,
+        created_at: item.created_at,
+        assessment_item: {
+          id: item.assessment_id,
+          item_number: item.item_number,
+          area_domain: null,
+          control_description: item.control_description,
+          assessment: {
+            id: item.assessment_id,
+            name: item.assessment_name,
+            assessment_type: '',
+          },
+        },
+        evidence: {
+          id: item.evidence_id,
+          name: item.evidence_name,
+          file_name: item.evidence_file_name,
+          file_type: '',
+          description: null,
+          uploaded_at: item.submitted_at,
+        },
+      })) : [];
     },
   });
 
