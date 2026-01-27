@@ -26,6 +26,7 @@ import {
   BookOpen,
   Layers,
   ClipboardList,
+  Rss,
   type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -57,6 +58,7 @@ const navigation: NavEntry[] = [
       { name: 'Documents', href: '/governance/documents', icon: FileText },
       { name: 'Attestations', href: '/governance/attestations', icon: ClipboardCheck },
       { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: FileCheck },
+      { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss },
       { name: 'Committees', href: '/governance/committees', icon: Users },
       { name: 'Workflows', href: '/governance/workflows', icon: GitBranch },
       { name: 'Reviews', href: '/governance/reviews', icon: ClipboardList },
