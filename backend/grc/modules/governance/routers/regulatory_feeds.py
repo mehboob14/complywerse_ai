@@ -955,3 +955,44 @@ def create_feed_source(
     db.refresh(db_source)
     
     return serialize_feed_source(db_source)
+
+
+@router.delete("/sources/{source_id}", response_model=MessageResponse)
+def delete_feed_source(
+    source_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Delete a regulatory feed source and all its associated feed items.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not assigned to any tenant"
+        )
+    
+    source = db.query(RegulatoryFeedSource).filter(
+        RegulatoryFeedSource.id == source_id,
+        RegulatoryFeedSource.tenant_id == tenant_id
+    ).first()
+    
+    if not source:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feed source not found"
+        )
+    
+    source_name = source.name
+    
+    # Delete associated feed items first
+    db.query(RegulatoryFeedItem).filter(
+        RegulatoryFeedItem.feed_source_id == source_id
+    ).delete(synchronize_session=False)
+    
+    # Delete the source
+    db.delete(source)
+    db.commit()
+    
+    return MessageResponse(message=f"Feed source '{source_name}' and its items deleted successfully")

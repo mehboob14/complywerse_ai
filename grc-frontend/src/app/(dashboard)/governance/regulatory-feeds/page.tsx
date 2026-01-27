@@ -210,6 +210,17 @@ export default function RegulatoryFeedsPage() {
     },
   });
 
+  const deleteSourceMutation = useMutation({
+    mutationFn: async (sourceId: number) => {
+      const response = await apiClient.delete(`/governance/regulatory-feeds/sources/${sourceId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['regulatory-feed-sources'] });
+      queryClient.invalidateQueries({ queryKey: ['regulatory-feed-items'] });
+    },
+  });
+
   const analyzeItemMutation = useMutation({
     mutationFn: async (itemId: number) => {
       const response = await apiClient.post(`/governance/regulatory-feeds/items/${itemId}/analyze`);
@@ -453,8 +464,21 @@ export default function RegulatoryFeedsPage() {
                               <button className="btn-ghost btn-sm" title="Edit">
                                 <Edit className="h-4 w-4" />
                               </button>
-                              <button className="btn-ghost btn-sm text-rose-400" title="Delete">
-                                <Trash2 className="h-4 w-4" />
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Delete "${source.name}" and all its feed items?`)) {
+                                    deleteSourceMutation.mutate(source.id);
+                                  }
+                                }}
+                                disabled={deleteSourceMutation.isPending}
+                                className="btn-ghost btn-sm text-rose-400"
+                                title="Delete"
+                              >
+                                {deleteSourceMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
                               </button>
                             </div>
                           </td>
