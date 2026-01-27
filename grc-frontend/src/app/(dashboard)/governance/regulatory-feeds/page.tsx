@@ -131,6 +131,7 @@ export default function RegulatoryFeedsPage() {
   const [newFeed, setNewFeed] = useState({
     name: '',
     source_url: '',
+    source_type: 'rss',
     regulator: '',
     country: '',
     category: 'general',
@@ -189,6 +190,7 @@ export default function RegulatoryFeedsPage() {
       setNewFeed({
         name: '',
         source_url: '',
+        source_type: 'rss',
         regulator: '',
         country: '',
         category: 'general',
@@ -396,7 +398,7 @@ export default function RegulatoryFeedsPage() {
                         <Rss className="h-12 w-12 text-slate-500 mx-auto mb-3" />
                         <p className="text-slate-400">No feed sources configured</p>
                         <p className="text-sm text-slate-500 mt-1">
-                          Click "Seed CBSL Feeds" to add default regulatory feeds
+                          Click "Add Default Feeds" to add regulatory feeds from Federal Reserve and ECB
                         </p>
                       </td>
                     </tr>
