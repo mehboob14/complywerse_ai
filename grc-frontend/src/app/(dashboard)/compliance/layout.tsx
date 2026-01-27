@@ -5,12 +5,14 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   FileText,
+  ClipboardCheck,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const complianceNavigation = [
   { name: 'Overview', href: '/compliance', icon: LayoutDashboard },
   { name: 'Policy Statements', href: '/compliance/statements', icon: FileText },
+  { name: 'Assessments', href: '/compliance/assessments', icon: ClipboardCheck },
 ];
 
 export default function ComplianceLayout({

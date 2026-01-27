@@ -13,7 +13,8 @@ from .routers import (
     assets_router,
     dashboard_router,
     certification_router,
-    advanced_erm_router
+    advanced_erm_router,
+    compliance_assessments_router
 )
 from .modules.erm import erm_router
 from .modules.governance import governance_module_router
@@ -51,6 +52,7 @@ app.include_router(assets_router)
 app.include_router(dashboard_router)
 app.include_router(certification_router)
 app.include_router(advanced_erm_router)
+app.include_router(compliance_assessments_router)
 app.include_router(erm_router)
 app.include_router(governance_module_router)
 app.include_router(framework_upload_router)
@@ -82,6 +84,7 @@ def root():
             "advanced-erm",
             "erm",
             "compliance",
+            "compliance-assessments",
             "control-library",
             "vuln-management"
         ]
