@@ -201,7 +201,23 @@ export default function AssessmentDetailPage() {
       for (const itemId of expandedEvidence) {
         try {
           const response = await apiClient.get(`/compliance/assessments/${assessmentId}/items/${itemId}/evidence`);
-          results[itemId] = response.data;
+          const evidenceData = response.data?.evidence || response.data || [];
+          results[itemId] = Array.isArray(evidenceData) ? evidenceData.map((ev: any) => ({
+            id: ev.id,
+            assessment_item_id: itemId,
+            evidence_id: ev.evidence_id,
+            status: ev.approval_status || ev.status || 'draft',
+            current_tier: ev.current_tier,
+            workflow_id: ev.workflow_id,
+            created_at: ev.created_at,
+            evidence: ev.evidence_id ? {
+              id: ev.evidence_id,
+              name: ev.evidence_name,
+              file_name: ev.evidence_file_name,
+              file_type: ev.evidence_file_type,
+              status: ev.evidence_status,
+            } : null,
+          })) : [];
         } catch {
           results[itemId] = [];
         }
