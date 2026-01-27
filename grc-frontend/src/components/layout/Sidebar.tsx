@@ -82,6 +82,7 @@ const navigation: NavEntry[] = [
       { name: 'Controls', href: '/controls', icon: Shield },
       { name: 'Statements', href: '/compliance/statements', icon: FileText },
       { name: 'Assessments', href: '/compliance/assessments', icon: ClipboardCheck },
+      { name: 'Pending Approvals', href: '/compliance/assessments/approvals', icon: Clock },
       { name: 'Evidence', href: '/evidence', icon: FileCheck },
       { name: 'Control Library', href: '/control-library', icon: Library },
     ],

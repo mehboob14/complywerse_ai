@@ -262,6 +262,13 @@ export default function AssessmentsPage() {
               </option>
             ))}
           </select>
+          <Link
+            href="/compliance/assessments/approvals"
+            className="btn-secondary flex items-center gap-2"
+          >
+            <Clock className="h-4 w-4" />
+            Pending Approvals
+          </Link>
           <button
             onClick={() => setIsUploadModalOpen(true)}
             className="btn-primary flex items-center gap-2"
