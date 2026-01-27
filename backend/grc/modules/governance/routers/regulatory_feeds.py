@@ -1,18 +1,23 @@
-from typing import List, Optional
-from datetime import datetime
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timedelta
+import json
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 
 import feedparser
+from openai import OpenAI
 
 from ....models import (
-    RegulatoryFeedSource, RegulatoryFeedItem, Tenant, GRCUser, get_db
+    RegulatoryFeedSource, RegulatoryFeedItem, Tenant, GRCUser, get_db,
+    Framework, NormalizedControl, GovernanceDocument,
+    RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask
 )
 from ....schemas import (
     RegulatoryFeedSourceCreate, RegulatoryFeedSourceUpdate, RegulatoryFeedSourceResponse,
-    RegulatoryFeedItemResponse, FeedPollResult, MessageResponse
+    RegulatoryFeedItemResponse, FeedPollResult, MessageResponse, RegulatoryChangeResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -66,6 +71,129 @@ def serialize_feed_item(item: RegulatoryFeedItem) -> RegulatoryFeedItemResponse:
         created_at=item.created_at,
         feed_source_name=item.feed_source.name if item.feed_source else None
     )
+
+
+def get_openai_client() -> OpenAI:
+    """Get OpenAI client with proper configuration"""
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    if not api_key or api_key.startswith("_DUMMY") or len(api_key) < 20:
+        raise HTTPException(status_code=503, detail="AI features unavailable. OpenAI API key not configured.")
+    return OpenAI(api_key=api_key, base_url=base_url)
+
+
+def analyze_regulatory_item(
+    item: RegulatoryFeedItem,
+    frameworks: List[Framework],
+    controls: List[NormalizedControl],
+    policies: List[GovernanceDocument],
+    db: Session
+) -> Dict[str, Any]:
+    """
+    Perform AI gap analysis on a regulatory feed item.
+    Returns a dictionary containing the analysis results.
+    """
+    client = get_openai_client()
+    
+    source_info = "Unknown"
+    if item.feed_source:
+        source_info = f"{item.feed_source.regulator or 'Unknown Regulator'} ({item.feed_source.country or 'Unknown Country'})"
+    
+    frameworks_text = "\n".join([
+        f"- {fw.name} ({fw.short_code}): {fw.description or 'No description'}"
+        for fw in frameworks
+    ]) if frameworks else "No frameworks registered"
+    
+    controls_sample = controls[:50] if len(controls) > 50 else controls
+    controls_text = "\n".join([
+        f"- {ctrl.code}: {ctrl.name}"
+        for ctrl in controls_sample
+    ]) if controls_sample else "No controls registered"
+    
+    policies_text = "\n".join([
+        f"- {pol.title}"
+        for pol in policies
+    ]) if policies else "No policies registered"
+    
+    content_text = item.content or item.description or "No content available"
+    if len(content_text) > 8000:
+        content_text = content_text[:8000] + "... [truncated]"
+    
+    prompt = f"""You are a Senior GRC Compliance Expert analyzing regulatory changes. Analyze this regulatory update and assess its impact on existing compliance frameworks and controls.
+
+REGULATORY UPDATE:
+Title: {item.title}
+Source: {source_info}
+Published: {item.published_date.strftime('%Y-%m-%d') if item.published_date else 'Unknown'}
+Content: {content_text}
+Link: {item.link or 'No link available'}
+
+EXISTING FRAMEWORKS:
+{frameworks_text}
+
+EXISTING CONTROLS (sample):
+{controls_text}
+
+EXISTING POLICIES:
+{policies_text}
+
+Provide your analysis in JSON format:
+{{
+  "summary": "Brief summary of the regulatory change",
+  "priority": "critical|high|medium|low",
+  "effective_date_estimate": "YYYY-MM-DD or null if unknown",
+  "impacted_frameworks": [{{"name": "framework name", "relevance": "high|medium|low", "reason": "why impacted"}}],
+  "impacted_controls": [{{"id": "control id", "name": "control name", "gap_type": "new_requirement|modification|obsolete", "action_needed": "description"}}],
+  "impacted_policies": [{{"title": "policy title", "action_needed": "review|update|create_new"}}],
+  "implementation_tasks": [{{"title": "task title", "description": "what needs to be done", "priority": "high|medium|low", "suggested_deadline_days": 30}}],
+  "compliance_gaps": ["list of identified gaps"],
+  "recommendations": ["list of recommended actions"]
+}}
+
+Return ONLY valid JSON, no other text."""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a Senior GRC Compliance Expert. Respond only with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=4000
+        )
+        
+        response_text = response.choices[0].message.content.strip()
+        
+        if response_text.startswith("```"):
+            lines = response_text.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines[-1].strip() == "```":
+                lines = lines[:-1]
+            response_text = "\n".join(lines)
+        
+        analysis = json.loads(response_text)
+        
+        analysis["analyzed_at"] = datetime.utcnow().isoformat()
+        analysis["model_used"] = "gpt-4o"
+        analysis["frameworks_analyzed"] = len(frameworks)
+        analysis["controls_analyzed"] = len(controls)
+        analysis["policies_analyzed"] = len(policies)
+        
+        return analysis
+        
+    except json.JSONDecodeError as e:
+        return {
+            "error": f"Failed to parse AI response: {str(e)}",
+            "raw_response": response_text[:1000] if 'response_text' in locals() else None,
+            "analyzed_at": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI analysis failed: {str(e)}"
+        )
 
 
 def poll_rss_feed(source: RegulatoryFeedSource, db: Session, tenant_id: int) -> FeedPollResult:
@@ -455,6 +583,256 @@ def get_feed_item(
         )
     
     return serialize_feed_item(item)
+
+
+@router.post("/items/{item_id}/analyze", response_model=RegulatoryFeedItemResponse)
+def analyze_feed_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Perform AI gap analysis on a regulatory feed item.
+    Analyzes the item against existing frameworks, controls, and policies.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    tenant_id = get_user_primary_tenant(current_user, db)
+    
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not assigned to any tenant"
+        )
+    
+    item = db.query(RegulatoryFeedItem).options(
+        joinedload(RegulatoryFeedItem.feed_source)
+    ).filter(
+        RegulatoryFeedItem.id == item_id,
+        RegulatoryFeedItem.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feed item not found"
+        )
+    
+    frameworks = db.query(Framework).filter(
+        Framework.is_active == True
+    ).all()
+    
+    controls = db.query(NormalizedControl).all()
+    
+    policies = db.query(GovernanceDocument).filter(
+        GovernanceDocument.tenant_id == tenant_id,
+        GovernanceDocument.doc_type == "policy"
+    ).all()
+    
+    analysis = analyze_regulatory_item(item, frameworks, controls, policies, db)
+    
+    item.ai_analysis = analysis
+    item.status = "analyzed"
+    db.commit()
+    db.refresh(item)
+    
+    return serialize_feed_item(item)
+
+
+@router.post("/items/{item_id}/convert", response_model=RegulatoryChangeResponse)
+def convert_feed_item_to_regulatory_change(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Convert a feed item to a RegulatoryChange record.
+    Creates impact assessments and implementation tasks from AI analysis.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    tenant_id = get_user_primary_tenant(current_user, db)
+    
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not assigned to any tenant"
+        )
+    
+    item = db.query(RegulatoryFeedItem).options(
+        joinedload(RegulatoryFeedItem.feed_source)
+    ).filter(
+        RegulatoryFeedItem.id == item_id,
+        RegulatoryFeedItem.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feed item not found"
+        )
+    
+    if item.regulatory_change_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Feed item already converted to regulatory change"
+        )
+    
+    ai_analysis = item.ai_analysis or {}
+    
+    source_name = "custom"
+    if item.feed_source:
+        regulator = item.feed_source.regulator or ""
+        if "OCC" in regulator.upper():
+            source_name = "OCC"
+        elif "FED" in regulator.upper() or "FEDERAL RESERVE" in regulator.upper():
+            source_name = "Fed"
+        elif "EBA" in regulator.upper():
+            source_name = "EBA"
+        elif "PRA" in regulator.upper():
+            source_name = "PRA"
+        elif "SEC" in regulator.upper():
+            source_name = "SEC"
+        elif "FINRA" in regulator.upper():
+            source_name = "FINRA"
+    
+    priority = ai_analysis.get("priority", "medium")
+    if priority not in ["critical", "high", "medium", "low"]:
+        priority = "medium"
+    
+    effective_date = None
+    effective_date_str = ai_analysis.get("effective_date_estimate")
+    if effective_date_str and effective_date_str != "null":
+        try:
+            effective_date = datetime.strptime(effective_date_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+    
+    regulatory_change = RegulatoryChange(
+        tenant_id=tenant_id,
+        title=item.title,
+        description=ai_analysis.get("summary") or item.description,
+        source=source_name,
+        regulation_reference=item.link,
+        effective_date=effective_date,
+        published_date=item.published_date,
+        status="identified",
+        priority=priority,
+        created_by=current_user.id
+    )
+    
+    db.add(regulatory_change)
+    db.flush()
+    
+    impacted_policies = ai_analysis.get("impacted_policies", [])
+    for policy_impact in impacted_policies:
+        policy_title = policy_impact.get("title", "")
+        action_needed = policy_impact.get("action_needed", "review")
+        
+        gap_identified = action_needed in ["update", "create_new"]
+        
+        impact_assessment = RegulatoryImpactAssessment(
+            tenant_id=tenant_id,
+            regulatory_change_id=regulatory_change.id,
+            assessment_type="policy",
+            impacted_item_type="policy",
+            impact_level="medium",
+            impact_description=f"Policy '{policy_title}' requires {action_needed}",
+            gap_identified=gap_identified,
+            gap_description=f"Action needed: {action_needed}" if gap_identified else None,
+            assessed_by=current_user.id,
+            assessed_at=datetime.utcnow()
+        )
+        db.add(impact_assessment)
+    
+    impacted_controls = ai_analysis.get("impacted_controls", [])
+    for control_impact in impacted_controls:
+        control_id = control_impact.get("id", "")
+        control_name = control_impact.get("name", "")
+        gap_type = control_impact.get("gap_type", "modification")
+        action_needed = control_impact.get("action_needed", "")
+        
+        impact_level = "high" if gap_type == "new_requirement" else "medium"
+        gap_identified = gap_type in ["new_requirement", "modification"]
+        
+        impact_assessment = RegulatoryImpactAssessment(
+            tenant_id=tenant_id,
+            regulatory_change_id=regulatory_change.id,
+            assessment_type="control",
+            impacted_item_type="control",
+            impact_level=impact_level,
+            impact_description=f"Control '{control_id}: {control_name}' - {gap_type}",
+            gap_identified=gap_identified,
+            gap_description=action_needed if gap_identified else None,
+            assessed_by=current_user.id,
+            assessed_at=datetime.utcnow()
+        )
+        db.add(impact_assessment)
+    
+    implementation_tasks = ai_analysis.get("implementation_tasks", [])
+    for task_data in implementation_tasks:
+        task_title = task_data.get("title", "Implementation Task")
+        task_description = task_data.get("description", "")
+        task_priority = task_data.get("priority", "medium")
+        deadline_days = task_data.get("suggested_deadline_days", 30)
+        
+        if task_priority not in ["critical", "high", "medium", "low"]:
+            task_priority = "medium"
+        
+        due_date = datetime.utcnow() + timedelta(days=deadline_days)
+        
+        task_type = "process_change"
+        title_lower = task_title.lower()
+        if "policy" in title_lower:
+            task_type = "policy_update"
+        elif "control" in title_lower:
+            task_type = "control_update"
+        elif "training" in title_lower:
+            task_type = "training"
+        elif "communication" in title_lower or "notify" in title_lower:
+            task_type = "communication"
+        
+        impl_task = RegulatoryImplementationTask(
+            tenant_id=tenant_id,
+            regulatory_change_id=regulatory_change.id,
+            title=task_title,
+            description=task_description,
+            task_type=task_type,
+            status="pending",
+            priority=task_priority,
+            due_date=due_date,
+            created_by=current_user.id
+        )
+        db.add(impl_task)
+    
+    item.status = "processed"
+    item.regulatory_change_id = regulatory_change.id
+    item.processed_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(regulatory_change)
+    
+    completed_tasks = sum(1 for t in regulatory_change.implementation_tasks if t.status == "completed")
+    
+    return RegulatoryChangeResponse(
+        id=regulatory_change.id,
+        tenant_id=regulatory_change.tenant_id,
+        title=regulatory_change.title,
+        description=regulatory_change.description,
+        source=regulatory_change.source,
+        regulation_reference=regulatory_change.regulation_reference,
+        effective_date=regulatory_change.effective_date,
+        published_date=regulatory_change.published_date,
+        status=regulatory_change.status,
+        priority=regulatory_change.priority,
+        assigned_to=regulatory_change.assigned_to,
+        assignee_name=regulatory_change.assignee.display_name if regulatory_change.assignee else None,
+        created_by=regulatory_change.created_by,
+        creator_name=regulatory_change.creator.display_name if regulatory_change.creator else None,
+        created_at=regulatory_change.created_at,
+        updated_at=regulatory_change.updated_at,
+        assessment_count=len(regulatory_change.impact_assessments),
+        task_count=len(regulatory_change.implementation_tasks),
+        completed_task_count=completed_tasks
+    )
 
 
 @router.post("/seed-cbsl", response_model=List[RegulatoryFeedSourceResponse])
