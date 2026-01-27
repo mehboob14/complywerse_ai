@@ -184,6 +184,7 @@ export default function AssessmentDetailPage() {
   const [evidenceName, setEvidenceName] = useState('');
   const [evidenceDescription, setEvidenceDescription] = useState('');
   const [approvalComments, setApprovalComments] = useState<Record<number, string>>({});
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const { data: assessment, isLoading, error } = useQuery<Assessment>({
     queryKey: ['compliance-assessment-detail', assessmentId],
@@ -254,8 +255,11 @@ export default function AssessmentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['compliance-assessment-detail', assessmentId] });
       setGeneratingAIForItem(null);
     },
-    onError: () => {
+    onError: (error: any) => {
       setGeneratingAIForItem(null);
+      const message = error?.response?.data?.detail || 'Failed to generate AI recommendation. Please try again.';
+      setAiError(message);
+      setTimeout(() => setAiError(null), 5000);
     },
   });
 
@@ -410,6 +414,18 @@ export default function AssessmentDetailPage() {
 
   return (
     <div className="space-y-6">
+      {aiError && (
+        <div className="fixed top-4 right-4 z-50 bg-red-900/90 border border-red-700 text-red-200 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-md animate-in slide-in-from-top-2">
+          <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">AI Recommendation Error</p>
+            <p className="text-xs text-red-300">{aiError}</p>
+          </div>
+          <button onClick={() => setAiError(null)} className="text-red-300 hover:text-white">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
       <div className="flex items-start gap-4">
         <Link
           href="/compliance/assessments"
