@@ -839,13 +839,13 @@ def convert_feed_item_to_regulatory_change(
 
 
 @router.post("/seed-cbsl", response_model=List[RegulatoryFeedSourceResponse])
-def seed_cbsl_feeds(
+def seed_regulatory_feeds(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     """
-    Create default Sri Lanka Central Bank (CBSL) feed sources.
-    Note: RSS URLs are placeholders and may need to be updated with actual CBSL RSS feed URLs.
+    Create default regulatory feed sources from Federal Reserve and European Central Bank.
+    These are working RSS feeds that provide real regulatory updates.
     """
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
@@ -854,32 +854,42 @@ def seed_cbsl_feeds(
             detail="User not assigned to any tenant"
         )
     
-    cbsl_feeds = [
+    regulatory_feeds = [
         {
-            "name": "CBSL Notices",
-            "source_url": "https://www.cbsl.gov.lk/en/rss/notices",
+            "name": "Federal Reserve - All Press Releases",
+            "source_url": "https://www.federalreserve.gov/feeds/press_all.xml",
             "source_type": "rss",
-            "country": "Sri Lanka",
-            "regulator": "Central Bank of Sri Lanka",
-            "category": "notices",
+            "country": "United States",
+            "regulator": "Federal Reserve Board",
+            "category": "press_releases",
             "is_active": True,
-            "poll_interval_hours": 24
+            "poll_interval_hours": 12
         },
         {
-            "name": "CBSL Monetary Policy",
-            "source_url": "https://www.cbsl.gov.lk/en/rss/monetary-policy",
+            "name": "Federal Reserve - Banking Regulatory Policy",
+            "source_url": "https://www.federalreserve.gov/feeds/press_bcreg.xml",
             "source_type": "rss",
-            "country": "Sri Lanka",
-            "regulator": "Central Bank of Sri Lanka",
-            "category": "monetary_policy",
+            "country": "United States",
+            "regulator": "Federal Reserve Board",
+            "category": "regulatory_policy",
             "is_active": True,
-            "poll_interval_hours": 24
+            "poll_interval_hours": 12
+        },
+        {
+            "name": "ECB - Press Releases & Speeches",
+            "source_url": "https://www.ecb.europa.eu/rss/press.html",
+            "source_type": "rss",
+            "country": "European Union",
+            "regulator": "European Central Bank",
+            "category": "press_releases",
+            "is_active": True,
+            "poll_interval_hours": 12
         }
     ]
     
     created_sources = []
     
-    for feed_data in cbsl_feeds:
+    for feed_data in regulatory_feeds:
         existing = db.query(RegulatoryFeedSource).filter(
             RegulatoryFeedSource.tenant_id == tenant_id,
             RegulatoryFeedSource.source_url == feed_data["source_url"]
@@ -900,3 +910,48 @@ def seed_cbsl_feeds(
     db.commit()
     
     return created_sources
+
+
+@router.post("/sources", response_model=RegulatoryFeedSourceResponse)
+def create_feed_source(
+    source_data: RegulatoryFeedSourceCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Create a custom regulatory feed source with a user-provided RSS URL.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not assigned to any tenant"
+        )
+    
+    existing = db.query(RegulatoryFeedSource).filter(
+        RegulatoryFeedSource.tenant_id == tenant_id,
+        RegulatoryFeedSource.source_url == source_data.source_url
+    ).first()
+    
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A feed source with this URL already exists"
+        )
+    
+    db_source = RegulatoryFeedSource(
+        tenant_id=tenant_id,
+        name=source_data.name,
+        source_url=source_data.source_url,
+        source_type=source_data.source_type or "rss",
+        country=source_data.country or "Unknown",
+        regulator=source_data.regulator or "Unknown",
+        category=source_data.category or "general",
+        is_active=source_data.is_active if source_data.is_active is not None else True,
+        poll_interval_hours=source_data.poll_interval_hours or 24
+    )
+    db.add(db_source)
+    db.commit()
+    db.refresh(db_source)
+    
+    return serialize_feed_source(db_source)
