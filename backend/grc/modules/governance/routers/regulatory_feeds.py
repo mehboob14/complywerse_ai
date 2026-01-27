@@ -618,10 +618,13 @@ def analyze_feed_item(
         )
     
     frameworks = db.query(Framework).filter(
+        Framework.tenant_id == tenant_id,
         Framework.is_active == True
     ).all()
     
-    controls = db.query(NormalizedControl).all()
+    controls = db.query(NormalizedControl).filter(
+        NormalizedControl.tenant_id == tenant_id
+    ).all()
     
     policies = db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id == tenant_id,

@@ -31,34 +31,70 @@ interface FeedSource {
   regulator: string;
   country: string;
   category: string;
-  feed_url: string;
-  status: string;
-  last_polled: string | null;
-  items_count: number;
+  source_url: string;
+  source_type: string;
+  is_active: boolean;
+  poll_interval_hours: number;
+  last_polled_at: string | null;
+  last_successful_poll: string | null;
+  items_processed: number;
   created_at: string;
+  updated_at: string;
+}
+
+interface ImpactedFramework {
+  name: string;
+  relevance: string;
+  reason: string;
+}
+
+interface ImpactedControl {
+  id: string;
+  name: string;
+  gap_type: string;
+  action_needed: string;
+}
+
+interface ImpactedPolicy {
+  title: string;
+  action_needed: string;
+}
+
+interface ImplementationTask {
+  title: string;
+  description: string;
+  priority: string;
+  suggested_deadline_days: number;
 }
 
 interface AIAnalysis {
   summary: string;
   priority: string;
+  effective_date_estimate: string | null;
   compliance_gaps: string[];
-  impacted_frameworks: string[];
-  impacted_controls: string[];
-  impacted_policies: string[];
-  implementation_tasks: string[];
+  impacted_frameworks: ImpactedFramework[];
+  impacted_controls: ImpactedControl[];
+  impacted_policies: ImpactedPolicy[];
+  implementation_tasks: ImplementationTask[];
+  recommendations: string[];
+  analyzed_at: string;
+  model_used: string;
 }
 
 interface FeedItem {
   id: number;
-  source_id: number;
-  source_name: string;
+  feed_source_id: number;
+  feed_source_name: string;
+  guid: string;
   title: string;
   link: string;
   description: string;
+  content: string | null;
   published_date: string;
   status: string;
   ai_analysis: AIAnalysis | null;
   regulatory_change_id: number | null;
+  processed_at: string | null;
   created_at: string;
 }
 
@@ -329,7 +365,7 @@ export default function RegulatoryFeedsPage() {
                     </tr>
                   ) : (
                     sources.map((source) => {
-                      const statusStyle = STATUS_STYLES[source.status] || STATUS_STYLES.inactive;
+                      const statusStyle = source.is_active ? STATUS_STYLES.active : STATUS_STYLES.inactive;
                       return (
                         <tr key={source.id}>
                           <td>
@@ -355,11 +391,11 @@ export default function RegulatoryFeedsPage() {
                           <td>
                             <div className="flex items-center gap-2 text-slate-400">
                               <Clock className="h-4 w-4" />
-                              <span className="text-sm">{formatDateTime(source.last_polled)}</span>
+                              <span className="text-sm">{formatDateTime(source.last_polled_at)}</span>
                             </div>
                           </td>
                           <td>
-                            <span className="text-slate-300">{source.items_count}</span>
+                            <span className="text-slate-300">{source.items_processed}</span>
                           </td>
                           <td>
                             <div className="flex items-center gap-1">
@@ -484,7 +520,7 @@ export default function RegulatoryFeedsPage() {
                           </span>
                         </td>
                         <td>
-                          <span className="text-slate-300">{item.source_name}</span>
+                          <span className="text-slate-300">{item.feed_source_name}</span>
                         </td>
                         <td>
                           <span className={`badge ${statusStyle.bg} ${statusStyle.text}`}>
@@ -574,9 +610,12 @@ export default function RegulatoryFeedsPage() {
                                     {item.ai_analysis.impacted_frameworks && item.ai_analysis.impacted_frameworks.length > 0 && (
                                       <div>
                                         <h5 className="text-xs font-medium text-slate-500 uppercase mb-2">Impacted Frameworks</h5>
-                                        <div className="space-y-1">
+                                        <div className="space-y-2">
                                           {item.ai_analysis.impacted_frameworks.map((fw, idx) => (
-                                            <div key={idx} className="text-sm text-slate-400">{fw}</div>
+                                            <div key={idx} className="text-sm">
+                                              <div className="text-slate-300 font-medium">{fw.name}</div>
+                                              <div className="text-slate-500 text-xs">{fw.reason}</div>
+                                            </div>
                                           ))}
                                         </div>
                                       </div>
@@ -585,9 +624,12 @@ export default function RegulatoryFeedsPage() {
                                     {item.ai_analysis.impacted_controls && item.ai_analysis.impacted_controls.length > 0 && (
                                       <div>
                                         <h5 className="text-xs font-medium text-slate-500 uppercase mb-2">Impacted Controls</h5>
-                                        <div className="space-y-1">
+                                        <div className="space-y-2">
                                           {item.ai_analysis.impacted_controls.map((ctrl, idx) => (
-                                            <div key={idx} className="text-sm text-slate-400">{ctrl}</div>
+                                            <div key={idx} className="text-sm">
+                                              <div className="text-slate-300 font-medium">{ctrl.id}: {ctrl.name}</div>
+                                              <div className="text-slate-500 text-xs">{ctrl.action_needed}</div>
+                                            </div>
                                           ))}
                                         </div>
                                       </div>
@@ -596,9 +638,12 @@ export default function RegulatoryFeedsPage() {
                                     {item.ai_analysis.impacted_policies && item.ai_analysis.impacted_policies.length > 0 && (
                                       <div>
                                         <h5 className="text-xs font-medium text-slate-500 uppercase mb-2">Impacted Policies</h5>
-                                        <div className="space-y-1">
+                                        <div className="space-y-2">
                                           {item.ai_analysis.impacted_policies.map((policy, idx) => (
-                                            <div key={idx} className="text-sm text-slate-400">{policy}</div>
+                                            <div key={idx} className="text-sm">
+                                              <div className="text-slate-300 font-medium">{policy.title}</div>
+                                              <div className="text-slate-500 text-xs capitalize">{policy.action_needed}</div>
+                                            </div>
                                           ))}
                                         </div>
                                       </div>
@@ -608,11 +653,22 @@ export default function RegulatoryFeedsPage() {
                                   {item.ai_analysis.implementation_tasks && item.ai_analysis.implementation_tasks.length > 0 && (
                                     <div>
                                       <h5 className="text-xs font-medium text-slate-500 uppercase mb-2">Implementation Tasks</h5>
-                                      <ul className="list-disc list-inside space-y-1">
+                                      <div className="space-y-2">
                                         {item.ai_analysis.implementation_tasks.map((task, idx) => (
-                                          <li key={idx} className="text-sm text-slate-400">{task}</li>
+                                          <div key={idx} className="text-sm bg-slate-800/50 p-2 rounded">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-slate-300 font-medium">{task.title}</span>
+                                              <span className={`badge text-xs ${PRIORITY_STYLES[task.priority?.toLowerCase()]?.bg || 'bg-slate-500/20'} ${PRIORITY_STYLES[task.priority?.toLowerCase()]?.text || 'text-slate-400'}`}>
+                                                {task.priority}
+                                              </span>
+                                            </div>
+                                            <div className="text-slate-500 text-xs mt-1">{task.description}</div>
+                                            {task.suggested_deadline_days && (
+                                              <div className="text-slate-500 text-xs mt-1">Deadline: {task.suggested_deadline_days} days</div>
+                                            )}
+                                          </div>
                                         ))}
-                                      </ul>
+                                      </div>
                                     </div>
                                   )}
 
