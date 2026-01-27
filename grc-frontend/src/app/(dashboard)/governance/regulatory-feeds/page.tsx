@@ -23,6 +23,8 @@ import {
   ArrowRightCircle,
   Database,
   Filter,
+  Plus,
+  X,
 } from 'lucide-react';
 
 interface FeedSource {
@@ -125,6 +127,15 @@ export default function RegulatoryFeedsPage() {
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newFeed, setNewFeed] = useState({
+    name: '',
+    source_url: '',
+    regulator: '',
+    country: '',
+    category: 'general',
+    poll_interval_hours: 24,
+  });
   const queryClient = useQueryClient();
 
   const { data: sources, isLoading: sourcesLoading } = useQuery({
@@ -164,6 +175,25 @@ export default function RegulatoryFeedsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['regulatory-feed-sources'] });
       queryClient.invalidateQueries({ queryKey: ['regulatory-feed-items'] });
+    },
+  });
+
+  const createFeedMutation = useMutation({
+    mutationFn: async (feedData: typeof newFeed) => {
+      const response = await apiClient.post('/governance/regulatory-feeds/sources', feedData);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['regulatory-feed-sources'] });
+      setShowAddModal(false);
+      setNewFeed({
+        name: '',
+        source_url: '',
+        regulator: '',
+        country: '',
+        category: 'general',
+        poll_interval_hours: 24,
+      });
     },
   });
 
@@ -243,6 +273,13 @@ export default function RegulatoryFeedsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
+            onClick={() => setShowAddModal(true)}
+            className="btn-secondary flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Custom Feed
+          </button>
+          <button
             onClick={() => seedCBSLMutation.mutate()}
             disabled={seedCBSLMutation.isPending}
             className="btn-secondary flex items-center gap-2"
@@ -252,7 +289,7 @@ export default function RegulatoryFeedsPage() {
             ) : (
               <Database className="h-4 w-4" />
             )}
-            Seed CBSL Feeds
+            Add Default Feeds
           </button>
           <button
             onClick={() => pollAllMutation.mutate()}
@@ -719,6 +756,136 @@ export default function RegulatoryFeedsPage() {
           </table>
         </div>
       </div>
+
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-lg mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <h2 className="text-lg font-semibold text-white">Add Custom Feed Source</h2>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                createFeedMutation.mutate(newFeed);
+              }}
+              className="p-4 space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Feed Name *
+                </label>
+                <input
+                  type="text"
+                  value={newFeed.name}
+                  onChange={(e) => setNewFeed({ ...newFeed, name: e.target.value })}
+                  required
+                  className="input w-full"
+                  placeholder="e.g., SEC Press Releases"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  RSS Feed URL *
+                </label>
+                <input
+                  type="url"
+                  value={newFeed.source_url}
+                  onChange={(e) => setNewFeed({ ...newFeed, source_url: e.target.value })}
+                  required
+                  className="input w-full"
+                  placeholder="https://example.com/rss/feed.xml"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Regulator
+                  </label>
+                  <input
+                    type="text"
+                    value={newFeed.regulator}
+                    onChange={(e) => setNewFeed({ ...newFeed, regulator: e.target.value })}
+                    className="input w-full"
+                    placeholder="e.g., SEC"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Country
+                  </label>
+                  <input
+                    type="text"
+                    value={newFeed.country}
+                    onChange={(e) => setNewFeed({ ...newFeed, country: e.target.value })}
+                    className="input w-full"
+                    placeholder="e.g., United States"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={newFeed.category}
+                    onChange={(e) => setNewFeed({ ...newFeed, category: e.target.value })}
+                    className="select w-full"
+                  >
+                    <option value="general">General</option>
+                    <option value="press_releases">Press Releases</option>
+                    <option value="regulatory_policy">Regulatory Policy</option>
+                    <option value="notices">Notices</option>
+                    <option value="monetary_policy">Monetary Policy</option>
+                    <option value="enforcement">Enforcement</option>
+                    <option value="guidance">Guidance</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Poll Interval (hours)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="168"
+                    value={newFeed.poll_interval_hours}
+                    onChange={(e) => setNewFeed({ ...newFeed, poll_interval_hours: parseInt(e.target.value) || 24 })}
+                    className="input w-full"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createFeedMutation.isPending || !newFeed.name || !newFeed.source_url}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  {createFeedMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  Add Feed
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
