@@ -11,6 +11,7 @@ from .attestations import router as attestations_router
 from .attestation_campaigns import router as attestation_campaigns_router
 from .regulatory_changes import router as regulatory_changes_router
 from .committees import router as committees_router
+from .regulatory_feeds import router as regulatory_feeds_router
 
 __all__ = [
     "documents_router",
@@ -26,4 +27,5 @@ __all__ = [
     "attestation_campaigns_router",
     "regulatory_changes_router",
     "committees_router",
+    "regulatory_feeds_router",
 ]
