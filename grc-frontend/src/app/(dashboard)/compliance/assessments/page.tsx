@@ -19,6 +19,7 @@ import {
   XCircle,
   Clock,
   Eye,
+  Trash2,
 } from 'lucide-react';
 
 interface Assessment {
@@ -110,6 +111,8 @@ export default function AssessmentsPage() {
   });
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [assessmentToDelete, setAssessmentToDelete] = useState<Assessment | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -151,6 +154,28 @@ export default function AssessmentsPage() {
       setUploadError(error.message || 'Failed to upload assessment');
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (assessmentId: number) => {
+      await apiClient.delete(`/compliance/assessments/${assessmentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compliance-assessments'] });
+      setDeleteModalOpen(false);
+      setAssessmentToDelete(null);
+    },
+  });
+
+  const handleDeleteClick = (assessment: Assessment) => {
+    setAssessmentToDelete(assessment);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (assessmentToDelete) {
+      deleteMutation.mutate(assessmentToDelete.id);
+    }
+  };
 
   const resetUploadForm = () => {
     setUploadForm({
@@ -424,13 +449,22 @@ export default function AssessmentsPage() {
                       </div>
                     </td>
                     <td>
-                      <Link
-                        href={`/compliance/assessments/${assessment.id}`}
-                        className="btn-ghost btn-sm"
-                        title="View Assessment"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Link>
+                      <div className="flex items-center gap-1">
+                        <Link
+                          href={`/compliance/assessments/${assessment.id}`}
+                          className="btn-ghost btn-sm"
+                          title="View Assessment"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteClick(assessment)}
+                          className="btn-ghost btn-sm text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                          title="Delete Assessment"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -618,6 +652,66 @@ export default function AssessmentsPage() {
                   <Upload className="h-4 w-4" />
                 )}
                 Upload Assessment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteModalOpen && assessmentToDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-slate-700">
+              <h2 className="text-lg font-semibold text-white">Delete Assessment</h2>
+              <button
+                onClick={() => {
+                  setDeleteModalOpen(false);
+                  setAssessmentToDelete(null);
+                }}
+                className="btn-ghost btn-sm"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex-shrink-0 w-10 h-10 bg-rose-500/20 rounded-full flex items-center justify-center">
+                  <AlertCircle className="h-5 w-5 text-rose-400" />
+                </div>
+                <div>
+                  <p className="text-white">Are you sure you want to delete this assessment?</p>
+                  <p className="text-sm text-slate-400 mt-1">
+                    <strong>{assessmentToDelete.name}</strong>
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-400">
+                This will permanently delete the assessment and all its items. This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-700">
+              <button
+                onClick={() => {
+                  setDeleteModalOpen(false);
+                  setAssessmentToDelete(null);
+                }}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleteMutation.isPending}
+                className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Delete Assessment
               </button>
             </div>
           </div>
