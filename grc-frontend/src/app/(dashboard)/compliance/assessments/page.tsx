@@ -113,6 +113,7 @@ export default function AssessmentsPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [assessmentToDelete, setAssessmentToDelete] = useState<Assessment | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -163,12 +164,17 @@ export default function AssessmentsPage() {
       queryClient.invalidateQueries({ queryKey: ['compliance-assessments'] });
       setDeleteModalOpen(false);
       setAssessmentToDelete(null);
+      setDeleteError(null);
+    },
+    onError: (error: any) => {
+      setDeleteError(error.response?.data?.detail || 'Failed to delete assessment');
     },
   });
 
   const handleDeleteClick = (assessment: Assessment) => {
     setAssessmentToDelete(assessment);
     setDeleteModalOpen(true);
+    setDeleteError(null);
   };
 
   const confirmDelete = () => {
@@ -675,6 +681,12 @@ export default function AssessmentsPage() {
             </div>
 
             <div className="p-6">
+              {deleteError && (
+                <div className="bg-rose-500/20 border border-rose-500/30 rounded-lg p-3 flex items-center gap-2 mb-4">
+                  <AlertCircle className="h-4 w-4 text-rose-400 flex-shrink-0" />
+                  <p className="text-sm text-rose-300">{deleteError}</p>
+                </div>
+              )}
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-rose-500/20 rounded-full flex items-center justify-center">
                   <AlertCircle className="h-5 w-5 text-rose-400" />
