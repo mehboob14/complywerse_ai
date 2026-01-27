@@ -2,6 +2,8 @@ import os
 import uuid
 import io
 import json
+import logging
+import traceback
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
@@ -13,6 +15,8 @@ from openpyxl.utils import get_column_letter
 import pandas as pd
 from pydantic import BaseModel
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 from ..models import (
     ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem,
@@ -296,122 +300,155 @@ async def upload_assessment(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    if tenant_id:
-        validate_tenant_access(current_user, tenant_id, db)
-    else:
-        tenant_id = get_user_primary_tenant(current_user, db)
-        if not tenant_id:
+    logger.info(f"Assessment upload started: name={name}, file={file.filename}")
+    file_path = None
+    
+    try:
+        if tenant_id:
+            validate_tenant_access(current_user, tenant_id, db)
+        else:
+            tenant_id = get_user_primary_tenant(current_user, db)
+            if not tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User is not assigned to any tenant"
+                )
+        
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tenant not found"
+            )
+        
+        if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User is not assigned to any tenant"
+                detail="File must be an Excel (.xlsx, .xls) or CSV file"
             )
-    
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-    if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tenant not found"
-        )
-    
-    if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be an Excel (.xlsx, .xls) or CSV file"
-        )
-    
-    file_content = await file.read()
-    file_ext = os.path.splitext(file.filename)[1]
-    file_id = str(uuid.uuid4())
-    file_path = os.path.join(UPLOAD_DIR, f"{file_id}{file_ext}")
-    
-    with open(file_path, "wb") as f:
-        f.write(file_content)
-    
-    items_data, column_map = parse_excel_file(file_content, file.filename)
-    
-    if not items_data:
-        os.remove(file_path)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No valid assessment items found in the file. Please check the column headers."
-        )
-    
-    parsed_due_date = None
-    if due_date:
-        try:
-            parsed_due_date = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
-        except:
-            pass
-    
-    db_assessment = ComplianceAssessmentDocument(
-        tenant_id=tenant_id,
-        name=name,
-        assessment_type=assessment_type,
-        source=source,
-        file_name=file.filename,
-        file_path=file_path,
-        due_date=parsed_due_date,
-        assessor=assessor,
-        notes=notes,
-        status="draft",
-        created_by=current_user.id,
-        total_items=len(items_data)
-    )
-    db.add(db_assessment)
-    db.flush()
-    
-    for idx, item_data in enumerate(items_data):
-        db_item = ComplianceAssessmentDocumentItem(
-            assessment_id=db_assessment.id,
+        
+        logger.info(f"Reading file content: {file.filename}")
+        file_content = await file.read()
+        file_size = len(file_content)
+        logger.info(f"File read complete: {file_size} bytes")
+        
+        file_ext = os.path.splitext(file.filename)[1]
+        file_id = str(uuid.uuid4())
+        file_path = os.path.join(UPLOAD_DIR, f"{file_id}{file_ext}")
+        
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+        logger.info(f"File saved to: {file_path}")
+        
+        logger.info("Parsing Excel file...")
+        items_data, column_map = parse_excel_file(file_content, file.filename)
+        logger.info(f"Parsed {len(items_data)} items, columns: {list(column_map.keys())}")
+        
+        if not items_data:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No valid assessment items found in the file. Please check the column headers."
+            )
+        
+        parsed_due_date = None
+        if due_date:
+            try:
+                parsed_due_date = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+            except:
+                pass
+        
+        logger.info("Creating assessment document in database...")
+        db_assessment = ComplianceAssessmentDocument(
             tenant_id=tenant_id,
-            item_number=item_data.get("item_number") or str(idx + 1),
-            area_domain=item_data.get("area_domain"),
-            control_description=item_data.get("control_description"),
-            compliance_status=item_data.get("compliance_status", "in_progress"),
-            gaps_identified=item_data.get("gaps_identified"),
-            proposed_solution=item_data.get("proposed_solution"),
-            responsible_party=item_data.get("responsible_party"),
-            timeline=item_data.get("timeline"),
-            priority=item_data.get("priority"),
-            evidence_reference=item_data.get("evidence_reference"),
-            remarks=item_data.get("remarks")
+            name=name,
+            assessment_type=assessment_type,
+            source=source,
+            file_name=file.filename,
+            file_path=file_path,
+            due_date=parsed_due_date,
+            assessor=assessor,
+            notes=notes,
+            status="draft",
+            created_by=current_user.id,
+            total_items=len(items_data)
         )
-        db.add(db_item)
+        db.add(db_assessment)
+        db.flush()
+        logger.info(f"Assessment document created with ID: {db_assessment.id}")
+        
+        logger.info(f"Creating {len(items_data)} assessment items...")
+        for idx, item_data in enumerate(items_data):
+            db_item = ComplianceAssessmentDocumentItem(
+                assessment_id=db_assessment.id,
+                tenant_id=tenant_id,
+                item_number=item_data.get("item_number") or str(idx + 1),
+                area_domain=item_data.get("area_domain"),
+                control_description=item_data.get("control_description"),
+                compliance_status=item_data.get("compliance_status", "in_progress"),
+                gaps_identified=item_data.get("gaps_identified"),
+                proposed_solution=item_data.get("proposed_solution"),
+                responsible_party=item_data.get("responsible_party"),
+                timeline=item_data.get("timeline"),
+                priority=item_data.get("priority"),
+                evidence_reference=item_data.get("evidence_reference"),
+                remarks=item_data.get("remarks")
+            )
+            db.add(db_item)
+        
+        db.flush()
+        logger.info("Assessment items created, calculating stats...")
+        
+        items = db.query(ComplianceAssessmentDocumentItem).filter(
+            ComplianceAssessmentDocumentItem.assessment_id == db_assessment.id
+        ).all()
+        stats = calculate_assessment_stats(items)
+        
+        db_assessment.complied_count = stats["complied"]
+        db_assessment.partially_complied_count = stats["partially_complied"]
+        db_assessment.not_complied_count = stats["not_complied"]
+        db_assessment.in_progress_count = stats["in_progress"]
+        db_assessment.na_count = stats["na"]
+        db_assessment.overall_score = stats["overall_score"]
+        
+        db.commit()
+        db.refresh(db_assessment)
+        logger.info(f"Assessment upload complete: ID={db_assessment.id}, items={db_assessment.total_items}")
+        
+        return {
+            "id": db_assessment.id,
+            "name": db_assessment.name,
+            "assessment_type": db_assessment.assessment_type,
+            "source": db_assessment.source,
+            "file_name": db_assessment.file_name,
+            "status": db_assessment.status,
+            "total_items": db_assessment.total_items,
+            "complied_count": db_assessment.complied_count,
+            "partially_complied_count": db_assessment.partially_complied_count,
+            "not_complied_count": db_assessment.not_complied_count,
+            "in_progress_count": db_assessment.in_progress_count,
+            "na_count": db_assessment.na_count,
+            "overall_score": db_assessment.overall_score,
+            "columns_detected": list(column_map.keys()),
+            "message": f"Successfully uploaded assessment with {len(items_data)} items"
+        }
     
-    db.flush()
-    
-    items = db.query(ComplianceAssessmentDocumentItem).filter(
-        ComplianceAssessmentDocumentItem.assessment_id == db_assessment.id
-    ).all()
-    stats = calculate_assessment_stats(items)
-    
-    db_assessment.complied_count = stats["complied"]
-    db_assessment.partially_complied_count = stats["partially_complied"]
-    db_assessment.not_complied_count = stats["not_complied"]
-    db_assessment.in_progress_count = stats["in_progress"]
-    db_assessment.na_count = stats["na"]
-    db_assessment.overall_score = stats["overall_score"]
-    
-    db.commit()
-    db.refresh(db_assessment)
-    
-    return {
-        "id": db_assessment.id,
-        "name": db_assessment.name,
-        "assessment_type": db_assessment.assessment_type,
-        "source": db_assessment.source,
-        "file_name": db_assessment.file_name,
-        "status": db_assessment.status,
-        "total_items": db_assessment.total_items,
-        "complied_count": db_assessment.complied_count,
-        "partially_complied_count": db_assessment.partially_complied_count,
-        "not_complied_count": db_assessment.not_complied_count,
-        "in_progress_count": db_assessment.in_progress_count,
-        "na_count": db_assessment.na_count,
-        "overall_score": db_assessment.overall_score,
-        "columns_detected": list(column_map.keys()),
-        "message": f"Successfully uploaded assessment with {len(items_data)} items"
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Assessment upload failed: {str(e)}")
+        logger.error(traceback.format_exc())
+        db.rollback()
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except:
+                pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process assessment file: {str(e)}"
+        )
 
 
 @router.get("")
