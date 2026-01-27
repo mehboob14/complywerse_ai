@@ -23,7 +23,52 @@ import {
   Save,
   X,
   Minus,
+  Upload,
+  Sparkles,
+  Paperclip,
+  ThumbsUp,
+  ThumbsDown,
+  RotateCcw,
+  Send,
+  FileUp,
 } from 'lucide-react';
+
+interface EvidenceUpload {
+  id: number;
+  assessment_item_id: number;
+  evidence_id: number | null;
+  status: string;
+  current_tier: number;
+  ai_recommendation: string | null;
+  submitted_at: string | null;
+  created_at: string;
+  evidence?: {
+    id: number;
+    name: string;
+    file_name: string;
+    file_type: string;
+    status: string;
+    uploaded_at: string;
+  };
+  approval_history?: Array<{
+    id: number;
+    action: string;
+    tier_number: number;
+    comments: string | null;
+    performed_at: string;
+    performer?: { full_name: string };
+  }>;
+}
+
+interface AIRecommendation {
+  recommendations: Array<{
+    evidence_type: string;
+    description: string;
+    priority: string;
+    example_files: string[];
+  }>;
+  summary: string;
+}
 
 interface AssessmentItem {
   id: number;
@@ -40,6 +85,8 @@ interface AssessmentItem {
   remarks: string | null;
   created_at: string;
   updated_at: string | null;
+  ai_evidence_recommendation: string | null;
+  ai_recommendation_generated_at: string | null;
 }
 
 interface Assessment {
@@ -89,6 +136,15 @@ const ASSESSMENT_STATUS_STYLES: Record<string, { bg: string; text: string; label
   archived: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Archived' },
 };
 
+const EVIDENCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Draft' },
+  pending_review: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Pending Review' },
+  in_approval: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Approval' },
+  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Approved' },
+  rejected: { bg: 'bg-rose-500/20', text: 'text-rose-400', label: 'Rejected' },
+  returned: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Returned' },
+};
+
 function getScoreColor(score: number | null): { bg: string; text: string } {
   if (score === null) return { bg: 'bg-slate-500/20', text: 'text-slate-400' };
   if (score >= 80) return { bg: 'bg-emerald-500/20', text: 'text-emerald-400' };
@@ -103,6 +159,15 @@ function getScoreBarColor(score: number | null): string {
   return 'bg-rose-500';
 }
 
+function parseAIRecommendation(jsonStr: string | null): AIRecommendation | null {
+  if (!jsonStr) return null;
+  try {
+    return JSON.parse(jsonStr);
+  } catch {
+    return null;
+  }
+}
+
 export default function AssessmentDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -112,6 +177,13 @@ export default function AssessmentDetailPage() {
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editingStatus, setEditingStatus] = useState<string>('');
+  const [expandedEvidence, setExpandedEvidence] = useState<Set<number>>(new Set());
+  const [uploadingItemId, setUploadingItemId] = useState<number | null>(null);
+  const [generatingAIForItem, setGeneratingAIForItem] = useState<number | null>(null);
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [evidenceName, setEvidenceName] = useState('');
+  const [evidenceDescription, setEvidenceDescription] = useState('');
+  const [approvalComments, setApprovalComments] = useState<Record<number, string>>({});
 
   const { data: assessment, isLoading, error } = useQuery<Assessment>({
     queryKey: ['compliance-assessment-detail', assessmentId],
@@ -119,6 +191,23 @@ export default function AssessmentDetailPage() {
       const response = await apiClient.get(`/compliance/assessments/${assessmentId}`);
       return response.data;
     },
+  });
+
+  const { data: itemEvidence, refetch: refetchEvidence } = useQuery({
+    queryKey: ['assessment-item-evidence', assessmentId, Array.from(expandedEvidence)],
+    queryFn: async () => {
+      const results: Record<number, EvidenceUpload[]> = {};
+      for (const itemId of expandedEvidence) {
+        try {
+          const response = await apiClient.get(`/compliance/assessments/${assessmentId}/items/${itemId}/evidence`);
+          results[itemId] = response.data;
+        } catch {
+          results[itemId] = [];
+        }
+      }
+      return results;
+    },
+    enabled: expandedEvidence.size > 0,
   });
 
   const updateItemMutation = useMutation({
@@ -132,6 +221,55 @@ export default function AssessmentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['compliance-assessment-detail', assessmentId] });
       setEditingItemId(null);
       setEditingStatus('');
+    },
+  });
+
+  const uploadEvidenceMutation = useMutation({
+    mutationFn: async ({ itemId, formData }: { itemId: number; formData: FormData }) => {
+      const response = await apiClient.post(
+        `/compliance/assessments/${assessmentId}/items/${itemId}/evidence/upload`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compliance-assessment-detail', assessmentId] });
+      refetchEvidence();
+      setUploadingItemId(null);
+      setEvidenceFile(null);
+      setEvidenceName('');
+      setEvidenceDescription('');
+    },
+  });
+
+  const generateAIRecommendationMutation = useMutation({
+    mutationFn: async (itemId: number) => {
+      const response = await apiClient.post(
+        `/compliance/assessments/${assessmentId}/items/${itemId}/ai-recommendation`
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compliance-assessment-detail', assessmentId] });
+      setGeneratingAIForItem(null);
+    },
+    onError: () => {
+      setGeneratingAIForItem(null);
+    },
+  });
+
+  const approvalActionMutation = useMutation({
+    mutationFn: async ({ evidenceLinkId, action, comments }: { evidenceLinkId: number; action: string; comments?: string }) => {
+      const response = await apiClient.post(`/compliance/assessments/evidence/${evidenceLinkId}/approval`, {
+        action,
+        comments,
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchEvidence();
+      setApprovalComments({});
     },
   });
 
@@ -166,6 +304,16 @@ export default function AssessmentDetailPage() {
     setExpandedDomains(newExpanded);
   };
 
+  const toggleEvidencePanel = (itemId: number) => {
+    const newExpanded = new Set(expandedEvidence);
+    if (newExpanded.has(itemId)) {
+      newExpanded.delete(itemId);
+    } else {
+      newExpanded.add(itemId);
+    }
+    setExpandedEvidence(newExpanded);
+  };
+
   const expandAll = () => {
     if (assessment?.items_by_domain) {
       setExpandedDomains(new Set(Object.keys(assessment.items_by_domain)));
@@ -192,12 +340,47 @@ export default function AssessmentDetailPage() {
     }
   };
 
+  const handleGenerateAIRecommendation = (itemId: number) => {
+    setGeneratingAIForItem(itemId);
+    generateAIRecommendationMutation.mutate(itemId);
+  };
+
+  const handleUploadEvidence = (itemId: number) => {
+    if (!evidenceFile) return;
+    const formData = new FormData();
+    formData.append('file', evidenceFile);
+    formData.append('name', evidenceName || evidenceFile.name);
+    if (evidenceDescription) {
+      formData.append('description', evidenceDescription);
+    }
+    uploadEvidenceMutation.mutate({ itemId, formData });
+  };
+
+  const handleApprovalAction = (evidenceLinkId: number, action: string) => {
+    approvalActionMutation.mutate({
+      evidenceLinkId,
+      action,
+      comments: approvalComments[evidenceLinkId],
+    });
+  };
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
+    });
+  };
+
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -446,104 +629,343 @@ export default function AssessmentDetailPage() {
                           COMPLIANCE_STATUS_STYLES.in_progress;
                         const StatusIcon = itemStatusStyle.icon;
                         const isEditing = editingItemId === item.id;
+                        const isEvidenceExpanded = expandedEvidence.has(item.id);
+                        const currentItemEvidence = itemEvidence?.[item.id] || [];
+                        const aiRecommendation = parseAIRecommendation(item.ai_evidence_recommendation);
 
                         return (
-                          <div key={item.id} className="p-4 bg-slate-900/30">
-                            <div className="flex items-start gap-4">
-                              <span className="text-sm font-mono text-slate-500 mt-1">
-                                {item.item_number}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-white mb-2">{item.control_description}</p>
+                          <div key={item.id} className="bg-slate-900/30">
+                            <div className="p-4">
+                              <div className="flex items-start gap-4">
+                                <span className="text-sm font-mono text-slate-500 mt-1">
+                                  {item.item_number}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-white mb-2">{item.control_description}</p>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
-                                  {item.gaps_identified && (
-                                    <div className="bg-slate-800/50 rounded-lg p-3">
-                                      <p className="text-xs text-slate-500 mb-1">Gaps Identified</p>
-                                      <p className="text-sm text-slate-300">{item.gaps_identified}</p>
-                                    </div>
-                                  )}
-                                  {item.proposed_solution && (
-                                    <div className="bg-slate-800/50 rounded-lg p-3">
-                                      <p className="text-xs text-slate-500 mb-1">Proposed Solution</p>
-                                      <p className="text-sm text-slate-300">{item.proposed_solution}</p>
-                                    </div>
-                                  )}
-                                  {item.responsible_party && (
-                                    <div className="bg-slate-800/50 rounded-lg p-3">
-                                      <p className="text-xs text-slate-500 mb-1">Responsible Party</p>
-                                      <p className="text-sm text-slate-300">{item.responsible_party}</p>
-                                    </div>
-                                  )}
-                                  {item.timeline && (
-                                    <div className="bg-slate-800/50 rounded-lg p-3">
-                                      <p className="text-xs text-slate-500 mb-1">Timeline</p>
-                                      <p className="text-sm text-slate-300">{item.timeline}</p>
-                                    </div>
-                                  )}
-                                  {item.priority && (
-                                    <div className="bg-slate-800/50 rounded-lg p-3">
-                                      <p className="text-xs text-slate-500 mb-1">Priority</p>
-                                      <p className="text-sm text-slate-300 capitalize">{item.priority}</p>
-                                    </div>
-                                  )}
-                                  {item.remarks && (
-                                    <div className="bg-slate-800/50 rounded-lg p-3">
-                                      <p className="text-xs text-slate-500 mb-1">Remarks</p>
-                                      <p className="text-sm text-slate-300">{item.remarks}</p>
-                                    </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+                                    {item.gaps_identified && (
+                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                        <p className="text-xs text-slate-500 mb-1">Gaps Identified</p>
+                                        <p className="text-sm text-slate-300">{item.gaps_identified}</p>
+                                      </div>
+                                    )}
+                                    {item.proposed_solution && (
+                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                        <p className="text-xs text-slate-500 mb-1">Proposed Solution</p>
+                                        <p className="text-sm text-slate-300">{item.proposed_solution}</p>
+                                      </div>
+                                    )}
+                                    {item.responsible_party && (
+                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                        <p className="text-xs text-slate-500 mb-1">Responsible Party</p>
+                                        <p className="text-sm text-slate-300">{item.responsible_party}</p>
+                                      </div>
+                                    )}
+                                    {item.timeline && (
+                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                        <p className="text-xs text-slate-500 mb-1">Timeline</p>
+                                        <p className="text-sm text-slate-300">{item.timeline}</p>
+                                      </div>
+                                    )}
+                                    {item.priority && (
+                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                        <p className="text-xs text-slate-500 mb-1">Priority</p>
+                                        <p className="text-sm text-slate-300 capitalize">{item.priority}</p>
+                                      </div>
+                                    )}
+                                    {item.remarks && (
+                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                        <p className="text-xs text-slate-500 mb-1">Remarks</p>
+                                        <p className="text-sm text-slate-300">{item.remarks}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {isEditing ? (
+                                    <>
+                                      <select
+                                        value={editingStatus}
+                                        onChange={(e) => setEditingStatus(e.target.value)}
+                                        className="select text-sm"
+                                      >
+                                        {STATUS_OPTIONS.map((opt) => (
+                                          <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <button
+                                        onClick={saveEditing}
+                                        disabled={updateItemMutation.isPending}
+                                        className="btn-primary btn-sm"
+                                      >
+                                        {updateItemMutation.isPending ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Save className="h-4 w-4" />
+                                        )}
+                                      </button>
+                                      <button onClick={cancelEditing} className="btn-ghost btn-sm">
+                                        <X className="h-4 w-4" />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span
+                                        className={`badge ${itemStatusStyle.bg} ${itemStatusStyle.text} flex items-center gap-1`}
+                                      >
+                                        <StatusIcon className="h-3 w-3" />
+                                        {itemStatusStyle.label}
+                                      </span>
+                                      <button
+                                        onClick={() => startEditing(item)}
+                                        className="btn-ghost btn-sm"
+                                        title="Edit Status"
+                                      >
+                                        <Edit2 className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => toggleEvidencePanel(item.id)}
+                                        className={`btn-ghost btn-sm relative ${isEvidenceExpanded ? 'text-primary-400' : ''}`}
+                                        title="Evidence"
+                                      >
+                                        <Paperclip className="h-4 w-4" />
+                                        {currentItemEvidence.length > 0 && (
+                                          <span className="absolute -top-1 -right-1 h-4 w-4 text-xs bg-primary-500 text-white rounded-full flex items-center justify-center">
+                                            {currentItemEvidence.length}
+                                          </span>
+                                        )}
+                                      </button>
+                                      <button
+                                        onClick={() => handleGenerateAIRecommendation(item.id)}
+                                        disabled={generatingAIForItem === item.id}
+                                        className={`btn-ghost btn-sm ${aiRecommendation ? 'text-purple-400' : ''}`}
+                                        title="AI Suggest Evidence"
+                                      >
+                                        {generatingAIForItem === item.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Sparkles className="h-4 w-4" />
+                                        )}
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                               </div>
+                            </div>
 
-                              <div className="flex items-center gap-2">
-                                {isEditing ? (
-                                  <>
-                                    <select
-                                      value={editingStatus}
-                                      onChange={(e) => setEditingStatus(e.target.value)}
-                                      className="select text-sm"
-                                    >
-                                      {STATUS_OPTIONS.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
-                                          {opt.label}
-                                        </option>
+                            {isEvidenceExpanded && (
+                              <div className="mx-4 mb-4 bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-4">
+                                {aiRecommendation && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                      <Sparkles className="h-4 w-4 text-purple-400" />
+                                      <h4 className="text-sm font-medium text-purple-400">AI Evidence Recommendations</h4>
+                                      {item.ai_recommendation_generated_at && (
+                                        <span className="text-xs text-slate-500">
+                                          Generated {formatDateTime(item.ai_recommendation_generated_at)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-slate-300">{aiRecommendation.summary}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                      {aiRecommendation.recommendations.map((rec, idx) => (
+                                        <div key={idx} className="bg-slate-900/50 rounded-lg p-3">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-medium text-white">{rec.evidence_type}</span>
+                                            <span className={`text-xs px-2 py-0.5 rounded ${
+                                              rec.priority === 'high' ? 'bg-rose-500/20 text-rose-400' :
+                                              rec.priority === 'medium' ? 'bg-amber-500/20 text-amber-400' :
+                                              'bg-slate-500/20 text-slate-400'
+                                            }`}>
+                                              {rec.priority}
+                                            </span>
+                                          </div>
+                                          <p className="text-xs text-slate-400 mb-2">{rec.description}</p>
+                                          {rec.example_files.length > 0 && (
+                                            <div className="text-xs text-slate-500">
+                                              Examples: {rec.example_files.join(', ')}
+                                            </div>
+                                          )}
+                                        </div>
                                       ))}
-                                    </select>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {!aiRecommendation && (
+                                  <div className="flex items-center gap-3 py-2">
                                     <button
-                                      onClick={saveEditing}
-                                      disabled={updateItemMutation.isPending}
-                                      className="btn-primary btn-sm"
+                                      onClick={() => handleGenerateAIRecommendation(item.id)}
+                                      disabled={generatingAIForItem === item.id}
+                                      className="btn-secondary btn-sm flex items-center gap-2"
                                     >
-                                      {updateItemMutation.isPending ? (
+                                      {generatingAIForItem === item.id ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                       ) : (
-                                        <Save className="h-4 w-4" />
+                                        <Sparkles className="h-4 w-4" />
                                       )}
+                                      Generate AI Suggestions
                                     </button>
-                                    <button onClick={cancelEditing} className="btn-ghost btn-sm">
-                                      <X className="h-4 w-4" />
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span
-                                      className={`badge ${itemStatusStyle.bg} ${itemStatusStyle.text} flex items-center gap-1`}
-                                    >
-                                      <StatusIcon className="h-3 w-3" />
-                                      {itemStatusStyle.label}
+                                    <span className="text-xs text-slate-500">
+                                      Get AI-powered recommendations for evidence to upload
                                     </span>
-                                    <button
-                                      onClick={() => startEditing(item)}
-                                      className="btn-ghost btn-sm"
-                                      title="Edit Status"
-                                    >
-                                      <Edit2 className="h-4 w-4" />
-                                    </button>
-                                  </>
+                                  </div>
                                 )}
+
+                                {currentItemEvidence.length > 0 && (
+                                  <div className="space-y-3">
+                                    <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                      <Paperclip className="h-4 w-4" />
+                                      Uploaded Evidence ({currentItemEvidence.length})
+                                    </h4>
+                                    <div className="space-y-2">
+                                      {currentItemEvidence.map((ev) => {
+                                        const evStatusStyle = EVIDENCE_STATUS_STYLES[ev.status] || EVIDENCE_STATUS_STYLES.draft;
+                                        return (
+                                          <div key={ev.id} className="bg-slate-900/50 rounded-lg p-3">
+                                            <div className="flex items-start justify-between">
+                                              <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                  <FileText className="h-4 w-4 text-slate-400" />
+                                                  <span className="text-sm font-medium text-white">
+                                                    {ev.evidence?.name || 'Evidence'}
+                                                  </span>
+                                                  <span className={`badge ${evStatusStyle.bg} ${evStatusStyle.text} text-xs`}>
+                                                    {evStatusStyle.label}
+                                                  </span>
+                                                </div>
+                                                {ev.evidence && (
+                                                  <p className="text-xs text-slate-500 mt-1">
+                                                    {ev.evidence.file_name} • {ev.evidence.file_type}
+                                                  </p>
+                                                )}
+                                                <p className="text-xs text-slate-500">
+                                                  Uploaded {formatDateTime(ev.created_at)}
+                                                </p>
+                                              </div>
+                                              {ev.status === 'pending_review' && (
+                                                <div className="flex items-center gap-2 ml-4">
+                                                  <input
+                                                    type="text"
+                                                    placeholder="Comments (optional)"
+                                                    value={approvalComments[ev.id] || ''}
+                                                    onChange={(e) => setApprovalComments({ ...approvalComments, [ev.id]: e.target.value })}
+                                                    className="input text-xs py-1 px-2 w-32"
+                                                  />
+                                                  <button
+                                                    onClick={() => handleApprovalAction(ev.id, 'approve')}
+                                                    disabled={approvalActionMutation.isPending}
+                                                    className="btn-ghost btn-sm text-emerald-400 hover:bg-emerald-500/20"
+                                                    title="Approve"
+                                                  >
+                                                    <ThumbsUp className="h-4 w-4" />
+                                                  </button>
+                                                  <button
+                                                    onClick={() => handleApprovalAction(ev.id, 'reject')}
+                                                    disabled={approvalActionMutation.isPending}
+                                                    className="btn-ghost btn-sm text-rose-400 hover:bg-rose-500/20"
+                                                    title="Reject"
+                                                  >
+                                                    <ThumbsDown className="h-4 w-4" />
+                                                  </button>
+                                                  <button
+                                                    onClick={() => handleApprovalAction(ev.id, 'return')}
+                                                    disabled={approvalActionMutation.isPending}
+                                                    className="btn-ghost btn-sm text-orange-400 hover:bg-orange-500/20"
+                                                    title="Return for revision"
+                                                  >
+                                                    <RotateCcw className="h-4 w-4" />
+                                                  </button>
+                                                </div>
+                                              )}
+                                            </div>
+                                            {ev.approval_history && ev.approval_history.length > 0 && (
+                                              <div className="mt-2 pt-2 border-t border-slate-700">
+                                                <p className="text-xs text-slate-500 mb-1">Approval History</p>
+                                                <div className="space-y-1">
+                                                  {ev.approval_history.map((history) => (
+                                                    <div key={history.id} className="text-xs text-slate-400">
+                                                      <span className={`font-medium ${
+                                                        history.action === 'approved' ? 'text-emerald-400' :
+                                                        history.action === 'rejected' ? 'text-rose-400' :
+                                                        'text-orange-400'
+                                                      }`}>
+                                                        {history.action}
+                                                      </span>
+                                                      {' by '}
+                                                      {history.performer?.full_name || 'Unknown'}
+                                                      {' at Tier '}
+                                                      {history.tier_number}
+                                                      {history.comments && (
+                                                        <span className="text-slate-500"> - {history.comments}</span>
+                                                      )}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="space-y-3 pt-2 border-t border-slate-700">
+                                  <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                    <FileUp className="h-4 w-4" />
+                                    Upload New Evidence
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                      <label className="block text-xs text-slate-500 mb-1">File</label>
+                                      <input
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                                        onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
+                                        className="input text-sm py-1"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-slate-500 mb-1">Evidence Name</label>
+                                      <input
+                                        type="text"
+                                        value={evidenceName}
+                                        onChange={(e) => setEvidenceName(e.target.value)}
+                                        placeholder="e.g., Security Policy v2"
+                                        className="input text-sm"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-slate-500 mb-1">Description (optional)</label>
+                                      <input
+                                        type="text"
+                                        value={evidenceDescription}
+                                        onChange={(e) => setEvidenceDescription(e.target.value)}
+                                        placeholder="Brief description"
+                                        className="input text-sm"
+                                      />
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => handleUploadEvidence(item.id)}
+                                    disabled={!evidenceFile || uploadEvidenceMutation.isPending}
+                                    className="btn-primary btn-sm flex items-center gap-2"
+                                  >
+                                    {uploadEvidenceMutation.isPending ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Send className="h-4 w-4" />
+                                    )}
+                                    Upload Evidence
+                                  </button>
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         );
                       })}
