@@ -847,7 +847,25 @@ export default function AssessmentDetailPage() {
                                                   Uploaded {formatDateTime(ev.created_at)}
                                                 </p>
                                               </div>
-                                              {ev.status === 'pending_review' && (
+                                              {ev.status === 'draft' && (
+                                                <button
+                                                  onClick={() => approvalActionMutation.mutate({
+                                                    evidenceLinkId: ev.id,
+                                                    action: 'submit',
+                                                    comments: ''
+                                                  })}
+                                                  disabled={approvalActionMutation.isPending}
+                                                  className="btn-primary flex items-center gap-2 text-sm ml-4"
+                                                >
+                                                  {approvalActionMutation.isPending ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                  ) : (
+                                                    <Send className="h-4 w-4" />
+                                                  )}
+                                                  Submit for Review
+                                                </button>
+                                              )}
+                                              {(ev.status === 'pending_review' || ev.status === 'in_approval') && (
                                                 <div className="flex items-center gap-2 ml-4">
                                                   <input
                                                     type="text"
