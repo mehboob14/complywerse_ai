@@ -89,7 +89,23 @@ def serialize_framework(framework: UploadedFramework, controls_count: int = 0) -
         "uploader_name": framework.uploader.display_name if framework.uploader else None,
         "created_at": framework.created_at.isoformat() if framework.created_at else None,
         "updated_at": framework.updated_at.isoformat() if framework.updated_at else None,
-        "parsed_controls_count": controls_count
+        "parsed_controls_count": controls_count,
+        "classification": framework.classification,
+        "classification_confidence": framework.classification_confidence,
+        "classification_reasoning": framework.classification_reasoning,
+        "framework_purpose": framework.framework_purpose,
+        "framework_scope": framework.framework_scope,
+        "framework_objectives": framework.framework_objectives,
+        "target_audience": framework.target_audience,
+        "certification_body": framework.certification_body,
+        "certification_validity_period": framework.certification_validity_period,
+        "certification_levels": framework.certification_levels,
+        "certification_lifecycle": framework.certification_lifecycle,
+        "required_artifacts": framework.required_artifacts,
+        "regulatory_authority": framework.regulatory_authority,
+        "compliance_deadline": framework.compliance_deadline.isoformat() if framework.compliance_deadline else None,
+        "penalty_for_non_compliance": framework.penalty_for_non_compliance,
+        "adoption_approach": framework.adoption_approach
     }
 
 

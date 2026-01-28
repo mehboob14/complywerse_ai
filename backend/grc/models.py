@@ -2029,7 +2029,7 @@ class UploadedFramework(Base):
     file_size = Column(Integer, nullable=True)
     file_type = Column(String(50), nullable=False)  # pdf, docx
     
-    upload_status = Column(String(50), default="uploaded")  # uploaded, parsing, parsed, published, failed
+    upload_status = Column(String(50), default="uploaded")  # uploaded, classifying, classified, parsing, parsed, published, failed
     parse_error = Column(Text, nullable=True)
     parsed_at = Column(DateTime, nullable=True)
     published_framework_id = Column(Integer, ForeignKey("grc_frameworks.id"), nullable=True, index=True)
@@ -2039,6 +2039,33 @@ class UploadedFramework(Base):
     source_organization = Column(String(255), nullable=True)
     version = Column(String(50), nullable=True)
     effective_date = Column(DateTime, nullable=True)
+    
+    # Framework Classification: certification vs compliance
+    classification = Column(String(50), nullable=True)  # certification, compliance
+    classification_confidence = Column(Float, nullable=True)  # AI confidence in classification
+    classification_reasoning = Column(Text, nullable=True)  # AI explanation for classification
+    
+    # Pre-processing Overview (displayed before loading requirements)
+    framework_purpose = Column(Text, nullable=True)  # What this framework aims to achieve
+    framework_scope = Column(Text, nullable=True)  # Who/what it applies to
+    framework_objectives = Column(JSON, nullable=True)  # List of key objectives
+    target_audience = Column(Text, nullable=True)  # Who should implement this
+    
+    # Certification-specific fields (if classification = 'certification')
+    certification_body = Column(String(255), nullable=True)  # e.g., PCI SSC, SWIFT
+    certification_validity_period = Column(String(100), nullable=True)  # e.g., "3 years", "Annual"
+    certification_levels = Column(JSON, nullable=True)  # Tier levels if applicable
+    certification_lifecycle = Column(JSON, nullable=True)  # Phases: preparation, assessment, remediation, certification, maintenance
+    required_artifacts = Column(JSON, nullable=True)  # Policies, procedures, controls, records, evidence expectations
+    
+    # Compliance-specific fields (if classification = 'compliance')
+    regulatory_authority = Column(String(255), nullable=True)  # e.g., SAMA, SBP, EU Commission
+    compliance_deadline = Column(DateTime, nullable=True)  # When compliance is required
+    penalty_for_non_compliance = Column(Text, nullable=True)  # Consequences of non-compliance
+    adoption_approach = Column(JSON, nullable=True)  # Recommended implementation steps
+    
+    # Control hierarchy preservation
+    hierarchy_structure = Column(JSON, nullable=True)  # Preserves official numbering: {domains: [{id, name, sections: [{...}]}]}
     
     is_shared = Column(Boolean, default=False)  # Available to all tenants
     is_active = Column(Boolean, default=True)
@@ -2052,10 +2079,12 @@ class UploadedFramework(Base):
     uploader = relationship("GRCUser", foreign_keys=[uploaded_by])
     parsed_controls = relationship("ParsedFrameworkControl", back_populates="uploaded_framework", cascade="all, delete-orphan")
     assessments = relationship("FrameworkAssessment", back_populates="uploaded_framework", cascade="all, delete-orphan")
+    evidence_requirements = relationship("ControlEvidenceRequirement", back_populates="framework", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_uploaded_framework_tenant", "tenant_id"),
         Index("ix_uploaded_framework_status", "upload_status"),
+        Index("ix_uploaded_framework_classification", "classification"),
     )
 
 
@@ -2123,6 +2152,104 @@ class ControlEvidenceMapping(Base):
     __table_args__ = (
         Index("ix_evidence_mapping_control", "parsed_control_id"),
         UniqueConstraint("parsed_control_id", "evidence_type", name="uq_control_evidence_type"),
+    )
+
+
+class ControlEvidenceRequirement(Base):
+    """AI-generated evidence requirements for each control with multi-tier review workflow"""
+    __tablename__ = "grc_control_evidence_requirements"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id"), nullable=False, index=True)
+    parsed_control_id = Column(Integer, ForeignKey("grc_parsed_framework_controls.id"), nullable=False, index=True)
+    
+    # Evidence requirement details (AI-generated)
+    evidence_title = Column(String(500), nullable=False)  # e.g., "Network Diagram Documentation"
+    evidence_description = Column(Text, nullable=False)  # Detailed description of what evidence is needed
+    evidence_type = Column(String(100), nullable=False)  # policy, procedure, configuration, screenshot, log, report, contract, attestation
+    evidence_format = Column(String(100), nullable=True)  # PDF, screenshot, export, signed document, etc.
+    
+    # Specificity fields for exact evidence requirements
+    exact_requirements = Column(JSON, nullable=True)  # List of specific items: ["firewall rules export", "change log", etc.]
+    acceptance_criteria = Column(JSON, nullable=True)  # What makes this evidence acceptable
+    sample_evidence = Column(Text, nullable=True)  # Description or link to sample/template
+    collection_guidance = Column(Text, nullable=True)  # How to collect this evidence
+    
+    # Frequency and retention
+    collection_frequency = Column(String(50), nullable=True)  # one-time, monthly, quarterly, annually, on-change
+    retention_period = Column(String(100), nullable=True)  # e.g., "3 years", "7 years", "indefinitely"
+    
+    # AI metadata
+    ai_confidence = Column(Float, nullable=True)  # Confidence in this requirement
+    ai_reasoning = Column(Text, nullable=True)  # Why AI generated this requirement
+    
+    # Multi-tier review workflow: draft -> submitted -> pending_review -> approved/rejected
+    status = Column(String(50), default="draft")  # draft, submitted, pending_review, approved, rejected
+    
+    # Draft phase
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)  # null if AI-generated
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Submit phase
+    submitted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    submitted_at = Column(DateTime, nullable=True)
+    submission_notes = Column(Text, nullable=True)
+    
+    # Review phase
+    reviewer_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    review_notes = Column(Text, nullable=True)
+    
+    # Approval phase
+    approver_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    approval_notes = Column(Text, nullable=True)
+    rejection_reason = Column(Text, nullable=True)  # If rejected
+    
+    # Priority and ordering
+    priority = Column(String(20), default="medium")  # high, medium, low
+    display_order = Column(Integer, default=0)
+    
+    is_mandatory = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
+    
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    framework = relationship("UploadedFramework", back_populates="evidence_requirements")
+    parsed_control = relationship("ParsedFrameworkControl", backref="control_evidence_requirements")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    submitter = relationship("GRCUser", foreign_keys=[submitted_by])
+    reviewer = relationship("GRCUser", foreign_keys=[reviewer_id])
+    approver = relationship("GRCUser", foreign_keys=[approver_id])
+    
+    __table_args__ = (
+        Index("ix_evidence_req_framework", "framework_id"),
+        Index("ix_evidence_req_control", "parsed_control_id"),
+        Index("ix_evidence_req_status", "status"),
+    )
+
+
+class EvidenceRequirementHistory(Base):
+    """Audit trail for evidence requirement workflow changes"""
+    __tablename__ = "grc_evidence_requirement_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    evidence_requirement_id = Column(Integer, ForeignKey("grc_control_evidence_requirements.id"), nullable=False, index=True)
+    
+    action = Column(String(50), nullable=False)  # created, submitted, review_started, approved, rejected, edited
+    previous_status = Column(String(50), nullable=True)
+    new_status = Column(String(50), nullable=True)
+    
+    performed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=False)
+    performed_at = Column(DateTime, default=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+    changes = Column(JSON, nullable=True)  # What fields changed
+    
+    performer = relationship("GRCUser")
+    
+    __table_args__ = (
+        Index("ix_evidence_req_history_req", "evidence_requirement_id"),
     )
 
 

@@ -23,7 +23,8 @@ import {
   RefreshCw,
   FileText,
   Sparkles,
-  CheckCircle
+  CheckCircle,
+  Eye
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -37,6 +38,23 @@ interface UploadedFramework {
   is_shared: boolean;
   is_active: boolean;
   created_at: string;
+  classification?: string;
+  classification_confidence?: number;
+  classification_reasoning?: string;
+  framework_purpose?: string;
+  framework_scope?: string;
+  framework_objectives?: string[];
+  target_audience?: string;
+  certification_body?: string;
+  certification_validity_period?: string;
+  certification_levels?: any[];
+  certification_lifecycle?: any;
+  required_artifacts?: any;
+  regulatory_authority?: string;
+  compliance_deadline?: string;
+  penalty_for_non_compliance?: string;
+  adoption_approach?: any;
+  parsed_controls_count?: number;
 }
 
 export default function FrameworksPage() {
@@ -47,6 +65,7 @@ export default function FrameworksPage() {
   const [journeyDeleteConfirm, setJourneyDeleteConfirm] = useState<CertificationJourney | null>(null);
   const [journeyDeleteError, setJourneyDeleteError] = useState<string | null>(null);
   const [enhancingFrameworkId, setEnhancingFrameworkId] = useState<number | null>(null);
+  const [classifyingFrameworkId, setClassifyingFrameworkId] = useState<number | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: async (frameworkId: number) => {
@@ -111,6 +130,24 @@ export default function FrameworksPage() {
       const errorMsg = error.response?.data?.detail || 'Failed to start enhancement';
       setRetryError(errorMsg);
       setEnhancingFrameworkId(null);
+      setTimeout(() => setRetryError(null), 5000);
+    }
+  });
+
+  const classifyMutation = useMutation({
+    mutationFn: async (frameworkId: number) => {
+      return await apiClient.post(`/framework-upload/parser/${frameworkId}/classify`);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['uploaded-frameworks'] });
+      setClassifyingFrameworkId(null);
+      setRetrySuccess(data.data?.message || 'Framework classification started');
+      setTimeout(() => setRetrySuccess(null), 5000);
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.detail || 'Failed to classify framework';
+      setRetryError(errorMsg);
+      setClassifyingFrameworkId(null);
       setTimeout(() => setRetryError(null), 5000);
     }
   });
@@ -223,6 +260,20 @@ export default function FrameworksPage() {
           color: 'bg-red-500/20 text-red-400',
           icon: AlertCircle,
           description: 'An error occurred during processing'
+        };
+      case 'classifying':
+        return { 
+          label: 'Classifying Framework', 
+          color: 'bg-yellow-500/20 text-yellow-400',
+          icon: Sparkles,
+          description: 'AI is analyzing framework type'
+        };
+      case 'classified':
+        return { 
+          label: 'Classified', 
+          color: 'bg-cyan-500/20 text-cyan-400',
+          icon: Tag,
+          description: 'Framework classified, ready to view overview'
         };
       default:
         return { 
@@ -521,7 +572,59 @@ export default function FrameworksPage() {
                   {getFrameworkTypeLabel(framework.framework_type)}
                 </div>
 
+                {framework.classification && (
+                  <div className="mt-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                      framework.classification === 'certification' 
+                        ? 'bg-emerald-500/20 text-emerald-400' 
+                        : 'bg-blue-500/20 text-blue-400'
+                    }`}>
+                      {framework.classification === 'certification' ? '🏆 Certification' : '📋 Compliance'}
+                      {framework.classification_confidence && (
+                        <span className="text-slate-400 ml-1">
+                          ({Math.round(framework.classification_confidence * 100)}%)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
+
                 <div className="mt-4 border-t border-slate-700 pt-4 flex flex-col gap-2">
+                  {(framework.classification === 'certification' || framework.classification === 'compliance') && (
+                    <Link
+                      href={`/frameworks/overview/${framework.id}`}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500/20 px-3 py-2 text-cyan-400 hover:bg-cyan-500/30 transition-colors"
+                    >
+                      <Eye className="h-4 w-4" />
+                      View Overview
+                    </Link>
+                  )}
+                  
+                  {(framework.upload_status === 'uploaded' || framework.upload_status === 'parsed' || framework.upload_status === 'completed' || framework.upload_status === 'published') && !framework.classification && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setClassifyingFrameworkId(framework.id);
+                        classifyMutation.mutate(framework.id);
+                      }}
+                      disabled={classifyMutation.isPending && classifyingFrameworkId === framework.id}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-yellow-500/20 px-3 py-2 text-yellow-400 hover:bg-yellow-500/30 transition-colors disabled:opacity-50"
+                      title="Classify framework as certification or compliance"
+                    >
+                      {classifyMutation.isPending && classifyingFrameworkId === framework.id ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Classifying...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          Classify Framework
+                        </>
+                      )}
+                    </button>
+                  )}
+                  
                   <div className="flex gap-2">
                     <Link
                       href={`/controls?framework=${framework.id}`}

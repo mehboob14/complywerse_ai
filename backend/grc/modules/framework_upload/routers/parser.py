@@ -12,7 +12,8 @@ from openai import OpenAI
 from ....models import (
     UploadedFramework, ParsedFrameworkControl, ControlEvidenceMapping,
     FrameworkControlAlignment, AssessmentItem, AssessmentEvidence,
-    AssessmentRemediation, GRCUser, get_db, SessionLocal
+    AssessmentRemediation, GRCUser, get_db, SessionLocal,
+    ControlEvidenceRequirement, EvidenceRequirementHistory
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -1478,10 +1479,276 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
         db.close()
 
 
+CLASSIFICATION_SYSTEM_PROMPT = """You are a GRC (Governance, Risk, and Compliance) expert specializing in regulatory frameworks and certification standards. Your task is to analyze a framework document and classify it accurately.
+
+CLASSIFICATION CRITERIA:
+
+1. CERTIFICATION FRAMEWORK:
+   - Requires formal third-party audit/assessment leading to a certificate
+   - Has specific audit procedures, qualified assessor requirements, and validity periods
+   - Organizations receive a formal certificate or attestation upon successful assessment
+   - Examples: PCI DSS (QSA assessment, ROC), ISO 27001 (certification body audit), SOC 2 (CPA audit), SWIFT CSP (annual attestation)
+
+2. COMPLIANCE FRAMEWORK:
+   - Regulatory/legal requirements or best practice guidelines that require adherence
+   - May have audits or assessments but NO formal certificate is issued
+   - Compliance is typically demonstrated through self-assessment, regulatory reporting, or inspection
+   - Examples: GDPR (law), SAMA CSF (regulatory guideline), NIST CSF (voluntary), COBIT (best practice)
+
+REFERENCE EXAMPLES:
+- PCI DSS → CERTIFICATION (requires QSA assessment, ROC, certificate of compliance)
+- SWIFT CSCF → CERTIFICATION (requires SWIFT CSP certification, annual attestation)
+- ISO 27001 → CERTIFICATION (requires certification body audit, formal certificate)
+- SOC 2 → CERTIFICATION (requires CPA audit, attestation report)
+- SAMA CSF → COMPLIANCE (Saudi regulatory guideline, no formal certification)
+- GDPR → COMPLIANCE (EU law, no certification - compliance is legal requirement)
+- NIST CSF → COMPLIANCE (voluntary framework, no formal certification)
+- SBP Guidelines → COMPLIANCE (Pakistan central bank regulations)
+- SABIC CyberTrust → COMPLIANCE (vendor requirements, no formal certification)
+- ARAMCO SACS → COMPLIANCE (third-party requirements, no formal certification)
+- COBIT → COMPLIANCE (ISACA best practice framework, no certification required)
+
+Analyze the document text carefully and provide a comprehensive classification with high confidence."""
+
+
+def classify_framework_with_ai(text: str, framework_name: str) -> dict:
+    """Use OpenAI to classify a framework as certification or compliance."""
+    client = get_openai_client()
+    
+    analysis_text = text[:15000]
+    
+    prompt = f"""Analyze the following framework document and classify it.
+
+FRAMEWORK NAME: {framework_name}
+
+DOCUMENT TEXT (first ~15000 characters):
+---
+{analysis_text}
+---
+
+Based on the document content, provide a comprehensive classification. Return a JSON object with the following structure:
+
+{{
+    "classification": "certification" or "compliance",
+    "classification_confidence": 0.0-1.0 (how confident you are in the classification),
+    "classification_reasoning": "Detailed explanation of why this is classified as certification or compliance",
+    
+    "framework_purpose": "What this framework aims to achieve",
+    "framework_scope": "Who/what this framework applies to (industries, organization types, geographies)",
+    "framework_objectives": ["List", "of", "key", "objectives"],
+    "target_audience": "Who should implement this framework",
+    
+    "certification_body": "Organization that issues the certification (null if compliance framework)",
+    "certification_validity_period": "How long certification is valid, e.g., '1 year', '3 years' (null if compliance)",
+    "certification_levels": ["Tier/level options if applicable, otherwise null"],
+    "certification_lifecycle": {{
+        "preparation": "Description of preparation phase",
+        "assessment": "Description of assessment/audit phase",
+        "remediation": "Description of remediation phase if gaps found",
+        "certification": "Description of certification issuance",
+        "maintenance": "Description of ongoing maintenance requirements"
+    }},
+    "required_artifacts": ["policies", "procedures", "controls", "records", "evidence types needed"],
+    
+    "regulatory_authority": "Who enforces this (null if certification framework)",
+    "compliance_deadline": "When compliance is required if mentioned (null if not mentioned or certification)",
+    "penalty_for_non_compliance": "Consequences of non-compliance (null if certification framework)",
+    "adoption_approach": ["Step 1: ...", "Step 2: ...", "Recommended implementation steps"]
+}}
+
+IMPORTANT:
+- For CERTIFICATION frameworks: Fill in certification_* fields, set regulatory_authority/penalty_for_non_compliance/adoption_approach to null
+- For COMPLIANCE frameworks: Fill in regulatory_authority/penalty_for_non_compliance/adoption_approach, set certification_* fields to null
+- Be specific and detailed in your analysis
+- If information is not found in the document, provide reasonable inferences based on framework type"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": CLASSIFICATION_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=4096,
+            temperature=0
+        )
+        
+        result_text = response.choices[0].message.content or "{}"
+        result = json.loads(result_text)
+        return result
+    
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to parse classification response: {str(e)}"
+        )
+    except Exception as e:
+        error_msg = str(e)
+        if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Cloud budget exceeded. Please upgrade your plan."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Classification failed: {error_msg}"
+        )
+
+
+@router.post("/{framework_id}/classify")
+def classify_framework(
+    framework_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Classify a framework as certification or compliance before parsing.
+    
+    This endpoint analyzes the framework document using AI to determine:
+    - Whether it's a certification framework (requires formal audit/certificate)
+    - Or a compliance framework (regulatory requirement without formal certification)
+    
+    The classification results are stored in the framework record and include:
+    - Classification type and confidence
+    - Framework purpose, scope, objectives, and target audience
+    - Type-specific metadata (certification body, validity period, or regulatory authority, penalties)
+    """
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uploaded framework not found"
+        )
+    
+    validate_framework_access(current_user, framework, db)
+    
+    if framework.upload_status == "classifying":
+        return {
+            "message": "Classification already in progress",
+            "framework_id": framework_id,
+            "status": "classifying"
+        }
+    
+    if not os.path.exists(framework.file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework file not found on disk"
+        )
+    
+    framework.upload_status = "classifying"
+    db.commit()
+    
+    try:
+        extracted_text = extract_text_from_file(framework)
+        
+        if not extracted_text.strip():
+            framework.upload_status = "uploaded"
+            framework.parse_error = "No text could be extracted from the document"
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No text could be extracted from the document"
+            )
+        
+        classification_result = classify_framework_with_ai(extracted_text, framework.name)
+        
+        framework.classification = classification_result.get("classification")
+        framework.classification_confidence = classification_result.get("classification_confidence")
+        framework.classification_reasoning = classification_result.get("classification_reasoning")
+        
+        framework.framework_purpose = classification_result.get("framework_purpose")
+        framework.framework_scope = classification_result.get("framework_scope")
+        framework.framework_objectives = classification_result.get("framework_objectives")
+        framework.target_audience = classification_result.get("target_audience")
+        
+        if framework.classification == "certification":
+            framework.certification_body = classification_result.get("certification_body")
+            framework.certification_validity_period = classification_result.get("certification_validity_period")
+            framework.certification_levels = classification_result.get("certification_levels")
+            framework.certification_lifecycle = classification_result.get("certification_lifecycle")
+            framework.required_artifacts = classification_result.get("required_artifacts")
+            framework.regulatory_authority = None
+            framework.compliance_deadline = None
+            framework.penalty_for_non_compliance = None
+            framework.adoption_approach = None
+        else:
+            framework.regulatory_authority = classification_result.get("regulatory_authority")
+            deadline_str = classification_result.get("compliance_deadline")
+            if deadline_str and isinstance(deadline_str, str) and deadline_str.lower() not in ["null", "none", ""]:
+                try:
+                    from dateutil import parser as date_parser
+                    framework.compliance_deadline = date_parser.parse(deadline_str)
+                except Exception:
+                    framework.compliance_deadline = None
+            framework.penalty_for_non_compliance = classification_result.get("penalty_for_non_compliance")
+            framework.adoption_approach = classification_result.get("adoption_approach")
+            framework.certification_body = None
+            framework.certification_validity_period = None
+            framework.certification_levels = None
+            framework.certification_lifecycle = None
+            framework.required_artifacts = classification_result.get("required_artifacts")
+        
+        framework.upload_status = "classified"
+        framework.updated_at = datetime.utcnow()
+        db.commit()
+        
+        return {
+            "message": "Framework classified successfully",
+            "framework_id": framework_id,
+            "status": "classified",
+            "classification": framework.classification,
+            "classification_confidence": framework.classification_confidence,
+            "classification_reasoning": framework.classification_reasoning,
+            "framework_purpose": framework.framework_purpose,
+            "framework_scope": framework.framework_scope,
+            "framework_objectives": framework.framework_objectives,
+            "target_audience": framework.target_audience,
+            "certification_body": framework.certification_body,
+            "certification_validity_period": framework.certification_validity_period,
+            "certification_levels": framework.certification_levels,
+            "certification_lifecycle": framework.certification_lifecycle,
+            "required_artifacts": framework.required_artifacts,
+            "regulatory_authority": framework.regulatory_authority,
+            "compliance_deadline": framework.compliance_deadline.isoformat() if framework.compliance_deadline else None,
+            "penalty_for_non_compliance": framework.penalty_for_non_compliance,
+            "adoption_approach": framework.adoption_approach
+        }
+    
+    except HTTPException:
+        db.rollback()
+        try:
+            fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+            if fw and fw.upload_status == "classifying":
+                fw.upload_status = "uploaded"
+                db.commit()
+        except Exception:
+            pass
+        raise
+    except Exception as e:
+        db.rollback()
+        error_msg = str(e)
+        try:
+            fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+            if fw:
+                fw.upload_status = "uploaded"
+                fw.parse_error = f"Classification failed: {error_msg[:500]}"
+                db.commit()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Classification failed: {error_msg}"
+        )
+
+
 @router.post("/{framework_id}/parse")
 def parse_framework_document(
     framework_id: int,
     background_tasks: BackgroundTasks,
+    classify_first: bool = Query(False, description="Run classification before parsing if not already classified"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1489,6 +1756,10 @@ def parse_framework_document(
     
     Returns immediately with status 'parsing'. The actual parsing runs in
     the background. Poll the framework status to check when parsing completes.
+    
+    Args:
+        classify_first: If True and the framework is not already classified,
+                       run classification before parsing. Default is False.
     """
     framework = db.query(UploadedFramework).filter(
         UploadedFramework.id == framework_id
@@ -1509,6 +1780,13 @@ def parse_framework_document(
             "status": "parsing"
         }
     
+    if framework.upload_status == "classifying":
+        return {
+            "message": "Classification in progress. Parsing will start after classification.",
+            "framework_id": framework_id,
+            "status": "classifying"
+        }
+    
     file_path = framework.file_path
     file_type = framework.file_type
     framework_name = framework.name
@@ -1518,6 +1796,47 @@ def parse_framework_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Framework file not found on disk"
         )
+    
+    if classify_first and not framework.classification:
+        try:
+            framework.upload_status = "classifying"
+            db.commit()
+            
+            extracted_text = extract_text_from_file(framework)
+            
+            if extracted_text.strip():
+                classification_result = classify_framework_with_ai(extracted_text, framework.name)
+                
+                framework.classification = classification_result.get("classification")
+                framework.classification_confidence = classification_result.get("classification_confidence")
+                framework.classification_reasoning = classification_result.get("classification_reasoning")
+                framework.framework_purpose = classification_result.get("framework_purpose")
+                framework.framework_scope = classification_result.get("framework_scope")
+                framework.framework_objectives = classification_result.get("framework_objectives")
+                framework.target_audience = classification_result.get("target_audience")
+                
+                if framework.classification == "certification":
+                    framework.certification_body = classification_result.get("certification_body")
+                    framework.certification_validity_period = classification_result.get("certification_validity_period")
+                    framework.certification_levels = classification_result.get("certification_levels")
+                    framework.certification_lifecycle = classification_result.get("certification_lifecycle")
+                    framework.required_artifacts = classification_result.get("required_artifacts")
+                else:
+                    framework.regulatory_authority = classification_result.get("regulatory_authority")
+                    deadline_str = classification_result.get("compliance_deadline")
+                    if deadline_str and isinstance(deadline_str, str) and deadline_str.lower() not in ["null", "none", ""]:
+                        try:
+                            from dateutil import parser as date_parser
+                            framework.compliance_deadline = date_parser.parse(deadline_str)
+                        except Exception:
+                            pass
+                    framework.penalty_for_non_compliance = classification_result.get("penalty_for_non_compliance")
+                    framework.adoption_approach = classification_result.get("adoption_approach")
+                    framework.required_artifacts = classification_result.get("required_artifacts")
+                
+                db.commit()
+        except Exception as e:
+            print(f"[PARSE] Classification failed during parse: {e}", flush=True)
     
     framework.upload_status = "parsing"
     framework.parse_error = None
@@ -2328,6 +2647,620 @@ def get_enhancement_status(
         "total_controls": total_controls,
         "controls_with_evidence": controls_with_evidence,
         "enhancement_progress": round((controls_with_evidence / total_controls * 100) if total_controls > 0 else 0, 1)
+    }
+
+
+EVIDENCE_GENERATION_PROMPT = """You are a GRC expert specializing in audit evidence and compliance documentation. For the given control requirement, generate SPECIFIC evidence requirements that would satisfy an auditor.
+
+CONTROL INFORMATION:
+Control ID: {control_id}
+Title: {title}
+Description: {description}
+Full Text: {full_text}
+Domain: {domain}
+Is Mandatory: {is_mandatory}
+
+Generate 1-5 SPECIFIC evidence requirements. Be EXACT about what documentation, screenshots, exports, or records are needed.
+
+For each evidence requirement, specify:
+1. evidence_title: Clear, specific title
+2. evidence_description: Detailed description (2-3 sentences)
+3. evidence_type: One of: policy, procedure, configuration, screenshot, log, report, contract, attestation, certificate, training_record
+4. evidence_format: e.g., "PDF document", "System screenshot", "CSV export", "Signed PDF"
+5. exact_requirements: Array of specific items needed (e.g., ["Rule definitions", "Source/destination IPs", "Date of last update"])
+6. acceptance_criteria: Array of criteria (e.g., ["Dated within last 12 months", "Signed by manager", "Shows complete configuration"])
+7. sample_evidence: Brief description of an ideal sample
+8. collection_guidance: How to collect this evidence (1-2 sentences)
+9. collection_frequency: one-time, monthly, quarterly, annually, or on-change
+10. retention_period: e.g., "3 years"
+11. priority: high (critical controls), medium, or low
+12. is_mandatory: true if required for compliance, false if supporting
+
+Return JSON with "evidence_requirements" array."""
+
+
+def generate_evidence_requirements_for_controls_batch(
+    controls: List[ParsedFrameworkControl],
+    framework_name: str
+) -> List[dict]:
+    """Generate evidence requirements for a batch of controls using AI."""
+    if not check_ai_available():
+        return []
+    
+    client = get_openai_client()
+    
+    results = []
+    
+    for control in controls:
+        prompt = EVIDENCE_GENERATION_PROMPT.format(
+            control_id=control.control_id,
+            title=control.title,
+            description=control.description or "",
+            full_text=control.full_text or "",
+            domain=control.domain or "General",
+            is_mandatory=control.is_mandatory
+        )
+        
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": GRC_SME_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=4096,
+                temperature=0
+            )
+            
+            result_text = response.choices[0].message.content or "{}"
+            result = json.loads(result_text)
+            evidence_reqs = result.get("evidence_requirements", [])
+            
+            for req in evidence_reqs:
+                req["parsed_control_id"] = control.id
+            
+            results.extend(evidence_reqs)
+            
+        except Exception as e:
+            print(f"[EVIDENCE] Error generating for control {control.id}: {e}", flush=True)
+            continue
+    
+    return results
+
+
+def generate_evidence_requirements_background(framework_id: int, framework_name: str):
+    """Background task to generate evidence requirements for all controls in a framework."""
+    db = SessionLocal()
+    try:
+        framework = db.query(UploadedFramework).filter(
+            UploadedFramework.id == framework_id
+        ).first()
+        
+        if not framework:
+            return
+        
+        framework.parse_error = "Generating evidence requirements..."
+        db.commit()
+        
+        controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework_id
+        ).all()
+        
+        if not controls:
+            framework.parse_error = "No controls found"
+            db.commit()
+            return
+        
+        total_controls = len(controls)
+        batch_size = 5
+        total_batches = (total_controls + batch_size - 1) // batch_size
+        total_requirements = 0
+        
+        for batch_num, i in enumerate(range(0, total_controls, batch_size), start=1):
+            batch = controls[i:i + batch_size]
+            
+            progress = round((batch_num / total_batches) * 100)
+            framework.parse_error = f"Generating evidence requirements... {progress}% ({batch_num}/{total_batches} batches)"
+            db.commit()
+            
+            print(f"[EVIDENCE] Processing batch {batch_num}/{total_batches} ({len(batch)} controls)", flush=True)
+            
+            evidence_reqs = generate_evidence_requirements_for_controls_batch(batch, framework_name)
+            
+            for req in evidence_reqs:
+                evidence_record = ControlEvidenceRequirement(
+                    framework_id=framework_id,
+                    parsed_control_id=req.get("parsed_control_id"),
+                    evidence_title=req.get("evidence_title", "Evidence Requirement")[:500],
+                    evidence_description=req.get("evidence_description", ""),
+                    evidence_type=req.get("evidence_type", "policy")[:100],
+                    evidence_format=req.get("evidence_format", "PDF")[:100] if req.get("evidence_format") else None,
+                    exact_requirements=req.get("exact_requirements", []),
+                    acceptance_criteria=req.get("acceptance_criteria", []),
+                    sample_evidence=req.get("sample_evidence"),
+                    collection_guidance=req.get("collection_guidance"),
+                    collection_frequency=req.get("collection_frequency", "annually")[:50] if req.get("collection_frequency") else None,
+                    retention_period=req.get("retention_period", "3 years")[:100] if req.get("retention_period") else None,
+                    priority=normalize_priority(req.get("priority", "medium")),
+                    is_mandatory=req.get("is_mandatory", True),
+                    status="draft",
+                    ai_confidence=0.85,
+                    ai_reasoning=f"AI-generated evidence requirement for control {req.get('parsed_control_id')}"
+                )
+                db.add(evidence_record)
+                total_requirements += 1
+            
+            db.commit()
+        
+        framework.parse_error = None
+        db.commit()
+        
+        print(f"[EVIDENCE] Completed! Generated {total_requirements} evidence requirements for {total_controls} controls", flush=True)
+        
+    except Exception as e:
+        print(f"[EVIDENCE] Error: {str(e)}", flush=True)
+        if framework:
+            framework.parse_error = f"Error generating evidence: {str(e)[:200]}"
+            db.commit()
+    finally:
+        db.close()
+
+
+@router.post("/{framework_id}/generate-evidence-requirements")
+def generate_evidence_requirements(
+    framework_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Generate AI-powered evidence requirements for all controls in a framework."""
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework not found"
+        )
+    
+    validate_framework_access(current_user, framework, db)
+    
+    if not check_ai_available():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    
+    control_count = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id
+    ).count()
+    
+    if control_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No controls found in this framework. Please parse the framework first."
+        )
+    
+    existing_requirements = db.query(ControlEvidenceRequirement).filter(
+        ControlEvidenceRequirement.framework_id == framework_id
+    ).count()
+    
+    background_tasks.add_task(
+        generate_evidence_requirements_background,
+        framework_id,
+        framework.name
+    )
+    
+    return {
+        "message": "Evidence requirement generation started",
+        "framework_id": framework_id,
+        "framework_name": framework.name,
+        "total_controls": control_count,
+        "existing_requirements": existing_requirements,
+        "estimated_time_minutes": max(1, (control_count // 5) * 0.5)
+    }
+
+
+@router.get("/{framework_id}/evidence-requirements")
+def list_evidence_requirements(
+    framework_id: int,
+    status_filter: Optional[str] = Query(None, alias="status"),
+    control_id: Optional[int] = Query(None),
+    evidence_type: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """List all evidence requirements for a framework with filtering options."""
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework not found"
+        )
+    
+    validate_framework_access(current_user, framework, db)
+    
+    query = db.query(ControlEvidenceRequirement).filter(
+        ControlEvidenceRequirement.framework_id == framework_id,
+        ControlEvidenceRequirement.is_active == True
+    )
+    
+    if status_filter:
+        query = query.filter(ControlEvidenceRequirement.status == status_filter)
+    
+    if control_id:
+        query = query.filter(ControlEvidenceRequirement.parsed_control_id == control_id)
+    
+    if evidence_type:
+        query = query.filter(ControlEvidenceRequirement.evidence_type == evidence_type)
+    
+    if priority:
+        query = query.filter(ControlEvidenceRequirement.priority == priority)
+    
+    total = query.count()
+    
+    requirements = query.order_by(
+        ControlEvidenceRequirement.parsed_control_id,
+        ControlEvidenceRequirement.display_order,
+        ControlEvidenceRequirement.id
+    ).offset(skip).limit(limit).all()
+    
+    status_counts = db.query(
+        ControlEvidenceRequirement.status,
+        func.count(ControlEvidenceRequirement.id)
+    ).filter(
+        ControlEvidenceRequirement.framework_id == framework_id,
+        ControlEvidenceRequirement.is_active == True
+    ).group_by(ControlEvidenceRequirement.status).all()
+    
+    return {
+        "framework_id": framework_id,
+        "framework_name": framework.name,
+        "total": total,
+        "status_counts": {s: c for s, c in status_counts},
+        "requirements": [
+            {
+                "id": req.id,
+                "parsed_control_id": req.parsed_control_id,
+                "control_id": req.parsed_control.control_id if req.parsed_control else None,
+                "control_title": req.parsed_control.title if req.parsed_control else None,
+                "evidence_title": req.evidence_title,
+                "evidence_description": req.evidence_description,
+                "evidence_type": req.evidence_type,
+                "evidence_format": req.evidence_format,
+                "exact_requirements": req.exact_requirements,
+                "acceptance_criteria": req.acceptance_criteria,
+                "sample_evidence": req.sample_evidence,
+                "collection_guidance": req.collection_guidance,
+                "collection_frequency": req.collection_frequency,
+                "retention_period": req.retention_period,
+                "priority": req.priority,
+                "is_mandatory": req.is_mandatory,
+                "status": req.status,
+                "ai_confidence": req.ai_confidence,
+                "ai_reasoning": req.ai_reasoning,
+                "rejection_reason": req.rejection_reason,
+                "created_at": req.created_at.isoformat() if req.created_at else None,
+                "submitted_at": req.submitted_at.isoformat() if req.submitted_at else None,
+                "reviewed_at": req.reviewed_at.isoformat() if req.reviewed_at else None,
+                "approved_at": req.approved_at.isoformat() if req.approved_at else None
+            }
+            for req in requirements
+        ]
+    }
+
+
+class WorkflowSubmitRequest(BaseModel):
+    notes: Optional[str] = None
+
+
+class WorkflowReviewRequest(BaseModel):
+    notes: Optional[str] = None
+
+
+class WorkflowApproveRequest(BaseModel):
+    notes: Optional[str] = None
+
+
+class WorkflowRejectRequest(BaseModel):
+    reason: str
+
+
+@router.post("/evidence-requirements/{requirement_id}/submit")
+def submit_evidence_requirement(
+    requirement_id: int,
+    request: WorkflowSubmitRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Submit an evidence requirement for review."""
+    requirement = db.query(ControlEvidenceRequirement).filter(
+        ControlEvidenceRequirement.id == requirement_id,
+        ControlEvidenceRequirement.is_active == True
+    ).first()
+    
+    if not requirement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence requirement not found"
+        )
+    
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == requirement.framework_id
+    ).first()
+    
+    if framework:
+        validate_framework_access(current_user, framework, db)
+    
+    if requirement.status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot submit requirement with status '{requirement.status}'. Only draft requirements can be submitted."
+        )
+    
+    previous_status = requirement.status
+    requirement.status = "submitted"
+    requirement.submitted_by = current_user.id
+    requirement.submitted_at = datetime.utcnow()
+    requirement.submission_notes = request.notes
+    
+    history = EvidenceRequirementHistory(
+        evidence_requirement_id=requirement_id,
+        action="submitted",
+        previous_status=previous_status,
+        new_status="submitted",
+        performed_by=current_user.id,
+        notes=request.notes
+    )
+    db.add(history)
+    
+    db.commit()
+    
+    return {
+        "message": "Evidence requirement submitted for review",
+        "requirement_id": requirement_id,
+        "status": requirement.status,
+        "submitted_at": requirement.submitted_at.isoformat()
+    }
+
+
+@router.post("/evidence-requirements/{requirement_id}/review")
+def start_review_evidence_requirement(
+    requirement_id: int,
+    request: WorkflowReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Start review of an evidence requirement (requires reviewer role)."""
+    requirement = db.query(ControlEvidenceRequirement).filter(
+        ControlEvidenceRequirement.id == requirement_id,
+        ControlEvidenceRequirement.is_active == True
+    ).first()
+    
+    if not requirement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence requirement not found"
+        )
+    
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == requirement.framework_id
+    ).first()
+    
+    if framework:
+        validate_framework_access(current_user, framework, db)
+    
+    if requirement.status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot review requirement with status '{requirement.status}'. Only submitted requirements can be reviewed."
+        )
+    
+    previous_status = requirement.status
+    requirement.status = "pending_review"
+    requirement.reviewer_id = current_user.id
+    requirement.reviewed_at = datetime.utcnow()
+    requirement.review_notes = request.notes
+    
+    history = EvidenceRequirementHistory(
+        evidence_requirement_id=requirement_id,
+        action="review_started",
+        previous_status=previous_status,
+        new_status="pending_review",
+        performed_by=current_user.id,
+        notes=request.notes
+    )
+    db.add(history)
+    
+    db.commit()
+    
+    return {
+        "message": "Review started for evidence requirement",
+        "requirement_id": requirement_id,
+        "status": requirement.status,
+        "reviewed_at": requirement.reviewed_at.isoformat()
+    }
+
+
+@router.post("/evidence-requirements/{requirement_id}/approve")
+def approve_evidence_requirement(
+    requirement_id: int,
+    request: WorkflowApproveRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Approve an evidence requirement."""
+    requirement = db.query(ControlEvidenceRequirement).filter(
+        ControlEvidenceRequirement.id == requirement_id,
+        ControlEvidenceRequirement.is_active == True
+    ).first()
+    
+    if not requirement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence requirement not found"
+        )
+    
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == requirement.framework_id
+    ).first()
+    
+    if framework:
+        validate_framework_access(current_user, framework, db)
+    
+    if requirement.status not in ["submitted", "pending_review"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot approve requirement with status '{requirement.status}'. Only submitted or pending_review requirements can be approved."
+        )
+    
+    previous_status = requirement.status
+    requirement.status = "approved"
+    requirement.approver_id = current_user.id
+    requirement.approved_at = datetime.utcnow()
+    requirement.approval_notes = request.notes
+    
+    history = EvidenceRequirementHistory(
+        evidence_requirement_id=requirement_id,
+        action="approved",
+        previous_status=previous_status,
+        new_status="approved",
+        performed_by=current_user.id,
+        notes=request.notes
+    )
+    db.add(history)
+    
+    db.commit()
+    
+    return {
+        "message": "Evidence requirement approved",
+        "requirement_id": requirement_id,
+        "status": requirement.status,
+        "approved_at": requirement.approved_at.isoformat()
+    }
+
+
+@router.post("/evidence-requirements/{requirement_id}/reject")
+def reject_evidence_requirement(
+    requirement_id: int,
+    request: WorkflowRejectRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Reject an evidence requirement with a reason."""
+    requirement = db.query(ControlEvidenceRequirement).filter(
+        ControlEvidenceRequirement.id == requirement_id,
+        ControlEvidenceRequirement.is_active == True
+    ).first()
+    
+    if not requirement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence requirement not found"
+        )
+    
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == requirement.framework_id
+    ).first()
+    
+    if framework:
+        validate_framework_access(current_user, framework, db)
+    
+    if requirement.status not in ["submitted", "pending_review"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot reject requirement with status '{requirement.status}'. Only submitted or pending_review requirements can be rejected."
+        )
+    
+    previous_status = requirement.status
+    requirement.status = "rejected"
+    requirement.rejection_reason = request.reason
+    requirement.approver_id = current_user.id
+    requirement.approved_at = datetime.utcnow()
+    
+    history = EvidenceRequirementHistory(
+        evidence_requirement_id=requirement_id,
+        action="rejected",
+        previous_status=previous_status,
+        new_status="rejected",
+        performed_by=current_user.id,
+        notes=request.reason
+    )
+    db.add(history)
+    
+    db.commit()
+    
+    return {
+        "message": "Evidence requirement rejected",
+        "requirement_id": requirement_id,
+        "status": requirement.status,
+        "rejection_reason": requirement.rejection_reason
+    }
+
+
+@router.get("/{framework_id}/evidence-generation-status")
+def get_evidence_generation_status(
+    framework_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get the status of evidence requirement generation for a framework."""
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework not found"
+        )
+    
+    validate_framework_access(current_user, framework, db)
+    
+    total_controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id
+    ).count()
+    
+    total_requirements = db.query(ControlEvidenceRequirement).filter(
+        ControlEvidenceRequirement.framework_id == framework_id,
+        ControlEvidenceRequirement.is_active == True
+    ).count()
+    
+    controls_with_requirements = db.query(
+        func.count(func.distinct(ControlEvidenceRequirement.parsed_control_id))
+    ).filter(
+        ControlEvidenceRequirement.framework_id == framework_id,
+        ControlEvidenceRequirement.is_active == True
+    ).scalar() or 0
+    
+    status_counts = db.query(
+        ControlEvidenceRequirement.status,
+        func.count(ControlEvidenceRequirement.id)
+    ).filter(
+        ControlEvidenceRequirement.framework_id == framework_id,
+        ControlEvidenceRequirement.is_active == True
+    ).group_by(ControlEvidenceRequirement.status).all()
+    
+    is_generating = framework.parse_error and "Generating evidence requirements" in framework.parse_error
+    
+    return {
+        "framework_id": framework_id,
+        "framework_name": framework.name,
+        "is_generating": is_generating,
+        "progress_message": framework.parse_error if is_generating else None,
+        "total_controls": total_controls,
+        "controls_with_requirements": controls_with_requirements,
+        "total_requirements": total_requirements,
+        "average_requirements_per_control": round(total_requirements / controls_with_requirements, 1) if controls_with_requirements > 0 else 0,
+        "status_breakdown": {s: c for s, c in status_counts}
     }
 
 

@@ -17,7 +17,11 @@ import {
   ChevronDown,
   Filter,
   Check,
+  Sparkles,
+  FileCheck,
 } from 'lucide-react';
+import Link from 'next/link';
+import apiClient from '@/lib/api';
 
 interface ParsedControl {
   id: number;
@@ -185,6 +189,29 @@ export default function ParsedControlsPage() {
     },
   });
 
+  const [generatingEvidence, setGeneratingEvidence] = useState(false);
+  const [generateSuccess, setGenerateSuccess] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  const generateEvidenceRequirementsMutation = useMutation({
+    mutationFn: async (frameworkId: number) => {
+      setGeneratingEvidence(true);
+      return await apiClient.post(`/framework-upload/parser/${frameworkId}/generate-evidence-requirements`);
+    },
+    onSuccess: (data) => {
+      setGeneratingEvidence(false);
+      setGenerateSuccess(data.data?.message || 'Evidence requirement generation started successfully.');
+      setGenerateError(null);
+      setTimeout(() => setGenerateSuccess(null), 8000);
+    },
+    onError: (error: any) => {
+      setGeneratingEvidence(false);
+      setGenerateError(error.response?.data?.detail || 'Failed to generate evidence requirements');
+      setGenerateSuccess(null);
+      setTimeout(() => setGenerateError(null), 8000);
+    },
+  });
+
   const controls = controlsData?.items || [];
 
   const filteredControls = useMemo(() => {
@@ -343,6 +370,58 @@ export default function ParsedControlsPage() {
           </div>
         </div>
       </div>
+
+      {effectiveFrameworkId && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-800 p-4">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-5 w-5 text-purple-400" />
+            <div>
+              <h3 className="text-sm font-medium text-white">AI Evidence Requirements</h3>
+              <p className="text-xs text-slate-400">Generate evidence requirements for all controls using AI</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => generateEvidenceRequirementsMutation.mutate(effectiveFrameworkId)}
+              disabled={generatingEvidence || generateEvidenceRequirementsMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {generatingEvidence ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Generate Requirements
+                </>
+              )}
+            </button>
+            <Link
+              href="/evidence-requirements"
+              className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors"
+            >
+              <FileCheck className="h-4 w-4" />
+              View Requirements
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {generateSuccess && (
+        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-center gap-3">
+          <CheckCircle className="h-5 w-5 text-emerald-400 flex-shrink-0" />
+          <p className="text-sm text-emerald-400">{generateSuccess}</p>
+        </div>
+      )}
+
+      {generateError && (
+        <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-3 flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-rose-400 flex-shrink-0" />
+          <p className="text-sm text-rose-400">{generateError}</p>
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
         <div className="flex flex-wrap items-center gap-3">
