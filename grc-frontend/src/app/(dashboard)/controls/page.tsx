@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { controlsApi } from '@/lib/api';
-import { Control, NormalizedControl } from '@/types';
+import apiClient from '@/lib/api';
 import { 
   Shield, 
   Loader2, 
@@ -12,71 +11,116 @@ import {
   Filter,
   CheckCircle,
   Clock,
-  XCircle,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  FileText,
+  Layers
 } from 'lucide-react';
 
-type StatusFilter = 'all' | 'implemented' | 'partial' | 'not_implemented';
+interface FrameworkControl {
+  id: number;
+  control_id: string;
+  original_reference: string | null;
+  title: string;
+  description: string | null;
+  full_text: string | null;
+  domain: string | null;
+  category: string | null;
+  is_mandatory: boolean;
+  priority: string;
+  section_number: string | null;
+  parent_section: string | null;
+  ai_confidence: number | null;
+  is_verified: boolean;
+  framework_id: number;
+  framework_name: string;
+  framework_version: string | null;
+  created_at: string | null;
+}
+
+interface FrameworkSummary {
+  id: number;
+  name: string;
+  version: string | null;
+  framework_type: string | null;
+  status: string;
+  control_count: number;
+}
+
+interface FrameworkControlsResponse {
+  controls: FrameworkControl[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+interface FrameworkSummaryResponse {
+  frameworks: FrameworkSummary[];
+  total_frameworks: number;
+  total_controls: number;
+}
 
 export default function ControlsPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [expandedControl, setExpandedControl] = useState<string | null>(null);
+  const [frameworkFilter, setFrameworkFilter] = useState<number | null>(null);
+  const [domainFilter, setDomainFilter] = useState('');
+  const [expandedControl, setExpandedControl] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
 
-  const { data: controls, isLoading, error } = useQuery({
-    queryKey: ['controls'],
+  const { data: summaryData } = useQuery({
+    queryKey: ['framework-controls-summary'],
     queryFn: async () => {
-      const response = await controlsApi.getAll();
-      return response.data;
+      const response = await apiClient.get('/controls/framework-controls/summary');
+      return response.data as FrameworkSummaryResponse;
     },
   });
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'implemented':
-        return (
-          <span className="flex items-center gap-1 rounded-full bg-green-900/50 px-2 py-0.5 text-xs text-green-400">
-            <CheckCircle size={12} /> Implemented
-          </span>
-        );
-      case 'partial':
-        return (
-          <span className="flex items-center gap-1 rounded-full bg-yellow-900/50 px-2 py-0.5 text-xs text-yellow-400">
-            <Clock size={12} /> Partial
-          </span>
-        );
-      default:
-        return (
-          <span className="flex items-center gap-1 rounded-full bg-red-900/50 px-2 py-0.5 text-xs text-red-400">
-            <XCircle size={12} /> Not Implemented
-          </span>
-        );
-    }
-  };
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['framework-controls', frameworkFilter, domainFilter, searchTerm, page],
+    queryFn: async () => {
+      const params: Record<string, any> = {
+        skip: page * pageSize,
+        limit: pageSize,
+      };
+      if (frameworkFilter) params.framework_id = frameworkFilter;
+      if (domainFilter) params.domain = domainFilter;
+      if (searchTerm) params.search = searchTerm;
+      
+      const response = await apiClient.get('/controls/framework-controls', { params });
+      return response.data as FrameworkControlsResponse;
+    },
+  });
 
-  const getTypeBadge = (type: string) => {
+  const getPriorityBadge = (priority: string) => {
     const colors: Record<string, string> = {
-      preventive: 'bg-blue-900/50 text-blue-400',
-      detective: 'bg-purple-900/50 text-purple-400',
-      corrective: 'bg-orange-900/50 text-orange-400',
+      high: 'bg-rose-500/20 text-rose-400',
+      medium: 'bg-amber-500/20 text-amber-400',
+      low: 'bg-emerald-500/20 text-emerald-400',
     };
     return (
-      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[type] || 'bg-slate-700 text-slate-400'}`}>
-        {type}
+      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[priority] || 'bg-slate-700 text-slate-400'}`}>
+        {priority}
       </span>
     );
   };
 
-  const filteredControls = controls?.filter((control: Control) => {
-    const matchesSearch = 
-      control.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      control.reference_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      control.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    if (statusFilter === 'all') return matchesSearch;
-    return matchesSearch;
-  });
+  const getVerificationBadge = (isVerified: boolean) => {
+    if (isVerified) {
+      return (
+        <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-400">
+          <CheckCircle size={12} /> Verified
+        </span>
+      );
+    }
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-400">
+        <Clock size={12} /> Pending
+      </span>
+    );
+  };
+
+  const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
   if (isLoading) {
     return (
@@ -98,34 +142,84 @@ export default function ControlsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Controls</h1>
-        <p className="text-slate-400">Manage and track control implementations</p>
+        <h1 className="text-2xl font-bold text-white">Framework Controls</h1>
+        <p className="text-slate-400">Controls extracted from your uploaded regulatory frameworks</p>
       </div>
+
+      {summaryData && summaryData.frameworks.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="card p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
+                <Layers className="h-5 w-5 text-primary-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{summaryData.total_frameworks}</p>
+                <p className="text-sm text-slate-400">Frameworks</p>
+              </div>
+            </div>
+          </div>
+          <div className="card p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20">
+                <Shield className="h-5 w-5 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{summaryData.total_controls}</p>
+                <p className="text-sm text-slate-400">Total Controls</p>
+              </div>
+            </div>
+          </div>
+          {summaryData.frameworks.slice(0, 2).map((fw) => (
+            <div key={fw.id} className="card p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20">
+                  <FileText className="h-5 w-5 text-blue-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-lg font-bold text-white truncate">{fw.name}</p>
+                  <p className="text-sm text-slate-400">{fw.control_count} controls</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search controls..."
+            placeholder="Search controls by ID, title, or description..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(0);
+            }}
             className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-400" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
-          >
-            <option value="all">All Status</option>
-            <option value="implemented">Implemented</option>
-            <option value="partial">Partial</option>
-            <option value="not_implemented">Not Implemented</option>
-          </select>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-slate-400" />
+            <select
+              value={frameworkFilter || ''}
+              onChange={(e) => {
+                setFrameworkFilter(e.target.value ? Number(e.target.value) : null);
+                setPage(0);
+              }}
+              className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+            >
+              <option value="">All Frameworks</option>
+              {summaryData?.frameworks.map((fw) => (
+                <option key={fw.id} value={fw.id}>
+                  {fw.name} ({fw.control_count})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -133,84 +227,123 @@ export default function ControlsPage() {
         <table className="w-full">
           <thead className="bg-slate-800">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Control</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 md:table-cell">Type</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 lg:table-cell">Automation</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Control ID</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Title</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 md:table-cell">Framework</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 lg:table-cell">Domain</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Priority</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Status</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-slate-300">Actions</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-slate-300"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700">
-            {filteredControls?.map((control: Control) => {
+            {data?.controls.map((control) => {
               const isExpanded = expandedControl === control.id;
               return (
                 <>
                   <tr 
-                    key={control.id} 
+                    key={control.id}
                     className="bg-slate-800/50 hover:bg-slate-700/50 cursor-pointer"
                     onClick={() => setExpandedControl(isExpanded ? null : control.id)}
                   >
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <Shield className="h-5 w-5 text-primary-400" />
-                        <div>
-                          <p className="font-medium text-white">{control.reference_code}</p>
-                          <p className="text-sm text-slate-400 line-clamp-1">{control.name}</p>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-primary-400 flex-shrink-0" />
+                        <span className="font-mono text-sm text-white">
+                          {control.original_reference || control.control_id}
+                        </span>
                       </div>
                     </td>
-                    <td className="hidden px-4 py-3 md:table-cell">
-                      {getTypeBadge(control.control_type)}
+                    <td className="px-4 py-3">
+                      <p className="text-sm text-white line-clamp-1">{control.title}</p>
                     </td>
-                    <td className="hidden px-4 py-3 lg:table-cell">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${
-                        control.automation_status === 'fully-automated' 
-                          ? 'bg-green-900/50 text-green-400'
-                          : control.automation_status === 'semi-automated'
-                          ? 'bg-yellow-900/50 text-yellow-400'
-                          : 'bg-slate-700 text-slate-400'
-                      }`}>
-                        {control.automation_status || 'Manual'}
+                    <td className="hidden px-4 py-3 md:table-cell">
+                      <span className="rounded-full bg-blue-500/20 px-2 py-1 text-xs text-blue-400">
+                        {control.framework_name}
                       </span>
                     </td>
+                    <td className="hidden px-4 py-3 lg:table-cell">
+                      <span className="text-sm text-slate-400">{control.domain || '-'}</span>
+                    </td>
                     <td className="px-4 py-3">
-                      {getStatusBadge('partial')}
+                      {getPriorityBadge(control.priority)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {getVerificationBadge(control.is_verified)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {isExpanded ? (
-                        <ChevronDown className="inline h-5 w-5 text-slate-400" />
+                        <ChevronDown className="h-5 w-5 text-slate-400" />
                       ) : (
-                        <ChevronRight className="inline h-5 w-5 text-slate-400" />
+                        <ChevronRight className="h-5 w-5 text-slate-400" />
                       )}
                     </td>
                   </tr>
                   {isExpanded && (
-                    <tr key={`${control.id}-expanded`}>
-                      <td colSpan={5} className="bg-slate-900 px-4 py-4">
-                        <div className="space-y-3">
-                          <div>
-                            <h4 className="text-sm font-medium text-slate-300">Description</h4>
-                            <p className="mt-1 text-sm text-slate-400">{control.description || 'No description available'}</p>
-                          </div>
-                          {control.implementation_guidance && (
+                    <tr key={`${control.id}-details`} className="bg-slate-900">
+                      <td colSpan={7} className="px-4 py-4 border-t border-slate-700">
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <h4 className="text-sm font-medium text-slate-300">Implementation Guidance</h4>
-                              <p className="mt-1 text-sm text-slate-400">{control.implementation_guidance}</p>
+                              <h4 className="text-sm font-medium text-slate-300">Framework</h4>
+                              <p className="mt-1 text-sm text-white">
+                                {control.framework_name}
+                                {control.framework_version && ` (${control.framework_version})`}
+                              </p>
                             </div>
-                          )}
-                          {control.sub_controls && control.sub_controls.length > 0 && (
                             <div>
-                              <h4 className="text-sm font-medium text-slate-300">Sub-Controls</h4>
-                              <div className="mt-2 space-y-1">
-                                {control.sub_controls.map((sub) => (
-                                  <div key={sub.id} className="flex items-center gap-2 rounded bg-slate-800 p-2 text-sm">
-                                    <span className="font-mono text-slate-400">{sub.reference_code}</span>
-                                    <span className="text-slate-300">{sub.name}</span>
-                                  </div>
-                                ))}
+                              <h4 className="text-sm font-medium text-slate-300">Original Reference</h4>
+                              <p className="mt-1 text-sm font-mono text-white">
+                                {control.original_reference || control.control_id}
+                              </p>
+                            </div>
+                            {control.section_number && (
+                              <div>
+                                <h4 className="text-sm font-medium text-slate-300">Section</h4>
+                                <p className="mt-1 text-sm text-slate-400">{control.section_number}</p>
                               </div>
+                            )}
+                            {control.parent_section && (
+                              <div>
+                                <h4 className="text-sm font-medium text-slate-300">Parent Section</h4>
+                                <p className="mt-1 text-sm text-slate-400">{control.parent_section}</p>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {control.description && (
+                            <div>
+                              <h4 className="text-sm font-medium text-slate-300">Description</h4>
+                              <p className="mt-1 text-sm text-slate-400">{control.description}</p>
                             </div>
                           )}
+                          
+                          {control.full_text && (
+                            <div>
+                              <h4 className="text-sm font-medium text-slate-300">Full Requirement Text</h4>
+                              <p className="mt-1 text-sm text-slate-400 whitespace-pre-wrap">{control.full_text}</p>
+                            </div>
+                          )}
+                          
+                          <div className="flex items-center gap-4 pt-2">
+                            {control.ai_confidence !== null && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500">AI Confidence:</span>
+                                <span className={`text-xs font-medium ${
+                                  control.ai_confidence >= 0.8 ? 'text-emerald-400' :
+                                  control.ai_confidence >= 0.5 ? 'text-amber-400' : 'text-rose-400'
+                                }`}>
+                                  {Math.round(control.ai_confidence * 100)}%
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500">Mandatory:</span>
+                              <span className={`text-xs font-medium ${control.is_mandatory ? 'text-rose-400' : 'text-slate-400'}`}>
+                                {control.is_mandatory ? 'Yes' : 'No'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -222,11 +355,43 @@ export default function ControlsPage() {
         </table>
       </div>
 
-      {(!filteredControls || filteredControls.length === 0) && (
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate-400">
+            Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, data?.total || 0)} of{' '}
+            {data?.total || 0} controls
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(Math.max(0, page - 1))}
+              disabled={page === 0}
+              className="btn-secondary btn-sm"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-slate-400">
+              Page {page + 1} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+              disabled={page >= totalPages - 1}
+              className="btn-secondary btn-sm"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(!data?.controls || data.controls.length === 0) && (
         <div className="card flex flex-col items-center justify-center py-12 text-center">
           <Shield className="mb-4 h-12 w-12 text-slate-600" />
           <h3 className="text-lg font-medium text-white">No controls found</h3>
-          <p className="mt-1 text-slate-400">Try adjusting your search or filters</p>
+          <p className="mt-1 text-slate-400">
+            {summaryData?.total_frameworks === 0
+              ? 'Upload a regulatory framework to see controls here'
+              : 'Try adjusting your search or filters'}
+          </p>
         </div>
       )}
     </div>
