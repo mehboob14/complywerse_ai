@@ -1,7 +1,30 @@
+"""
+Framework Seeder for GRC Platform
+
+This module provides functionality to seed frameworks from JSON files into the database.
+It supports both the new UploadedFramework/ParsedFrameworkControl models (for uploaded frameworks)
+and the legacy Framework hierarchy models.
+
+Usage:
+    from grc.seed_frameworks import seed_uploaded_frameworks, seed_frameworks
+    
+    # Seed from JSON files (recommended)
+    seed_uploaded_frameworks()
+    
+    # Legacy seeding (deprecated)
+    seed_frameworks()
+"""
+
+import json
+import os
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+
 from .models import (
     SessionLocal, Framework, FrameworkDomain, ControlObjective,
     FrameworkControl, FrameworkSubControl, NormalizedControl,
-    ControlMapping, GRCRequiredEvidence
+    ControlMapping, GRCRequiredEvidence,
+    UploadedFramework, ParsedFrameworkControl, Tenant
 )
 
 
@@ -1807,3 +1830,329 @@ def _seed_required_evidence(db, normalized_controls):
                 validation_criteria=ev_data["validation_criteria"]
             )
             db.add(evidence)
+
+
+
+# =============================================================================
+# New Framework Seeder - Seeds from JSON files
+# =============================================================================
+
+def get_seed_data_dir() -> str:
+    """Get the path to the seed data frameworks directory."""
+    return os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "seed_data", "frameworks"
+    )
+
+
+def load_framework_json(file_path: str) -> Optional[Dict[str, Any]]:
+    """
+    Load a framework JSON file.
+    
+    Args:
+        file_path: Path to the JSON file
+        
+    Returns:
+        Parsed JSON data or None if file cannot be loaded
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading {file_path}: {e}")
+        return None
+
+
+def framework_exists(db, name: str, tenant_id: int = None) -> bool:
+    """
+    Check if a framework with the given name already exists.
+    
+    Args:
+        db: Database session
+        name: Framework name to check
+        tenant_id: Optional tenant ID to scope the check
+        
+    Returns:
+        True if framework exists, False otherwise
+    """
+    query = db.query(UploadedFramework).filter(UploadedFramework.name == name)
+    if tenant_id:
+        query = query.filter(UploadedFramework.tenant_id == tenant_id)
+    return query.first() is not None
+
+
+def get_default_tenant(db) -> Optional[int]:
+    """Get the default tenant ID (first tenant or create one)."""
+    tenant = db.query(Tenant).first()
+    if tenant:
+        return tenant.id
+    return None
+
+
+def seed_framework_from_json(db, data: Dict[str, Any], tenant_id: int = None, 
+                              uploaded_by: int = 1, force: bool = False) -> Optional[UploadedFramework]:
+    """
+    Seed a single framework from JSON data.
+    
+    Args:
+        db: Database session
+        data: Parsed JSON data containing metadata and controls
+        tenant_id: Tenant ID to associate the framework with
+        uploaded_by: User ID who uploaded the framework (defaults to 1)
+        force: If True, skip existence check
+        
+    Returns:
+        Created UploadedFramework or None if skipped
+    """
+    metadata = data.get("metadata", {})
+    controls = data.get("controls", [])
+    
+    name = metadata.get("name")
+    if not name:
+        print("Framework JSON missing 'name' in metadata")
+        return None
+    
+    # Check if framework already exists (idempotent)
+    if not force and framework_exists(db, name, tenant_id):
+        print(f"Framework '{name}' already exists, skipping...")
+        return None
+    
+    # Parse dates
+    effective_date = None
+    if metadata.get("effective_date"):
+        try:
+            effective_date = datetime.fromisoformat(metadata["effective_date"].replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+    
+    compliance_deadline = None
+    if metadata.get("compliance_deadline"):
+        try:
+            compliance_deadline = datetime.fromisoformat(metadata["compliance_deadline"].replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+    
+    # Create the UploadedFramework record
+    framework = UploadedFramework(
+        tenant_id=tenant_id,
+        name=name,
+        description=metadata.get("description"),
+        file_name=f"{name.lower().replace(' ', '_')}_seeded.json",
+        file_path=f"seed_data/frameworks/{name.lower().replace(' ', '_')}.json",
+        file_size=0,
+        file_type="json",
+        upload_status="parsed",
+        parsed_at=datetime.utcnow(),
+        
+        # Classification fields
+        classification=metadata.get("classification", "compliance"),
+        classification_confidence=metadata.get("classification_confidence"),
+        classification_reasoning=metadata.get("classification_reasoning"),
+        
+        # Basic metadata
+        framework_type=metadata.get("framework_type", "regulatory"),
+        source_organization=metadata.get("source_organization"),
+        version=metadata.get("version"),
+        effective_date=effective_date,
+        
+        # Pre-processing overview
+        framework_purpose=metadata.get("framework_purpose"),
+        framework_scope=metadata.get("framework_scope"),
+        framework_objectives=metadata.get("framework_objectives"),
+        target_audience=metadata.get("target_audience"),
+        
+        # Certification-specific fields
+        certification_body=metadata.get("certification_body"),
+        certification_validity_period=metadata.get("certification_validity_period"),
+        certification_levels=metadata.get("certification_levels"),
+        certification_lifecycle=metadata.get("certification_lifecycle"),
+        required_artifacts=metadata.get("required_artifacts"),
+        
+        # Compliance-specific fields
+        regulatory_authority=metadata.get("regulatory_authority"),
+        compliance_deadline=compliance_deadline,
+        penalty_for_non_compliance=metadata.get("penalty_for_non_compliance"),
+        adoption_approach=metadata.get("adoption_approach"),
+        
+        # Structure
+        hierarchy_structure=metadata.get("hierarchy_structure"),
+        document_structure=metadata.get("document_structure"),
+        
+        # Sharing and status
+        is_shared=True,  # Make seeded frameworks available to all tenants
+        is_active=True,
+        uploaded_by=uploaded_by
+    )
+    
+    db.add(framework)
+    db.flush()  # Get the framework ID
+    
+    # Create ParsedFrameworkControl records for each control
+    for control_data in controls:
+        control = ParsedFrameworkControl(
+            uploaded_framework_id=framework.id,
+            control_id=control_data.get("control_id", ""),
+            original_reference=control_data.get("original_reference"),
+            title=control_data.get("title", ""),
+            description=control_data.get("description"),
+            full_text=control_data.get("full_text"),
+            domain=control_data.get("domain"),
+            category=control_data.get("category"),
+            is_mandatory=control_data.get("is_mandatory", True),
+            priority=control_data.get("priority", "medium"),
+            section_number=control_data.get("section_number"),
+            parent_section=control_data.get("parent_section"),
+            ai_confidence=control_data.get("ai_confidence"),
+            ai_notes=control_data.get("ai_notes"),
+            evidence_requirements=control_data.get("evidence_requirements", []),
+            is_verified=False
+        )
+        db.add(control)
+    
+    print(f"Seeded framework '{name}' with {len(controls)} controls")
+    return framework
+
+
+def seed_uploaded_frameworks(seed_dir: str = None, tenant_id: int = None, 
+                              uploaded_by: int = 1, force: bool = False) -> List[UploadedFramework]:
+    """
+    Seed all frameworks from JSON files in the seed directory.
+    
+    This function is idempotent - it will skip frameworks that already exist
+    (by name) unless force=True.
+    
+    Args:
+        seed_dir: Directory containing JSON files (defaults to seed_data/frameworks)
+        tenant_id: Tenant ID to associate frameworks with (defaults to first tenant)
+        uploaded_by: User ID for the uploaded_by field
+        force: If True, re-seed even if frameworks exist
+        
+    Returns:
+        List of created UploadedFramework objects
+    """
+    if seed_dir is None:
+        seed_dir = get_seed_data_dir()
+    
+    if not os.path.exists(seed_dir):
+        print(f"Seed directory not found: {seed_dir}")
+        return []
+    
+    # Find all JSON files
+    json_files = [f for f in os.listdir(seed_dir) if f.endswith(".json")]
+    
+    if not json_files:
+        print(f"No JSON files found in {seed_dir}")
+        return []
+    
+    print(f"Found {len(json_files)} framework JSON file(s) to seed")
+    
+    db = SessionLocal()
+    seeded_frameworks = []
+    
+    try:
+        # Get default tenant if not specified
+        if tenant_id is None:
+            tenant_id = get_default_tenant(db)
+        
+        for json_file in json_files:
+            file_path = os.path.join(seed_dir, json_file)
+            data = load_framework_json(file_path)
+            
+            if data is None:
+                continue
+            
+            framework = seed_framework_from_json(
+                db, data, tenant_id=tenant_id, 
+                uploaded_by=uploaded_by, force=force
+            )
+            
+            if framework:
+                seeded_frameworks.append(framework)
+        
+        db.commit()
+        print(f"\nSuccessfully seeded {len(seeded_frameworks)} framework(s)")
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Error seeding frameworks: {e}")
+        raise
+    finally:
+        db.close()
+    
+    return seeded_frameworks
+
+
+def seed_single_framework(json_path: str, tenant_id: int = None, 
+                           uploaded_by: int = 1, force: bool = False) -> Optional[UploadedFramework]:
+    """
+    Seed a single framework from a specific JSON file.
+    
+    Args:
+        json_path: Path to the JSON file
+        tenant_id: Tenant ID to associate with
+        uploaded_by: User ID for uploaded_by field
+        force: If True, re-seed even if framework exists
+        
+    Returns:
+        Created UploadedFramework or None
+    """
+    data = load_framework_json(json_path)
+    if data is None:
+        return None
+    
+    db = SessionLocal()
+    try:
+        if tenant_id is None:
+            tenant_id = get_default_tenant(db)
+        
+        framework = seed_framework_from_json(
+            db, data, tenant_id=tenant_id,
+            uploaded_by=uploaded_by, force=force
+        )
+        
+        db.commit()
+        return framework
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Error seeding framework: {e}")
+        raise
+    finally:
+        db.close()
+
+
+# CLI support
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Seed GRC frameworks from JSON files")
+    parser.add_argument(
+        "--seed-dir",
+        type=str,
+        default=None,
+        help="Directory containing JSON files to seed"
+    )
+    parser.add_argument(
+        "--json-file",
+        type=str,
+        default=None,
+        help="Single JSON file to seed"
+    )
+    parser.add_argument(
+        "--tenant-id",
+        type=int,
+        default=None,
+        help="Tenant ID to associate frameworks with"
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force re-seeding even if frameworks exist"
+    )
+    
+    args = parser.parse_args()
+    
+    if args.json_file:
+        seed_single_framework(args.json_file, args.tenant_id, force=args.force)
+    else:
+        seed_uploaded_frameworks(args.seed_dir, args.tenant_id, force=args.force)

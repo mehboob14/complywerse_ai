@@ -4698,8 +4698,10 @@ def init_grc_db():
     """Create all GRC tables in the database and seed framework data."""
     Base.metadata.create_all(bind=engine)
     
-    from .seed_frameworks import seed_frameworks
+    from .seed_frameworks import seed_frameworks, seed_uploaded_frameworks
     seed_frameworks()
+    
+    seed_uploaded_frameworks()
     
     from .seed_subcontrols import seed_subcontrols
     seed_subcontrols()
