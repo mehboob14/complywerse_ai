@@ -6,7 +6,7 @@ from sqlalchemy import func
 from ..models import (
     NormalizedControl, ControlMapping, GRCRequiredEvidence,
     FrameworkControl, Framework, GRCUser, get_db,
-    ParsedFrameworkControl, UploadedFramework
+    ParsedFrameworkControl, UploadedFramework, EvidenceControlMapping
 )
 from ..schemas import (
     NormalizedControlCreate, NormalizedControlUpdate, NormalizedControlResponse,
@@ -201,6 +201,19 @@ def list_framework_controls(
         ParsedFrameworkControl.control_id
     ).offset(skip).limit(limit).all()
     
+    control_ids = [c.id for c in controls]
+    evidence_counts = {}
+    if control_ids:
+        counts = db.query(
+            EvidenceControlMapping.parsed_control_id,
+            func.count(EvidenceControlMapping.id).label("count")
+        ).filter(
+            EvidenceControlMapping.parsed_control_id.in_(control_ids)
+        ).group_by(
+            EvidenceControlMapping.parsed_control_id
+        ).all()
+        evidence_counts = {c.parsed_control_id: c.count for c in counts}
+    
     result = []
     for control in controls:
         result.append({
@@ -222,6 +235,7 @@ def list_framework_controls(
             "framework_name": control.uploaded_framework.name if control.uploaded_framework else None,
             "framework_version": control.uploaded_framework.version if control.uploaded_framework else None,
             "created_at": control.created_at.isoformat() if control.created_at else None,
+            "evidence_count": evidence_counts.get(control.id, 0),
         })
     
     return {

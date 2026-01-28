@@ -43,6 +43,7 @@ interface FrameworkControl {
   framework_name: string;
   framework_version: string | null;
   created_at: string | null;
+  evidence_count: number;
 }
 
 interface FrameworkSummary {
@@ -349,6 +350,7 @@ export default function ControlsPage() {
               <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 md:table-cell">Framework</th>
               <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 lg:table-cell">Domain</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Priority</th>
+              <th className="px-4 py-3 text-center text-sm font-medium text-slate-300">Evidence</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Status</th>
               <th className="px-4 py-3 text-right text-sm font-medium text-slate-300"></th>
             </tr>
@@ -385,6 +387,20 @@ export default function ControlsPage() {
                     <td className="px-4 py-3">
                       {getPriorityBadge(control.priority)}
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      <Link
+                        href={`/evidence?control_id=${control.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors ${
+                          control.evidence_count > 0
+                            ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                            : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                        }`}
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        {control.evidence_count}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3">
                       {getVerificationBadge(control.is_verified)}
                     </td>
@@ -398,9 +414,9 @@ export default function ControlsPage() {
                   </tr>
                   {isExpanded && (
                     <tr key={`${control.id}-details`} className="bg-slate-900">
-                      <td colSpan={7} className="px-4 py-4 border-t border-slate-700">
+                      <td colSpan={8} className="px-4 py-4 border-t border-slate-700">
                         <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <div>
                               <h4 className="text-sm font-medium text-slate-300">Framework</h4>
                               <p className="mt-1 text-sm text-white">
@@ -413,6 +429,21 @@ export default function ControlsPage() {
                               <p className="mt-1 text-sm font-mono text-white">
                                 {control.original_reference || control.control_id}
                               </p>
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-medium text-slate-300">Linked Evidence</h4>
+                              <div className="mt-1 flex items-center gap-2">
+                                <span className={`text-sm font-medium ${control.evidence_count > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                  {control.evidence_count} document{control.evidence_count !== 1 ? 's' : ''}
+                                </span>
+                                <Link
+                                  href={`/evidence?control_id=${control.id}`}
+                                  className="inline-flex items-center gap-1 rounded bg-primary-500/20 px-2 py-1 text-xs text-primary-400 hover:bg-primary-500/30 transition-colors"
+                                >
+                                  <Paperclip className="h-3 w-3" />
+                                  {control.evidence_count > 0 ? 'View Evidence' : 'Link Evidence'}
+                                </Link>
+                              </div>
                             </div>
                             {control.section_number && (
                               <div>
