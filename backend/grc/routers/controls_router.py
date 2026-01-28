@@ -111,6 +111,127 @@ def get_control_matrix(
     }
 
 
+@router.get("/framework-controls/summary")
+def get_framework_controls_summary(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get summary of controls per uploaded framework"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    frameworks = db.query(
+        UploadedFramework.id,
+        UploadedFramework.name,
+        UploadedFramework.version,
+        UploadedFramework.framework_type,
+        UploadedFramework.upload_status,
+        func.count(ParsedFrameworkControl.id).label("control_count")
+    ).outerjoin(
+        ParsedFrameworkControl,
+        UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id
+    ).filter(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        UploadedFramework.upload_status.in_(["parsed", "published"])
+    ).group_by(
+        UploadedFramework.id,
+        UploadedFramework.name,
+        UploadedFramework.version,
+        UploadedFramework.framework_type,
+        UploadedFramework.upload_status
+    ).all()
+    
+    return {
+        "frameworks": [
+            {
+                "id": f.id,
+                "name": f.name,
+                "version": f.version,
+                "framework_type": f.framework_type,
+                "status": f.upload_status,
+                "control_count": f.control_count
+            }
+            for f in frameworks
+        ],
+        "total_frameworks": len(frameworks),
+        "total_controls": sum(f.control_count for f in frameworks)
+    }
+
+
+@router.get("/framework-controls")
+def list_framework_controls(
+    framework_id: Optional[int] = None,
+    domain: Optional[str] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get all parsed controls from uploaded frameworks with framework info"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    query = db.query(ParsedFrameworkControl).join(
+        UploadedFramework,
+        ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
+    ).filter(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        UploadedFramework.upload_status.in_(["parsed", "published"])
+    )
+    
+    if framework_id:
+        query = query.filter(ParsedFrameworkControl.uploaded_framework_id == framework_id)
+    
+    if domain:
+        query = query.filter(ParsedFrameworkControl.domain.ilike(f"%{domain}%"))
+    
+    if search:
+        query = query.filter(
+            (ParsedFrameworkControl.control_id.ilike(f"%{search}%")) |
+            (ParsedFrameworkControl.title.ilike(f"%{search}%")) |
+            (ParsedFrameworkControl.original_reference.ilike(f"%{search}%")) |
+            (ParsedFrameworkControl.description.ilike(f"%{search}%"))
+        )
+    
+    total = query.count()
+    
+    controls = query.options(
+        joinedload(ParsedFrameworkControl.uploaded_framework)
+    ).order_by(
+        UploadedFramework.name,
+        ParsedFrameworkControl.control_id
+    ).offset(skip).limit(limit).all()
+    
+    result = []
+    for control in controls:
+        result.append({
+            "id": control.id,
+            "control_id": control.control_id,
+            "original_reference": control.original_reference,
+            "title": control.title,
+            "description": control.description,
+            "full_text": control.full_text,
+            "domain": control.domain,
+            "category": control.category,
+            "is_mandatory": control.is_mandatory,
+            "priority": control.priority,
+            "section_number": control.section_number,
+            "parent_section": control.parent_section,
+            "ai_confidence": control.ai_confidence,
+            "is_verified": control.is_verified,
+            "framework_id": control.uploaded_framework_id,
+            "framework_name": control.uploaded_framework.name if control.uploaded_framework else None,
+            "framework_version": control.uploaded_framework.version if control.uploaded_framework else None,
+            "created_at": control.created_at.isoformat() if control.created_at else None,
+        })
+    
+    return {
+        "controls": result,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+
 @router.get("/{control_id}", response_model=dict)
 def get_control(
     control_id: int,
@@ -333,124 +454,3 @@ def add_required_evidence(
     db.commit()
     db.refresh(db_evidence)
     return db_evidence
-
-
-@router.get("/framework-controls")
-def list_framework_controls(
-    framework_id: Optional[int] = None,
-    domain: Optional[str] = None,
-    search: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
-    """Get all parsed controls from uploaded frameworks with framework info"""
-    user_tenants = get_user_tenants(current_user, db)
-    
-    query = db.query(ParsedFrameworkControl).join(
-        UploadedFramework,
-        ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
-    ).filter(
-        UploadedFramework.tenant_id.in_(user_tenants),
-        UploadedFramework.upload_status.in_(["parsed", "published"])
-    )
-    
-    if framework_id:
-        query = query.filter(ParsedFrameworkControl.uploaded_framework_id == framework_id)
-    
-    if domain:
-        query = query.filter(ParsedFrameworkControl.domain.ilike(f"%{domain}%"))
-    
-    if search:
-        query = query.filter(
-            (ParsedFrameworkControl.control_id.ilike(f"%{search}%")) |
-            (ParsedFrameworkControl.title.ilike(f"%{search}%")) |
-            (ParsedFrameworkControl.original_reference.ilike(f"%{search}%")) |
-            (ParsedFrameworkControl.description.ilike(f"%{search}%"))
-        )
-    
-    total = query.count()
-    
-    controls = query.options(
-        joinedload(ParsedFrameworkControl.uploaded_framework)
-    ).order_by(
-        UploadedFramework.name,
-        ParsedFrameworkControl.control_id
-    ).offset(skip).limit(limit).all()
-    
-    result = []
-    for control in controls:
-        result.append({
-            "id": control.id,
-            "control_id": control.control_id,
-            "original_reference": control.original_reference,
-            "title": control.title,
-            "description": control.description,
-            "full_text": control.full_text,
-            "domain": control.domain,
-            "category": control.category,
-            "is_mandatory": control.is_mandatory,
-            "priority": control.priority,
-            "section_number": control.section_number,
-            "parent_section": control.parent_section,
-            "ai_confidence": control.ai_confidence,
-            "is_verified": control.is_verified,
-            "framework_id": control.uploaded_framework_id,
-            "framework_name": control.uploaded_framework.name if control.uploaded_framework else None,
-            "framework_version": control.uploaded_framework.version if control.uploaded_framework else None,
-            "created_at": control.created_at.isoformat() if control.created_at else None,
-        })
-    
-    return {
-        "controls": result,
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
-
-
-@router.get("/framework-controls/summary")
-def get_framework_controls_summary(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
-    """Get summary of controls per uploaded framework"""
-    user_tenants = get_user_tenants(current_user, db)
-    
-    frameworks = db.query(
-        UploadedFramework.id,
-        UploadedFramework.name,
-        UploadedFramework.version,
-        UploadedFramework.framework_type,
-        UploadedFramework.upload_status,
-        func.count(ParsedFrameworkControl.id).label("control_count")
-    ).outerjoin(
-        ParsedFrameworkControl,
-        UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id
-    ).filter(
-        UploadedFramework.tenant_id.in_(user_tenants),
-        UploadedFramework.upload_status.in_(["parsed", "published"])
-    ).group_by(
-        UploadedFramework.id,
-        UploadedFramework.name,
-        UploadedFramework.version,
-        UploadedFramework.framework_type,
-        UploadedFramework.upload_status
-    ).all()
-    
-    return {
-        "frameworks": [
-            {
-                "id": f.id,
-                "name": f.name,
-                "version": f.version,
-                "framework_type": f.framework_type,
-                "status": f.upload_status,
-                "control_count": f.control_count
-            }
-            for f in frameworks
-        ],
-        "total_frameworks": len(frameworks),
-        "total_controls": sum(f.control_count for f in frameworks)
-    }
