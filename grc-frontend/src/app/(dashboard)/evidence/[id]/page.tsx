@@ -294,7 +294,7 @@ export default function EvidenceDetailPage() {
   });
 
   const runAssessmentMutation = useMutation({
-    mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess`),
+    mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess?force_refresh=true`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
       queryClient.invalidateQueries({ queryKey: ['evidence-assessment', evidenceId] });

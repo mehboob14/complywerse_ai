@@ -148,7 +148,7 @@ export default function EvidenceCoverageDashboardPage() {
 
   const reassessMutation = useMutation({
     mutationFn: async (evidenceId: number) => {
-      const response = await apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess`);
+      const response = await apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess?force_refresh=true`);
       return response.data;
     },
     onSuccess: () => {

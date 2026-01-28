@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from ....models import (
     Evidence, EvidenceVersion, EvidenceControlMapping, EvidenceAIAssessment,
     RiskEvidenceLink, AssetEvidenceLink, EvidenceIncidentLink, EvidencePolicyLink,
+    AssessmentItemEvidence, RCSAResponseEvidence,
     GRCUser, Tenant, get_db, engine
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
@@ -622,6 +623,53 @@ def delete_evidence(
         except OSError:
             pass
     
+    # Delete all related records that reference this evidence
+    # Delete assessment item evidence links
+    db.query(AssessmentItemEvidence).filter(
+        AssessmentItemEvidence.evidence_id == evidence_id
+    ).delete(synchronize_session=False)
+    
+    # Delete RCSA response evidence links
+    db.query(RCSAResponseEvidence).filter(
+        RCSAResponseEvidence.evidence_id == evidence_id
+    ).delete(synchronize_session=False)
+    
+    # Delete AI assessments
+    db.query(EvidenceAIAssessment).filter(
+        EvidenceAIAssessment.evidence_id == evidence_id
+    ).delete(synchronize_session=False)
+    
+    # Delete control mappings
+    db.query(EvidenceControlMapping).filter(
+        EvidenceControlMapping.evidence_id == evidence_id
+    ).delete(synchronize_session=False)
+    
+    # Delete versions
+    db.query(EvidenceVersion).filter(
+        EvidenceVersion.evidence_id == evidence_id
+    ).delete(synchronize_session=False)
+    
+    # Delete risk evidence links
+    db.query(RiskEvidenceLink).filter(
+        RiskEvidenceLink.evidence_id == evidence_id
+    ).delete(synchronize_session=False)
+    
+    # Delete asset evidence links
+    db.query(AssetEvidenceLink).filter(
+        AssetEvidenceLink.evidence_id == evidence_id
+    ).delete(synchronize_session=False)
+    
+    # Delete incident evidence links
+    db.query(EvidenceIncidentLink).filter(
+        EvidenceIncidentLink.evidence_id == evidence_id
+    ).delete(synchronize_session=False)
+    
+    # Delete policy evidence links
+    db.query(EvidencePolicyLink).filter(
+        EvidencePolicyLink.evidence_id == evidence_id
+    ).delete(synchronize_session=False)
+    
+    # Now delete the evidence itself
     db.delete(evidence)
     db.commit()
     
