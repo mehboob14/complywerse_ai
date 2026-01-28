@@ -45,7 +45,10 @@ class ExecutiveSummaryRequest(BaseModel):
 
 
 def check_ai_available() -> bool:
-    """Check if OpenAI API key is configured."""
+    """Check if OpenAI API key is configured (Replit AI Integrations or direct API key)."""
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    if base_url and "modelfarm" in base_url:
+        return True
     api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return False

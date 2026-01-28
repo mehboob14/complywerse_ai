@@ -179,12 +179,13 @@ def validate_evidence_access(user: GRCUser, evidence: Evidence, db: Session) -> 
 def get_openai_client() -> OpenAI:
     api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    if not api_key:
+    is_modelfarm = base_url and "modelfarm" in base_url
+    if not api_key and not is_modelfarm:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI features unavailable. OpenAI API key not configured."
         )
-    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+    if not is_modelfarm and (api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI features unavailable. OpenAI API key not configured."
