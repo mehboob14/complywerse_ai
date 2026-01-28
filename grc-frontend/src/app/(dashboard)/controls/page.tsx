@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import apiClient from '@/lib/api';
 import { 
   Shield, 
@@ -14,7 +16,12 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
-  Layers
+  Layers,
+  ArrowLeft,
+  FileStack,
+  Info,
+  Paperclip,
+  HelpCircle
 } from 'lucide-react';
 
 interface FrameworkControl {
@@ -61,12 +68,24 @@ interface FrameworkSummaryResponse {
 }
 
 export default function ControlsPage() {
+  const searchParams = useSearchParams();
+  const initialFrameworkId = searchParams.get('framework');
+  
   const [searchTerm, setSearchTerm] = useState('');
-  const [frameworkFilter, setFrameworkFilter] = useState<number | null>(null);
+  const [frameworkFilter, setFrameworkFilter] = useState<number | null>(
+    initialFrameworkId ? Number(initialFrameworkId) : null
+  );
   const [domainFilter, setDomainFilter] = useState('');
   const [expandedControl, setExpandedControl] = useState<number | null>(null);
   const [page, setPage] = useState(0);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const pageSize = 50;
+
+  useEffect(() => {
+    if (initialFrameworkId) {
+      setFrameworkFilter(Number(initialFrameworkId));
+    }
+  }, [initialFrameworkId]);
 
   const { data: summaryData } = useQuery({
     queryKey: ['framework-controls-summary'],
@@ -139,14 +158,112 @@ export default function ControlsPage() {
     );
   }
 
+  const selectedFramework = summaryData?.frameworks.find(f => f.id === frameworkFilter);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Framework Controls</h1>
-        <p className="text-slate-400">Controls extracted from your uploaded regulatory frameworks</p>
+      <div className="flex items-start justify-between">
+        <div>
+          {frameworkFilter && selectedFramework ? (
+            <>
+              <div className="flex items-center gap-2 mb-1">
+                <Link 
+                  href="/frameworks" 
+                  className="flex items-center gap-1 text-sm text-slate-400 hover:text-white transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Frameworks
+                </Link>
+              </div>
+              <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+                <FileStack className="h-6 w-6 text-primary-400" />
+                {selectedFramework.name}
+              </h1>
+              <p className="text-slate-400">
+                {selectedFramework.control_count} controls extracted from this framework
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-white">Framework Controls</h1>
+              <p className="text-slate-400">Controls extracted from your uploaded regulatory frameworks</p>
+            </>
+          )}
+        </div>
+        <button
+          onClick={() => setShowInfoModal(true)}
+          className="flex items-center gap-2 rounded-lg bg-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-600 transition-colors"
+        >
+          <HelpCircle className="h-4 w-4" />
+          How It Works
+        </button>
       </div>
 
-      {summaryData && summaryData.frameworks.length > 0 && (
+      {showInfoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg mx-4 rounded-xl bg-slate-800 border border-slate-700 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-700 p-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Info className="h-5 w-5 text-primary-400" />
+                Understanding Frameworks & Controls
+              </h2>
+              <button
+                onClick={() => setShowInfoModal(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+              >
+                <ChevronDown className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4 text-sm">
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-400 font-bold">1</div>
+                  <div>
+                    <h3 className="font-medium text-white">Upload Framework</h3>
+                    <p className="text-slate-400">Upload your regulatory framework document (PDF, Excel). The AI extracts individual controls/requirements.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold">2</div>
+                  <div>
+                    <h3 className="font-medium text-white">Controls Are Extracted</h3>
+                    <p className="text-slate-400">Each requirement becomes a control shown here. Controls retain their original reference IDs from the framework document.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold">3</div>
+                  <div>
+                    <h3 className="font-medium text-white">Link Evidence</h3>
+                    <p className="text-slate-400">Upload evidence documents to prove compliance. Link evidence to specific controls to demonstrate you meet each requirement.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-bold">4</div>
+                  <div>
+                    <h3 className="font-medium text-white">Track Compliance</h3>
+                    <p className="text-slate-400">Start a certification journey from the Frameworks page to track your progress toward full compliance.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="pt-3 border-t border-slate-700">
+                <p className="text-xs text-slate-500">
+                  <strong>Tip:</strong> Use the Evidence module to upload documents, then link them to controls here. Each control can have multiple pieces of evidence.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-slate-700 p-4">
+              <button
+                onClick={() => setShowInfoModal(false)}
+                className="btn-primary"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {summaryData && summaryData.frameworks.length > 0 && !frameworkFilter && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="card p-4">
             <div className="flex items-center gap-3">

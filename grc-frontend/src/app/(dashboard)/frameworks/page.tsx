@@ -506,10 +506,14 @@ export default function FrameworksPage() {
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300">
+                  <Link
+                    href={`/controls?framework=${framework.id}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
+                  >
                     <Shield className="h-3 w-3" />
                     {framework.controls_count} controls
-                  </span>
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
                 </div>
 
                 <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
@@ -519,12 +523,19 @@ export default function FrameworksPage() {
 
                 <div className="mt-4 border-t border-slate-700 pt-4 flex flex-col gap-2">
                   <div className="flex gap-2">
+                    <Link
+                      href={`/controls?framework=${framework.id}`}
+                      className="btn-secondary flex flex-1 items-center justify-center gap-2"
+                    >
+                      <Shield className="h-4 w-4" />
+                      View Controls
+                    </Link>
                     <button
                       onClick={() => handleStartCertification(framework)}
                       className="btn-primary flex flex-1 items-center justify-center gap-2"
                     >
                       <Play className="h-4 w-4" />
-                      Start Certification
+                      Start Journey
                     </button>
                     <button
                       onClick={(e) => {
