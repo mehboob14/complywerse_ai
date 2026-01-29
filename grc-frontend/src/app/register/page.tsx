@@ -226,11 +226,23 @@ export default function RegisterPage() {
         router.push('/dashboard');
       } else {
         const data = await response.json();
-        if (data.detail?.includes('email') || data.detail?.includes('domain')) {
-          setError('Please use a corporate email address. Free email providers are not accepted.');
-        } else {
-          setError(data.detail || 'Registration failed. Please try again.');
+        let errorMessage = 'Registration failed. Please try again.';
+        
+        if (Array.isArray(data.detail)) {
+          const messages = data.detail.map((err: { msg?: string; loc?: string[] }) => {
+            const field = err.loc?.slice(-1)[0] || 'field';
+            return err.msg || `Invalid ${field}`;
+          });
+          errorMessage = messages.join('. ');
+        } else if (typeof data.detail === 'string') {
+          if (data.detail.includes('email') || data.detail.includes('domain')) {
+            errorMessage = 'Please use a corporate email address. Free email providers are not accepted.';
+          } else {
+            errorMessage = data.detail;
+          }
         }
+        
+        setError(errorMessage);
       }
     } catch {
       setError('An error occurred. Please try again.');
