@@ -44,12 +44,12 @@ name = "GRC Frontend"
 author = "agent"
 
 [workflows.workflow.metadata]
-outputType = "console"
+outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd grc-frontend && npm run dev -- -p 3000"
-waitForPort = 3000
+args = "cd grc-frontend && npm run dev -- -p 5000"
+waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Website"

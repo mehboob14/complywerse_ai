@@ -13,6 +13,19 @@ class UserCreate(UserBase):
     password: str
 
 
+class OrganizationRegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    display_name: str
+    organization_name: str
+    legal_entity: Optional[str] = None
+    industry: Optional[str] = None
+    regulatory_scope: Optional[str] = None
+    company_size: Optional[str] = None
+    geography: Optional[str] = None
+    primary_contact_phone: Optional[str] = None
+
+
 class UserLogin(BaseModel):
     username: str
     password: str

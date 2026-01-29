@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 import bcrypt
 from jose import jwt, JWTError
 
-from ..models import GRCUser, TenantUser, Tenant, get_db
-from ..schemas import UserCreate, UserLogin, UserResponse, TokenResponse
+from ..models import GRCUser, TenantUser, Tenant, BusinessUnit, Role, UserRole, get_db
+from ..schemas import UserCreate, UserLogin, UserResponse, TokenResponse, OrganizationRegisterRequest
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -19,6 +19,21 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 TOKEN_REFRESH_THRESHOLD_HOURS = 6
+
+
+PERSONAL_EMAIL_DOMAINS = {
+    'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'live.com',
+    'aol.com', 'icloud.com', 'protonmail.com', 'mail.com', 'ymail.com',
+    'msn.com', 'me.com', 'zoho.com', 'gmx.com', 'inbox.com'
+}
+
+
+def is_corporate_email(email: str) -> bool:
+    try:
+        domain = email.lower().split('@')[1]
+        return domain not in PERSONAL_EMAIL_DOMAINS
+    except (IndexError, AttributeError):
+        return False
 
 
 def hash_password(password: str) -> str:
@@ -306,3 +321,121 @@ def get_me(
             return response
     
     return response_data
+
+
+def generate_slug(name: str) -> str:
+    import re
+    slug = name.lower().strip()
+    slug = re.sub(r'[^\w\s-]', '', slug)
+    slug = re.sub(r'[\s_-]+', '-', slug)
+    return slug[:100]
+
+
+@router.post("/register-organization", status_code=status.HTTP_201_CREATED)
+def register_organization(request: OrganizationRegisterRequest, db: Session = Depends(get_db)):
+    if not is_corporate_email(request.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Personal email addresses are not allowed. Please use your corporate email address."
+        )
+    
+    existing_user = db.query(GRCUser).filter(GRCUser.email == request.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    base_slug = generate_slug(request.organization_name)
+    slug = base_slug
+    counter = 1
+    while db.query(Tenant).filter(Tenant.slug == slug).first():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+    
+    tenant = Tenant(
+        name=request.organization_name,
+        slug=slug,
+        legal_entity=request.legal_entity,
+        industry=request.industry,
+        regulatory_scope=request.regulatory_scope,
+        company_size=request.company_size,
+        geography=request.geography,
+        primary_contact_name=request.display_name,
+        primary_contact_email=request.email,
+        primary_contact_phone=request.primary_contact_phone,
+        is_active=True
+    )
+    db.add(tenant)
+    db.commit()
+    db.refresh(tenant)
+    
+    default_bu = BusinessUnit(
+        tenant_id=tenant.id,
+        name="Organization"
+    )
+    db.add(default_bu)
+    db.commit()
+    db.refresh(default_bu)
+    
+    admin_role = Role(
+        tenant_id=tenant.id,
+        name="Tenant Admin",
+        description="Full administrative access to all tenant resources",
+        is_system_role=False
+    )
+    db.add(admin_role)
+    db.commit()
+    db.refresh(admin_role)
+    
+    username = request.email.split('@')[0]
+    base_username = username
+    counter = 1
+    while db.query(GRCUser).filter(GRCUser.username == username).first():
+        username = f"{base_username}{counter}"
+        counter += 1
+    
+    user = GRCUser(
+        username=username,
+        email=request.email,
+        password_hash=hash_password(request.password),
+        display_name=request.display_name
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    tenant_user = TenantUser(
+        user_id=user.id,
+        tenant_id=tenant.id,
+        is_primary=True
+    )
+    db.add(tenant_user)
+    db.commit()
+    
+    user_role = UserRole(
+        user_id=user.id,
+        role_id=admin_role.id,
+        tenant_id=tenant.id,
+        business_unit_id=default_bu.id
+    )
+    db.add(user_role)
+    db.commit()
+    
+    token = create_access_token({"sub": user.username})
+    response = JSONResponse(content={
+        "message": "Organization registration successful",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "display_name": user.display_name
+        },
+        "tenant": {
+            "id": tenant.id,
+            "name": tenant.name,
+            "slug": tenant.slug
+        }
+    }, status_code=status.HTTP_201_CREATED)
+    set_auth_cookie(response, token)
+    return response
