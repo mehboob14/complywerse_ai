@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
     "recharts": "^3.6.0"
   }
 }
