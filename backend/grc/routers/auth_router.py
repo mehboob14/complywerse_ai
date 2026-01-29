@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import bcrypt
 from jose import jwt, JWTError
 
-from ..models import GRCUser, TenantUser, get_db
+from ..models import GRCUser, TenantUser, Tenant, get_db
 from ..schemas import UserCreate, UserLogin, UserResponse, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -139,6 +139,30 @@ def register(request: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    
+    # Auto-assign user to default tenant
+    default_tenant = db.query(Tenant).filter(Tenant.id == 1).first()
+    if not default_tenant:
+        default_tenant = db.query(Tenant).filter(Tenant.name.ilike("%Default%")).first()
+    
+    if not default_tenant:
+        # Create default tenant if none exists
+        default_tenant = Tenant(
+            name="Default Organization",
+            slug="default-organization"
+        )
+        db.add(default_tenant)
+        db.commit()
+        db.refresh(default_tenant)
+    
+    # Create TenantUser record linking user to tenant
+    tenant_user = TenantUser(
+        user_id=user.id,
+        tenant_id=default_tenant.id,
+        is_primary=True
+    )
+    db.add(tenant_user)
+    db.commit()
     
     token = create_access_token({"sub": user.username})
     response = JSONResponse(content={
