@@ -1,7 +1,7 @@
-# Enterprise GRC Platform
+# ComplyVerse - Enterprise GRC Platform
 
 ## Overview
-A comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platform with multi-tenancy support. It aims to streamline GRC processes, provide a single source of truth for compliance, and enable real-time risk assessment and management for enterprises. Key capabilities include integration of 8 regulatory frameworks with a normalized control model, evidence management, enterprise risk management, governance orchestration, policy management, and IT asset inventory. The platform targets significant market potential by offering a unified solution for complex GRC needs.
+ComplyVerse is a comprehensive, enterprise-grade Governance, Risk, and Compliance (GRC) platform with multi-tenancy support. It aims to streamline GRC processes, provide a single source of truth for compliance, and enable real-time risk assessment and management for enterprises. Key capabilities include integration of 8 regulatory frameworks with a normalized control model, evidence management, enterprise risk management, governance orchestration, policy management, and IT asset inventory. The platform targets significant market potential by offering a unified solution for complex GRC needs.
 
 ## User Preferences
 - Backend in Python only

@@ -2,8 +2,8 @@ import Providers from '@/components/Providers';
 import './globals.css';
 
 export const metadata = {
-  title: 'Enterprise GRC Platform',
-  description: 'Governance, Risk, and Compliance Management Platform',
+  title: 'ComplyVerse',
+  description: 'Enterprise Governance, Risk, and Compliance Platform',
 };
 
 export default function RootLayout({

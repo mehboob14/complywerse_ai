@@ -44,7 +44,7 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-600">
             <Shield className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Enterprise GRC Platform</h1>
+          <h1 className="text-2xl font-bold text-white">ComplyVerse</h1>
           <p className="mt-2 text-slate-400">Sign in to your account</p>
         </div>
 

@@ -299,7 +299,7 @@ export default function Sidebar() {
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
-              <span className="text-lg font-bold text-white whitespace-nowrap">GRC Platform</span>
+              <span className="text-lg font-bold text-white whitespace-nowrap">ComplyVerse</span>
             </div>
           )}
         </div>
