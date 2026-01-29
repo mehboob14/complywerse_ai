@@ -21,7 +21,9 @@ from ....schemas import (
     RegulatoryImpactAssessmentCreate, RegulatoryImpactAssessmentResponse,
     RegulatoryImplementationTaskCreate, RegulatoryImplementationTaskUpdate,
     RegulatoryImplementationTaskResponse, RegulatoryChangeDashboardStats,
-    RegulatoryGapAnalysisResponse, MessageResponse
+    RegulatoryGapAnalysisResponse, MessageResponse,
+    RegulatoryChangeClosureReadinessResponse, RegulatoryChangeCloseResponse,
+    IncompleteTaskDetail
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -56,6 +58,9 @@ def serialize_regulatory_change(change: RegulatoryChange) -> RegulatoryChangeRes
         creator_name=change.creator.display_name if change.creator else None,
         created_at=change.created_at,
         updated_at=change.updated_at,
+        closed_at=change.closed_at,
+        closed_by=change.closed_by,
+        closed_by_name=change.closer.display_name if change.closer else None,
         assessment_count=len(change.impact_assessments),
         task_count=len(change.implementation_tasks),
         completed_task_count=completed_tasks
@@ -212,7 +217,7 @@ def create_regulatory_change(
             detail=f"Invalid source. Must be one of: {', '.join(valid_sources)}"
         )
     
-    valid_statuses = ["identified", "under_assessment", "implementation", "completed", "not_applicable"]
+    valid_statuses = ["identified", "under_assessment", "implementation", "completed", "closed", "not_applicable"]
     if change.status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -275,7 +280,7 @@ def update_regulatory_change(
             )
     
     if "status" in update_data:
-        valid_statuses = ["identified", "under_assessment", "implementation", "completed", "not_applicable"]
+        valid_statuses = ["identified", "under_assessment", "implementation", "completed", "closed", "not_applicable"]
         if update_data["status"] not in valid_statuses:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -888,3 +893,122 @@ Focus on regulatory compliance gaps and potential areas of non-compliance."""
             risk_level="unknown",
             confidence_score=0.0
         )
+
+
+# =============================================================================
+# Closure Readiness and Close Endpoints
+# =============================================================================
+
+@router.get("/changes/{change_id}/closure-readiness", response_model=RegulatoryChangeClosureReadinessResponse)
+def get_closure_readiness(
+    change_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Check if all implementation tasks are completed and the regulatory change is ready to close."""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    change = db.query(RegulatoryChange).options(
+        joinedload(RegulatoryChange.implementation_tasks).joinedload(RegulatoryImplementationTask.assignee)
+    ).filter(
+        RegulatoryChange.id == change_id,
+        RegulatoryChange.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not change:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
+    
+    total_tasks = len(change.implementation_tasks)
+    completed_tasks = sum(1 for t in change.implementation_tasks if t.status == "completed")
+    
+    incomplete_tasks = [
+        IncompleteTaskDetail(
+            id=task.id,
+            title=task.title,
+            status=task.status,
+            assignee_id=task.assigned_to,
+            assignee_name=task.assignee.display_name if task.assignee else None
+        )
+        for task in change.implementation_tasks
+        if task.status != "completed"
+    ]
+    
+    ready_to_close = total_tasks > 0 and completed_tasks == total_tasks
+    
+    return RegulatoryChangeClosureReadinessResponse(
+        ready_to_close=ready_to_close,
+        total_tasks=total_tasks,
+        completed_tasks=completed_tasks,
+        incomplete_tasks=incomplete_tasks
+    )
+
+
+@router.post("/changes/{change_id}/close", response_model=RegulatoryChangeCloseResponse)
+def close_regulatory_change(
+    change_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Close a regulatory change after validating all implementation tasks are completed."""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    change = db.query(RegulatoryChange).options(
+        joinedload(RegulatoryChange.assignee),
+        joinedload(RegulatoryChange.creator),
+        joinedload(RegulatoryChange.closer),
+        joinedload(RegulatoryChange.impact_assessments),
+        joinedload(RegulatoryChange.implementation_tasks).joinedload(RegulatoryImplementationTask.assignee)
+    ).filter(
+        RegulatoryChange.id == change_id,
+        RegulatoryChange.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not change:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
+    
+    if change.status == "closed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Regulatory change is already closed"
+        )
+    
+    incomplete_tasks = [
+        {
+            "id": task.id,
+            "title": task.title,
+            "status": task.status,
+            "assignee_id": task.assigned_to,
+            "assignee_name": task.assignee.display_name if task.assignee else None
+        }
+        for task in change.implementation_tasks
+        if task.status != "completed"
+    ]
+    
+    if incomplete_tasks:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": "Cannot close regulatory change. Some tasks are not completed.",
+                "incomplete_tasks": incomplete_tasks
+            }
+        )
+    
+    change.status = "closed"
+    change.closed_at = datetime.utcnow()
+    change.closed_by = current_user.id
+    
+    db.commit()
+    db.refresh(change)
+    
+    change = db.query(RegulatoryChange).options(
+        joinedload(RegulatoryChange.assignee),
+        joinedload(RegulatoryChange.creator),
+        joinedload(RegulatoryChange.closer),
+        joinedload(RegulatoryChange.impact_assessments),
+        joinedload(RegulatoryChange.implementation_tasks)
+    ).filter(RegulatoryChange.id == change_id).first()
+    
+    return RegulatoryChangeCloseResponse(
+        message="Regulatory change closed successfully",
+        regulatory_change=serialize_regulatory_change(change)
+    )

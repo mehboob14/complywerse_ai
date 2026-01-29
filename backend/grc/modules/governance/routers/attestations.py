@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from ....models import (
     GRCUser, Tenant, GovernanceDocument, GovernanceDocumentVersion,
-    PolicyAttestation, get_db
+    PolicyAttestation, Evidence, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -31,6 +31,10 @@ class AttestationCreate(BaseModel):
 
 class AttestationComplete(BaseModel):
     user_comments: Optional[str] = None
+
+
+class BulkLinkEvidenceRequest(BaseModel):
+    attestation_ids: List[int]
 
 
 class AttestationResponse(BaseModel):
@@ -447,3 +451,159 @@ async def revoke_attestation(
     db.commit()
     
     return {"message": "Attestation revoked successfully"}
+
+
+@router.post("/{attestation_id}/link-to-evidence", status_code=status.HTTP_201_CREATED)
+async def link_attestation_to_evidence(
+    attestation_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Link a completed attestation to the evidence repository.
+    Only works for attestations with status "completed".
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenant access"
+        )
+    
+    attestation = db.query(PolicyAttestation).filter(
+        PolicyAttestation.id == attestation_id,
+        PolicyAttestation.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not attestation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attestation not found"
+        )
+    
+    if attestation.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only completed attestations can be linked to evidence"
+        )
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == attestation.document_id
+    ).first()
+    document_title = document.title if document else "Unknown Document"
+    
+    user = db.query(GRCUser).filter(GRCUser.id == attestation.user_id).first()
+    user_name = user.display_name or user.username if user else "Unknown User"
+    
+    description = (
+        f"Attestation completed by {user_name} on {attestation.completed_at.strftime('%Y-%m-%d %H:%M:%S') if attestation.completed_at else 'N/A'}. "
+        f"Attestation type: {attestation.attestation_type}. "
+        f"Source ID: {attestation_id}. "
+        f"Source type: attestation."
+    )
+    if attestation.user_comments:
+        description += f" User comments: {attestation.user_comments}"
+    
+    evidence = Evidence(
+        tenant_id=attestation.tenant_id,
+        name=f"Attestation - {document_title}",
+        description=description,
+        evidence_type="attestation",
+        source_system=f"attestation:{attestation_id}",
+        collection_date=attestation.completed_at,
+        uploaded_by=current_user.id,
+        uploaded_at=datetime.utcnow(),
+        status="approved"
+    )
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
+    
+    return {
+        "id": evidence.id,
+        "name": evidence.name,
+        "description": evidence.description,
+        "evidence_type": evidence.evidence_type,
+        "source_system": evidence.source_system,
+        "collection_date": evidence.collection_date,
+        "status": evidence.status,
+        "uploaded_at": evidence.uploaded_at
+    }
+
+
+@router.post("/bulk-link-evidence", status_code=status.HTTP_201_CREATED)
+async def bulk_link_attestations_to_evidence(
+    request_data: BulkLinkEvidenceRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Bulk link completed attestations to evidence repository.
+    Only completed attestations will be linked; others will be skipped.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenant access"
+        )
+    
+    created_count = 0
+    skipped_count = 0
+    created_evidence_ids = []
+    
+    for attestation_id in request_data.attestation_ids:
+        attestation = db.query(PolicyAttestation).filter(
+            PolicyAttestation.id == attestation_id,
+            PolicyAttestation.tenant_id.in_(user_tenants)
+        ).first()
+        
+        if not attestation:
+            skipped_count += 1
+            continue
+        
+        if attestation.status != "completed":
+            skipped_count += 1
+            continue
+        
+        document = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == attestation.document_id
+        ).first()
+        document_title = document.title if document else "Unknown Document"
+        
+        user = db.query(GRCUser).filter(GRCUser.id == attestation.user_id).first()
+        user_name = user.display_name or user.username if user else "Unknown User"
+        
+        description = (
+            f"Attestation completed by {user_name} on {attestation.completed_at.strftime('%Y-%m-%d %H:%M:%S') if attestation.completed_at else 'N/A'}. "
+            f"Attestation type: {attestation.attestation_type}. "
+            f"Source ID: {attestation_id}. "
+            f"Source type: attestation."
+        )
+        if attestation.user_comments:
+            description += f" User comments: {attestation.user_comments}"
+        
+        evidence = Evidence(
+            tenant_id=attestation.tenant_id,
+            name=f"Attestation - {document_title}",
+            description=description,
+            evidence_type="attestation",
+            source_system=f"attestation:{attestation_id}",
+            collection_date=attestation.completed_at,
+            uploaded_by=current_user.id,
+            uploaded_at=datetime.utcnow(),
+            status="approved"
+        )
+        db.add(evidence)
+        created_count += 1
+        db.flush()
+        created_evidence_ids.append(evidence.id)
+    
+    db.commit()
+    
+    return {
+        "message": f"Successfully linked {created_count} attestations to evidence",
+        "created_count": created_count,
+        "skipped_count": skipped_count,
+        "evidence_ids": created_evidence_ids
+    }

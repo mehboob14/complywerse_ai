@@ -1685,14 +1685,18 @@ class Document(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     approved_at = Column(DateTime, nullable=True)
+    published_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    published_at = Column(DateTime, nullable=True)
     review_cycle_months = Column(Integer, default=12)
     next_review_date = Column(DateTime, nullable=True)
     
     tenant = relationship("Tenant", back_populates="documents")
     owner = relationship("GRCUser", back_populates="owned_documents", foreign_keys=[owner_id])
     approver = relationship("GRCUser", back_populates="approved_documents", foreign_keys=[approved_by])
+    publisher = relationship("GRCUser", foreign_keys=[published_by])
     versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan")
     approval_workflows = relationship("DocumentApprovalWorkflow", back_populates="document", cascade="all, delete-orphan")
+    attestations = relationship("DocumentAttestation", back_populates="document", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_document_tenant_type", "tenant_id", "doc_type"),
@@ -1733,6 +1737,42 @@ class DocumentApprovalWorkflow(Base):
     
     document = relationship("Document", back_populates="approval_workflows")
     approver = relationship("GRCUser", back_populates="document_approvals")
+
+
+class DocumentAttestation(Base):
+    """Tracks user attestations/acknowledgments for legacy documents"""
+    __tablename__ = "grc_document_attestations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    document_id = Column(Integer, ForeignKey("grc_documents.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    
+    attestation_type = Column(String(50), default="acknowledgment")
+    status = Column(String(50), default="pending")
+    
+    requested_at = Column(DateTime, default=datetime.utcnow)
+    requested_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    
+    attestation_text = Column(Text, nullable=True)
+    user_comments = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    document = relationship("Document", back_populates="attestations")
+    user = relationship("GRCUser", foreign_keys=[user_id])
+    requester = relationship("GRCUser", foreign_keys=[requested_by])
+    
+    __table_args__ = (
+        Index("ix_doc_attestation_tenant", "tenant_id"),
+        Index("ix_doc_attestation_document", "document_id"),
+        Index("ix_doc_attestation_user", "user_id"),
+        Index("ix_doc_attestation_status", "status"),
+    )
 
 
 # =============================================================================
@@ -4097,9 +4137,13 @@ class RegulatoryChange(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    closed_at = Column(DateTime, nullable=True)
+    closed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    
     tenant = relationship("Tenant")
     assignee = relationship("GRCUser", foreign_keys=[assigned_to])
     creator = relationship("GRCUser", foreign_keys=[created_by])
+    closer = relationship("GRCUser", foreign_keys=[closed_by])
     impact_assessments = relationship("RegulatoryImpactAssessment", back_populates="regulatory_change", cascade="all, delete-orphan")
     implementation_tasks = relationship("RegulatoryImplementationTask", back_populates="regulatory_change", cascade="all, delete-orphan")
     

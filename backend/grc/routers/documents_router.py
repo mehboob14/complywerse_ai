@@ -2,10 +2,11 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
+from pydantic import BaseModel
 
 from ..models import (
     Document, DocumentVersion, DocumentApprovalWorkflow, DocumentControlLink,
-    NormalizedControl, GRCUser, Tenant, get_db
+    NormalizedControl, GRCUser, Tenant, DocumentAttestation, get_db
 )
 from ..schemas import (
     DocumentCreate, DocumentUpdate, DocumentResponse,
@@ -13,6 +14,12 @@ from ..schemas import (
     DocumentControlLinkCreate, MessageResponse
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+
+
+class AttestationRequest(BaseModel):
+    user_ids: List[int]
+    due_date: Optional[datetime] = None
+    attestation_text: Optional[str] = None
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -177,6 +184,8 @@ def get_document(
         "created_at": document.created_at.isoformat(),
         "approved_by": document.approved_by,
         "approved_at": document.approved_at.isoformat() if document.approved_at else None,
+        "published_by": document.published_by,
+        "published_at": document.published_at.isoformat() if document.published_at else None,
         "review_cycle_months": document.review_cycle_months,
         "next_review_date": document.next_review_date.isoformat() if document.next_review_date else None,
         "versions": [
@@ -492,3 +501,137 @@ def link_document_to_control(
     db.commit()
     
     return MessageResponse(message="Control linked successfully")
+
+
+@router.post("/{document_id}/publish", response_model=dict)
+def publish_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Publish a document - transitions status from 'approved' to 'published'.
+    Makes the document available for attestations.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    if document.status != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Document must be approved before publishing. Current status: {document.status}"
+        )
+    
+    version_parts = document.version.split(".")
+    major_version = int(version_parts[0])
+    if major_version < 1:
+        new_version = "1.0"
+    else:
+        new_version = document.version
+    
+    document.status = "published"
+    document.published_at = datetime.utcnow()
+    document.published_by = current_user.id
+    document.version = new_version
+    
+    db.commit()
+    db.refresh(document)
+    
+    return {
+        "message": "Document published successfully",
+        "document": {
+            "id": document.id,
+            "title": document.title,
+            "version": document.version,
+            "status": document.status,
+            "published_at": document.published_at.isoformat() if document.published_at else None,
+            "published_by": document.published_by
+        }
+    }
+
+
+@router.post("/{document_id}/request-attestation", response_model=dict)
+def request_attestation(
+    document_id: int,
+    attestation_request: AttestationRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Request attestations from users for a published document.
+    Creates attestation records for each specified user.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    if document.status != "published":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Attestations can only be requested for published documents. Current status: {document.status}"
+        )
+    
+    due_date = attestation_request.due_date or (datetime.utcnow() + timedelta(days=14))
+    attestation_text = attestation_request.attestation_text or f"I acknowledge that I have read, understood, and agree to comply with the '{document.title}'."
+    
+    created_count = 0
+    skipped_count = 0
+    
+    for user_id in attestation_request.user_ids:
+        user = db.query(GRCUser).filter(GRCUser.id == user_id).first()
+        if not user:
+            skipped_count += 1
+            continue
+        
+        existing = db.query(DocumentAttestation).filter(
+            DocumentAttestation.document_id == document_id,
+            DocumentAttestation.user_id == user_id,
+            DocumentAttestation.status == "pending"
+        ).first()
+        
+        if existing:
+            skipped_count += 1
+            continue
+        
+        attestation = DocumentAttestation(
+            tenant_id=document.tenant_id,
+            document_id=document_id,
+            user_id=user_id,
+            attestation_type="acknowledgment",
+            status="pending",
+            requested_by=current_user.id,
+            due_date=due_date,
+            attestation_text=attestation_text
+        )
+        db.add(attestation)
+        created_count += 1
+    
+    db.commit()
+    
+    return {
+        "message": f"Attestation requests created successfully",
+        "attestations_created": created_count,
+        "attestations_skipped": skipped_count,
+        "due_date": due_date.isoformat(),
+        "document_id": document_id,
+        "document_title": document.title
+    }

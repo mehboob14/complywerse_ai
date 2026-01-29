@@ -3276,6 +3276,9 @@ class RegulatoryChangeResponse(BaseModel):
     creator_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    closed_at: Optional[datetime] = None
+    closed_by: Optional[int] = None
+    closed_by_name: Optional[str] = None
     assessment_count: int = 0
     task_count: int = 0
     completed_task_count: int = 0
@@ -3393,6 +3396,26 @@ class RegulatoryGapAnalysisResponse(BaseModel):
     recommended_actions: List[str] = []
     risk_level: str
     confidence_score: float
+
+
+class IncompleteTaskDetail(BaseModel):
+    id: int
+    title: str
+    status: str
+    assignee_id: Optional[int] = None
+    assignee_name: Optional[str] = None
+
+
+class RegulatoryChangeClosureReadinessResponse(BaseModel):
+    ready_to_close: bool
+    total_tasks: int
+    completed_tasks: int
+    incomplete_tasks: List[IncompleteTaskDetail] = []
+
+
+class RegulatoryChangeCloseResponse(BaseModel):
+    message: str
+    regulatory_change: RegulatoryChangeResponse
 
 
 # =============================================================================
