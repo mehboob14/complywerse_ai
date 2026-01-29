@@ -44,6 +44,17 @@ The platform utilizes a multi-tenant architecture with complete tenant isolation
 
 ## Recent Changes (January 2026)
 
+### Organization-Based Multi-Tenant Registration
+- **Corporate Email Validation**: Registration restricted to corporate emails only; personal domains (Gmail, Yahoo, Outlook, etc.) are blocked
+- **Multi-Step Onboarding Form**: 4-step registration wizard capturing:
+  - Step 1: Account details (email, password, name)
+  - Step 2: Organization details (name, legal entity, industry, company size)
+  - Step 3: Compliance profile (geography, regulatory scope, contact phone)
+  - Step 4: Review and submit
+- **Extended Tenant Model**: Added organization fields (legal_entity, industry, regulatory_scope, company_size, geography, contact details)
+- **Automatic Tenant Provisioning**: On registration creates tenant, admin role, default business unit, and assigns user as tenant admin
+- **Registration Flow**: POST /auth/register-organization endpoint with full validation and tenant initialization
+
 ### Governance Workflow Completions
 - **User Registration**: Auto-assigns new users to default tenant on registration, enabling immediate resource creation
 - **Committee Dashboard**: Fixed route conflict by reordering static routes before dynamic routes
