@@ -42,6 +42,17 @@ function formatTimeAgo(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
+interface CurrentUser {
+  id: number;
+  username: string;
+  email: string;
+  display_name: string;
+  primary_tenant_id: number | null;
+  primary_tenant_name: string | null;
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/grc';
+
 export default function Header() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -50,6 +61,19 @@ export default function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  const { data: currentUser } = useQuery<CurrentUser | null>({
+    queryKey: ['current-user'],
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE}/auth/me`, {
+        credentials: 'include',
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.authenticated ? data.user : null;
+    },
+    staleTime: 60000,
+  });
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
@@ -252,8 +276,8 @@ export default function Header() {
               <User size={16} />
             </div>
             <div className="hidden lg:block text-left">
-              <p className="text-sm font-medium text-slate-200">Admin User</p>
-              <p className="text-xs text-slate-500">Default Tenant</p>
+              <p className="text-sm font-medium text-slate-200">{currentUser?.display_name || 'User'}</p>
+              <p className="text-xs text-slate-500">{currentUser?.primary_tenant_name || 'No Organization'}</p>
             </div>
             <ChevronDown 
               size={14} 
@@ -272,8 +296,8 @@ export default function Header() {
                     <User size={20} />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-white">Admin User</p>
-                    <p className="text-xs text-slate-400">admin@company.com</p>
+                    <p className="text-sm font-semibold text-white">{currentUser?.display_name || 'User'}</p>
+                    <p className="text-xs text-slate-400">{currentUser?.email || ''}</p>
                   </div>
                 </div>
               </div>

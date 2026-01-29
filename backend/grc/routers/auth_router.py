@@ -297,6 +297,12 @@ def get_me(
     tenants = get_user_tenants(user, db)
     primary_tenant = get_user_primary_tenant(user, db)
     
+    primary_tenant_name = None
+    if primary_tenant:
+        tenant = db.query(Tenant).filter(Tenant.id == primary_tenant).first()
+        if tenant:
+            primary_tenant_name = tenant.name
+    
     response_data = {
         "authenticated": True,
         "user": {
@@ -308,7 +314,8 @@ def get_me(
             "created_at": user.created_at.isoformat(),
             "last_login": user.last_login.isoformat() if user.last_login else None,
             "tenant_ids": tenants,
-            "primary_tenant_id": primary_tenant
+            "primary_tenant_id": primary_tenant,
+            "primary_tenant_name": primary_tenant_name
         }
     }
     
