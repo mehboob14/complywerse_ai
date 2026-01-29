@@ -23,8 +23,11 @@ import {
   Target,
   BarChart3,
   Edit,
+  Lock,
+  User,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useToast } from '@/components/ui/ToastProvider';
 
 interface RegulatoryChange {
   id: number;
@@ -80,6 +83,20 @@ interface GapAnalysis {
   severity: string;
   remediation_plan?: string;
   status: string;
+}
+
+interface IncompleteTask {
+  id: number;
+  title: string;
+  status: string;
+  assignee?: string;
+}
+
+interface ClosureReadiness {
+  ready_to_close: boolean;
+  completed_tasks: number;
+  total_tasks: number;
+  incomplete_tasks?: IncompleteTask[];
 }
 
 const TABS = [
@@ -162,12 +179,15 @@ export default function RegulatoryChangeDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const changeId = Number(params.id);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [closureReadiness, setClosureReadiness] = useState<ClosureReadiness | null>(null);
+  const [checkingReadiness, setCheckingReadiness] = useState(false);
 
   const [assessmentForm, setAssessmentForm] = useState({
     impact_level: 'medium',
@@ -269,6 +289,43 @@ export default function RegulatoryChangeDetailPage() {
     mutationFn: (taskId: number) => regulatoryApi.deleteTask(taskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['regulatory-tasks', changeId] });
+    },
+  });
+
+  const checkClosureReadiness = async () => {
+    setCheckingReadiness(true);
+    try {
+      const response = await regulatoryApi.getClosureReadiness(changeId);
+      setClosureReadiness(response.data as ClosureReadiness);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        message: 'Failed to check closure readiness',
+        type: 'error',
+      });
+    } finally {
+      setCheckingReadiness(false);
+    }
+  };
+
+  const closeChangeMutation = useMutation({
+    mutationFn: () => regulatoryApi.closeChange(changeId),
+    onSuccess: () => {
+      toast({
+        title: 'Success',
+        message: 'Regulatory change has been closed successfully',
+        type: 'success',
+      });
+      queryClient.invalidateQueries({ queryKey: ['regulatory-change', changeId] });
+      queryClient.invalidateQueries({ queryKey: ['regulatory-changes'] });
+      setClosureReadiness(null);
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        message: 'Failed to close regulatory change',
+        type: 'error',
+      });
     },
   });
 
@@ -480,6 +537,95 @@ export default function RegulatoryChangeDetailPage() {
                   <Sparkles size={16} />
                   View Gap Analysis
                 </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-6">
+              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <Lock size={18} />
+                Closure
+              </h2>
+              <div className="space-y-4">
+                <button 
+                  onClick={checkClosureReadiness}
+                  disabled={checkingReadiness || change.status === 'completed'}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {checkingReadiness ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ClipboardList size={16} />
+                  )}
+                  Check Closure Readiness
+                </button>
+
+                {closureReadiness && (
+                  <div className="space-y-3">
+                    <div className={`rounded-lg p-4 ${closureReadiness.ready_to_close ? 'bg-emerald-900/20 border border-emerald-700/50' : 'bg-amber-900/20 border border-amber-700/50'}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        {closureReadiness.ready_to_close ? (
+                          <CheckCircle className="h-5 w-5 text-emerald-400" />
+                        ) : (
+                          <AlertTriangle className="h-5 w-5 text-amber-400" />
+                        )}
+                        <span className={`font-medium ${closureReadiness.ready_to_close ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {closureReadiness.ready_to_close ? 'Ready to Close' : 'Not Ready'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-300">
+                        {closureReadiness.completed_tasks} / {closureReadiness.total_tasks} tasks completed
+                      </p>
+                    </div>
+
+                    {!closureReadiness.ready_to_close && closureReadiness.incomplete_tasks && closureReadiness.incomplete_tasks.length > 0 && (
+                      <div className="rounded-lg bg-slate-900/50 p-3">
+                        <h4 className="text-sm font-medium text-slate-400 mb-2">Incomplete Tasks</h4>
+                        <div className="space-y-2 max-h-40 overflow-y-auto">
+                          {closureReadiness.incomplete_tasks.map((task) => (
+                            <div key={task.id} className="flex items-center justify-between text-sm border-b border-slate-700 pb-2 last:border-0 last:pb-0">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white truncate">{task.title}</p>
+                                {task.assignee && (
+                                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                                    <User size={10} />
+                                    {task.assignee}
+                                  </p>
+                                )}
+                              </div>
+                              <span className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs ${getTaskStatusStyle(task.status).bg} ${getTaskStatusStyle(task.status).text}`}>
+                                {task.status.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <button 
+                      onClick={() => closeChangeMutation.mutate()}
+                      disabled={!closureReadiness.ready_to_close || closeChangeMutation.isPending}
+                      className={`w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed ${
+                        closureReadiness.ready_to_close 
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50' 
+                          : 'bg-slate-600 text-slate-400 opacity-50'
+                      }`}
+                    >
+                      {closeChangeMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle size={16} />
+                      )}
+                      Close Regulatory Change
+                    </button>
+                  </div>
+                )}
+
+                {change.status === 'completed' && (
+                  <div className="rounded-lg bg-emerald-900/20 border border-emerald-700/50 p-4 text-center">
+                    <CheckCircle className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
+                    <p className="text-sm text-emerald-400 font-medium">This change has been closed</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

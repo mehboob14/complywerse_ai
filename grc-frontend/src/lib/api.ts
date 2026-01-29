@@ -246,6 +246,17 @@ export const governanceApi = {
     apiClient.get('/governance/dashboard/compliance-coverage'),
   getTrends: (months: number = 12) =>
     apiClient.get(`/governance/dashboard/trends?months=${months}`),
+  publishDocument: (documentId: number) =>
+    apiClient.post(`/governance/documents/${documentId}/publish`),
+  requestAttestation: (documentId: number, data: { user_ids: number[]; attestation_type?: string; due_date?: string }) =>
+    apiClient.post('/governance/attestations/request', {
+      document_id: documentId,
+      user_ids: data.user_ids,
+      attestation_type: data.attestation_type || 'acknowledgment',
+      due_date: data.due_date,
+    }),
+  getTenantUsers: (tenantId: number) =>
+    apiClient.get(`/tenants/${tenantId}/users`),
 };
 
 export const documentsApi = {
@@ -847,6 +858,8 @@ export const regulatoryApi = {
   deleteTask: (taskId: number) => apiClient.delete(`/governance/regulatory-changes/tasks/${taskId}`),
   getDashboard: () => apiClient.get('/governance/regulatory-changes/dashboard'),
   getGapAnalysis: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/gap-analysis`),
+  getClosureReadiness: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/closure-readiness`),
+  closeChange: (changeId: number) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/close`),
 };
 
 export const rcsaApi = {
@@ -922,6 +935,8 @@ export const attestationApi = {
   getMyAttestations: (params?: { status?: string }) => apiClient.get('/governance/attestation-campaigns/my-attestations', { params }),
   getDashboard: () => apiClient.get('/governance/attestation-campaigns/dashboard'),
   getAttestation: (id: number) => apiClient.get(`/governance/attestation-campaigns/requests/${id}`),
+  linkToEvidence: (id: number) => apiClient.post(`/governance/attestations/${id}/link-to-evidence`),
+  bulkLinkToEvidence: (attestationIds: number[]) => apiClient.post('/governance/attestations/bulk-link-evidence', { attestation_ids: attestationIds }),
 };
 
 export const committeeApi = {
@@ -955,6 +970,10 @@ export const committeeApi = {
   getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean }) => apiClient.get('/governance/committees/actions', { params }),
   updateAction: (actionId: number, data: any) => apiClient.patch(`/governance/committees/actions/${actionId}`, data),
   getDashboard: () => apiClient.get('/governance/committees/dashboard'),
+  getSuggestedAgendaItems: (meetingId: number) => 
+    apiClient.get(`/grc/committees/meetings/${meetingId}/suggested-agenda-items`),
+  autoPopulateAgenda: (meetingId: number, data: { include_documents?: boolean; include_exceptions?: boolean; include_regulatory_changes?: boolean }) => 
+    apiClient.post(`/grc/committees/meetings/${meetingId}/auto-populate-agenda`, data),
 };
 
 export default apiClient;

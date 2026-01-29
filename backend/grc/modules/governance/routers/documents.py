@@ -760,6 +760,56 @@ def bulk_archive(
     }
 
 
+@router.post("/{document_id}/publish")
+def publish_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Publish an approved document"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    if document.status != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only approved documents can be published. Current status: {document.status}"
+        )
+    
+    old_status = document.status
+    document.status = "published"
+    document.published_by = current_user.id
+    document.published_at = datetime.utcnow()
+    document.updated_at = datetime.utcnow()
+    
+    create_audit_log(
+        db=db,
+        document_id=document_id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="published",
+        action_details=f"Document published by {current_user.display_name}",
+        field_changed="status",
+        old_value=old_status,
+        new_value="published"
+    )
+    
+    db.commit()
+    db.refresh(document)
+    
+    return serialize_document(document, db)
+
+
 @router.get("/{document_id}/audit-logs")
 def get_document_audit_logs(
     document_id: int,

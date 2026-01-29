@@ -1,7 +1,9 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { attestationApi } from '@/lib/api';
+import { useToast } from '@/components/ui/ToastProvider';
 import {
   ClipboardCheck,
   Clock,
@@ -12,10 +14,12 @@ import {
   Eye,
   ArrowRight,
   Calendar,
-  Users,
   FileCheck,
   Play,
   AlertCircle,
+  Link2,
+  Filter,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -35,6 +39,7 @@ interface MyAttestation {
   status: 'pending' | 'completed' | 'overdue';
   due_date: string;
   attestation_text: string;
+  linked_to_evidence?: boolean;
 }
 
 interface Campaign {
@@ -60,6 +65,11 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.Elem
 };
 
 export default function AttestationsPage() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedAttestations, setSelectedAttestations] = useState<number[]>([]);
+  const [showUnlinkedOnly, setShowUnlinkedOnly] = useState(false);
+
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
     queryKey: ['attestation-dashboard'],
     queryFn: async () => {
@@ -86,9 +96,10 @@ export default function AttestationsPage() {
         return response.data as MyAttestation[];
       } catch {
         return [
-          { id: 1, campaign_id: 1, campaign_name: 'Q4 2025 Policy Attestation', attestation_type: 'policy_acknowledgment', status: 'pending', due_date: '2025-01-31', attestation_text: 'I have read and understand the Information Security Policy and agree to abide by its requirements.' },
-          { id: 2, campaign_id: 2, campaign_name: 'Annual Code of Conduct', attestation_type: 'compliance_certification', status: 'overdue', due_date: '2025-01-15', attestation_text: 'I certify that I have completed the annual Code of Conduct training and will adhere to its principles.' },
-          { id: 3, campaign_id: 3, campaign_name: 'Data Protection Certification', attestation_type: 'compliance_certification', status: 'completed', due_date: '2025-01-10', attestation_text: 'I certify that I understand and comply with data protection requirements.' },
+          { id: 1, campaign_id: 1, campaign_name: 'Q4 2025 Policy Attestation', attestation_type: 'policy_acknowledgment', status: 'pending', due_date: '2025-01-31', attestation_text: 'I have read and understand the Information Security Policy and agree to abide by its requirements.', linked_to_evidence: false },
+          { id: 2, campaign_id: 2, campaign_name: 'Annual Code of Conduct', attestation_type: 'compliance_certification', status: 'overdue', due_date: '2025-01-15', attestation_text: 'I certify that I have completed the annual Code of Conduct training and will adhere to its principles.', linked_to_evidence: false },
+          { id: 3, campaign_id: 3, campaign_name: 'Data Protection Certification', attestation_type: 'compliance_certification', status: 'completed', due_date: '2025-01-10', attestation_text: 'I certify that I understand and comply with data protection requirements.', linked_to_evidence: false },
+          { id: 4, campaign_id: 4, campaign_name: 'Security Awareness Training', attestation_type: 'policy_acknowledgment', status: 'completed', due_date: '2025-01-05', attestation_text: 'I acknowledge completion of security awareness training.', linked_to_evidence: true },
         ] as MyAttestation[];
       }
     },
@@ -107,6 +118,46 @@ export default function AttestationsPage() {
           { id: 3, name: 'Q3 2025 SOX Attestation', description: 'SOX compliance attestation', status: 'closed', attestation_type: 'sarbanes_oxley', start_date: '2024-10-01', end_date: '2024-10-31', total_requests: 50, completed_requests: 50, progress: 100 },
         ] as Campaign[];
       }
+    },
+  });
+
+  const linkToEvidenceMutation = useMutation({
+    mutationFn: (id: number) => attestationApi.linkToEvidence(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-attestations'] });
+      toast({
+        title: 'Evidence Linked',
+        message: 'Attestation successfully linked to evidence repository',
+        type: 'success',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Link Failed',
+        message: 'Failed to link attestation to evidence',
+        type: 'error',
+      });
+    },
+  });
+
+  const bulkLinkToEvidenceMutation = useMutation({
+    mutationFn: (ids: number[]) => attestationApi.bulkLinkToEvidence(ids),
+    onSuccess: (response) => {
+      const data = response.data as { created_count: number; skipped_count: number };
+      queryClient.invalidateQueries({ queryKey: ['my-attestations'] });
+      setSelectedAttestations([]);
+      toast({
+        title: 'Evidence Linked',
+        message: `Successfully linked ${data.created_count} attestation(s) to evidence${data.skipped_count > 0 ? ` (${data.skipped_count} skipped)` : ''}`,
+        type: 'success',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Bulk Link Failed',
+        message: 'Failed to link attestations to evidence',
+        type: 'error',
+      });
     },
   });
 
@@ -133,6 +184,47 @@ export default function AttestationsPage() {
   }
 
   const pendingAttestations = (myAttestations || []).filter(a => a.status === 'pending' || a.status === 'overdue');
+  const completedAttestations = (myAttestations || []).filter(a => a.status === 'completed');
+  
+  const filteredCompletedAttestations = showUnlinkedOnly 
+    ? completedAttestations.filter(a => !a.linked_to_evidence)
+    : completedAttestations;
+
+  const selectedCompletedIds = selectedAttestations.filter(id => 
+    completedAttestations.some(a => a.id === id && !a.linked_to_evidence)
+  );
+
+  const handleSelectAttestation = (id: number) => {
+    setSelectedAttestations(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllCompleted = () => {
+    const unlinkedCompletedIds = filteredCompletedAttestations
+      .filter(a => !a.linked_to_evidence)
+      .map(a => a.id);
+    
+    if (unlinkedCompletedIds.every(id => selectedAttestations.includes(id))) {
+      setSelectedAttestations(prev => prev.filter(id => !unlinkedCompletedIds.includes(id)));
+    } else {
+      setSelectedAttestations(prev => [...new Set([...prev, ...unlinkedCompletedIds])]);
+    }
+  };
+
+  const handleBulkLinkToEvidence = () => {
+    if (selectedCompletedIds.length === 0) {
+      toast({
+        title: 'No Selection',
+        message: 'Please select completed attestations to link to evidence',
+        type: 'warning',
+      });
+      return;
+    }
+    bulkLinkToEvidenceMutation.mutate(selectedCompletedIds);
+  };
+
+  const unlinkedCompletedCount = completedAttestations.filter(a => !a.linked_to_evidence).length;
 
   return (
     <div className="space-y-8">
@@ -251,6 +343,130 @@ export default function AttestationsPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {completedAttestations.length > 0 && (
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-medium text-white flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-emerald-400" />
+              Completed Attestations
+            </h3>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowUnlinkedOnly(!showUnlinkedOnly)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                  showUnlinkedOnly 
+                    ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30' 
+                    : 'bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600'
+                }`}
+              >
+                <Filter className="h-4 w-4" />
+                Unlinked Only ({unlinkedCompletedCount})
+                {showUnlinkedOnly && <X className="h-3 w-3" />}
+              </button>
+            </div>
+          </div>
+
+          {selectedCompletedIds.length > 0 && (
+            <div className="mb-4 p-3 bg-primary-500/10 border border-primary-500/30 rounded-lg flex items-center justify-between">
+              <span className="text-sm text-primary-300">
+                {selectedCompletedIds.length} attestation(s) selected
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedAttestations([])}
+                  className="text-sm text-slate-400 hover:text-white px-3 py-1"
+                >
+                  Clear Selection
+                </button>
+                <button
+                  onClick={handleBulkLinkToEvidence}
+                  disabled={bulkLinkToEvidenceMutation.isPending}
+                  className="btn-primary text-sm py-1.5 flex items-center gap-2"
+                >
+                  <Link2 className="h-4 w-4" />
+                  {bulkLinkToEvidenceMutation.isPending ? 'Linking...' : 'Bulk Link to Evidence'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 px-4 py-2 text-sm text-slate-400 border-b border-slate-700">
+              <input
+                type="checkbox"
+                checked={
+                  filteredCompletedAttestations.filter(a => !a.linked_to_evidence).length > 0 &&
+                  filteredCompletedAttestations
+                    .filter(a => !a.linked_to_evidence)
+                    .every(a => selectedAttestations.includes(a.id))
+                }
+                onChange={handleSelectAllCompleted}
+                className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                disabled={filteredCompletedAttestations.filter(a => !a.linked_to_evidence).length === 0}
+              />
+              <span>Select All Unlinked</span>
+            </div>
+
+            {filteredCompletedAttestations.map((attestation) => {
+              const isLinked = attestation.linked_to_evidence;
+
+              return (
+                <div key={attestation.id} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-slate-600 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedAttestations.includes(attestation.id)}
+                      onChange={() => handleSelectAttestation(attestation.id)}
+                      disabled={isLinked}
+                      className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500 disabled:opacity-50"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h4 className="text-white font-medium">{attestation.campaign_name}</h4>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 inline-flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3" />
+                          completed
+                        </span>
+                        {isLinked && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 inline-flex items-center gap-1">
+                            <Link2 className="h-3 w-3" />
+                            linked to evidence
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-400 text-sm line-clamp-1">{attestation.attestation_text}</p>
+                      <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
+                        <span className="capitalize">{attestation.attestation_type.replace('_', ' ')}</span>
+                        <span>Completed: {new Date(attestation.due_date).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    {!isLinked && (
+                      <button
+                        onClick={() => linkToEvidenceMutation.mutate(attestation.id)}
+                        disabled={linkToEvidenceMutation.isPending}
+                        className="btn-secondary text-sm py-1.5 flex items-center gap-2"
+                      >
+                        <Link2 className="h-4 w-4" />
+                        Link to Evidence
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {filteredCompletedAttestations.length === 0 && (
+              <div className="text-center py-8 text-slate-400">
+                {showUnlinkedOnly 
+                  ? 'All completed attestations have been linked to evidence'
+                  : 'No completed attestations found'
+                }
+              </div>
+            )}
           </div>
         </div>
       )}

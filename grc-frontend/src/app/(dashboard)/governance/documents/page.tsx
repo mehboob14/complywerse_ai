@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
+import { useToast } from '@/components/ui/ToastProvider';
 import { 
   FileText, 
   Loader2, 
@@ -30,7 +31,23 @@ import {
   Wand2,
   CheckCircle,
   ExternalLink,
+  Send,
+  Globe,
+  Users,
 } from 'lucide-react';
+
+interface TenantUser {
+  id: number;
+  user_id: number;
+  tenant_id: number;
+  role: string;
+  is_active: boolean;
+  user?: {
+    id: number;
+    email: string;
+    display_name: string;
+  };
+}
 
 interface DocumentItem {
   id: number;
@@ -168,7 +185,9 @@ export default function GovernanceDocumentsPage() {
   const [viewingDocument, setViewingDocument] = useState<DocumentItem | null>(null);
   const [parsingDocumentId, setParsingDocumentId] = useState<number | null>(null);
   const [parseResult, setParseResult] = useState<{ documentId: number; count: number } | null>(null);
+  const [attestationTargetDocument, setAttestationTargetDocument] = useState<DocumentItem | null>(null);
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['governance-documents', typeFilter, statusFilter, searchTerm, sortField, sortOrder, page, pageSize],
@@ -270,6 +289,46 @@ export default function GovernanceDocumentsPage() {
     },
     onError: () => {
       setParsingDocumentId(null);
+    },
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: (documentId: number) => governanceApi.publishDocument(documentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      toast({
+        type: 'success',
+        title: 'Document Published',
+        message: 'The document has been successfully published.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        type: 'error',
+        title: 'Publish Failed',
+        message: error?.response?.data?.detail || 'Failed to publish document.',
+      });
+    },
+  });
+
+  const requestAttestationMutation = useMutation({
+    mutationFn: ({ documentId, userIds, dueDate }: { documentId: number; userIds: number[]; dueDate?: string }) => 
+      governanceApi.requestAttestation(documentId, { user_ids: userIds, due_date: dueDate }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      setAttestationTargetDocument(null);
+      toast({
+        type: 'success',
+        title: 'Attestation Requested',
+        message: 'Attestation requests have been sent to the selected users.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        type: 'error',
+        title: 'Request Failed',
+        message: error?.response?.data?.detail || 'Failed to request attestation.',
+      });
     },
   });
 
@@ -608,6 +667,29 @@ export default function GovernanceDocumentsPage() {
                                 <Upload className="h-4 w-4" />
                               </button>
                             )}
+                            {doc.status === 'approved' && (
+                              <button
+                                onClick={() => publishMutation.mutate(doc.id)}
+                                className="rounded p-1.5 text-slate-400 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors"
+                                title="Publish Document"
+                                disabled={publishMutation.isPending}
+                              >
+                                {publishMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Globe className="h-4 w-4" />
+                                )}
+                              </button>
+                            )}
+                            {doc.status === 'published' && (
+                              <button
+                                onClick={() => setAttestationTargetDocument(doc)}
+                                className="rounded p-1.5 text-slate-400 hover:bg-cyan-500/20 hover:text-cyan-400 transition-colors"
+                                title="Request Attestation"
+                              >
+                                <Send className="h-4 w-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => handleDelete(doc)}
                               className="rounded p-1.5 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-colors"
@@ -694,6 +776,21 @@ export default function GovernanceDocumentsPage() {
             setViewingDocument(null);
           }}
           onDownload={() => handleDownload(viewingDocument)}
+        />
+      )}
+
+      {attestationTargetDocument && (
+        <RequestAttestationModal
+          document={attestationTargetDocument}
+          onClose={() => setAttestationTargetDocument(null)}
+          onSubmit={(userIds, dueDate) => {
+            requestAttestationMutation.mutate({
+              documentId: attestationTargetDocument.id,
+              userIds,
+              dueDate,
+            });
+          }}
+          isLoading={requestAttestationMutation.isPending}
         />
       )}
     </div>
@@ -1441,6 +1538,186 @@ function ViewDocumentModal({ document, onClose, onEdit, onDownload }: ViewDocume
               Edit Document
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface RequestAttestationModalProps {
+  document: DocumentItem;
+  onClose: () => void;
+  onSubmit: (userIds: number[], dueDate?: string) => void;
+  isLoading: boolean;
+}
+
+function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: RequestAttestationModalProps) {
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [dueDate, setDueDate] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const { data: usersData, isLoading: usersLoading } = useQuery({
+    queryKey: ['tenant-users', document.tenant_id],
+    queryFn: async () => {
+      const response = await governanceApi.getTenantUsers(document.tenant_id);
+      return response.data as TenantUser[];
+    },
+  });
+
+  const users = usersData || [];
+  
+  const filteredUsers = useMemo(() => {
+    if (!searchTerm) return users;
+    const term = searchTerm.toLowerCase();
+    return users.filter(u => 
+      u.user?.display_name?.toLowerCase().includes(term) ||
+      u.user?.email?.toLowerCase().includes(term)
+    );
+  }, [users, searchTerm]);
+
+  const handleToggleUser = (userId: number) => {
+    setSelectedUserIds(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedUserIds.length === filteredUsers.length) {
+      setSelectedUserIds([]);
+    } else {
+      setSelectedUserIds(filteredUsers.map(u => u.user_id));
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedUserIds.length === 0) return;
+    onSubmit(selectedUserIds, dueDate || undefined);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Request Attestation</h2>
+            <p className="text-sm text-slate-400 mt-0.5">{document.title}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[calc(90vh-180px)]">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Due Date (Optional)
+            </label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-slate-100 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              min={new Date().toISOString().split('T')[0]}
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-slate-300">
+                Select Users ({selectedUserIds.length} selected)
+              </label>
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="text-xs text-primary-400 hover:text-primary-300"
+              >
+                {selectedUserIds.length === filteredUsers.length ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
+            
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 pl-10 pr-3 py-2 text-sm text-slate-100 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
+            </div>
+
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-600 bg-slate-900/50">
+              {usersLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                  <Users className="h-8 w-8 mb-2" />
+                  <p className="text-sm">No users found</p>
+                </div>
+              ) : (
+                filteredUsers.map(tenantUser => (
+                  <label
+                    key={tenantUser.user_id}
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-slate-800 cursor-pointer border-b border-slate-700 last:border-b-0"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIds.includes(tenantUser.user_id)}
+                      onChange={() => handleToggleUser(tenantUser.user_id)}
+                      className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-primary-600 focus:ring-primary-500 focus:ring-offset-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-200 truncate">
+                        {tenantUser.user?.display_name || 'Unknown User'}
+                      </p>
+                      <p className="text-xs text-slate-400 truncate">
+                        {tenantUser.user?.email || 'No email'}
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500 capitalize">
+                      {tenantUser.role}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+        </form>
+
+        <div className="flex justify-end gap-3 border-t border-slate-700 px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors"
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isLoading || selectedUserIds.length === 0}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Send Requests ({selectedUserIds.length})
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

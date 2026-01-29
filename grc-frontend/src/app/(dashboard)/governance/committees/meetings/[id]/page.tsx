@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { committeeApi, governanceApi } from '@/lib/api';
+import { useToast } from '@/components/ui/ToastProvider';
 import {
   Calendar,
   Clock,
@@ -14,11 +15,15 @@ import {
   Plus,
   X,
   ArrowLeft,
-  Edit,
   Save,
   ListOrdered,
   Sparkles,
   AlertCircle,
+  FileCheck,
+  Shield,
+  Scale,
+  Lightbulb,
+  Link as LinkIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -48,6 +53,26 @@ interface AgendaItem {
   duration_minutes?: number;
   item_type: string;
   status: 'pending' | 'discussed' | 'deferred';
+  source_type?: 'document' | 'exception' | 'regulatory_change' | 'manual';
+  linked_document_id?: number;
+  linked_document_title?: string;
+  linked_risk_id?: number;
+  linked_risk_title?: string;
+  linked_exception_id?: number;
+  linked_exception_title?: string;
+  linked_regulatory_change_id?: number;
+  linked_regulatory_change_title?: string;
+}
+
+interface SuggestedAgendaItem {
+  id: number;
+  title: string;
+  description?: string;
+  type: 'document' | 'exception' | 'regulatory_change';
+  source_id: number;
+  source_title: string;
+  priority?: string;
+  due_date?: string;
 }
 
 interface Minutes {
@@ -89,6 +114,13 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
 };
 
+const SOURCE_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; text: string }> = {
+  document: { label: 'Document', icon: FileCheck, bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  exception: { label: 'Exception', icon: Shield, bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  regulatory_change: { label: 'Regulatory Change', icon: Scale, bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  manual: { label: 'Manual', icon: FileText, bg: 'bg-slate-500/20', text: 'text-slate-400' },
+};
+
 const ACTION_TYPES = [
   { value: 'follow_up', label: 'Follow Up' },
   { value: 'policy_approval', label: 'Policy Approval' },
@@ -99,10 +131,17 @@ const ACTION_TYPES = [
 export default function MeetingDetailPage() {
   const params = useParams();
   const meetingId = parseInt(params.id as string);
+  const { toast } = useToast();
   const [isAddAgendaModalOpen, setIsAddAgendaModalOpen] = useState(false);
   const [isAddActionModalOpen, setIsAddActionModalOpen] = useState(false);
+  const [isAutoPopulateModalOpen, setIsAutoPopulateModalOpen] = useState(false);
   const [isEditMinutesOpen, setIsEditMinutesOpen] = useState(false);
   const [minutesContent, setMinutesContent] = useState('');
+  const [autoPopulateOptions, setAutoPopulateOptions] = useState({
+    include_documents: true,
+    include_exceptions: true,
+    include_regulatory_changes: true,
+  });
   const [newAgendaItem, setNewAgendaItem] = useState({
     title: '',
     description: '',
@@ -153,13 +192,29 @@ export default function MeetingDetailPage() {
         return response.data as AgendaItem[];
       } catch {
         return [
-          { id: 1, meeting_id: meetingId, sequence: 1, title: 'Call to Order', description: 'Chair opens the meeting', presenter: 'Chair', duration_minutes: 5, item_type: 'procedural', status: 'pending' },
-          { id: 2, meeting_id: meetingId, sequence: 2, title: 'Approval of Previous Minutes', description: 'Review and approve minutes from last meeting', presenter: 'Secretary', duration_minutes: 10, item_type: 'approval', status: 'pending' },
-          { id: 3, meeting_id: meetingId, sequence: 3, title: 'Enterprise Risk Register Review', description: 'Review top 10 risks and mitigation progress', presenter: 'CRO', duration_minutes: 30, item_type: 'discussion', status: 'pending' },
-          { id: 4, meeting_id: meetingId, sequence: 4, title: 'Cyber Risk Update', description: 'Update on cybersecurity posture', presenter: 'CISO', duration_minutes: 20, item_type: 'discussion', status: 'pending' },
-          { id: 5, meeting_id: meetingId, sequence: 5, title: 'New Business', description: 'Any new items for discussion', presenter: 'All', duration_minutes: 15, item_type: 'discussion', status: 'pending' },
-          { id: 6, meeting_id: meetingId, sequence: 6, title: 'Adjournment', description: 'Close of meeting', presenter: 'Chair', duration_minutes: 5, item_type: 'procedural', status: 'pending' },
+          { id: 1, meeting_id: meetingId, sequence: 1, title: 'Call to Order', description: 'Chair opens the meeting', presenter: 'Chair', duration_minutes: 5, item_type: 'procedural', status: 'pending', source_type: 'manual' },
+          { id: 2, meeting_id: meetingId, sequence: 2, title: 'Approval of Previous Minutes', description: 'Review and approve minutes from last meeting', presenter: 'Secretary', duration_minutes: 10, item_type: 'approval', status: 'pending', source_type: 'manual' },
+          { id: 3, meeting_id: meetingId, sequence: 3, title: 'Enterprise Risk Register Review', description: 'Review top 10 risks and mitigation progress', presenter: 'CRO', duration_minutes: 30, item_type: 'discussion', status: 'pending', source_type: 'manual' },
+          { id: 4, meeting_id: meetingId, sequence: 4, title: 'Cyber Risk Update', description: 'Update on cybersecurity posture', presenter: 'CISO', duration_minutes: 20, item_type: 'discussion', status: 'pending', source_type: 'manual' },
+          { id: 5, meeting_id: meetingId, sequence: 5, title: 'New Business', description: 'Any new items for discussion', presenter: 'All', duration_minutes: 15, item_type: 'discussion', status: 'pending', source_type: 'manual' },
+          { id: 6, meeting_id: meetingId, sequence: 6, title: 'Adjournment', description: 'Close of meeting', presenter: 'Chair', duration_minutes: 5, item_type: 'procedural', status: 'pending', source_type: 'manual' },
         ] as AgendaItem[];
+      }
+    },
+  });
+
+  const { data: suggestedItems, isLoading: suggestedLoading } = useQuery({
+    queryKey: ['suggested-agenda-items', meetingId],
+    queryFn: async () => {
+      try {
+        const response = await committeeApi.getSuggestedAgendaItems(meetingId);
+        return response.data as SuggestedAgendaItem[];
+      } catch {
+        return [
+          { id: 1, title: 'Information Security Policy Review', description: 'Annual review due', type: 'document', source_id: 1, source_title: 'Information Security Policy', priority: 'high', due_date: '2025-02-28' },
+          { id: 2, title: 'Critical Vulnerability Exception', description: 'Exception request for CVE-2024-1234', type: 'exception', source_id: 5, source_title: 'Patching Exception Request', priority: 'critical' },
+          { id: 3, title: 'GDPR Amendment Impact', description: 'New data residency requirements', type: 'regulatory_change', source_id: 3, source_title: 'EU GDPR Amendment 2025', priority: 'medium' },
+        ] as SuggestedAgendaItem[];
       }
     },
   });
@@ -198,6 +253,7 @@ export default function MeetingDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
       setIsAddAgendaModalOpen(false);
       setNewAgendaItem({ title: '', description: '', presenter: '', duration_minutes: 15, item_type: 'discussion' });
+      toast({ title: 'Agenda item added', type: 'success' });
     },
   });
 
@@ -207,6 +263,7 @@ export default function MeetingDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['meeting-actions', meetingId] });
       setIsAddActionModalOpen(false);
       setNewAction({ title: '', description: '', action_type: 'follow_up', due_date: '', assigned_to_id: '' });
+      toast({ title: 'Action created', type: 'success' });
     },
   });
 
@@ -215,26 +272,50 @@ export default function MeetingDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meeting-minutes', meetingId] });
       setIsEditMinutesOpen(false);
+      toast({ title: 'Minutes saved', type: 'success' });
     },
   });
 
   const autoPopulateMutation = useMutation({
-    mutationFn: async () => {
-      const pendingApprovals = await governanceApi.getPendingApprovals();
-      const approvals = pendingApprovals.data as any[];
-      for (const approval of approvals.slice(0, 5)) {
-        await committeeApi.addAgendaItem(meetingId, {
-          title: `Review: ${approval.document_title || approval.title}`,
-          description: `Pending approval from governance workflow`,
-          item_type: 'approval',
-          duration_minutes: 10,
-        });
-      }
+    mutationFn: async (options: { include_documents: boolean; include_exceptions: boolean; include_regulatory_changes: boolean }) => {
+      const response = await committeeApi.autoPopulateAgenda(meetingId, options);
+      return response.data as { items_added: number; items: any[] };
     },
-    onSuccess: () => {
-      refetchAgenda();
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
+      queryClient.invalidateQueries({ queryKey: ['suggested-agenda-items', meetingId] });
+      setIsAutoPopulateModalOpen(false);
+      toast({
+        title: 'Agenda Populated',
+        message: `${data.items_added || 0} item${(data.items_added || 0) !== 1 ? 's' : ''} added to the agenda`,
+        type: 'success',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        message: 'Failed to auto-populate agenda',
+        type: 'error',
+      });
     },
   });
+
+  const getLinkedItemInfo = (item: AgendaItem) => {
+    const links = [];
+    if (item.linked_document_title) {
+      links.push({ type: 'Document', title: item.linked_document_title, icon: FileCheck });
+    }
+    if (item.linked_risk_title) {
+      links.push({ type: 'Risk', title: item.linked_risk_title, icon: AlertCircle });
+    }
+    if (item.linked_exception_title) {
+      links.push({ type: 'Exception', title: item.linked_exception_title, icon: Shield });
+    }
+    if (item.linked_regulatory_change_title) {
+      links.push({ type: 'Regulatory Change', title: item.linked_regulatory_change_title, icon: Scale });
+    }
+    return links;
+  };
 
   if (meetingLoading) {
     return (
@@ -304,52 +385,128 @@ export default function MeetingDetailPage() {
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-medium text-white flex items-center gap-2">
-                <ListOrdered className="h-5 w-5 text-primary-400" />
-                Agenda
+                <Lightbulb className="h-5 w-5 text-amber-400" />
+                Suggested Agenda Items
               </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => autoPopulateMutation.mutate()}
-                  disabled={autoPopulateMutation.isPending}
-                  className="btn-secondary flex items-center gap-2 text-sm"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {autoPopulateMutation.isPending ? 'Loading...' : 'Auto-Populate from Approvals'}
-                </button>
-                <button
-                  onClick={() => setIsAddAgendaModalOpen(true)}
-                  className="btn-primary flex items-center gap-2 text-sm"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Item
-                </button>
-              </div>
+              <button
+                onClick={() => setIsAutoPopulateModalOpen(true)}
+                className="btn-primary flex items-center gap-2 text-sm"
+              >
+                <Sparkles className="h-4 w-4" />
+                Auto-Populate Agenda
+              </button>
             </div>
 
-            <div className="space-y-3">
-              {(agenda || []).sort((a, b) => a.sequence - b.sequence).map((item) => (
-                <div key={item.id} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-500/20 text-primary-400 text-sm font-medium">
-                        {item.sequence}
-                      </div>
-                      <div>
-                        <h4 className="text-white font-medium">{item.title}</h4>
-                        {item.description && <p className="text-slate-400 text-sm mt-1">{item.description}</p>}
-                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                          {item.presenter && <span>Presenter: {item.presenter}</span>}
-                          {item.duration_minutes && <span>{item.duration_minutes} min</span>}
-                          <span className="capitalize">{item.item_type}</span>
+            {suggestedLoading ? (
+              <div className="space-y-3">
+                <div className="skeleton h-16 w-full" />
+                <div className="skeleton h-16 w-full" />
+              </div>
+            ) : (suggestedItems || []).length > 0 ? (
+              <div className="space-y-3">
+                {(suggestedItems || []).map((item) => {
+                  const typeConfig = SOURCE_TYPE_CONFIG[item.type] || SOURCE_TYPE_CONFIG.manual;
+                  const TypeIcon = typeConfig.icon;
+                  return (
+                    <div key={`${item.type}-${item.id}`} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-slate-600 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${typeConfig.bg}`}>
+                            <TypeIcon className={`h-4 w-4 ${typeConfig.text}`} />
+                          </div>
+                          <div>
+                            <h4 className="text-white font-medium">{item.title}</h4>
+                            {item.description && <p className="text-slate-400 text-sm mt-1">{item.description}</p>}
+                            <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
+                              <span className={`px-2 py-0.5 rounded-full ${typeConfig.bg} ${typeConfig.text}`}>
+                                {typeConfig.label}
+                              </span>
+                              <span>Source: {item.source_title}</span>
+                              {item.priority && (
+                                <span className={`capitalize ${item.priority === 'critical' ? 'text-rose-400' : item.priority === 'high' ? 'text-amber-400' : 'text-slate-400'}`}>
+                                  {item.priority} priority
+                                </span>
+                              )}
+                              {item.due_date && <span>Due: {new Date(item.due_date).toLocaleDateString()}</span>}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status]?.bg} ${STATUS_COLORS[item.status]?.text}`}>
-                      {item.status}
-                    </span>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Lightbulb className="h-10 w-10 text-slate-500 mx-auto mb-3" />
+                <p className="text-slate-400">No suggested items at this time</p>
+                <p className="text-slate-500 text-sm mt-1">Items will appear when there are pending documents, exceptions, or regulatory changes</p>
+              </div>
+            )}
+          </div>
+
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                <ListOrdered className="h-5 w-5 text-primary-400" />
+                Agenda
+              </h3>
+              <button
+                onClick={() => setIsAddAgendaModalOpen(true)}
+                className="btn-primary flex items-center gap-2 text-sm"
+              >
+                <Plus className="h-4 w-4" />
+                Add Item
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {(agenda || []).sort((a, b) => a.sequence - b.sequence).map((item) => {
+                const sourceConfig = SOURCE_TYPE_CONFIG[item.source_type || 'manual'] || SOURCE_TYPE_CONFIG.manual;
+                const linkedItems = getLinkedItemInfo(item);
+                return (
+                  <div key={item.id} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-500/20 text-primary-400 text-sm font-medium">
+                          {item.sequence}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-white font-medium">{item.title}</h4>
+                          {item.description && <p className="text-slate-400 text-sm mt-1">{item.description}</p>}
+                          <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-slate-500">
+                            {item.presenter && <span>Presenter: {item.presenter}</span>}
+                            {item.duration_minutes && <span>{item.duration_minutes} min</span>}
+                            <span className="capitalize">{item.item_type}</span>
+                            {item.source_type && item.source_type !== 'manual' && (
+                              <span className={`px-2 py-0.5 rounded-full ${sourceConfig.bg} ${sourceConfig.text}`}>
+                                {sourceConfig.label}
+                              </span>
+                            )}
+                          </div>
+                          {linkedItems.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-700">
+                              <LinkIcon className="h-3 w-3 text-slate-500" />
+                              {linkedItems.map((link, idx) => {
+                                const Icon = link.icon;
+                                return (
+                                  <span key={idx} className="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-700/50 px-2 py-1 rounded">
+                                    <Icon className="h-3 w-3" />
+                                    <span className="text-slate-500">{link.type}:</span> {link.title}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status]?.bg} ${STATUS_COLORS[item.status]?.text}`}>
+                        {item.status}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {(agenda || []).length === 0 && (
                 <div className="text-center py-8">
@@ -458,6 +615,84 @@ export default function MeetingDetailPage() {
           </div>
         </div>
       </div>
+
+      {isAutoPopulateModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-700">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-400" />
+                Auto-Populate Agenda
+              </h2>
+              <button onClick={() => setIsAutoPopulateModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="text-slate-400 mb-6">
+              Select which types of items to include in the agenda. The system will automatically add relevant pending items.
+            </p>
+
+            <div className="space-y-4 mb-6">
+              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600 cursor-pointer hover:bg-slate-700/80 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={autoPopulateOptions.include_documents}
+                  onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_documents: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                />
+                <FileCheck className="h-5 w-5 text-blue-400" />
+                <div>
+                  <span className="text-white font-medium">Documents</span>
+                  <p className="text-sm text-slate-400">Pending document approvals and reviews</p>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600 cursor-pointer hover:bg-slate-700/80 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={autoPopulateOptions.include_exceptions}
+                  onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_exceptions: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                />
+                <Shield className="h-5 w-5 text-amber-400" />
+                <div>
+                  <span className="text-white font-medium">Exceptions</span>
+                  <p className="text-sm text-slate-400">Risk and control exceptions requiring approval</p>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600 cursor-pointer hover:bg-slate-700/80 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={autoPopulateOptions.include_regulatory_changes}
+                  onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_regulatory_changes: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                />
+                <Scale className="h-5 w-5 text-purple-400" />
+                <div>
+                  <span className="text-white font-medium">Regulatory Changes</span>
+                  <p className="text-sm text-slate-400">Pending regulatory updates and impact assessments</p>
+                </div>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setIsAutoPopulateModalOpen(false)} className="btn-secondary">
+                Cancel
+              </button>
+              <button
+                onClick={() => autoPopulateMutation.mutate(autoPopulateOptions)}
+                disabled={autoPopulateMutation.isPending || (!autoPopulateOptions.include_documents && !autoPopulateOptions.include_exceptions && !autoPopulateOptions.include_regulatory_changes)}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                {autoPopulateMutation.isPending ? 'Populating...' : 'Populate Agenda'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isAddAgendaModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
