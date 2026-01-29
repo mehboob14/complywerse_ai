@@ -15,14 +15,30 @@ export default function DemoPage() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [error, setError] = useState('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setSubmitted(true);
-    setLoading(false);
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData, formType: 'demo' }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to submit');
+      }
+      
+      setSubmitted(true);
+    } catch {
+      setError('Something went wrong. Please try again or email us directly.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail, Phone, MapPin, MessageSquare } from 'lucide-react';
+import { Mail, Phone, MapPin, MessageSquare, CheckCircle, AlertCircle } from 'lucide-react';
 
 const contactInfo = [
   { icon: Mail, label: 'Email', value: 'hello@complyverse.io' },
@@ -16,9 +16,32 @@ export default function ContactPage() {
     company: '',
     message: '',
   });
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData, formType: 'contact' }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit');
+      }
+
+      setSubmitted(true);
+    } catch {
+      setError('Something went wrong. Please try again or email us directly.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -38,79 +61,101 @@ export default function ContactPage() {
         <div className="grid lg:grid-cols-3 gap-12">
           <div className="lg:col-span-2">
             <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Request a Demo</h2>
-              <p className="text-slate-400 mb-8">
-                Fill out the form below and our team will get back to you within 24 hours.
-              </p>
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-2">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      id="name"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
-                      placeholder="John Doe"
-                    />
+              {submitted ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="h-8 w-8 text-white" />
                   </div>
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                      Work Email *
-                    </label>
-                    <input
-                      type="email"
-                      id="email"
-                      required
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
-                      placeholder="john@company.com"
-                    />
-                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-2">Message Sent!</h2>
+                  <p className="text-slate-400 max-w-md mx-auto">
+                    Thank you for reaching out. We've received your message and will get back to you within 24 hours.
+                  </p>
                 </div>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-bold text-white mb-2">Request a Demo</h2>
+                  <p className="text-slate-400 mb-8">
+                    Fill out the form below and our team will get back to you within 24 hours.
+                  </p>
 
-                <div>
-                  <label htmlFor="company" className="block text-sm font-medium text-slate-300 mb-2">
-                    Company Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="company"
-                    required
-                    value={formData.company}
-                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
-                    placeholder="Acme Inc"
-                  />
-                </div>
+                  {error && (
+                    <div className="mb-6 p-4 bg-red-900/30 border border-red-500/30 rounded-lg flex items-center gap-3 text-red-400">
+                      <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                      <span>{error}</span>
+                    </div>
+                  )}
 
-                <div>
-                  <label htmlFor="message" className="block text-sm font-medium text-slate-300 mb-2">
-                    Message
-                  </label>
-                  <textarea
-                    id="message"
-                    rows={5}
-                    value={formData.message}
-                    onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
-                    placeholder="Tell us about your compliance needs and how we can help..."
-                  />
-                </div>
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div>
+                        <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-2">
+                          Full Name *
+                        </label>
+                        <input
+                          type="text"
+                          id="name"
+                          required
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
+                          placeholder="John Doe"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
+                          Work Email *
+                        </label>
+                        <input
+                          type="email"
+                          id="email"
+                          required
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
+                          placeholder="john@company.com"
+                        />
+                      </div>
+                    </div>
 
-                <button
-                  type="submit"
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-lg font-medium transition-colors"
-                >
-                  Send Message
-                </button>
-              </form>
+                    <div>
+                      <label htmlFor="company" className="block text-sm font-medium text-slate-300 mb-2">
+                        Company Name *
+                      </label>
+                      <input
+                        type="text"
+                        id="company"
+                        required
+                        value={formData.company}
+                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
+                        placeholder="Acme Inc"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="message" className="block text-sm font-medium text-slate-300 mb-2">
+                        Message
+                      </label>
+                      <textarea
+                        id="message"
+                        rows={5}
+                        value={formData.message}
+                        onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                        placeholder="Tell us about your compliance needs and how we can help..."
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 text-white py-3 rounded-lg font-medium transition-colors"
+                    >
+                      {loading ? 'Sending...' : 'Send Message'}
+                    </button>
+                  </form>
+                </>
+              )}
             </div>
           </div>
 
