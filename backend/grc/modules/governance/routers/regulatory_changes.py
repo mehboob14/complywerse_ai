@@ -14,7 +14,7 @@ except Exception:
 
 from ....models import (
     RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask,
-    GovernanceDocument, NormalizedControl, GRCUser, Tenant, get_db
+    GovernanceDocument, NormalizedControl, GRCUser, Tenant, AuditLog, UserRole, Role, get_db
 )
 from ....schemas import (
     RegulatoryChangeCreate, RegulatoryChangeUpdate, RegulatoryChangeResponse,
@@ -37,6 +37,55 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this tenant's data"
         )
+
+
+def check_user_has_admin_access(user: GRCUser, tenant_id: int, db: Session) -> bool:
+    """Check if user has admin-level access for the given tenant."""
+    admin_role_names = ["admin", "grc_admin", "administrator", "super_admin", "tenant_admin"]
+    user_roles = db.query(UserRole).join(Role).filter(
+        UserRole.user_id == user.id,
+        UserRole.tenant_id == tenant_id
+    ).all()
+    for user_role in user_roles:
+        if user_role.role and user_role.role.name.lower() in admin_role_names:
+            return True
+    return False
+
+
+def can_close_regulatory_change(user: GRCUser, change: RegulatoryChange, db: Session) -> bool:
+    """Check if user has permission to close the regulatory change."""
+    if change.created_by == user.id:
+        return True
+    if change.assigned_to == user.id:
+        return True
+    if check_user_has_admin_access(user, change.tenant_id, db):
+        return True
+    return False
+
+
+def create_audit_log_entry(
+    db: Session,
+    tenant_id: int,
+    user_id: int,
+    action: str,
+    resource_type: str,
+    resource_id: int,
+    changes: dict = None,
+    ip_address: str = None
+) -> AuditLog:
+    """Create an audit log entry for tracking actions."""
+    audit_log = AuditLog(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        changes=changes or {},
+        ip_address=ip_address,
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_log)
+    return audit_log
 
 
 def serialize_regulatory_change(change: RegulatoryChange) -> RegulatoryChangeResponse:
@@ -949,7 +998,7 @@ def close_regulatory_change(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Close a regulatory change after validating all implementation tasks are completed."""
+    """Close a regulatory change after validating status, permissions, and task completion."""
     user_tenants = get_user_tenants(current_user, db)
     
     change = db.query(RegulatoryChange).options(
@@ -966,10 +1015,37 @@ def close_regulatory_change(
     if not change:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
     
+    allowed_statuses_for_close = ["under_assessment", "implementation", "completed"]
+    invalid_statuses = ["closed", "identified", "not_applicable"]
+    
     if change.status == "closed":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Regulatory change is already closed"
+        )
+    
+    if change.status == "identified":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot close regulatory change from status '{change.status}'. The change must be in one of the following statuses before closing: {', '.join(allowed_statuses_for_close)}. The change needs to progress through assessment or implementation first."
+        )
+    
+    if change.status == "not_applicable":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot close regulatory change from status '{change.status}'. Changes marked as 'not_applicable' cannot be closed. To close this change, first update its status to one of: {', '.join(allowed_statuses_for_close)}."
+        )
+    
+    if change.status not in allowed_statuses_for_close:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status transition. Cannot close regulatory change from status '{change.status}'. Allowed statuses for closing are: {', '.join(allowed_statuses_for_close)}."
+        )
+    
+    if not can_close_regulatory_change(current_user, change, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to close this regulatory change. Only the creator, assignee, or an administrator can close this change."
         )
     
     incomplete_tasks = [
@@ -993,9 +1069,26 @@ def close_regulatory_change(
             }
         )
     
+    previous_status = change.status
     change.status = "closed"
     change.closed_at = datetime.utcnow()
     change.closed_by = current_user.id
+    
+    create_audit_log_entry(
+        db=db,
+        tenant_id=change.tenant_id,
+        user_id=current_user.id,
+        action="regulatory_change_closed",
+        resource_type="regulatory_change",
+        resource_id=change.id,
+        changes={
+            "previous_status": previous_status,
+            "new_status": "closed",
+            "closed_at": change.closed_at.isoformat(),
+            "closed_by": current_user.id,
+            "closed_by_name": current_user.display_name or current_user.username
+        }
+    )
     
     db.commit()
     db.refresh(change)

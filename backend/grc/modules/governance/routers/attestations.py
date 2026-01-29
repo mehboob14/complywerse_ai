@@ -462,6 +462,7 @@ async def link_attestation_to_evidence(
     """
     Link a completed attestation to the evidence repository.
     Only works for attestations with status "completed".
+    Returns existing evidence if already linked (idempotent).
     """
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
@@ -471,8 +472,7 @@ async def link_attestation_to_evidence(
         )
     
     attestation = db.query(PolicyAttestation).filter(
-        PolicyAttestation.id == attestation_id,
-        PolicyAttestation.tenant_id.in_(user_tenants)
+        PolicyAttestation.id == attestation_id
     ).first()
     
     if not attestation:
@@ -481,11 +481,37 @@ async def link_attestation_to_evidence(
             detail="Attestation not found"
         )
     
+    if attestation.tenant_id not in user_tenants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cross-tenant access denied. You do not have permission to link this attestation."
+        )
+    
     if attestation.status != "completed":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only completed attestations can be linked to evidence"
         )
+    
+    source_system_key = f"attestation:{attestation_id}"
+    existing_evidence = db.query(Evidence).filter(
+        Evidence.source_system == source_system_key
+    ).first()
+    
+    if existing_evidence:
+        return {
+            "id": existing_evidence.id,
+            "name": existing_evidence.name,
+            "description": existing_evidence.description,
+            "evidence_type": existing_evidence.evidence_type,
+            "source_system": existing_evidence.source_system,
+            "collection_date": existing_evidence.collection_date,
+            "status": existing_evidence.status,
+            "uploaded_at": existing_evidence.uploaded_at,
+            "already_linked": True,
+            "created_count": 0,
+            "already_linked_count": 1
+        }
     
     document = db.query(GovernanceDocument).filter(
         GovernanceDocument.id == attestation.document_id
@@ -509,7 +535,7 @@ async def link_attestation_to_evidence(
         name=f"Attestation - {document_title}",
         description=description,
         evidence_type="attestation",
-        source_system=f"attestation:{attestation_id}",
+        source_system=source_system_key,
         collection_date=attestation.completed_at,
         uploaded_by=current_user.id,
         uploaded_at=datetime.utcnow(),
@@ -527,7 +553,10 @@ async def link_attestation_to_evidence(
         "source_system": evidence.source_system,
         "collection_date": evidence.collection_date,
         "status": evidence.status,
-        "uploaded_at": evidence.uploaded_at
+        "uploaded_at": evidence.uploaded_at,
+        "already_linked": False,
+        "created_count": 1,
+        "already_linked_count": 0
     }
 
 
@@ -539,7 +568,8 @@ async def bulk_link_attestations_to_evidence(
 ):
     """
     Bulk link completed attestations to evidence repository.
-    Only completed attestations will be linked; others will be skipped.
+    Tracks created, already linked, and error counts separately.
+    Idempotent - skips attestations that are already linked to evidence.
     """
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
@@ -549,21 +579,49 @@ async def bulk_link_attestations_to_evidence(
         )
     
     created_count = 0
-    skipped_count = 0
+    already_linked_count = 0
+    error_count = 0
     created_evidence_ids = []
+    already_linked_evidence_ids = []
+    errors = []
     
     for attestation_id in request_data.attestation_ids:
         attestation = db.query(PolicyAttestation).filter(
-            PolicyAttestation.id == attestation_id,
-            PolicyAttestation.tenant_id.in_(user_tenants)
+            PolicyAttestation.id == attestation_id
         ).first()
         
         if not attestation:
-            skipped_count += 1
+            error_count += 1
+            errors.append({
+                "attestation_id": attestation_id,
+                "reason": "Attestation not found"
+            })
+            continue
+        
+        if attestation.tenant_id not in user_tenants:
+            error_count += 1
+            errors.append({
+                "attestation_id": attestation_id,
+                "reason": "Cross-tenant access denied"
+            })
             continue
         
         if attestation.status != "completed":
-            skipped_count += 1
+            error_count += 1
+            errors.append({
+                "attestation_id": attestation_id,
+                "reason": f"Attestation status is '{attestation.status}', expected 'completed'"
+            })
+            continue
+        
+        source_system_key = f"attestation:{attestation_id}"
+        existing_evidence = db.query(Evidence).filter(
+            Evidence.source_system == source_system_key
+        ).first()
+        
+        if existing_evidence:
+            already_linked_count += 1
+            already_linked_evidence_ids.append(existing_evidence.id)
             continue
         
         document = db.query(GovernanceDocument).filter(
@@ -588,7 +646,7 @@ async def bulk_link_attestations_to_evidence(
             name=f"Attestation - {document_title}",
             description=description,
             evidence_type="attestation",
-            source_system=f"attestation:{attestation_id}",
+            source_system=source_system_key,
             collection_date=attestation.completed_at,
             uploaded_by=current_user.id,
             uploaded_at=datetime.utcnow(),
@@ -602,8 +660,11 @@ async def bulk_link_attestations_to_evidence(
     db.commit()
     
     return {
-        "message": f"Successfully linked {created_count} attestations to evidence",
+        "message": f"Processed {len(request_data.attestation_ids)} attestations: {created_count} created, {already_linked_count} already linked, {error_count} errors",
         "created_count": created_count,
-        "skipped_count": skipped_count,
-        "evidence_ids": created_evidence_ids
+        "already_linked_count": already_linked_count,
+        "error_count": error_count,
+        "created_evidence_ids": created_evidence_ids,
+        "already_linked_evidence_ids": already_linked_evidence_ids,
+        "errors": errors
     }

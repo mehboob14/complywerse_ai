@@ -42,6 +42,27 @@ The platform utilizes a multi-tenant architecture with complete tenant isolation
 - **Unified Control Library**: AI-powered control mapping across frameworks with evidence recommendations, gap analysis, and control inheritance.
 - **Vulnerability Management**: Module for managing vulnerability and penetration testing reports with AI-powered fix recommendations, SLA tracking, department-based workflow, and escalation systems.
 
+## Recent Changes (January 2026)
+
+### Governance Workflow Completions
+- **User Registration**: Auto-assigns new users to default tenant on registration, enabling immediate resource creation
+- **Committee Dashboard**: Fixed route conflict by reordering static routes before dynamic routes
+- **Meeting Agenda Auto-Population**: New endpoints to suggest and auto-populate meeting agendas from pending governance approvals (documents, exceptions, regulatory changes)
+- **Document Publish Workflow**: Added explicit publish action transitioning approved documents to published status with timestamp and user tracking
+- **Document Attestation Request**: Request attestations from users directly from document detail page with user selection modal
+- **Attestation to Evidence Linking**: Link completed attestations to evidence repository with tenant isolation and duplicate prevention
+- **Regulatory Change Close Action**: Added closure readiness check and close workflow with:
+  - Task completion validation (all tasks must be completed)
+  - Status transition validation (only from valid workflow states)
+  - Permission checks (creator, assignee, or admin role required)
+  - Full audit trail with AuditLog entries
+
+### Frontend Enhancements
+- Regulatory changes detail page with closure readiness checking and close button
+- Documents page with publish and request attestation actions
+- Attestations page with individual and bulk link-to-evidence actions
+- Committee meeting page with suggested agenda items and auto-populate functionality
+
 ## External Dependencies
 - **PostgreSQL**: Primary relational database.
 - **FastAPI**: Python web framework for building APIs.
