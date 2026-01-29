@@ -294,7 +294,24 @@ export default function Header() {
                 </Link>
               </div>
               <div className="border-t border-slate-700 py-1.5">
-                <button className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors">
+                <button 
+                  onClick={async () => {
+                    try {
+                      await vulnManagementApi.escalations.markAllAsRead().catch(() => {});
+                      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api'}/auth/logout`, { 
+                        method: 'POST', 
+                        credentials: 'include' 
+                      });
+                      localStorage.removeItem('token');
+                      window.location.href = '/login';
+                    } catch (error) {
+                      console.error('Logout failed:', error);
+                      localStorage.removeItem('token');
+                      window.location.href = '/login';
+                    }
+                  }}
+                  className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors"
+                >
                   <LogOut size={16} />
                   Sign out
                 </button>
