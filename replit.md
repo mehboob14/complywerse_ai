@@ -95,6 +95,20 @@ Implemented 7 AI enhancement features that provide automatic insights without re
 
 All AI features use OpenAI GPT-4o via Replit AI Integrations with proper fallback handling when AI is unavailable.
 
+### Enhanced Evidence AI Assessment (v3.0)
+Major improvement to Evidence AI to move beyond literal clause extraction:
+
+- **Three-Tier Matching System**:
+  - `Explicit` (90-100% confidence): Direct text match - evidence explicitly states control requirement
+  - `Implicit` (70-89% confidence): Indirect address - evidence addresses control through related mechanisms  
+  - `Inferred` (50-69% confidence): Reasonably derived from policy scope and organizational context
+
+- **Intent-Based Analysis**: AI analyzes what controls are trying to ACHIEVE rather than requiring exact text matches
+
+- **Cross-Framework Equivalence Mapping**: When evidence satisfies a control in one framework, AI identifies equivalent controls across ALL other frameworks (e.g., if evidence satisfies SAMA access control, it also identifies SBP, SABIC, and ARAMCO equivalents)
+
+- **Enhanced UI Display**: Color-coded match_type badges (green=explicit, amber=implicit, purple=inferred), intent analysis section with AI reasoning, and cross-framework equivalent controls display
+
 ## External Dependencies
 - **PostgreSQL**: Primary relational database.
 - **FastAPI**: Python web framework for building APIs.
