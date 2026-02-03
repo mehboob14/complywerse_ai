@@ -28,54 +28,92 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_UR
 # Version tracking for deterministic assessments
 # v2.1: Updated to use uploaded frameworks instead of pre-seeded ones
 # v2.2: Include actual control IDs in prompt to prevent hallucination of generic control IDs
-PROMPT_VERSION = "2.3"  # Added mandatory multi-framework analysis
+# v2.3: Added mandatory multi-framework analysis requirement
+# v3.0: Intent-based analysis with three-tier matching (explicit/implicit/inferred) and cross-framework equivalence
+PROMPT_VERSION = "3.0"
 # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
 # Using gpt-4o for compatibility with Replit AI integrations
 MODEL_VERSION = "gpt-4o"
 
-# Enhanced prompt for clause-level mapping with auditor-defensible output
-# Version 2.3: Added MANDATORY multi-framework analysis requirement
-DETERMINISTIC_ASSESSMENT_PROMPT = """You are a Senior GRC Compliance Expert with 20+ years of experience, holding CISA, CISSP, CRISC, and ISO 27001 Lead Auditor certifications. Analyze this compliance evidence with extreme precision for regulatory audit purposes.
+# Enhanced prompt for intent-based analysis with cross-framework mapping
+# Version 3.0: Intent-based analysis with three-tier matching system
+DETERMINISTIC_ASSESSMENT_PROMPT = """You are a Senior GRC Compliance Expert with 20+ years of experience, holding CISA, CISSP, CRISC, and ISO 27001 Lead Auditor certifications. Analyze this compliance evidence using INTENT-BASED ANALYSIS for regulatory audit purposes.
 
-MANDATORY MULTI-FRAMEWORK ANALYSIS:
-You MUST analyze this evidence against EVERY framework listed below and return control mappings for ALL frameworks where relevant controls exist. Do NOT stop after finding matches in one framework. Enterprise compliance requires demonstrating coverage across ALL applicable regulatory frameworks.
+## CORE PRINCIPLE: INTENT-BASED ANALYSIS
+Instead of requiring exact text matches, analyze what each control is trying to ACHIEVE and whether the evidence demonstrates that INTENT is being satisfied. This enables broader, more accurate compliance mapping.
 
-CRITICAL REQUIREMENTS:
-1. ANALYZE EVERY FRAMEWORK: Examine each framework in the list and identify ALL applicable controls
-2. ONLY use control IDs from the VALID CONTROL IDs list below - DO NOT invent or hallucinate control IDs
-3. Use the EXACT framework names and EXACT control IDs as provided - no variations allowed
-4. If a control ID is not in the list below, DO NOT include it in your response
-5. ONLY map to controls that have EXPLICIT evidence in the document
-6. Include specific text excerpts from the evidence that support each mapping
-7. No control should be marked applicable without explicit clause-level evidence match
-8. Return mappings from MULTIPLE frameworks if the evidence covers controls in multiple frameworks
+## THREE-TIER MATCHING SYSTEM
+Classify each control mapping using one of these match types:
 
-WARNING: Generic ISO 27001 control IDs like "A.5.1", "A.12.4.1" are NOT valid unless they appear in the VALID CONTROL IDs list below. Each framework has its OWN control numbering scheme.
+1. **EXPLICIT** (Confidence: 90-100%): Direct text match
+   - Evidence explicitly states or directly addresses the control requirement
+   - Clear, unambiguous language that maps directly to the control
+   - Example: Policy states "access reviews shall be conducted quarterly" → maps to access review control
 
-AVAILABLE FRAMEWORKS WITH THEIR VALID CONTROL IDs (analyze evidence against ALL of these):
+2. **IMPLICIT** (Confidence: 70-89%): Indirect address through related mechanisms
+   - Evidence addresses the control through related policies, procedures, or mechanisms
+   - The intent of the control is satisfied even without exact terminology
+   - Example: Policy describes "role-based permissions with manager approval" → satisfies access control intent
+
+3. **INFERRED** (Confidence: 50-69%): Reasonably derived from policy scope and context
+   - Control can be reasonably inferred from the overall policy scope, organizational context, or related statements
+   - Based on logical implications from documented practices
+   - Example: Information Security Policy implies security awareness exists → inferred security training control
+
+## CROSS-FRAMEWORK EQUIVALENCE MAPPING
+When a control is satisfied in ONE framework, you MUST identify equivalent controls across ALL other frameworks:
+- If evidence satisfies "SAMA CSF 3.3.1 - Access Control", check for equivalent access control requirements in SBP, SABIC, ARAMCO, NIST, PCI-DSS, etc.
+- Security policies typically satisfy controls across MULTIPLE frameworks simultaneously
+- DO NOT stop after finding matches in one framework - analyze ALL frameworks for equivalent controls
+
+## MANDATORY REQUIREMENTS
+1. **ANALYZE EVERY FRAMEWORK**: Examine each framework in the list and identify ALL controls whose INTENT is addressed
+2. **ONLY use control IDs from the VALID CONTROL IDs list** - DO NOT invent or hallucinate control IDs
+3. Use the EXACT framework names and EXACT control IDs as provided
+4. For each mapping, provide an intent_analysis explaining HOW the evidence satisfies the control's PURPOSE
+5. Include specific text excerpts that support each mapping (even for implicit/inferred matches)
+6. Return mappings from MULTIPLE frameworks - a security policy should map to 10-50+ controls across frameworks
+
+## AVAILABLE FRAMEWORKS WITH THEIR VALID CONTROL IDs:
 {available_frameworks}
 
-Evidence Content:
+## EVIDENCE CONTENT:
 {evidence_content}
 
-Provide a comprehensive, auditor-defensible assessment in the following JSON format:
+## ANALYSIS PROCESS:
+1. First, extract ALL key policy statements, principles, and commitments from the evidence
+2. For EACH framework listed above, identify controls whose INTENT is addressed by these statements
+3. Classify each mapping as explicit, implicit, or inferred based on the matching criteria
+4. Apply cross-framework equivalence: if a control is satisfied in one framework, find equivalent controls in ALL other frameworks
+5. Provide intent analysis explaining the semantic connection between evidence and control
+
+## REQUIRED JSON RESPONSE FORMAT:
 {{
     "relevance_score": <0-100>,
     "adequacy_score": <0-100>,
     "audit_readiness": <0-100>,
     "confidence_score": <0-100>,
-    "summary": "<2-3 sentence description>",
+    "summary": "<2-3 sentence description of what this evidence covers>",
+    
+    "extracted_policy_statements": [
+        "<key policy statement or principle from evidence>",
+        "<another key statement>",
+        "..."
+    ],
     
     "clause_mappings": [
         {{
-            "framework_name": "<USE EXACT framework name from the UPLOADED FRAMEWORKS list above>",
-            "control_id": "<exact control ID from the framework, e.g., A.5.1, 1.2.3>",
+            "framework_name": "<USE EXACT framework name from the list above>",
+            "control_id": "<exact control ID from framework>",
             "clause_reference": "<exact clause/sub-clause reference>",
             "control_title": "<control title text>",
-            "matching_rationale": "<specific explanation why this evidence satisfies this control>",
-            "confidence": <0-100>,
-            "coverage_type": "<full|partial|supporting|not_applicable>",
-            "matched_text_excerpt": "<exact text from evidence that matches this control>"
+            "match_type": "<explicit|implicit|inferred>",
+            "confidence": <90-100 for explicit, 70-89 for implicit, 50-69 for inferred>,
+            "intent_analysis": "<Explain HOW the evidence satisfies the control's intent/purpose. What is the control trying to achieve and how does the evidence demonstrate that?>",
+            "matching_rationale": "<specific explanation of the match>",
+            "coverage_type": "<full|partial|supporting>",
+            "matched_text_excerpt": "<text from evidence that supports this mapping>",
+            "cross_framework_equivalents": ["<FRAMEWORK: control_id>", "..."]
         }}
     ],
     
@@ -89,14 +127,24 @@ Provide a comprehensive, auditor-defensible assessment in the following JSON for
             "text": "<relevant excerpt from evidence>",
             "relevance": "<what this excerpt demonstrates>"
         }}
-    ]
+    ],
+    
+    "cross_framework_summary": {{
+        "total_frameworks_analyzed": <number>,
+        "frameworks_with_matches": ["<framework names with at least one match>"],
+        "control_coverage_by_framework": {{
+            "<framework_name>": <number of controls matched>
+        }}
+    }}
 }}
 
-IMPORTANT: 
-1. Be extremely precise. Do NOT hallucinate control mappings. Only include controls where the evidence EXPLICITLY demonstrates compliance.
-2. You MUST check EVERY framework listed above and return clause_mappings for ALL frameworks where the evidence is relevant - not just one framework.
-3. If this evidence relates to security controls, it likely applies to multiple frameworks (e.g., endpoint protection may satisfy controls in ISO 27001, NIST, PCI-DSS, SBP frameworks, etc.)
-4. Your response should contain clause_mappings from MULTIPLE frameworks when applicable."""
+## CRITICAL REMINDERS:
+1. A typical Information Security Policy should map to 20-50+ controls across multiple frameworks
+2. Use intent-based analysis - don't require exact text matches
+3. For IMPLICIT and INFERRED matches, still provide matched_text_excerpt showing the supporting evidence
+4. Every control in clause_mappings MUST have match_type and intent_analysis fields
+5. cross_framework_equivalents should list related controls in OTHER frameworks that address the same security domain
+6. Analyze ALL frameworks provided - do not skip any framework"""
 
 
 class BatchAssessRequest(BaseModel):
@@ -116,6 +164,9 @@ class ClauseMappingResponse(BaseModel):
     confidence: float
     coverage_type: str
     matched_text_excerpt: Optional[str] = None
+    match_type: str = "explicit"  # explicit, implicit, or inferred
+    intent_analysis: Optional[str] = None  # explains HOW the evidence satisfies the control intent
+    cross_framework_equivalents: Optional[List[str]] = None  # equivalent controls in other frameworks
 
 
 class AssessmentResponse(BaseModel):
