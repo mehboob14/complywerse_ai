@@ -128,6 +128,9 @@ interface ClauseMapping {
   confidence: number;
   coverage_type: string;
   matched_text_excerpt: string;
+  match_type?: 'explicit' | 'implicit' | 'inferred';
+  intent_analysis?: string;
+  cross_framework_equivalents?: string[];
 }
 
 interface LatestAssessment {
@@ -1297,6 +1300,16 @@ function AssessmentTab({
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* Match Type Badge */}
+                      {clause.match_type && (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium border ${
+                          clause.match_type === 'explicit' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                          clause.match_type === 'implicit' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+                          'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                        }`}>
+                          {clause.match_type.charAt(0).toUpperCase() + clause.match_type.slice(1)}
+                        </span>
+                      )}
                       {isClauseLinked(clause) ? (
                         <span className="rounded-full px-2 py-0.5 text-xs font-medium border bg-green-500/20 text-green-400 border-green-500/30 flex items-center gap-1">
                           <CheckCircle className="h-3 w-3" />
@@ -1335,6 +1348,32 @@ function AssessmentTab({
                         <h6 className="text-xs text-slate-400 mb-1">Matching Rationale</h6>
                         <p className="text-sm text-slate-300">{clause.matching_rationale}</p>
                       </div>
+                      {/* Intent Analysis - AI explanation of how evidence satisfies control intent */}
+                      {clause.intent_analysis && (
+                        <div className="rounded-lg bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-500/20 p-3">
+                          <h6 className="flex items-center gap-1 text-xs text-purple-300 mb-1">
+                            <Brain className="h-3 w-3" />
+                            Intent Analysis
+                          </h6>
+                          <p className="text-sm text-slate-300">{clause.intent_analysis}</p>
+                        </div>
+                      )}
+                      {/* Cross-Framework Equivalents */}
+                      {clause.cross_framework_equivalents && clause.cross_framework_equivalents.length > 0 && (
+                        <div className="rounded-lg bg-slate-800/50 border border-slate-600/50 p-3">
+                          <h6 className="flex items-center gap-1 text-xs text-slate-400 mb-2">
+                            <Link2 className="h-3 w-3" />
+                            Equivalent Controls in Other Frameworks
+                          </h6>
+                          <div className="flex flex-wrap gap-1">
+                            {clause.cross_framework_equivalents.map((equiv, i) => (
+                              <span key={i} className="px-2 py-0.5 text-xs rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                {equiv}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <div>
                         <h6 className="flex items-center gap-1 text-xs text-slate-400 mb-1">
                           <Quote className="h-3 w-3" />
