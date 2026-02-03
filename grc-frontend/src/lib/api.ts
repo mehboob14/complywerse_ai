@@ -98,6 +98,24 @@ export const controlsApi = {
   delete: (id: string) => apiClient.delete(`/controls/${id}`),
   getNormalized: () => apiClient.get<NormalizedControl[]>('/controls/normalized'),
   getMappings: () => apiClient.get<ControlMapping[]>('/controls/mappings'),
+  getAIRecommendations: (data: { control_id: number; control_title: string; control_description?: string; framework_name?: string }) =>
+    apiClient.post<{
+      control_id: number;
+      test_procedures: Array<{
+        procedure_type: string;
+        description: string;
+        frequency: string;
+        sample_size: string;
+      }>;
+      evidence_requirements: Array<{
+        evidence_type: string;
+        title: string;
+        description: string;
+        mandatory: boolean;
+      }>;
+      key_risks_addressed: string[];
+      audit_focus_areas: string[];
+    }>('/controls/ai-recommendations', data),
 };
 
 export const evidenceApi = {
@@ -210,6 +228,8 @@ export const governanceApi = {
     apiClient.post(`/governance/documents/${documentId}/parse-policy`),
   getDocumentPolicyStatements: (documentId: number) =>
     apiClient.get(`/governance/documents/${documentId}/policy-statements`),
+  generatePolicyDraft: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; include_sections?: string[] }) =>
+    apiClient.post('/governance/documents/ai-draft', data),
   getWorkflowTemplates: (params?: { tenant_id?: number; is_active?: boolean; doc_type?: string; skip?: number; limit?: number }) =>
     apiClient.get('/governance/workflows/templates', { params }),
   getWorkflowTemplate: (id: number) =>
@@ -383,6 +403,22 @@ export const ermApi = {
       apiClient.post<Risk>(`/erm/risks/${riskId}/reopen`),
     getRiskAging: () => 
       apiClient.get<Array<{ risk_id: number; title: string; days_open: number; status: string }>>('/erm/risks/aging'),
+    getAISuggestions: (data: { name: string; category?: string; sub_category?: string; description?: string }) =>
+      apiClient.post<{
+        suggested_description: string;
+        suggested_causes: string[];
+        suggested_consequences: string[];
+        recommended_controls: Array<{
+          control_id: number;
+          control_name: string;
+          control_code?: string;
+          relevance: string;
+          rationale: string;
+        }>;
+        suggested_likelihood: number;
+        suggested_impact: number;
+        risk_treatment_options: string[];
+      }>('/erm/risks/ai-suggest', data),
   },
   mitigationActions: {
     getAll: (riskId: number) => 
@@ -431,6 +467,40 @@ export const ermApi = {
     update: (id: number, data: RiskIncidentUpdate) => apiClient.put<RiskIncident>(`/erm/incidents/${id}`, data),
     delete: (id: number) => apiClient.delete(`/erm/incidents/${id}`),
     getDashboard: () => apiClient.get<IncidentDashboard>('/erm/incidents/dashboard'),
+    analyzeWithAI: (data: { title: string; description: string; severity?: string; incident_date?: string; department?: string }) =>
+      apiClient.post<{
+        root_cause_analysis: {
+          primary_cause: string;
+          contributing_factors: string[];
+          category: string;
+          preventability: string;
+        };
+        related_risks: Array<{
+          risk_id: number;
+          risk_title: string;
+          relevance: string;
+          explanation: string;
+        }>;
+        related_controls: Array<{
+          control_id: number;
+          control_title: string;
+          framework: string;
+          relevance: string;
+          status_recommendation: string;
+        }>;
+        recommended_actions: string[];
+        similar_incidents: Array<{
+          incident_id: number;
+          title: string;
+          similarity: number;
+        }>;
+        impact_assessment: {
+          financial_impact: string;
+          reputational_impact: string;
+          regulatory_impact: string;
+          operational_impact: string;
+        };
+      }>('/erm/incidents/ai-analyze', data),
   },
   reviews: {
     getAll: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number }) => 
@@ -918,6 +988,7 @@ export const dashboardApi = {
   getStats: () => apiClient.get('/dashboard/stats'),
   getFrameworkCompliance: (frameworkId: number) => apiClient.get(`/dashboard/compliance/${frameworkId}`),
   getUnified: (tenantId?: number) => apiClient.get('/dashboard/unified', { params: tenantId ? { tenant_id: tenantId } : {} }),
+  getAIInsights: (tenantId?: number) => apiClient.get('/dashboard/ai-insights', { params: tenantId ? { tenant_id: tenantId } : {} }),
 };
 
 export const attestationApi = {
@@ -974,6 +1045,50 @@ export const committeeApi = {
     apiClient.get(`/grc/committees/meetings/${meetingId}/suggested-agenda-items`),
   autoPopulateAgenda: (meetingId: number, data: { include_documents?: boolean; include_exceptions?: boolean; include_regulatory_changes?: boolean }) => 
     apiClient.post(`/grc/committees/meetings/${meetingId}/auto-populate-agenda`, data),
+};
+
+export interface QuickAssessRequest {
+  evidence_name: string;
+  file_name: string;
+  file_type: string;
+  description?: string;
+  evidence_type?: string;
+}
+
+export interface QuickAssessResponse {
+  initial_assessment: {
+    relevance_estimate: 'high' | 'medium' | 'low';
+    suggested_type: string;
+    detected_frameworks: string[];
+    suggested_controls: string[];
+    quality_tips: string[];
+    completeness_check: {
+      has_date: boolean;
+      has_version: boolean;
+      has_approval: boolean;
+    };
+  };
+}
+
+export const evidenceAIApi = {
+  quickAssess: async (data: QuickAssessRequest): Promise<QuickAssessResponse> => {
+    const response = await apiClient.post<QuickAssessResponse>('/evidence-mgmt/ai/quick-assess', data);
+    return response.data;
+  },
+};
+
+export const controlLibraryApi = {
+  gapAnalysis: {
+    prioritizeWithAI: async (data?: { framework_id?: number; max_gaps?: number }) => {
+      const response = await apiClient.post('/control-library/gap-analysis/ai-prioritize', data || {});
+      return response.data;
+    },
+    getDashboard: () => apiClient.get('/control-library/gap-analysis/dashboard'),
+    getUnmappedControls: (params?: { framework_id?: number; skip?: number; limit?: number }) => 
+      apiClient.get('/control-library/gap-analysis/unmapped-controls', { params }),
+    getControlsWithoutEvidence: (params?: { framework_id?: number; skip?: number; limit?: number }) => 
+      apiClient.get('/control-library/gap-analysis/controls-without-evidence', { params }),
+  },
 };
 
 export default apiClient;

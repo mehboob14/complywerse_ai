@@ -21,6 +21,11 @@ import {
   Lock,
   Unlock,
   ListTodo,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRef } from 'react';
@@ -698,6 +703,22 @@ interface User {
   full_name?: string;
 }
 
+interface AISuggestion {
+  suggested_description: string;
+  suggested_causes: string[];
+  suggested_consequences: string[];
+  recommended_controls: Array<{
+    control_id: number;
+    control_name: string;
+    control_code?: string;
+    relevance: string;
+    rationale: string;
+  }>;
+  suggested_likelihood: number;
+  suggested_impact: number;
+  risk_treatment_options: string[];
+}
+
 function RiskModal({
   risk,
   onClose,
@@ -723,6 +744,11 @@ function RiskModal({
     residual_impact: risk?.residual_impact || 2,
     treatment_plan: risk?.treatment_plan || '',
   });
+
+  const [aiSuggestions, setAiSuggestions] = useState<AISuggestion | null>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const { data: users } = useQuery({
     queryKey: ['users'],
@@ -756,6 +782,62 @@ function RiskModal({
     }
   };
 
+  const handleGetAISuggestions = async () => {
+    if (formData.title.trim().length < 3) {
+      setAiError('Please enter at least 3 characters for the risk title');
+      return;
+    }
+    
+    setIsLoadingAI(true);
+    setAiError(null);
+    
+    try {
+      const response = await ermApi.risks.getAISuggestions({
+        name: formData.title,
+        category: formData.risk_category,
+        sub_category: formData.risk_sub_category || undefined,
+        description: formData.description || undefined,
+      });
+      setAiSuggestions(response.data);
+      setShowSuggestions(true);
+    } catch (err) {
+      console.error('AI suggestion error:', err);
+      setAiError('Failed to get AI suggestions. Please try again.');
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
+  const applyDescription = () => {
+    if (aiSuggestions?.suggested_description) {
+      setFormData({ ...formData, description: aiSuggestions.suggested_description });
+    }
+  };
+
+  const applyLikelihoodImpact = () => {
+    if (aiSuggestions) {
+      setFormData({
+        ...formData,
+        inherent_likelihood: aiSuggestions.suggested_likelihood,
+        inherent_impact: aiSuggestions.suggested_impact,
+      });
+    }
+  };
+
+  const appendCauseToDescription = (cause: string) => {
+    const causesSection = formData.description.includes('Root Causes:') 
+      ? formData.description 
+      : formData.description + (formData.description ? '\n\n' : '') + 'Root Causes:\n';
+    setFormData({ ...formData, description: causesSection + `• ${cause}\n` });
+  };
+
+  const appendConsequenceToDescription = (consequence: string) => {
+    const consequenceSection = formData.description.includes('Potential Consequences:')
+      ? formData.description
+      : formData.description + (formData.description ? '\n\n' : '') + 'Potential Consequences:\n';
+    setFormData({ ...formData, description: consequenceSection + `• ${consequence}\n` });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
@@ -778,14 +860,195 @@ function RiskModal({
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="block text-sm text-slate-400">Title</label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
-              required
-            />
+            <div className="mt-1 flex gap-2">
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                className="flex-1 rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                required
+                placeholder="Enter risk title..."
+              />
+              <button
+                type="button"
+                onClick={handleGetAISuggestions}
+                disabled={isLoadingAI || formData.title.trim().length < 3}
+                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-white hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {isLoadingAI ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                AI Assist
+              </button>
+            </div>
+            {aiError && (
+              <p className="mt-1 text-xs text-red-400">{aiError}</p>
+            )}
           </div>
+
+          {aiSuggestions && (
+            <div className="rounded-xl border-2 border-transparent bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-[2px]">
+              <div className="rounded-[10px] bg-slate-800 p-4">
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions(!showSuggestions)}
+                  className="flex w-full items-center justify-between text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-purple-400" />
+                    <span className="text-sm font-medium text-white">AI Suggestions</span>
+                  </div>
+                  {showSuggestions ? (
+                    <ChevronUp className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-slate-400" />
+                  )}
+                </button>
+                
+                {showSuggestions && (
+                  <div className="mt-4 space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider">Suggested Description</h4>
+                        <button
+                          type="button"
+                          onClick={applyDescription}
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-purple-400 hover:bg-purple-500/20"
+                        >
+                          <Check className="h-3 w-3" />
+                          Use this
+                        </button>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-300 bg-slate-700/50 rounded-lg p-3">
+                        {aiSuggestions.suggested_description}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Root Causes</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiSuggestions.suggested_causes.map((cause, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => appendCauseToDescription(cause)}
+                              className="rounded-full bg-red-500/20 px-2.5 py-1 text-xs text-red-300 hover:bg-red-500/30 transition-colors"
+                            >
+                              + {cause}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Consequences</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiSuggestions.suggested_consequences.map((consequence, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => appendConsequenceToDescription(consequence)}
+                              className="rounded-full bg-orange-500/20 px-2.5 py-1 text-xs text-orange-300 hover:bg-orange-500/30 transition-colors"
+                            >
+                              + {consequence}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider">Suggested Risk Rating</h4>
+                        <button
+                          type="button"
+                          onClick={applyLikelihoodImpact}
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-purple-400 hover:bg-purple-500/20"
+                        >
+                          <Check className="h-3 w-3" />
+                          Apply
+                        </button>
+                      </div>
+                      <div className="mt-2 flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400">Likelihood:</span>
+                          <span className="rounded bg-blue-500/20 px-2 py-0.5 text-sm font-medium text-blue-300">
+                            {aiSuggestions.suggested_likelihood}/5
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400">Impact:</span>
+                          <span className="rounded bg-amber-500/20 px-2 py-0.5 text-sm font-medium text-amber-300">
+                            {aiSuggestions.suggested_impact}/5
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400">Score:</span>
+                          <span className={`rounded px-2 py-0.5 text-sm font-medium ${getScoreColor(aiSuggestions.suggested_likelihood * aiSuggestions.suggested_impact).bg} ${getScoreColor(aiSuggestions.suggested_likelihood * aiSuggestions.suggested_impact).text}`}>
+                            {aiSuggestions.suggested_likelihood * aiSuggestions.suggested_impact}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {aiSuggestions.recommended_controls.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Recommended Controls</h4>
+                        <div className="space-y-2">
+                          {aiSuggestions.recommended_controls.map((control) => (
+                            <div
+                              key={control.control_id}
+                              className="flex items-start gap-3 rounded-lg bg-slate-700/50 p-3"
+                            >
+                              <Shield className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-white truncate">
+                                    {control.control_name}
+                                  </span>
+                                  {control.control_code && (
+                                    <span className="rounded bg-slate-600 px-1.5 py-0.5 text-xs text-slate-300">
+                                      {control.control_code}
+                                    </span>
+                                  )}
+                                  <span className={`rounded px-1.5 py-0.5 text-xs ${
+                                    control.relevance === 'high' 
+                                      ? 'bg-green-500/20 text-green-300'
+                                      : control.relevance === 'medium'
+                                      ? 'bg-yellow-500/20 text-yellow-300'
+                                      : 'bg-slate-500/20 text-slate-300'
+                                  }`}>
+                                    {control.relevance}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-xs text-slate-400">{control.rationale}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Treatment Options</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {aiSuggestions.risk_treatment_options.map((option, idx) => (
+                          <span
+                            key={idx}
+                            className="rounded-full bg-purple-500/20 px-3 py-1 text-xs text-purple-300"
+                          >
+                            {option}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm text-slate-400">Description</label>
@@ -794,6 +1057,7 @@ function RiskModal({
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
               rows={3}
+              placeholder="Describe the risk..."
             />
           </div>
 

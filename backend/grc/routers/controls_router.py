@@ -1,7 +1,14 @@
+import os
+import json
+import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
+from pydantic import BaseModel
+from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 from ..models import (
     NormalizedControl, ControlMapping, GRCRequiredEvidence,
@@ -16,7 +23,168 @@ from ..schemas import (
 )
 from .auth_router import require_auth, get_user_tenants
 
+
+class ControlAIRecommendationRequest(BaseModel):
+    control_id: int
+    control_title: str
+    control_description: Optional[str] = None
+    framework_name: Optional[str] = None
+
+
+def get_openai_client() -> OpenAI:
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    is_modelfarm = base_url and "modelfarm" in base_url
+    if not api_key and not is_modelfarm:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    if not is_modelfarm and (api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    return OpenAI(
+        api_key=api_key,
+        base_url=base_url
+    )
+
 router = APIRouter(prefix="/controls", tags=["Normalized Controls"])
+
+AI_RECOMMENDATION_PROMPT = """You are a Senior GRC Auditor with 20+ years of experience, holding CISA, CISSP, CRISC, and ISO 27001 Lead Auditor certifications.
+
+Given the following compliance control, generate comprehensive audit test procedures and evidence requirements that would satisfy an external auditor.
+
+CONTROL INFORMATION:
+- Control ID: {control_id}
+- Control Title: {control_title}
+- Control Description: {control_description}
+- Framework: {framework_name}
+
+Generate professional, audit-ready recommendations in the following JSON format:
+{{
+    "test_procedures": [
+        {{
+            "procedure_type": "<walkthrough|inquiry|observation|inspection|reperformance>",
+            "description": "<detailed description of the test procedure>",
+            "frequency": "<frequency of testing, e.g., quarterly, annually, continuously>",
+            "sample_size": "<recommended sample size or 'N/A' if not applicable>"
+        }}
+    ],
+    "evidence_requirements": [
+        {{
+            "evidence_type": "<policy|procedure|report|screenshot|log|configuration|certificate|attestation|training|other>",
+            "title": "<concise title for this evidence>",
+            "description": "<detailed description of what this evidence should contain>",
+            "mandatory": <true or false>
+        }}
+    ],
+    "key_risks_addressed": ["<risk 1>", "<risk 2>", ...],
+    "audit_focus_areas": ["<focus area 1>", "<focus area 2>", ...]
+}}
+
+REQUIREMENTS:
+1. Generate 2-5 test procedures covering different testing methodologies (inquiry, inspection, observation, etc.)
+2. Generate 3-7 evidence requirements covering policies, procedures, and actual evidence artifacts
+3. Identify 2-5 key risks that this control addresses
+4. Identify 2-4 audit focus areas that auditors would typically scrutinize
+5. Be specific and actionable - procedures should be executable by an auditor
+6. Evidence requirements should be comprehensive and realistic
+7. Respond ONLY with valid JSON, no additional text"""
+
+
+@router.post("/ai-recommendations")
+def get_control_ai_recommendations(
+    request: ControlAIRecommendationRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Generate AI-powered test procedures and evidence requirements for a control."""
+    try:
+        client = get_openai_client()
+        
+        prompt = AI_RECOMMENDATION_PROMPT.format(
+            control_id=request.control_id,
+            control_title=request.control_title,
+            control_description=request.control_description or "Not provided",
+            framework_name=request.framework_name or "General compliance framework"
+        )
+        
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a Senior GRC Auditor providing audit test procedures and evidence requirements. Respond only with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000
+        )
+        
+        response_text = response.choices[0].message.content.strip()
+        
+        # Parse the JSON response
+        cleaned = response_text
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        
+        try:
+            result = json.loads(cleaned.strip())
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse AI response: {response_text[:500]}")
+            result = {
+                "test_procedures": [
+                    {
+                        "procedure_type": "inquiry",
+                        "description": f"Interview control owner to understand implementation of: {request.control_title}",
+                        "frequency": "annually",
+                        "sample_size": "N/A"
+                    },
+                    {
+                        "procedure_type": "inspection",
+                        "description": f"Obtain and review documentation supporting: {request.control_title}",
+                        "frequency": "annually",
+                        "sample_size": "All available documentation"
+                    }
+                ],
+                "evidence_requirements": [
+                    {
+                        "evidence_type": "policy",
+                        "title": "Relevant Policy Document",
+                        "description": f"Policy document addressing: {request.control_title}",
+                        "mandatory": True
+                    },
+                    {
+                        "evidence_type": "procedure",
+                        "title": "Procedure Documentation",
+                        "description": f"Documented procedures for implementing: {request.control_title}",
+                        "mandatory": True
+                    }
+                ],
+                "key_risks_addressed": ["Control not operating effectively", "Non-compliance with requirements"],
+                "audit_focus_areas": ["Evidence of control operation", "Completeness of documentation"]
+            }
+        
+        return {
+            "control_id": request.control_id,
+            "test_procedures": result.get("test_procedures", []),
+            "evidence_requirements": result.get("evidence_requirements", []),
+            "key_risks_addressed": result.get("key_risks_addressed", []),
+            "audit_focus_areas": result.get("audit_focus_areas", [])
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating AI recommendations: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate AI recommendations: {str(e)}"
+        )
 
 
 @router.get("", response_model=List[NormalizedControlResponse])

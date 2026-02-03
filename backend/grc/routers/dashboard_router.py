@@ -1,8 +1,12 @@
+import os
+import json
+import logging
 from typing import Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
+from openai import OpenAI
 
 from ..models import (
     Framework, FrameworkDomain, ControlObjective, FrameworkControl,
@@ -11,9 +15,14 @@ from ..models import (
     DocumentApprovalStep, AttestationCampaign, RegulatoryChange,
     PolicyStatement, PolicyStatementCompliance, RCSAAssessment,
     UploadedFramework, ParsedFrameworkControl, RiskIncident, RiskMitigationAction,
-    RiskKRI, EvidenceAIAssessment
+    RiskKRI, EvidenceAIAssessment, RiskControlLink
 )
 from .auth_router import require_auth, get_user_tenants
+
+logger = logging.getLogger(__name__)
+
+AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -704,4 +713,307 @@ def get_unified_dashboard(
             "risk_trend": risk_trend,
             "evidence_trend": compliance_trend
         }
+    }
+
+
+def get_openai_client() -> OpenAI:
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    if not api_key:
+        return None
+    return OpenAI(api_key=api_key, base_url=base_url)
+
+
+def generate_deterministic_recommendations(signals: dict, framework_coverage: list) -> list:
+    recommendations = []
+    rec_id = 1
+    
+    for gap in signals.get("compliance_gaps", []):
+        recommendations.append({
+            "id": rec_id,
+            "title": f"Address {gap.get('name', 'Unknown')} compliance gap",
+            "severity": "critical" if gap.get("score", 0) < 30 else "high" if gap.get("score", 0) < 50 else "medium",
+            "category": "compliance",
+            "rationale": f"Framework coverage is at {gap.get('score', 0)}%, below the 70% threshold. This represents a significant compliance risk.",
+            "action_text": "Review missing controls",
+            "action_link": f"/frameworks/{gap.get('framework_id', '')}"
+        })
+        rec_id += 1
+        if rec_id > 6:
+            break
+    
+    for evidence in signals.get("expiring_evidence", [])[:2]:
+        recommendations.append({
+            "id": rec_id,
+            "title": f"Renew expiring evidence: {evidence.get('name', 'Unknown')[:40]}",
+            "severity": "high" if evidence.get("days_until_expiry", 30) < 7 else "medium",
+            "category": "evidence",
+            "rationale": f"Evidence expires in {evidence.get('days_until_expiry', 0)} days. Expired evidence can impact compliance posture.",
+            "action_text": "Update evidence",
+            "action_link": f"/evidence/{evidence.get('id', '')}"
+        })
+        rec_id += 1
+        if rec_id > 6:
+            break
+    
+    for risk in signals.get("risks_without_controls", [])[:2]:
+        recommendations.append({
+            "id": rec_id,
+            "title": f"Add controls for risk: {risk.get('title', 'Unknown')[:40]}",
+            "severity": "high",
+            "category": "risk",
+            "rationale": f"Risk '{risk.get('title', 'Unknown')[:30]}' has no linked mitigation controls. This leaves the organization exposed.",
+            "action_text": "Add mitigations",
+            "action_link": f"/erm/risks"
+        })
+        rec_id += 1
+        if rec_id > 6:
+            break
+    
+    for action in signals.get("overdue_mitigations", [])[:2]:
+        days_overdue = action.get("days_overdue", 0)
+        recommendations.append({
+            "id": rec_id,
+            "title": f"Complete overdue mitigation: {action.get('title', 'Unknown')[:35]}",
+            "severity": "critical" if days_overdue > 30 else "high",
+            "category": "risk",
+            "rationale": f"Mitigation action is {days_overdue} days overdue. Delays in risk treatment increase exposure.",
+            "action_text": "View action",
+            "action_link": "/erm/mitigation-actions"
+        })
+        rec_id += 1
+        if rec_id > 6:
+            break
+    
+    for assessment in signals.get("pending_assessments", [])[:2]:
+        recommendations.append({
+            "id": rec_id,
+            "title": f"Complete pending assessment: {assessment.get('name', 'Unknown')[:35]}",
+            "severity": "medium",
+            "category": "governance",
+            "rationale": f"Assessment '{assessment.get('name', 'Unknown')[:30]}' is awaiting completion. Timely assessments ensure accurate risk visibility.",
+            "action_text": "Complete assessment",
+            "action_link": f"/risks/rcsa/assessments/{assessment.get('id', '')}"
+        })
+        rec_id += 1
+        if rec_id > 6:
+            break
+    
+    return recommendations[:6]
+
+
+@router.get("/ai-insights")
+def get_ai_insights(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    now = datetime.utcnow()
+    
+    if not user_tenants:
+        return {
+            "generated_at": now.isoformat() + "Z",
+            "signals": {
+                "compliance_gaps": [],
+                "expiring_evidence": [],
+                "risks_without_controls": [],
+                "overdue_mitigations": [],
+                "pending_assessments": []
+            },
+            "recommendations": []
+        }
+    
+    tenant_filter = user_tenants
+    if tenant_id and tenant_id in user_tenants:
+        tenant_filter = [tenant_id]
+    
+    uploaded_frameworks = db.query(UploadedFramework).filter(
+        UploadedFramework.tenant_id.in_(tenant_filter),
+        UploadedFramework.upload_status.in_(['parsed', 'completed', 'published']),
+        UploadedFramework.is_active == True
+    ).all()
+    
+    framework_coverage = []
+    compliance_gaps = []
+    
+    for fw in uploaded_frameworks:
+        controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == fw.id
+        ).all()
+        
+        fw_total = len(controls)
+        fw_implemented = sum(1 for c in controls if getattr(c, 'implementation_status', None) in ['implemented', 'partial'] or getattr(c, 'is_verified', False))
+        score = round((fw_implemented / fw_total) * 100) if fw_total > 0 else 0
+        
+        framework_coverage.append({
+            "framework_id": fw.id,
+            "name": fw.name,
+            "short_code": getattr(fw, 'short_code', None) or fw.name[:10] if fw.name else "FW",
+            "score": score,
+            "total_controls": fw_total,
+            "implemented_controls": fw_implemented
+        })
+        
+        if score < 70:
+            compliance_gaps.append({
+                "framework_id": fw.id,
+                "name": fw.name,
+                "score": score,
+                "gap_percentage": 70 - score,
+                "missing_controls": fw_total - fw_implemented
+            })
+    
+    expiring_evidence = []
+    expiring_items = db.query(Evidence).filter(
+        Evidence.tenant_id.in_(tenant_filter),
+        Evidence.expiry_date.isnot(None),
+        Evidence.expiry_date >= now,
+        Evidence.expiry_date <= now + timedelta(days=30)
+    ).order_by(Evidence.expiry_date.asc()).limit(10).all()
+    
+    for ev in expiring_items:
+        days_until = (ev.expiry_date - now).days
+        expiring_evidence.append({
+            "id": ev.id,
+            "name": ev.name,
+            "expiry_date": ev.expiry_date.isoformat(),
+            "days_until_expiry": days_until
+        })
+    
+    risks_without_controls = []
+    all_risks = db.query(Risk).filter(
+        Risk.tenant_id.in_(tenant_filter),
+        Risk.status.in_(["identified", "under_review", "mitigating", "open"])
+    ).all()
+    
+    for risk in all_risks:
+        mitigation_count = db.query(func.count(RiskMitigationAction.id)).filter(
+            RiskMitigationAction.risk_id == risk.id,
+            RiskMitigationAction.status.notin_(['cancelled'])
+        ).scalar() or 0
+        
+        control_link_count = db.query(func.count(RiskControlLink.id)).filter(
+            RiskControlLink.risk_id == risk.id
+        ).scalar() or 0
+        
+        if mitigation_count == 0 and control_link_count == 0:
+            risks_without_controls.append({
+                "id": risk.id,
+                "title": risk.title,
+                "risk_category": risk.risk_category or risk.category or "operational",
+                "inherent_score": risk.inherent_score or 0
+            })
+    
+    overdue_mitigations = []
+    overdue_actions = db.query(RiskMitigationAction).join(
+        Risk, RiskMitigationAction.risk_id == Risk.id
+    ).filter(
+        Risk.tenant_id.in_(tenant_filter),
+        RiskMitigationAction.due_date < now,
+        RiskMitigationAction.status.notin_(['completed', 'cancelled'])
+    ).order_by(RiskMitigationAction.due_date.asc()).limit(10).all()
+    
+    for action in overdue_actions:
+        days_overdue = (now - action.due_date).days
+        overdue_mitigations.append({
+            "id": action.id,
+            "title": getattr(action, 'action_title', None) or action.title,
+            "due_date": action.due_date.isoformat(),
+            "days_overdue": days_overdue,
+            "risk_id": action.risk_id
+        })
+    
+    pending_assessments = []
+    pending_rcsa = db.query(RCSAAssessment).filter(
+        RCSAAssessment.tenant_id.in_(tenant_filter),
+        RCSAAssessment.status.in_(['pending', 'in_progress', 'draft'])
+    ).limit(10).all()
+    
+    for assessment in pending_rcsa:
+        pending_assessments.append({
+            "id": assessment.id,
+            "name": getattr(assessment, 'name', None) or f"RCSA Assessment #{assessment.id}",
+            "status": assessment.status,
+            "type": "rcsa"
+        })
+    
+    signals = {
+        "compliance_gaps": compliance_gaps,
+        "expiring_evidence": expiring_evidence,
+        "risks_without_controls": risks_without_controls[:10],
+        "overdue_mitigations": overdue_mitigations,
+        "pending_assessments": pending_assessments
+    }
+    
+    recommendations = []
+    
+    try:
+        client = get_openai_client()
+        if client:
+            prompt = f"""You are a GRC (Governance, Risk, Compliance) advisor. Analyze the following compliance signals and generate prioritized, actionable recommendations.
+
+COMPLIANCE SIGNALS:
+- Compliance Gaps (frameworks below 70% coverage): {json.dumps(compliance_gaps[:5])}
+- Expiring Evidence (next 30 days): {json.dumps(expiring_evidence[:5])}
+- Risks Without Controls: {json.dumps(risks_without_controls[:5])}
+- Overdue Mitigations: {json.dumps(overdue_mitigations[:5])}
+- Pending Assessments: {json.dumps(pending_assessments[:5])}
+
+Generate 4-6 prioritized recommendations. Prioritize by business impact - focus on critical compliance gaps and high-risk items first.
+
+Return ONLY a JSON array of recommendations with this structure:
+[
+  {{
+    "id": 1,
+    "title": "Brief action title (max 60 chars)",
+    "severity": "critical|high|medium|low",
+    "category": "compliance|risk|evidence|governance",
+    "rationale": "2-3 sentence explanation of why this matters and the business impact",
+    "action_text": "Short action button text",
+    "action_link": "relevant URL path starting with /"
+  }}
+]
+
+Use these action_link patterns:
+- Framework gaps: /frameworks/[id]
+- Evidence: /evidence/[id]
+- Risks: /erm/risks
+- Mitigations: /erm/mitigation-actions
+- Assessments: /risks/rcsa/assessments/[id]"""
+
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are a compliance advisor. Return only valid JSON arrays."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=1500
+            )
+            
+            response_text = response.choices[0].message.content.strip()
+            if response_text.startswith("```json"):
+                response_text = response_text[7:]
+            if response_text.startswith("```"):
+                response_text = response_text[3:]
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]
+            
+            recommendations = json.loads(response_text.strip())
+            
+            for i, rec in enumerate(recommendations):
+                rec["id"] = i + 1
+            
+        else:
+            recommendations = generate_deterministic_recommendations(signals, framework_coverage)
+            
+    except Exception as e:
+        logger.error(f"AI insights generation failed: {str(e)}")
+        recommendations = generate_deterministic_recommendations(signals, framework_coverage)
+    
+    return {
+        "generated_at": now.isoformat() + "Z",
+        "signals": signals,
+        "recommendations": recommendations[:6]
     }

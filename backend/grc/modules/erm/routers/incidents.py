@@ -1,10 +1,14 @@
+import os
+import json
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
+from pydantic import BaseModel
 
 from ....models import (
-    Risk, RiskIncident, GRCUser, get_db
+    Risk, RiskIncident, GRCUser, get_db, NormalizedControl, FrameworkControl,
+    ControlObjective, FrameworkDomain, Framework
 )
 from ....schemas import (
     RiskIncidentCreate, RiskIncidentUpdate, RiskIncidentResponse,
@@ -13,6 +17,31 @@ from ....schemas import (
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/incidents", tags=["ERM - Incidents"])
+
+
+class IncidentAIAnalyzeRequest(BaseModel):
+    title: str
+    description: str
+    severity: Optional[str] = None
+    incident_date: Optional[str] = None
+    department: Optional[str] = None
+
+
+def get_openai_client():
+    from openai import OpenAI
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    return OpenAI(api_key=api_key, base_url=base_url)
 
 
 def get_user_tenant_id(user: GRCUser, db: Session) -> int:
@@ -156,6 +185,161 @@ def get_incident_dashboard(
             for i in recent
         ]
     }
+
+
+@router.post("/ai-analyze")
+def analyze_incident_with_ai(
+    request: IncidentAIAnalyzeRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+    
+    risks = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants)).all()
+    risk_summary = "\n".join([
+        f"- Risk ID {r.id}: {r.title} (Category: {r.category}, Status: {r.status})"
+        for r in risks[:30]
+    ])
+    
+    controls = db.query(FrameworkControl).join(
+        ControlObjective, FrameworkControl.objective_id == ControlObjective.id
+    ).join(
+        FrameworkDomain, ControlObjective.domain_id == FrameworkDomain.id
+    ).join(
+        Framework, FrameworkDomain.framework_id == Framework.id
+    ).limit(50).all()
+    
+    control_summary = "\n".join([
+        f"- Control ID {c.id}: {c.name} (Code: {c.code})"
+        for c in controls
+    ])
+    
+    similar_incidents = db.query(RiskIncident).filter(
+        RiskIncident.tenant_id.in_(user_tenants)
+    ).order_by(RiskIncident.incident_date.desc()).limit(20).all()
+    
+    incident_history = "\n".join([
+        f"- Incident ID {i.id}: {i.title} (Severity: {i.severity}, Date: {i.incident_date.strftime('%Y-%m-%d') if i.incident_date else 'N/A'})"
+        for i in similar_incidents
+    ])
+    
+    prompt = f"""You are a GRC (Governance, Risk, Compliance) expert analyzing a security incident. Analyze the following incident and provide a comprehensive AI-powered assessment.
+
+INCIDENT DETAILS:
+Title: {request.title}
+Description: {request.description}
+Severity: {request.severity or 'Not specified'}
+Incident Date: {request.incident_date or 'Not specified'}
+Department: {request.department or 'Not specified'}
+
+AVAILABLE ORGANIZATIONAL RISKS:
+{risk_summary if risk_summary else 'No risks in system'}
+
+AVAILABLE FRAMEWORK CONTROLS:
+{control_summary if control_summary else 'No controls in system'}
+
+PREVIOUS INCIDENTS:
+{incident_history if incident_history else 'No previous incidents'}
+
+Provide a comprehensive analysis in the following JSON format:
+{{
+    "root_cause_analysis": {{
+        "primary_cause": "Brief description of the primary root cause",
+        "contributing_factors": ["Factor 1", "Factor 2", "Factor 3"],
+        "category": "technical|human|process|external",
+        "preventability": "high|medium|low"
+    }},
+    "related_risks": [
+        {{
+            "risk_id": <integer ID from the risks above>,
+            "risk_title": "Title from the risk above",
+            "relevance": "high|medium|low",
+            "explanation": "Why this risk is related"
+        }}
+    ],
+    "related_controls": [
+        {{
+            "control_id": <integer ID from controls above>,
+            "control_title": "Title from control above",
+            "framework": "Framework name",
+            "relevance": "high|medium|low",
+            "status_recommendation": "Review or improvement recommendation"
+        }}
+    ],
+    "recommended_actions": [
+        "Action 1",
+        "Action 2",
+        "Action 3"
+    ],
+    "similar_incidents": [
+        {{
+            "incident_id": <integer ID>,
+            "title": "Title from incidents above",
+            "similarity": 0.0 to 1.0
+        }}
+    ],
+    "impact_assessment": {{
+        "financial_impact": "critical|high|medium|low",
+        "reputational_impact": "critical|high|medium|low",
+        "regulatory_impact": "critical|high|medium|low",
+        "operational_impact": "critical|high|medium|low"
+    }}
+}}
+
+Ensure the risk_id, control_id, and incident_id values match actual IDs from the data provided above. If there are no relevant matches, return empty arrays for those sections.
+Return ONLY valid JSON, no additional text."""
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a GRC expert specializing in incident analysis, root cause determination, and control recommendations. Always respond with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=2000,
+            temperature=0.3
+        )
+        
+        ai_response = response.choices[0].message.content.strip()
+        if ai_response.startswith("```json"):
+            ai_response = ai_response[7:]
+        if ai_response.startswith("```"):
+            ai_response = ai_response[3:]
+        if ai_response.endswith("```"):
+            ai_response = ai_response[:-3]
+        
+        analysis = json.loads(ai_response.strip())
+        
+        return analysis
+        
+    except json.JSONDecodeError as e:
+        return {
+            "root_cause_analysis": {
+                "primary_cause": "Unable to parse AI response",
+                "contributing_factors": [],
+                "category": "process",
+                "preventability": "medium"
+            },
+            "related_risks": [],
+            "related_controls": [],
+            "recommended_actions": ["Review incident details and retry analysis"],
+            "similar_incidents": [],
+            "impact_assessment": {
+                "financial_impact": "medium",
+                "reputational_impact": "medium",
+                "regulatory_impact": "medium",
+                "operational_impact": "medium"
+            },
+            "error": f"Failed to parse AI response: {str(e)}"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI analysis failed: {str(e)}"
+        )
 
 
 @router.get("/{incident_id}", response_model=RiskIncidentResponse)

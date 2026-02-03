@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import apiClient from '@/lib/api';
+import apiClient, { evidenceAIApi, QuickAssessResponse } from '@/lib/api';
 import { 
   FileCheck, 
   Loader2, 
@@ -32,7 +32,10 @@ import {
   Settings,
   ChevronDown,
   RefreshCw,
-  MoreVertical
+  MoreVertical,
+  Sparkles,
+  Lightbulb,
+  Tag
 } from 'lucide-react';
 
 type StatusFilter = 'all' | 'draft' | 'pending_review' | 'approved' | 'rejected' | 'expired';
@@ -644,6 +647,32 @@ function UploadModal({
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [aiAssessment, setAiAssessment] = useState<QuickAssessResponse | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const runQuickAssessment = useCallback(async (fileName: string, fileType: string, evidenceName: string, desc: string, evType: string) => {
+    setIsAiLoading(true);
+    setAiError(null);
+    try {
+      const response = await evidenceAIApi.quickAssess({
+        evidence_name: evidenceName || fileName.replace(/\.[^/.]+$/, ''),
+        file_name: fileName,
+        file_type: fileType,
+        description: desc || undefined,
+        evidence_type: evType || undefined
+      });
+      setAiAssessment(response);
+      if (response.initial_assessment.suggested_type && !evType) {
+        setEvidenceType(response.initial_assessment.suggested_type);
+      }
+    } catch (err) {
+      setAiError('AI assessment unavailable');
+      console.error('Quick assess error:', err);
+    } finally {
+      setIsAiLoading(false);
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -676,11 +705,13 @@ function UploadModal({
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile) {
       setFile(droppedFile);
+      const newName = droppedFile.name.replace(/\.[^/.]+$/, '');
       if (!name) {
-        setName(droppedFile.name.replace(/\.[^/.]+$/, ''));
+        setName(newName);
       }
+      runQuickAssessment(droppedFile.name, droppedFile.type, name || newName, description, evidenceType);
     }
-  }, [name]);
+  }, [name, description, evidenceType, runQuickAssessment]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -714,9 +745,11 @@ function UploadModal({
                 const selectedFile = e.target.files?.[0];
                 if (selectedFile) {
                   setFile(selectedFile);
+                  const newName = selectedFile.name.replace(/\.[^/.]+$/, '');
                   if (!name) {
-                    setName(selectedFile.name.replace(/\.[^/.]+$/, ''));
+                    setName(newName);
                   }
+                  runQuickAssessment(selectedFile.name, selectedFile.type, name || newName, description, evidenceType);
                 }
               }}
               accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
@@ -735,6 +768,124 @@ function UploadModal({
               </>
             )}
           </div>
+
+          {(isAiLoading || aiAssessment || aiError) && (
+            <div className="animate-in fade-in slide-in-from-top-2 duration-300 rounded-lg border border-purple-500/30 bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-indigo-900/20 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-500">
+                  <Sparkles className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="text-sm font-medium text-purple-300">AI suggests:</span>
+                {isAiLoading && <Loader2 className="h-4 w-4 animate-spin text-purple-400" />}
+              </div>
+
+              {isAiLoading && (
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <Brain className="h-4 w-4 animate-pulse text-purple-400" />
+                  <span>Analyzing evidence metadata...</span>
+                </div>
+              )}
+
+              {aiError && (
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <AlertCircle className="h-4 w-4 text-slate-500" />
+                  <span>{aiError}</span>
+                </div>
+              )}
+
+              {aiAssessment && !isAiLoading && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400">Relevance:</span>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      aiAssessment.initial_assessment.relevance_estimate === 'high' 
+                        ? 'bg-green-500/20 text-green-400' 
+                        : aiAssessment.initial_assessment.relevance_estimate === 'medium' 
+                          ? 'bg-yellow-500/20 text-yellow-400' 
+                          : 'bg-red-500/20 text-red-400'
+                    }`}>
+                      {aiAssessment.initial_assessment.relevance_estimate === 'high' && <CheckCircle size={12} />}
+                      {aiAssessment.initial_assessment.relevance_estimate === 'medium' && <AlertTriangle size={12} />}
+                      {aiAssessment.initial_assessment.relevance_estimate === 'low' && <XCircle size={12} />}
+                      {aiAssessment.initial_assessment.relevance_estimate.charAt(0).toUpperCase() + aiAssessment.initial_assessment.relevance_estimate.slice(1)}
+                    </span>
+                  </div>
+
+                  {aiAssessment.initial_assessment.detected_frameworks.length > 0 && (
+                    <div>
+                      <span className="text-xs text-slate-400 block mb-1.5">Detected Frameworks:</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {aiAssessment.initial_assessment.detected_frameworks.slice(0, 5).map((fw, idx) => (
+                          <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300">
+                            <Tag size={10} />
+                            {fw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {aiAssessment.initial_assessment.suggested_controls.length > 0 && (
+                    <div>
+                      <span className="text-xs text-slate-400 block mb-1.5">Suggested Controls:</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {aiAssessment.initial_assessment.suggested_controls.slice(0, 4).map((ctrl, idx) => (
+                          <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-indigo-500/20 px-2 py-0.5 text-xs text-indigo-300">
+                            <ShieldCheck size={10} />
+                            {ctrl}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {aiAssessment.initial_assessment.quality_tips.length > 0 && (
+                    <div>
+                      <span className="text-xs text-slate-400 block mb-1.5">Quality Tips:</span>
+                      <ul className="space-y-1">
+                        {aiAssessment.initial_assessment.quality_tips.slice(0, 3).map((tip, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-xs text-slate-300">
+                            <Lightbulb size={12} className="mt-0.5 text-yellow-400 flex-shrink-0" />
+                            <span>{tip}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div>
+                    <span className="text-xs text-slate-400 block mb-1.5">Completeness Check:</span>
+                    <div className="flex flex-wrap gap-2">
+                      <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
+                        aiAssessment.initial_assessment.completeness_check.has_date 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-slate-600/50 text-slate-400'
+                      }`}>
+                        {aiAssessment.initial_assessment.completeness_check.has_date ? <CheckCircle size={10} /> : <XCircle size={10} />}
+                        Date
+                      </span>
+                      <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
+                        aiAssessment.initial_assessment.completeness_check.has_version 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-slate-600/50 text-slate-400'
+                      }`}>
+                        {aiAssessment.initial_assessment.completeness_check.has_version ? <CheckCircle size={10} /> : <XCircle size={10} />}
+                        Version
+                      </span>
+                      <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
+                        aiAssessment.initial_assessment.completeness_check.has_approval 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-slate-600/50 text-slate-400'
+                      }`}>
+                        {aiAssessment.initial_assessment.completeness_check.has_approval ? <CheckCircle size={10} /> : <XCircle size={10} />}
+                        Approval
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">

@@ -14,6 +14,7 @@ import {
   StatusDistribution,
   ChartEmptyState,
 } from '@/components/charts';
+import AIInsightsPanel from '@/components/dashboard/AIInsightsPanel';
 import {
   Shield,
   AlertTriangle,
@@ -433,26 +434,8 @@ export default function UnifiedGRCDashboard() {
       {activeTab === 'overview' && (
         <div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-blue-500/20 p-2">
-                    <TrendingUp className="h-4 w-4 text-blue-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-white">Compliance Trend</h3>
-                </div>
-              </div>
-              <div className="p-5">
-                {trendLabels.length > 0 ? (
-                  <TrendLine data={trendLabels} color="#3b82f6" height={120} />
-                ) : (
-                  <ChartEmptyState
-                    title="No trend data yet"
-                    description="Trend data will populate as compliance activities occur over time"
-                    icon={<TrendingUp className="h-8 w-8 text-slate-500" />}
-                  />
-                )}
-              </div>
+            <div className="lg:col-span-2">
+              <AIInsightsPanel />
             </div>
 
             <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
@@ -492,6 +475,30 @@ export default function UnifiedGRCDashboard() {
                     )}
                   </span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-blue-500/20 p-2">
+                    <TrendingUp className="h-4 w-4 text-blue-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Compliance Trend</h3>
+                </div>
+              </div>
+              <div className="p-5">
+                {trendLabels.length > 0 ? (
+                  <TrendLine data={trendLabels} color="#3b82f6" height={120} />
+                ) : (
+                  <ChartEmptyState
+                    title="No trend data yet"
+                    description="Trend data will populate as compliance activities occur over time"
+                    icon={<TrendingUp className="h-8 w-8 text-slate-500" />}
+                  />
+                )}
               </div>
             </div>
           </div>

@@ -167,6 +167,33 @@ class LockAssessmentRequest(BaseModel):
     lock_reason: Optional[str] = "User validated"
 
 
+class QuickAssessRequest(BaseModel):
+    evidence_name: str
+    file_name: str
+    file_type: str
+    description: Optional[str] = None
+    evidence_type: Optional[str] = None
+
+
+class CompletenessCheck(BaseModel):
+    has_date: bool = False
+    has_version: bool = False
+    has_approval: bool = False
+
+
+class InitialAssessment(BaseModel):
+    relevance_estimate: str
+    suggested_type: str
+    detected_frameworks: List[str]
+    suggested_controls: List[str]
+    quality_tips: List[str]
+    completeness_check: CompletenessCheck
+
+
+class QuickAssessResponse(BaseModel):
+    initial_assessment: InitialAssessment
+
+
 def validate_evidence_access(user: GRCUser, evidence: Evidence, db: Session) -> None:
     user_tenants = get_user_tenants(user, db)
     if evidence.tenant_id not in user_tenants:
@@ -1138,6 +1165,106 @@ def get_clause_mappings(
         }
         for m in mappings
     ]
+
+
+QUICK_ASSESS_PROMPT = """You are a GRC Compliance Expert. Analyze this evidence metadata and provide a quick initial assessment.
+
+Evidence Name: {evidence_name}
+File Name: {file_name}
+File Type: {file_type}
+Description: {description}
+Evidence Type (if specified): {evidence_type}
+
+Based on this metadata, provide an initial assessment in the following JSON format:
+{{
+    "relevance_estimate": "<high|medium|low>",
+    "suggested_type": "<best matching evidence type: policy, procedure, certificate, audit_report, screenshot, log, configuration, attestation, training_record, access_review, vulnerability_scan, penetration_test, backup_log, change_record, incident_report, or other>",
+    "detected_frameworks": ["<list of likely applicable frameworks like SAMA CSF, ISO 27001, PCI-DSS, NIST CSF, SOC 2, etc.>"],
+    "suggested_controls": ["<list of likely control areas like Access Control, Encryption, Incident Management, etc.>"],
+    "quality_tips": ["<list of 2-3 tips to improve evidence quality based on the evidence type>"],
+    "completeness_check": {{
+        "has_date": <true if filename or description suggests date inclusion, false otherwise>,
+        "has_version": <true if filename or description suggests version info, false otherwise>,
+        "has_approval": <true if filename or description suggests approval/signature, false otherwise>
+    }}
+}}
+
+Be concise and practical. Focus on GRC compliance evidence best practices."""
+
+
+@router.post("/quick-assess", response_model=QuickAssessResponse)
+def quick_assess_evidence(
+    request: QuickAssessRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Quick AI assessment based on evidence metadata before full OCR/content analysis.
+    
+    This is a lightweight endpoint that provides instant feedback to users during
+    the evidence upload process, helping them understand relevance and quality
+    before the full assessment runs.
+    """
+    try:
+        client = get_openai_client()
+        
+        prompt = QUICK_ASSESS_PROMPT.format(
+            evidence_name=request.evidence_name,
+            file_name=request.file_name,
+            file_type=request.file_type,
+            description=request.description or "Not provided",
+            evidence_type=request.evidence_type or "Not specified"
+        )
+        
+        response = client.chat.completions.create(
+            model=MODEL_VERSION,
+            messages=[
+                {"role": "system", "content": "You are a GRC compliance expert. Respond only with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=800
+        )
+        
+        result = parse_ai_response(response.choices[0].message.content)
+        
+        completeness = result.get("completeness_check", {})
+        
+        return QuickAssessResponse(
+            initial_assessment=InitialAssessment(
+                relevance_estimate=result.get("relevance_estimate", "medium"),
+                suggested_type=result.get("suggested_type", request.evidence_type or "document"),
+                detected_frameworks=result.get("detected_frameworks", []),
+                suggested_controls=result.get("suggested_controls", []),
+                quality_tips=result.get("quality_tips", []),
+                completeness_check=CompletenessCheck(
+                    has_date=completeness.get("has_date", False),
+                    has_version=completeness.get("has_version", False),
+                    has_approval=completeness.get("has_approval", False)
+                )
+            )
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Quick assess error: {e}")
+        return QuickAssessResponse(
+            initial_assessment=InitialAssessment(
+                relevance_estimate="medium",
+                suggested_type=request.evidence_type or "document",
+                detected_frameworks=[],
+                suggested_controls=[],
+                quality_tips=[
+                    "Include effective dates for documents",
+                    "Add version numbers for tracking",
+                    "Include approval signatures where applicable"
+                ],
+                completeness_check=CompletenessCheck(
+                    has_date=False,
+                    has_version=False,
+                    has_approval=False
+                )
+            )
+        )
 
 
 @router.post("/batch-assess", response_model=BatchAssessResponse)

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import apiClient from '@/lib/api';
+import apiClient, { controlsApi } from '@/lib/api';
 import { 
   Shield, 
   Loader2, 
@@ -21,7 +21,12 @@ import {
   FileStack,
   Info,
   Paperclip,
-  HelpCircle
+  HelpCircle,
+  Sparkles,
+  ClipboardList,
+  FolderOpen,
+  AlertTriangle,
+  Target
 } from 'lucide-react';
 
 interface FrameworkControl {
@@ -68,6 +73,28 @@ interface FrameworkSummaryResponse {
   total_controls: number;
 }
 
+interface TestProcedure {
+  procedure_type: string;
+  description: string;
+  frequency: string;
+  sample_size: string;
+}
+
+interface EvidenceRequirement {
+  evidence_type: string;
+  title: string;
+  description: string;
+  mandatory: boolean;
+}
+
+interface AIRecommendations {
+  control_id: number;
+  test_procedures: TestProcedure[];
+  evidence_requirements: EvidenceRequirement[];
+  key_risks_addressed: string[];
+  audit_focus_areas: string[];
+}
+
 export default function ControlsPage() {
   const searchParams = useSearchParams();
   const initialFrameworkId = searchParams.get('framework');
@@ -80,7 +107,65 @@ export default function ControlsPage() {
   const [expandedControl, setExpandedControl] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [aiRecommendations, setAiRecommendations] = useState<Record<number, AIRecommendations>>({});
+  const [loadingAI, setLoadingAI] = useState<number | null>(null);
   const pageSize = 50;
+
+  const aiRecommendationMutation = useMutation({
+    mutationFn: (data: { control_id: number; control_title: string; control_description?: string; framework_name?: string }) =>
+      controlsApi.getAIRecommendations(data),
+    onSuccess: (response, variables) => {
+      setAiRecommendations(prev => ({
+        ...prev,
+        [variables.control_id]: response.data
+      }));
+      setLoadingAI(null);
+    },
+    onError: () => {
+      setLoadingAI(null);
+    }
+  });
+
+  const handleGetAIRecommendations = (control: FrameworkControl) => {
+    if (aiRecommendations[control.id] || loadingAI === control.id) return;
+    setLoadingAI(control.id);
+    aiRecommendationMutation.mutate({
+      control_id: control.id,
+      control_title: control.title,
+      control_description: control.description || undefined,
+      framework_name: control.framework_name || undefined
+    });
+  };
+
+  const getProcedureTypeBadge = (type: string) => {
+    const colors: Record<string, string> = {
+      walkthrough: 'bg-blue-500/20 text-blue-400',
+      inquiry: 'bg-purple-500/20 text-purple-400',
+      observation: 'bg-cyan-500/20 text-cyan-400',
+      inspection: 'bg-amber-500/20 text-amber-400',
+      reperformance: 'bg-emerald-500/20 text-emerald-400',
+    };
+    return (
+      <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${colors[type] || 'bg-slate-700 text-slate-400'}`}>
+        {type}
+      </span>
+    );
+  };
+
+  const getEvidenceTypeIcon = (type: string) => {
+    const icons: Record<string, React.ReactNode> = {
+      policy: <FileText className="h-4 w-4" />,
+      procedure: <ClipboardList className="h-4 w-4" />,
+      report: <FolderOpen className="h-4 w-4" />,
+      screenshot: <FileText className="h-4 w-4" />,
+      log: <FileText className="h-4 w-4" />,
+      configuration: <FileText className="h-4 w-4" />,
+      certificate: <FileText className="h-4 w-4" />,
+      attestation: <FileText className="h-4 w-4" />,
+      training: <FileText className="h-4 w-4" />,
+    };
+    return icons[type] || <FileText className="h-4 w-4" />;
+  };
 
   useEffect(() => {
     if (initialFrameworkId) {
@@ -491,6 +576,133 @@ export default function ControlsPage() {
                                 {control.is_mandatory ? 'Yes' : 'No'}
                               </span>
                             </div>
+                          </div>
+
+                          <div className="mt-6 border-t border-slate-700 pt-4">
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="h-5 w-5 text-purple-400" />
+                                <h4 className="text-sm font-semibold text-white">AI Recommendations</h4>
+                              </div>
+                              {!aiRecommendations[control.id] && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleGetAIRecommendations(control);
+                                  }}
+                                  disabled={loadingAI === control.id}
+                                  className="flex items-center gap-2 rounded-lg bg-purple-500/20 px-3 py-1.5 text-sm text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+                                >
+                                  {loadingAI === control.id ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      Generating...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Sparkles className="h-4 w-4" />
+                                      Get AI Recommendations
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+
+                            {aiRecommendations[control.id] && (
+                              <div className="space-y-6">
+                                <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-4">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <ClipboardList className="h-4 w-4 text-purple-400" />
+                                    <h5 className="text-sm font-medium text-purple-300">Test Procedures</h5>
+                                  </div>
+                                  <div className="space-y-3">
+                                    {aiRecommendations[control.id].test_procedures.map((proc, idx) => (
+                                      <div key={idx} className="flex gap-3">
+                                        <span className="flex-shrink-0 h-6 w-6 rounded-full bg-purple-500/20 flex items-center justify-center text-xs text-purple-400 font-medium">
+                                          {idx + 1}
+                                        </span>
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            {getProcedureTypeBadge(proc.procedure_type)}
+                                            <span className="text-xs text-slate-500">{proc.frequency}</span>
+                                            {proc.sample_size !== 'N/A' && proc.sample_size !== 'N/A for inquiry' && (
+                                              <span className="text-xs text-slate-500">| Sample: {proc.sample_size}</span>
+                                            )}
+                                          </div>
+                                          <p className="text-sm text-slate-300">{proc.description}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <FolderOpen className="h-4 w-4 text-blue-400" />
+                                    <h5 className="text-sm font-medium text-blue-300">Evidence Requirements</h5>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {aiRecommendations[control.id].evidence_requirements.map((ev, idx) => (
+                                      <div key={idx} className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                                        <div className="flex items-start gap-2">
+                                          <div className="flex-shrink-0 mt-0.5 text-blue-400">
+                                            {getEvidenceTypeIcon(ev.evidence_type)}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-sm font-medium text-white">{ev.title}</span>
+                                              {ev.mandatory && (
+                                                <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-xs text-rose-400">Required</span>
+                                              )}
+                                            </div>
+                                            <span className="inline-block rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400 mt-1 capitalize">{ev.evidence_type}</span>
+                                            <p className="text-xs text-slate-400 mt-1">{ev.description}</p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <AlertTriangle className="h-4 w-4 text-amber-400" />
+                                      <h5 className="text-sm font-medium text-amber-300">Key Risks Addressed</h5>
+                                    </div>
+                                    <ul className="space-y-1">
+                                      {aiRecommendations[control.id].key_risks_addressed.map((risk, idx) => (
+                                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-300">
+                                          <span className="text-amber-400 mt-1">•</span>
+                                          {risk}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+
+                                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Target className="h-4 w-4 text-emerald-400" />
+                                      <h5 className="text-sm font-medium text-emerald-300">Audit Focus Areas</h5>
+                                    </div>
+                                    <ul className="space-y-1">
+                                      {aiRecommendations[control.id].audit_focus_areas.map((area, idx) => (
+                                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-300">
+                                          <span className="text-emerald-400 mt-1">•</span>
+                                          {area}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {!aiRecommendations[control.id] && loadingAI !== control.id && (
+                              <p className="text-sm text-slate-500">
+                                Click "Get AI Recommendations" to generate test procedures and evidence requirements for this control.
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>

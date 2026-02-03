@@ -186,6 +186,15 @@ export default function GovernanceDocumentsPage() {
   const [parsingDocumentId, setParsingDocumentId] = useState<number | null>(null);
   const [parseResult, setParseResult] = useState<{ documentId: number; count: number } | null>(null);
   const [attestationTargetDocument, setAttestationTargetDocument] = useState<DocumentItem | null>(null);
+  const [isAIDraftModalOpen, setIsAIDraftModalOpen] = useState(false);
+  const [aiDraftResult, setAIDraftResult] = useState<{
+    generated_content: string;
+    suggested_title: string;
+    suggested_sections: { heading: string; content: string }[];
+    framework_alignment: { framework: string; controls: string[] }[];
+    word_count: number;
+    estimated_review_time: string;
+  } | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -332,6 +341,26 @@ export default function GovernanceDocumentsPage() {
     },
   });
 
+  const aiDraftMutation = useMutation({
+    mutationFn: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string }) =>
+      governanceApi.generatePolicyDraft(data),
+    onSuccess: (response) => {
+      setAIDraftResult(response.data as typeof aiDraftResult);
+      toast({
+        type: 'success',
+        title: 'Draft Generated',
+        message: 'AI has generated your policy draft. Review and use the content.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        type: 'error',
+        title: 'Generation Failed',
+        message: error?.response?.data?.detail || 'Failed to generate AI draft.',
+      });
+    },
+  });
+
   const handleDownload = async (doc: DocumentItem) => {
     try {
       const response = await governanceApi.downloadDocumentFile(doc.id);
@@ -432,6 +461,13 @@ export default function GovernanceDocumentsPage() {
           <p className="text-slate-400">Manage governance documents, policies, and procedures</p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => setIsAIDraftModalOpen(true)}
+            className="flex items-center gap-2 rounded-lg border border-purple-500 bg-gradient-to-r from-purple-500/20 to-blue-500/20 px-4 py-2 font-medium text-purple-400 hover:from-purple-500/30 hover:to-blue-500/30 transition-colors"
+          >
+            <Wand2 size={18} />
+            AI Draft Policy
+          </button>
           <button
             onClick={() => setIsUploadModalOpen(true)}
             className="flex items-center gap-2 rounded-lg border border-primary-600 bg-primary-600/10 px-4 py-2 font-medium text-primary-400 hover:bg-primary-600/20 transition-colors"
@@ -791,6 +827,24 @@ export default function GovernanceDocumentsPage() {
             });
           }}
           isLoading={requestAttestationMutation.isPending}
+        />
+      )}
+
+      {isAIDraftModalOpen && (
+        <AIDraftPolicyModal
+          onClose={() => {
+            setIsAIDraftModalOpen(false);
+            setAIDraftResult(null);
+          }}
+          onGenerate={(data) => aiDraftMutation.mutate(data)}
+          onUseContent={(content: string, title: string) => {
+            setIsAIDraftModalOpen(false);
+            setAIDraftResult(null);
+            setEditingDocument(null);
+            setIsModalOpen(true);
+          }}
+          isLoading={aiDraftMutation.isPending}
+          result={aiDraftResult}
         />
       )}
     </div>
@@ -1718,6 +1772,243 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
               </>
             )}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface AIDraftPolicyModalProps {
+  onClose: () => void;
+  onGenerate: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string }) => void;
+  onUseContent: (content: string, title: string) => void;
+  isLoading: boolean;
+  result: {
+    generated_content: string;
+    suggested_title: string;
+    suggested_sections: { heading: string; content: string }[];
+    framework_alignment: { framework: string; controls: string[] }[];
+    word_count: number;
+    estimated_review_time: string;
+  } | null;
+}
+
+function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, result }: AIDraftPolicyModalProps) {
+  const [formData, setFormData] = useState({
+    doc_type: 'policy',
+    title: '',
+    regulatory_scope: '',
+    description: '',
+  });
+  const { toast } = useToast();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title.trim()) return;
+    
+    const regulatoryScope = formData.regulatory_scope
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+    
+    onGenerate({
+      doc_type: formData.doc_type,
+      title: formData.title,
+      regulatory_scope: regulatoryScope.length > 0 ? regulatoryScope : undefined,
+      description: formData.description || undefined,
+    });
+  };
+
+  const handleCopyContent = () => {
+    if (result?.generated_content) {
+      navigator.clipboard.writeText(result.generated_content);
+      toast({
+        type: 'success',
+        title: 'Copied',
+        message: 'Content copied to clipboard',
+      });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow-xl flex flex-col">
+        <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-2">
+              <Wand2 className="h-5 w-5 text-purple-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">AI Draft Policy</h2>
+              <p className="text-sm text-slate-400">Generate professional policy documents with AI</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {!result ? (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Document Type *</label>
+                  <select
+                    value={formData.doc_type}
+                    onChange={(e) => setFormData(prev => ({ ...prev, doc_type: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="policy">Policy</option>
+                    <option value="standard">Standard</option>
+                    <option value="procedure">Procedure</option>
+                    <option value="guideline">Guideline</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Regulatory Frameworks</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., SAMA CSF, ISO 27001, PCI DSS"
+                    value={formData.regulatory_scope}
+                    onChange={(e) => setFormData(prev => ({ ...prev, regulatory_scope: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Policy Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., Information Security Policy"
+                  value={formData.title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Description / Requirements</label>
+                <textarea
+                  rows={3}
+                  placeholder="Describe what this policy should cover, any specific requirements, or areas of focus..."
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading || !formData.title.trim()}
+                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-white hover:from-purple-700 hover:to-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="h-4 w-4" />
+                      Generate Draft
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <FileText className="h-4 w-4" />
+                    <span>{result.word_count} words</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <Loader2 className="h-4 w-4" />
+                    <span>~{result.estimated_review_time} to review</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCopyContent}
+                    className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                    Copy Content
+                  </button>
+                </div>
+              </div>
+
+              {result.framework_alignment.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {result.framework_alignment.map((alignment, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 rounded-full bg-purple-500/20 px-3 py-1"
+                    >
+                      <Shield className="h-3.5 w-3.5 text-purple-400" />
+                      <span className="text-sm font-medium text-purple-300">{alignment.framework}</span>
+                      <span className="text-xs text-purple-400">({alignment.controls.length} controls)</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="rounded-xl border border-slate-600 bg-slate-900/50 overflow-hidden">
+                <div className="border-b border-slate-600 px-4 py-2 bg-slate-800/50">
+                  <h3 className="font-medium text-white">{result.suggested_title}</h3>
+                </div>
+                <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
+                  {result.suggested_sections.map((section, idx) => (
+                    <div key={idx} className="space-y-2">
+                      <h4 className="font-medium text-purple-300">{section.heading}</h4>
+                      <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
+                        {section.content}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-700">
+                <button
+                  onClick={() => onGenerate({
+                    doc_type: formData.doc_type,
+                    title: formData.title,
+                    regulatory_scope: formData.regulatory_scope.split(',').map(s => s.trim()).filter(s => s.length > 0),
+                    description: formData.description || undefined,
+                  })}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors disabled:opacity-50"
+                >
+                  <Wand2 className="h-4 w-4" />
+                  Regenerate
+                </button>
+                <button
+                  onClick={() => onUseContent(result.generated_content, result.suggested_title)}
+                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-white hover:from-purple-700 hover:to-blue-700 transition-colors"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Use This Content
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

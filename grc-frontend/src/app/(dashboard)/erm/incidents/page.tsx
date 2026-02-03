@@ -21,6 +21,13 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
+  Sparkles,
+  Brain,
+  ChevronRight,
+  Shield,
+  Link2,
+  Target,
+  TrendingUp,
 } from 'lucide-react';
 
 const SEVERITIES: { value: IncidentSeverity; label: string; color: string }[] = [
@@ -38,11 +45,48 @@ const INCIDENT_STATUSES: { value: IncidentStatus; label: string; color: string }
   { value: 'closed', label: 'Closed', color: 'bg-slate-500/20 text-slate-400' },
 ];
 
+type AIAnalysisResult = {
+  root_cause_analysis: {
+    primary_cause: string;
+    contributing_factors: string[];
+    category: string;
+    preventability: string;
+  };
+  related_risks: Array<{
+    risk_id: number;
+    risk_title: string;
+    relevance: string;
+    explanation: string;
+  }>;
+  related_controls: Array<{
+    control_id: number;
+    control_title: string;
+    framework: string;
+    relevance: string;
+    status_recommendation: string;
+  }>;
+  recommended_actions: string[];
+  similar_incidents: Array<{
+    incident_id: number;
+    title: string;
+    similarity: number;
+  }>;
+  impact_assessment: {
+    financial_impact: string;
+    reputational_impact: string;
+    regulatory_impact: string;
+    operational_impact: string;
+  };
+};
+
 export default function IncidentsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingIncident, setEditingIncident] = useState<RiskIncident | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [analyzingIncident, setAnalyzingIncident] = useState<RiskIncident | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: incidents, isLoading } = useQuery({
@@ -79,6 +123,25 @@ export default function IncidentsPage() {
       queryClient.invalidateQueries({ queryKey: ['erm-incident-dashboard'] });
     },
   });
+
+  const handleAnalyzeWithAI = async (incident: RiskIncident) => {
+    setAnalyzingIncident(incident);
+    setAiAnalysis(null);
+    setIsAnalyzing(true);
+    try {
+      const response = await ermApi.incidents.analyzeWithAI({
+        title: incident.title,
+        description: incident.description || '',
+        severity: incident.severity,
+        incident_date: incident.incident_date,
+      });
+      setAiAnalysis(response.data);
+    } catch (error) {
+      console.error('AI analysis failed:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -206,6 +269,13 @@ export default function IncidentsPage() {
                   </div>
                   <div className="ml-4 flex gap-1">
                     <button
+                      onClick={() => handleAnalyzeWithAI(incident)}
+                      className="rounded p-1.5 text-slate-400 hover:bg-purple-500/20 hover:text-purple-400"
+                      title="AI Analysis"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                    </button>
+                    <button
                       onClick={() => setEditingIncident(incident)}
                       className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
                     >
@@ -248,6 +318,18 @@ export default function IncidentsPage() {
             setEditingIncident(null);
             queryClient.invalidateQueries({ queryKey: ['erm-incidents'] });
             queryClient.invalidateQueries({ queryKey: ['erm-incident-dashboard'] });
+          }}
+        />
+      )}
+
+      {analyzingIncident && (
+        <AIAnalysisModal
+          incident={analyzingIncident}
+          analysis={aiAnalysis}
+          isLoading={isAnalyzing}
+          onClose={() => {
+            setAnalyzingIncident(null);
+            setAiAnalysis(null);
           }}
         />
       )}
@@ -440,6 +522,224 @@ function IncidentModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function AIAnalysisModal({
+  incident,
+  analysis,
+  isLoading,
+  onClose,
+}: {
+  incident: RiskIncident;
+  analysis: AIAnalysisResult | null;
+  isLoading: boolean;
+  onClose: () => void;
+}) {
+  const getImpactColor = (level: string) => {
+    switch (level) {
+      case 'critical': return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'high': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+      case 'medium': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'low': return 'bg-green-500/20 text-green-400 border-green-500/30';
+      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+    }
+  };
+
+  const getRelevanceColor = (level: string) => {
+    switch (level) {
+      case 'high': return 'bg-purple-500/20 text-purple-400';
+      case 'medium': return 'bg-blue-500/20 text-blue-400';
+      case 'low': return 'bg-slate-500/20 text-slate-400';
+      default: return 'bg-slate-500/20 text-slate-400';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-slate-800 p-6">
+        <div className="flex items-center justify-between border-b border-slate-700 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 p-2">
+              <Brain className="h-6 w-6 text-purple-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">AI Analysis</h2>
+              <p className="text-sm text-slate-400">{incident.title}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping rounded-full bg-purple-500/30" />
+              <Sparkles className="relative h-12 w-12 text-purple-400 animate-pulse" />
+            </div>
+            <p className="mt-4 text-slate-400">Analyzing incident with AI...</p>
+            <p className="text-xs text-slate-500 mt-1">This may take a few seconds</p>
+          </div>
+        ) : analysis ? (
+          <div className="mt-6 space-y-6">
+            <div className="rounded-xl border border-purple-500/20 bg-gradient-to-br from-purple-900/20 to-blue-900/20 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Target className="h-5 w-5 text-purple-400" />
+                <h3 className="font-semibold text-white">Root Cause Analysis</h3>
+              </div>
+              <p className="text-slate-300">{analysis.root_cause_analysis.primary_cause}</p>
+              {analysis.root_cause_analysis.contributing_factors.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs text-slate-400 mb-2">Contributing Factors:</p>
+                  <ul className="space-y-1">
+                    {analysis.root_cause_analysis.contributing_factors.map((factor, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                        <ChevronRight className="h-4 w-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                        {factor}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="mt-3 flex gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-xs ${getImpactColor(analysis.root_cause_analysis.category)}`}>
+                  {analysis.root_cause_analysis.category}
+                </span>
+                <span className={`rounded-full px-2 py-0.5 text-xs ${getImpactColor(analysis.root_cause_analysis.preventability)}`}>
+                  {analysis.root_cause_analysis.preventability} preventability
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-3">
+              <div className={`rounded-lg border p-3 ${getImpactColor(analysis.impact_assessment.financial_impact)}`}>
+                <p className="text-xs opacity-70">Financial</p>
+                <p className="font-semibold capitalize">{analysis.impact_assessment.financial_impact}</p>
+              </div>
+              <div className={`rounded-lg border p-3 ${getImpactColor(analysis.impact_assessment.reputational_impact)}`}>
+                <p className="text-xs opacity-70">Reputational</p>
+                <p className="font-semibold capitalize">{analysis.impact_assessment.reputational_impact}</p>
+              </div>
+              <div className={`rounded-lg border p-3 ${getImpactColor(analysis.impact_assessment.regulatory_impact)}`}>
+                <p className="text-xs opacity-70">Regulatory</p>
+                <p className="font-semibold capitalize">{analysis.impact_assessment.regulatory_impact}</p>
+              </div>
+              <div className={`rounded-lg border p-3 ${getImpactColor(analysis.impact_assessment.operational_impact)}`}>
+                <p className="text-xs opacity-70">Operational</p>
+                <p className="font-semibold capitalize">{analysis.impact_assessment.operational_impact}</p>
+              </div>
+            </div>
+
+            {analysis.related_risks.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-5 w-5 text-orange-400" />
+                  <h3 className="font-semibold text-white">Related Risks</h3>
+                </div>
+                <div className="space-y-2">
+                  {analysis.related_risks.map((risk, i) => (
+                    <div key={i} className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-medium text-white">{risk.risk_title}</p>
+                          <p className="text-sm text-slate-400 mt-1">{risk.explanation}</p>
+                        </div>
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${getRelevanceColor(risk.relevance)}`}>
+                          {risk.relevance}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {analysis.related_controls.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Shield className="h-5 w-5 text-blue-400" />
+                  <h3 className="font-semibold text-white">Related Controls</h3>
+                </div>
+                <div className="space-y-2">
+                  {analysis.related_controls.map((control, i) => (
+                    <div key={i} className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-white">{control.control_title}</p>
+                            <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-xs text-blue-400">
+                              {control.framework}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-400 mt-1">{control.status_recommendation}</p>
+                        </div>
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${getRelevanceColor(control.relevance)}`}>
+                          {control.relevance}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {analysis.recommended_actions.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle className="h-5 w-5 text-green-400" />
+                  <h3 className="font-semibold text-white">Recommended Actions</h3>
+                </div>
+                <div className="space-y-2">
+                  {analysis.recommended_actions.map((action, i) => (
+                    <div key={i} className="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                      <div className="rounded-full border border-slate-600 p-1">
+                        <div className="h-2 w-2 rounded-full bg-slate-600" />
+                      </div>
+                      <p className="text-sm text-slate-300">{action}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {analysis.similar_incidents.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Link2 className="h-5 w-5 text-slate-400" />
+                  <h3 className="font-semibold text-white">Similar Incidents</h3>
+                </div>
+                <div className="space-y-2">
+                  {analysis.similar_incidents.map((inc, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                      <p className="text-sm text-slate-300">{inc.title}</p>
+                      <span className="text-xs text-slate-400">
+                        {Math.round(inc.similarity * 100)}% match
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16">
+            <AlertCircle className="h-12 w-12 text-red-400" />
+            <p className="mt-4 text-slate-400">Failed to analyze incident</p>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end border-t border-slate-700 pt-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

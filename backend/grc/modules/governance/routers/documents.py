@@ -2,18 +2,23 @@ from typing import List, Optional
 from datetime import datetime
 import os
 import uuid
+import json
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_
 from pydantic import BaseModel
+from openai import OpenAI
 
 from ....models import (
     GovernanceDocument, GovernanceDocumentVersion, DocumentReviewer,
     DocumentApprovalStep, DocumentAuditLog, GRCUser, Tenant, PolicyStatement, 
-    InternalControl, get_db
+    InternalControl, ParsedFrameworkControl, UploadedFramework, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+
+AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
 GOVERNANCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "uploads", "governance")
 os.makedirs(GOVERNANCE_UPLOAD_DIR, exist_ok=True)
@@ -1119,4 +1124,209 @@ async def create_document_with_file(
     return {
         "message": "Document created successfully",
         "document": serialize_document(document, db)
+    }
+
+
+class PolicyAIDraftRequest(BaseModel):
+    doc_type: str
+    title: str
+    framework_ids: Optional[List[int]] = None
+    regulatory_scope: Optional[List[str]] = None
+    description: Optional[str] = None
+    include_sections: Optional[List[str]] = None
+
+
+def generate_policy_with_openai(
+    doc_type: str,
+    title: str,
+    controls_context: str,
+    regulatory_scope: List[str],
+    description: Optional[str],
+    include_sections: Optional[List[str]]
+) -> dict:
+    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI integration not configured"
+        )
+    
+    client = OpenAI(
+        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
+        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+    )
+    
+    doc_type_labels = {
+        "policy": "Policy",
+        "standard": "Standard", 
+        "procedure": "Procedure",
+        "guideline": "Guideline"
+    }
+    doc_label = doc_type_labels.get(doc_type, "Policy")
+    
+    sections_instruction = ""
+    if include_sections:
+        sections_instruction = f"\n\nThe document MUST include these specific sections: {', '.join(include_sections)}"
+    
+    regulatory_context = ""
+    if regulatory_scope:
+        regulatory_context = f"\n\nThis document should align with the following regulatory frameworks: {', '.join(regulatory_scope)}"
+    
+    description_context = ""
+    if description:
+        description_context = f"\n\nAdditional requirements: {description}"
+    
+    prompt = f"""You are an expert governance and compliance consultant. Generate a professional {doc_label} document titled "{title}".
+
+{controls_context}
+{regulatory_context}
+{description_context}
+{sections_instruction}
+
+Generate a comprehensive {doc_label.lower()} document with the following structure:
+1. Purpose - Why this {doc_label.lower()} exists and its objectives
+2. Scope - Who and what this {doc_label.lower()} applies to
+3. {doc_label} Statements - The key requirements and directives
+4. Roles and Responsibilities - Who is responsible for what
+5. Compliance - How compliance will be measured and enforced
+6. Review and Updates - How often the document will be reviewed
+
+For each section, provide detailed, professional content that would be suitable for an enterprise organization.
+Reference the specific control requirements from the frameworks where applicable.
+
+Return a JSON object with:
+{{
+  "generated_content": "The full document content in markdown format",
+  "suggested_title": "The recommended document title",
+  "suggested_sections": [
+    {{"heading": "1. Purpose", "content": "Section content..."}},
+    {{"heading": "2. Scope", "content": "Section content..."}},
+    {{"heading": "3. {doc_label} Statements", "content": "Section content..."}},
+    {{"heading": "4. Roles and Responsibilities", "content": "Section content..."}},
+    {{"heading": "5. Compliance", "content": "Section content..."}},
+    {{"heading": "6. Review and Updates", "content": "Section content..."}}
+  ],
+  "framework_alignment": [
+    {{"framework": "Framework Name", "controls": ["Control ID 1", "Control ID 2"]}}
+  ]
+}}"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an expert governance and compliance consultant that creates professional policy documents. Always respond with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            max_completion_tokens=8192
+        )
+        
+        result_text = response.choices[0].message.content or "{}"
+        result = json.loads(result_text)
+        return result
+    
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to parse OpenAI response: {str(e)}"
+        )
+    except Exception as e:
+        error_msg = str(e)
+        if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Cloud budget exceeded. Please upgrade your plan."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"OpenAI API error: {error_msg}"
+        )
+
+
+@router.post("/ai-draft")
+def generate_policy_ai_draft(
+    request: PolicyAIDraftRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Generate a policy/standard/procedure document using AI based on framework requirements"""
+    controls_context = ""
+    framework_controls = []
+    
+    if request.framework_ids:
+        frameworks = db.query(UploadedFramework).filter(
+            UploadedFramework.id.in_(request.framework_ids)
+        ).all()
+        
+        if frameworks:
+            controls_context = "The document should align with the following framework controls:\n\n"
+            
+            for framework in frameworks:
+                controls = db.query(ParsedFrameworkControl).filter(
+                    ParsedFrameworkControl.uploaded_framework_id == framework.id
+                ).limit(20).all()
+                
+                if controls:
+                    framework_name = framework.name
+                    control_ids = []
+                    controls_context += f"Framework: {framework_name}\n"
+                    
+                    for control in controls:
+                        ref = control.original_reference or control.control_id
+                        controls_context += f"- {ref}: {control.title}\n"
+                        if control.description:
+                            controls_context += f"  Description: {control.description[:200]}...\n"
+                        control_ids.append(ref)
+                    
+                    controls_context += "\n"
+                    framework_controls.append({
+                        "framework": framework_name,
+                        "controls": control_ids[:10]
+                    })
+    
+    if request.regulatory_scope:
+        for scope in request.regulatory_scope:
+            matching_frameworks = db.query(UploadedFramework).filter(
+                UploadedFramework.name.ilike(f"%{scope}%")
+            ).all()
+            
+            for framework in matching_frameworks:
+                if not any(fc.get("framework") == framework.name for fc in framework_controls):
+                    controls = db.query(ParsedFrameworkControl).filter(
+                        ParsedFrameworkControl.uploaded_framework_id == framework.id
+                    ).limit(10).all()
+                    
+                    if controls:
+                        control_ids = [c.original_reference or c.control_id for c in controls]
+                        framework_controls.append({
+                            "framework": framework.name,
+                            "controls": control_ids[:10]
+                        })
+                        
+                        controls_context += f"Framework: {framework.name}\n"
+                        for control in controls:
+                            ref = control.original_reference or control.control_id
+                            controls_context += f"- {ref}: {control.title}\n"
+                        controls_context += "\n"
+    
+    result = generate_policy_with_openai(
+        doc_type=request.doc_type,
+        title=request.title,
+        controls_context=controls_context,
+        regulatory_scope=request.regulatory_scope or [],
+        description=request.description,
+        include_sections=request.include_sections
+    )
+    
+    generated_content = result.get("generated_content", "")
+    word_count = len(generated_content.split()) if generated_content else 0
+    estimated_review_time = f"{max(5, word_count // 100)} minutes"
+    
+    return {
+        "generated_content": generated_content,
+        "suggested_title": result.get("suggested_title", request.title),
+        "suggested_sections": result.get("suggested_sections", []),
+        "framework_alignment": framework_controls if framework_controls else result.get("framework_alignment", []),
+        "word_count": word_count,
+        "estimated_review_time": estimated_review_time
     }

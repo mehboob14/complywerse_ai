@@ -1,6 +1,8 @@
 import csv
 import io
 import json
+import os
+import logging
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -8,12 +10,15 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func, and_, not_, exists
 from pydantic import BaseModel
+from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 from ....models import (
     CommonControlGroup, CommonControlGroupMapping, NormalizedControl,
     FrameworkControl, FrameworkDomain, ControlObjective, Framework,
     Evidence, EvidenceControlMapping, AIEvidenceRecommendation,
-    GRCUser, get_db
+    GRCUser, get_db, UploadedFramework, ParsedFrameworkControl
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -1045,3 +1050,301 @@ def export_gap_analysis(
         "generated_at": datetime.utcnow().isoformat(),
         "data": dashboard_data
     }
+
+
+class GapPrioritizationRequest(BaseModel):
+    framework_id: Optional[int] = None
+    max_gaps: int = 20
+
+
+def get_openai_client() -> OpenAI:
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    is_modelfarm = base_url and "modelfarm" in base_url
+    if not api_key and not is_modelfarm:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    if not is_modelfarm and (api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    return OpenAI(
+        api_key=api_key,
+        base_url=base_url
+    )
+
+
+def collect_compliance_gaps(db: Session, tenant_id: int, framework_id: Optional[int], max_gaps: int) -> List[dict]:
+    gaps = []
+    
+    tenant_evidence_ids = db.query(Evidence.id).filter(
+        Evidence.tenant_id == tenant_id
+    ).subquery()
+    
+    fc_with_evidence = db.query(EvidenceControlMapping.framework_control_id).filter(
+        EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
+        EvidenceControlMapping.framework_control_id.isnot(None)
+    ).distinct().subquery()
+    
+    query = db.query(UploadedFramework).filter(
+        UploadedFramework.upload_status.in_(['parsed', 'completed', 'published']),
+        UploadedFramework.is_active == True
+    )
+    if tenant_id:
+        query = query.filter(
+            (UploadedFramework.tenant_id == tenant_id) | 
+            (UploadedFramework.is_shared == True) |
+            (UploadedFramework.tenant_id == None)
+        )
+    if framework_id:
+        query = query.filter(UploadedFramework.id == framework_id)
+    
+    uploaded_frameworks = query.all()
+    
+    for fw in uploaded_frameworks:
+        controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == fw.id
+        ).all()
+        
+        for ctrl in controls:
+            evidence_mappings = db.query(EvidenceControlMapping).join(
+                Evidence, EvidenceControlMapping.evidence_id == Evidence.id
+            ).filter(
+                Evidence.tenant_id == tenant_id,
+                EvidenceControlMapping.parsed_framework_control_id == ctrl.id
+            ).all()
+            
+            has_evidence = len(evidence_mappings) > 0
+            has_expired = False
+            
+            if has_evidence:
+                for mapping in evidence_mappings:
+                    if mapping.evidence and mapping.evidence.expiry_date:
+                        if mapping.evidence.expiry_date < datetime.utcnow():
+                            has_expired = True
+                            break
+            
+            if not has_evidence:
+                gaps.append({
+                    "gap_type": "missing_evidence",
+                    "control_id": ctrl.id,
+                    "control_code": ctrl.original_reference or ctrl.control_id,
+                    "control_title": ctrl.title or "Untitled Control",
+                    "control_description": ctrl.description or "",
+                    "framework_id": fw.id,
+                    "framework_name": fw.name,
+                    "domain": ctrl.domain_name or "",
+                    "criticality": ctrl.criticality or "medium"
+                })
+            elif has_expired:
+                gaps.append({
+                    "gap_type": "expired_evidence",
+                    "control_id": ctrl.id,
+                    "control_code": ctrl.original_reference or ctrl.control_id,
+                    "control_title": ctrl.title or "Untitled Control",
+                    "control_description": ctrl.description or "",
+                    "framework_id": fw.id,
+                    "framework_name": fw.name,
+                    "domain": ctrl.domain_name or "",
+                    "criticality": ctrl.criticality or "medium"
+                })
+            
+            if len(gaps) >= max_gaps * 2:
+                break
+        
+        if len(gaps) >= max_gaps * 2:
+            break
+    
+    return gaps[:max_gaps * 2]
+
+
+GAP_PRIORITIZATION_PROMPT = """You are a Senior GRC Compliance Expert with 20+ years of experience in regulatory compliance, risk management, and audit.
+Your task is to analyze compliance gaps and prioritize them by business impact.
+
+COMPLIANCE GAPS TO ANALYZE:
+{gaps_data}
+
+INSTRUCTIONS:
+1. Analyze each gap considering:
+   - Regulatory requirements and penalties
+   - Business operational impact
+   - Data protection and security implications
+   - Audit readiness and findings risk
+   - Remediation complexity
+
+2. Assign a business_impact rating: "critical", "high", "medium", or "low"
+3. Provide clear reasoning for each rating
+4. Suggest practical remediation actions
+5. Identify quick wins (low effort, high impact fixes)
+
+Return your analysis in this exact JSON format:
+{{
+    "prioritized_gaps": [
+        {{
+            "rank": 1,
+            "gap_type": "<missing_evidence|expired_evidence|unmapped_control>",
+            "control_id": <control_id_number>,
+            "control_title": "<control title>",
+            "framework_name": "<framework name>",
+            "business_impact": "<critical|high|medium|low>",
+            "impact_reasoning": "<2-3 sentence explanation of business impact>",
+            "regulatory_risk": "<explanation of regulatory implications>",
+            "remediation_effort": "<low|medium|high>",
+            "suggested_actions": ["<action 1>", "<action 2>"],
+            "deadline_recommendation": "<timeframe like '1 week', '2 weeks', '1 month'>"
+        }}
+    ],
+    "summary": {{
+        "critical_gaps": <count>,
+        "high_gaps": <count>,
+        "medium_gaps": <count>,
+        "low_gaps": <count>,
+        "key_themes": ["<theme 1>", "<theme 2>", "<theme 3>"]
+    }},
+    "quick_wins": [
+        {{
+            "gap_description": "<brief description>",
+            "effort": "low",
+            "impact": "high",
+            "recommendation": "<specific action>"
+        }}
+    ]
+}}
+
+IMPORTANT:
+- Rank gaps by business_impact (critical first, then high, medium, low)
+- Be specific in reasoning - reference regulatory frameworks and business consequences
+- Suggest actionable remediation steps
+- Identify at least 2-3 quick wins if possible"""
+
+
+def parse_ai_response(response_text: str) -> dict:
+    try:
+        cleaned = response_text.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        return json.loads(cleaned.strip())
+    except json.JSONDecodeError:
+        return {
+            "prioritized_gaps": [],
+            "summary": {
+                "critical_gaps": 0,
+                "high_gaps": 0,
+                "medium_gaps": 0,
+                "low_gaps": 0,
+                "key_themes": []
+            },
+            "quick_wins": []
+        }
+
+
+@router.post("/ai-prioritize")
+def ai_prioritize_gaps(
+    request: GapPrioritizationRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    
+    gaps = collect_compliance_gaps(db, tenant_id, request.framework_id, request.max_gaps)
+    
+    if not gaps:
+        return {
+            "analysis_date": datetime.utcnow().isoformat(),
+            "total_gaps_analyzed": 0,
+            "prioritized_gaps": [],
+            "summary": {
+                "critical_gaps": 0,
+                "high_gaps": 0,
+                "medium_gaps": 0,
+                "low_gaps": 0,
+                "key_themes": []
+            },
+            "quick_wins": [],
+            "message": "No compliance gaps found. Your controls have adequate evidence coverage."
+        }
+    
+    gaps_for_ai = gaps[:request.max_gaps]
+    gaps_data = json.dumps(gaps_for_ai, indent=2)
+    
+    try:
+        client = get_openai_client()
+        
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a Senior GRC Compliance Expert. Analyze compliance gaps and return structured JSON prioritization."
+                },
+                {
+                    "role": "user",
+                    "content": GAP_PRIORITIZATION_PROMPT.format(gaps_data=gaps_data)
+                }
+            ],
+            temperature=0.3,
+            max_tokens=4000
+        )
+        
+        ai_result = parse_ai_response(response.choices[0].message.content)
+        
+        return {
+            "analysis_date": datetime.utcnow().isoformat(),
+            "total_gaps_analyzed": len(gaps_for_ai),
+            "prioritized_gaps": ai_result.get("prioritized_gaps", []),
+            "summary": ai_result.get("summary", {
+                "critical_gaps": 0,
+                "high_gaps": 0,
+                "medium_gaps": 0,
+                "low_gaps": 0,
+                "key_themes": []
+            }),
+            "quick_wins": ai_result.get("quick_wins", [])
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI gap prioritization error: {str(e)}")
+        
+        prioritized = []
+        for idx, gap in enumerate(gaps_for_ai):
+            prioritized.append({
+                "rank": idx + 1,
+                "gap_type": gap["gap_type"],
+                "control_id": gap["control_id"],
+                "control_title": gap["control_title"],
+                "framework_name": gap["framework_name"],
+                "business_impact": "medium",
+                "impact_reasoning": f"Control '{gap['control_title']}' requires attention. {gap['gap_type'].replace('_', ' ').title()} detected.",
+                "regulatory_risk": f"{gap['framework_name']} compliance requirement.",
+                "remediation_effort": "medium",
+                "suggested_actions": [
+                    f"Upload evidence for {gap['control_title']}",
+                    "Review control implementation status"
+                ],
+                "deadline_recommendation": "2 weeks"
+            })
+        
+        return {
+            "analysis_date": datetime.utcnow().isoformat(),
+            "total_gaps_analyzed": len(gaps_for_ai),
+            "prioritized_gaps": prioritized,
+            "summary": {
+                "critical_gaps": 0,
+                "high_gaps": 0,
+                "medium_gaps": len(prioritized),
+                "low_gaps": 0,
+                "key_themes": ["Evidence Collection", "Compliance Documentation"]
+            },
+            "quick_wins": [],
+            "fallback": True,
+            "error": "AI analysis unavailable. Basic prioritization provided."
+        }

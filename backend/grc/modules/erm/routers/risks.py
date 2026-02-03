@@ -1,16 +1,24 @@
 from typing import List, Optional
 from datetime import datetime
 from io import BytesIO
+import os
+import json
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
+from pydantic import BaseModel
 import openpyxl
+from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 from ....models import (
     Risk, RiskControlLink, RiskAssetLink, RiskEvidenceLink,
     RiskFrameworkControlLink, RiskGovernanceLink, RiskAuditFindingLink,
     NormalizedControl, FrameworkControl, ITAsset, Evidence,
-    GovernanceObjective, Issue, GRCUser, Tenant, get_db
+    GovernanceObjective, Issue, GRCUser, Tenant, get_db,
+    ParsedFrameworkControl, UploadedFramework
 )
 from ....schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
@@ -1344,3 +1352,255 @@ def unlink_audit_finding_from_risk(
     db.delete(link)
     db.commit()
     return None
+
+
+class RiskAISuggestionRequest(BaseModel):
+    name: str
+    category: Optional[str] = None
+    sub_category: Optional[str] = None
+    description: Optional[str] = None
+
+
+class RecommendedControl(BaseModel):
+    control_id: int
+    control_name: str
+    control_code: Optional[str] = None
+    relevance: str
+    rationale: str
+
+
+class RiskAISuggestionResponse(BaseModel):
+    suggested_description: str
+    suggested_causes: List[str]
+    suggested_consequences: List[str]
+    recommended_controls: List[RecommendedControl]
+    suggested_likelihood: int
+    suggested_impact: int
+    risk_treatment_options: List[str]
+
+
+def get_openai_client() -> OpenAI:
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    is_modelfarm = base_url and "modelfarm" in base_url
+    if not api_key and not is_modelfarm:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    if not is_modelfarm and (api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    return OpenAI(
+        api_key=api_key,
+        base_url=base_url
+    )
+
+
+def parse_ai_response(response_text: str) -> dict:
+    try:
+        cleaned = response_text.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        return json.loads(cleaned.strip())
+    except json.JSONDecodeError:
+        return {
+            "suggested_description": "Unable to generate description",
+            "suggested_causes": [],
+            "suggested_consequences": [],
+            "suggested_likelihood": 3,
+            "suggested_impact": 3,
+            "risk_treatment_options": ["Mitigate", "Accept", "Transfer"]
+        }
+
+
+def get_available_controls_for_matching(db: Session, user_tenants: List[int]) -> str:
+    controls_info = []
+    
+    normalized_controls = db.query(NormalizedControl).limit(100).all()
+    for ctrl in normalized_controls:
+        controls_info.append(f"- ID:{ctrl.id} | Code:{ctrl.code} | Name:{ctrl.name}")
+    
+    for tenant_id in user_tenants:
+        parsed_controls = db.query(ParsedFrameworkControl).join(
+            UploadedFramework
+        ).filter(
+            (UploadedFramework.tenant_id == tenant_id) | 
+            (UploadedFramework.is_shared == True),
+            UploadedFramework.is_active == True
+        ).limit(50).all()
+        
+        for ctrl in parsed_controls:
+            ctrl_code = ctrl.original_reference or ctrl.control_id
+            controls_info.append(f"- ID:{ctrl.id} | Code:{ctrl_code} | Title:{ctrl.title[:80] if ctrl.title else 'N/A'}")
+    
+    return "\n".join(controls_info[:100])
+
+
+RISK_AI_SUGGESTION_PROMPT = """You are an expert Enterprise Risk Management (ERM) consultant with 20+ years of experience. Analyze the risk information provided and generate comprehensive suggestions.
+
+RISK INFORMATION:
+Name: {name}
+Category: {category}
+Sub-category: {sub_category}
+Existing Description: {description}
+
+AVAILABLE CONTROLS FOR RECOMMENDATION (select the most relevant ones):
+{available_controls}
+
+Based on this risk, provide suggestions in the following JSON format:
+{{
+    "suggested_description": "<A comprehensive 2-4 sentence professional risk description that explains what the risk is, its context, and potential business impact>",
+    
+    "suggested_causes": [
+        "<Root cause 1 - specific and actionable>",
+        "<Root cause 2 - specific and actionable>",
+        "<Root cause 3 - specific and actionable>"
+    ],
+    
+    "suggested_consequences": [
+        "<Business consequence 1 - specific impact on operations, finances, reputation, or compliance>",
+        "<Business consequence 2 - specific impact>",
+        "<Business consequence 3 - specific impact>"
+    ],
+    
+    "recommended_control_ids": [
+        {{
+            "control_id": <ID number from the available controls list>,
+            "relevance": "<high|medium|low>",
+            "rationale": "<Explain why this control helps mitigate this specific risk>"
+        }}
+    ],
+    
+    "suggested_likelihood": <1-5 scale where 1=Rare, 2=Unlikely, 3=Possible, 4=Likely, 5=Almost Certain>,
+    
+    "suggested_impact": <1-5 scale where 1=Negligible, 2=Minor, 3=Moderate, 4=Major, 5=Catastrophic>,
+    
+    "risk_treatment_options": [
+        "<Primary treatment recommendation: Mitigate/Accept/Transfer/Avoid>",
+        "<Alternative treatment option>",
+        "<Supporting action>"
+    ]
+}}
+
+GUIDELINES:
+1. Base likelihood and impact on industry standards for the risk category
+2. Select 2-4 most relevant controls from the provided list
+3. Be specific and actionable in causes and consequences
+4. Match the professional tone expected in enterprise GRC systems
+5. ONLY recommend controls that exist in the provided list - use exact IDs
+
+Return ONLY valid JSON, no additional text."""
+
+
+@router.post("/ai-suggest", response_model=RiskAISuggestionResponse)
+def get_risk_ai_suggestions(
+    request: RiskAISuggestionRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    if not request.name or len(request.name.strip()) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Risk name must be at least 3 characters"
+        )
+    
+    user_tenants = get_user_tenants(current_user, db)
+    
+    try:
+        client = get_openai_client()
+    except HTTPException:
+        return RiskAISuggestionResponse(
+            suggested_description=f"Risk related to {request.name} in the {request.category or 'operational'} category.",
+            suggested_causes=["Process failure", "Human error", "Inadequate controls"],
+            suggested_consequences=["Operational disruption", "Financial loss", "Reputational damage"],
+            recommended_controls=[],
+            suggested_likelihood=3,
+            suggested_impact=3,
+            risk_treatment_options=["Mitigate", "Accept", "Transfer"]
+        )
+    
+    available_controls = get_available_controls_for_matching(db, user_tenants)
+    
+    prompt = RISK_AI_SUGGESTION_PROMPT.format(
+        name=request.name,
+        category=request.category or "Not specified",
+        sub_category=request.sub_category or "Not specified",
+        description=request.description or "Not provided",
+        available_controls=available_controls if available_controls else "No controls available"
+    )
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an expert ERM consultant. Return only valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=1500
+        )
+        
+        ai_response = parse_ai_response(response.choices[0].message.content)
+        
+        recommended_controls = []
+        ai_control_recs = ai_response.get("recommended_control_ids", [])
+        
+        for rec in ai_control_recs[:5]:
+            control_id = rec.get("control_id")
+            if not control_id:
+                continue
+            
+            normalized_ctrl = db.query(NormalizedControl).filter(
+                NormalizedControl.id == control_id
+            ).first()
+            
+            if normalized_ctrl:
+                recommended_controls.append(RecommendedControl(
+                    control_id=normalized_ctrl.id,
+                    control_name=normalized_ctrl.name,
+                    control_code=normalized_ctrl.code,
+                    relevance=rec.get("relevance", "medium"),
+                    rationale=rec.get("rationale", "Relevant to this risk category")
+                ))
+            else:
+                parsed_ctrl = db.query(ParsedFrameworkControl).filter(
+                    ParsedFrameworkControl.id == control_id
+                ).first()
+                
+                if parsed_ctrl:
+                    recommended_controls.append(RecommendedControl(
+                        control_id=parsed_ctrl.id,
+                        control_name=parsed_ctrl.title or "Control",
+                        control_code=parsed_ctrl.original_reference or parsed_ctrl.control_id,
+                        relevance=rec.get("relevance", "medium"),
+                        rationale=rec.get("rationale", "Relevant to this risk category")
+                    ))
+        
+        return RiskAISuggestionResponse(
+            suggested_description=ai_response.get("suggested_description", f"Risk related to {request.name}"),
+            suggested_causes=ai_response.get("suggested_causes", [])[:5],
+            suggested_consequences=ai_response.get("suggested_consequences", [])[:5],
+            recommended_controls=recommended_controls,
+            suggested_likelihood=min(5, max(1, ai_response.get("suggested_likelihood", 3))),
+            suggested_impact=min(5, max(1, ai_response.get("suggested_impact", 3))),
+            risk_treatment_options=ai_response.get("risk_treatment_options", ["Mitigate", "Accept", "Transfer"])[:4]
+        )
+        
+    except Exception as e:
+        logger.error(f"AI suggestion error: {str(e)}")
+        return RiskAISuggestionResponse(
+            suggested_description=f"Risk related to {request.name} requiring assessment and mitigation.",
+            suggested_causes=["Process failure", "External factors", "Resource constraints"],
+            suggested_consequences=["Operational impact", "Financial impact", "Compliance impact"],
+            recommended_controls=[],
+            suggested_likelihood=3,
+            suggested_impact=3,
+            risk_treatment_options=["Mitigate", "Accept", "Transfer"]
+        )

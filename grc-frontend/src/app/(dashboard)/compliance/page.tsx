@@ -1,7 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { complianceApi } from '@/lib/api';
+import { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { complianceApi, controlLibraryApi } from '@/lib/api';
 import {
   FileText,
   CheckCircle,
@@ -11,6 +12,12 @@ import {
   ArrowRight,
   Clock,
   TrendingUp,
+  Sparkles,
+  Zap,
+  Target,
+  Lightbulb,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -29,7 +36,75 @@ const PRIORITY_COLORS: Record<string, { bg: string; text: string }> = {
   low: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
 };
 
+const IMPACT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  critical: { bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30' },
+  high: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+  medium: { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
+  low: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
+};
+
+interface PrioritizedGap {
+  rank: number;
+  gap_type: string;
+  control_id: number;
+  control_title: string;
+  framework_name: string;
+  business_impact: string;
+  impact_reasoning: string;
+  regulatory_risk: string;
+  remediation_effort: string;
+  suggested_actions: string[];
+  deadline_recommendation: string;
+}
+
+interface QuickWin {
+  gap_description: string;
+  effort: string;
+  impact: string;
+  recommendation: string;
+}
+
+interface AIPrioritizationResult {
+  analysis_date: string;
+  total_gaps_analyzed: number;
+  prioritized_gaps: PrioritizedGap[];
+  summary: {
+    critical_gaps: number;
+    high_gaps: number;
+    medium_gaps: number;
+    low_gaps: number;
+    key_themes: string[];
+  };
+  quick_wins: QuickWin[];
+  message?: string;
+  fallback?: boolean;
+  error?: string;
+}
+
 export default function ComplianceOverviewPage() {
+  const [showAIPrioritization, setShowAIPrioritization] = useState(false);
+  const [aiResult, setAiResult] = useState<AIPrioritizationResult | null>(null);
+  const [expandedGaps, setExpandedGaps] = useState<Set<number>>(new Set());
+
+  const toggleGapExpand = (rank: number) => {
+    const newExpanded = new Set(expandedGaps);
+    if (newExpanded.has(rank)) {
+      newExpanded.delete(rank);
+    } else {
+      newExpanded.add(rank);
+    }
+    setExpandedGaps(newExpanded);
+  };
+
+  const aiPrioritizeMutation = useMutation({
+    mutationFn: async () => {
+      return await controlLibraryApi.gapAnalysis.prioritizeWithAI({ max_gaps: 20 });
+    },
+    onSuccess: (data) => {
+      setAiResult(data);
+      setShowAIPrioritization(true);
+    },
+  });
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['compliance-dashboard-summary'],
     queryFn: async () => {
@@ -362,6 +437,211 @@ export default function ComplianceOverviewPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* AI Gap Prioritization Section */}
+      <div className="card border border-primary-500/20">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary-400" />
+              AI Gap Prioritization
+            </h2>
+            <p className="card-description">
+              Analyze compliance gaps and prioritize by business impact
+            </p>
+          </div>
+          <button
+            onClick={() => aiPrioritizeMutation.mutate()}
+            disabled={aiPrioritizeMutation.isPending}
+            className="btn-primary flex items-center gap-2"
+          >
+            {aiPrioritizeMutation.isPending ? (
+              <>
+                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Prioritize with AI
+              </>
+            )}
+          </button>
+        </div>
+
+        {aiPrioritizeMutation.isError && (
+          <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg mb-4">
+            <p className="text-sm text-rose-400">
+              Failed to analyze gaps. Please try again.
+            </p>
+          </div>
+        )}
+
+        {showAIPrioritization && aiResult && (
+          <div className="space-y-6">
+            {aiResult.message && aiResult.total_gaps_analyzed === 0 && (
+              <div className="text-center py-8">
+                <CheckCircle className="h-12 w-12 text-emerald-400 mx-auto mb-3" />
+                <p className="text-slate-300">{aiResult.message}</p>
+              </div>
+            )}
+
+            {aiResult.total_gaps_analyzed > 0 && (
+              <>
+                {aiResult.fallback && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <p className="text-sm text-amber-400">
+                      {aiResult.error || 'AI analysis unavailable. Showing basic prioritization.'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+                    <p className="text-2xl font-bold text-rose-400">{aiResult.summary.critical_gaps}</p>
+                    <p className="text-sm text-slate-400">Critical</p>
+                  </div>
+                  <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                    <p className="text-2xl font-bold text-orange-400">{aiResult.summary.high_gaps}</p>
+                    <p className="text-sm text-slate-400">High</p>
+                  </div>
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <p className="text-2xl font-bold text-amber-400">{aiResult.summary.medium_gaps}</p>
+                    <p className="text-sm text-slate-400">Medium</p>
+                  </div>
+                  <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <p className="text-2xl font-bold text-blue-400">{aiResult.summary.low_gaps}</p>
+                    <p className="text-sm text-slate-400">Low</p>
+                  </div>
+                </div>
+
+                {/* Key Themes */}
+                {aiResult.summary.key_themes && aiResult.summary.key_themes.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {aiResult.summary.key_themes.map((theme, idx) => (
+                      <span key={idx} className="px-3 py-1 bg-slate-700 text-slate-300 text-sm rounded-full">
+                        {theme}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Quick Wins */}
+                {aiResult.quick_wins && aiResult.quick_wins.length > 0 && (
+                  <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                    <h3 className="text-sm font-semibold text-emerald-400 flex items-center gap-2 mb-3">
+                      <Zap className="h-4 w-4" />
+                      Quick Wins
+                    </h3>
+                    <div className="space-y-3">
+                      {aiResult.quick_wins.map((win, idx) => (
+                        <div key={idx} className="flex items-start gap-3">
+                          <Lightbulb className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm text-white">{win.gap_description}</p>
+                            <p className="text-xs text-slate-400 mt-1">{win.recommendation}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Prioritized Gaps List */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                    <Target className="h-4 w-4 text-primary-400" />
+                    Prioritized Gaps ({aiResult.prioritized_gaps.length})
+                  </h3>
+                  {aiResult.prioritized_gaps.map((gap) => {
+                    const impactStyle = IMPACT_COLORS[gap.business_impact] || IMPACT_COLORS.medium;
+                    const isExpanded = expandedGaps.has(gap.rank);
+                    return (
+                      <div
+                        key={gap.rank}
+                        className={`p-4 bg-slate-800/50 border ${impactStyle.border} rounded-lg`}
+                      >
+                        <div
+                          className="flex items-start justify-between cursor-pointer"
+                          onClick={() => toggleGapExpand(gap.rank)}
+                        >
+                          <div className="flex items-start gap-3 flex-1">
+                            <div className="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center">
+                              <span className="text-sm font-bold text-white">#{gap.rank}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-medium text-white">{gap.control_title}</h4>
+                                <span className={`badge ${impactStyle.bg} ${impactStyle.text}`}>
+                                  {gap.business_impact}
+                                </span>
+                                <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-700 rounded">
+                                  {gap.gap_type.replace('_', ' ')}
+                                </span>
+                              </div>
+                              <p className="text-sm text-slate-400 mt-1">{gap.framework_name}</p>
+                            </div>
+                          </div>
+                          <button className="text-slate-400 hover:text-white p-1">
+                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </button>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="mt-4 pt-4 border-t border-slate-700 space-y-4">
+                            <div>
+                              <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Impact Reasoning</p>
+                              <p className="text-sm text-slate-300">{gap.impact_reasoning}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Regulatory Risk</p>
+                              <p className="text-sm text-slate-300">{gap.regulatory_risk}</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Remediation Effort</p>
+                                <span className={`badge ${
+                                  gap.remediation_effort === 'low' ? 'bg-emerald-500/20 text-emerald-400' :
+                                  gap.remediation_effort === 'high' ? 'bg-rose-500/20 text-rose-400' :
+                                  'bg-amber-500/20 text-amber-400'
+                                }`}>
+                                  {gap.remediation_effort}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Deadline</p>
+                                <span className="text-sm text-white">{gap.deadline_recommendation}</span>
+                              </div>
+                            </div>
+                            {gap.suggested_actions && gap.suggested_actions.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-slate-400 uppercase mb-2">Suggested Actions</p>
+                                <ul className="space-y-1">
+                                  {gap.suggested_actions.map((action, idx) => (
+                                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-300">
+                                      <span className="text-primary-400">•</span>
+                                      {action}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p className="text-xs text-slate-500 text-center">
+                  Analysis performed at {new Date(aiResult.analysis_date).toLocaleString()} • {aiResult.total_gaps_analyzed} gaps analyzed
+                </p>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
