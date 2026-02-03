@@ -74,6 +74,27 @@ The platform utilizes a multi-tenant architecture with complete tenant isolation
 - Attestations page with individual and bulk link-to-evidence actions
 - Committee meeting page with suggested agenda items and auto-populate functionality
 
+## Recent Changes (February 2026)
+
+### Embedded AI Capabilities Across All Modules
+Implemented 7 AI enhancement features that provide automatic insights without requiring user interaction - AI appears as purple/blue gradient sections throughout the platform:
+
+1. **Dashboard AI Insights Panel** (`/dashboard/ai-insights`): Proactive widget analyzing compliance gaps, expiring evidence, risk alerts, with actionable recommendations. Displays on dashboard with severity-coded alerts.
+
+2. **Risk Register AI Suggestions** (`/erm/risks/ai-suggest`): When creating/editing risks, AI Assist button auto-suggests risk descriptions, causes, consequences, and recommends related controls from the control library.
+
+3. **Controls AI Recommendations** (`/controls/ai-recommendations`): When expanding any control, AI automatically suggests test procedures and evidence requirements tailored to that control's objective.
+
+4. **Evidence Upload Real-time AI** (`/evidence-mgmt/ai/quick-assess`): During evidence upload, AI provides instant relevance assessment, detected framework matches, and quality improvement tips before saving.
+
+5. **Policy Creation AI Drafting** (`/governance/documents/ai-draft`): "AI Draft Policy" button generates complete policy documents with purpose, scope, responsibilities, and procedures based on selected framework requirements.
+
+6. **Incidents AI Analysis** (`/erm/incidents/ai-analyze`): AI Analysis button on incidents suggests root cause analysis, contributing factors, links to related risks/controls, and provides impact assessment.
+
+7. **Compliance Gaps AI Prioritization** (`/gap-analysis/ai-prioritize`): "Prioritize with AI" analyzes compliance gaps and ranks them by business impact, providing reasoning, quick wins, and remediation recommendations.
+
+All AI features use OpenAI GPT-4o via Replit AI Integrations with proper fallback handling when AI is unavailable.
+
 ## External Dependencies
 - **PostgreSQL**: Primary relational database.
 - **FastAPI**: Python web framework for building APIs.
