@@ -16,6 +16,7 @@ from .routers import (
     advanced_erm_router,
     compliance_assessments_router
 )
+from .routers.admin_router import router as admin_router
 from .modules.erm import erm_router
 from .modules.governance import governance_module_router
 from .modules.framework_upload import framework_upload_router
@@ -23,6 +24,7 @@ from .modules.compliance import compliance_router
 from .modules.evidence import evidence_module_router
 from .modules.control_library import control_library_router
 from .modules.vuln_management import vuln_management_router
+from .middleware.subdomain import TenantMiddleware
 
 app = FastAPI(
     title="Enterprise GRC Platform API",
@@ -40,7 +42,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(TenantMiddleware)
+
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(tenants_router)
 app.include_router(frameworks_router)
 app.include_router(controls_router)

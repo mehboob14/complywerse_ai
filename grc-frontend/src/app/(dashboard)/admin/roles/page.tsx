@@ -1,0 +1,414 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { PageHeader, DataTable } from '@/components/ui';
+import { adminApi, AdminRole, PermissionModule } from '@/lib/api';
+
+export default function RolesManagementPage() {
+  const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [permissionMatrix, setPermissionMatrix] = useState<PermissionModule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    permission_names: [] as string[],
+  });
+  const [saving, setSaving] = useState(false);
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [rolesRes, matrixRes] = await Promise.all([
+        adminApi.getRoles(),
+        adminApi.getPermissionMatrix(),
+      ]);
+      setRoles(rolesRes.data);
+      setPermissionMatrix(matrixRes.data);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to load roles');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = () => {
+    setEditingRole(null);
+    setFormData({
+      name: '',
+      description: '',
+      permission_names: [],
+    });
+    setExpandedModules(new Set());
+    setShowModal(true);
+  };
+
+  const handleEdit = async (role: AdminRole) => {
+    try {
+      const response = await adminApi.getRole(role.id);
+      setEditingRole(response.data);
+      setFormData({
+        name: response.data.name,
+        description: response.data.description || '',
+        permission_names: response.data.permissions,
+      });
+      setExpandedModules(new Set());
+      setShowModal(true);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to load role details');
+    }
+  };
+
+  const handleDelete = async (role: AdminRole) => {
+    if (role.is_system_role) {
+      setError('Cannot delete system roles');
+      return;
+    }
+    if (!confirm(`Are you sure you want to delete role "${role.name}"?`)) {
+      return;
+    }
+    try {
+      await adminApi.deleteRole(role.id);
+      fetchData();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to delete role');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      if (editingRole) {
+        await adminApi.updateRole(editingRole.id, {
+          name: formData.name,
+          description: formData.description,
+          permission_names: formData.permission_names,
+        });
+      } else {
+        await adminApi.createRole({
+          name: formData.name,
+          description: formData.description,
+          permission_names: formData.permission_names,
+        });
+      }
+      setShowModal(false);
+      fetchData();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to save role');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const togglePermission = (permName: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      permission_names: prev.permission_names.includes(permName)
+        ? prev.permission_names.filter((p) => p !== permName)
+        : [...prev.permission_names, permName],
+    }));
+  };
+
+  const toggleModuleExpand = (module: string) => {
+    const newExpanded = new Set(expandedModules);
+    if (newExpanded.has(module)) {
+      newExpanded.delete(module);
+    } else {
+      newExpanded.add(module);
+    }
+    setExpandedModules(newExpanded);
+  };
+
+  const toggleAllModulePermissions = (module: PermissionModule, checked: boolean) => {
+    const modulePerms: string[] = [];
+    module.submodules.forEach((sub) => {
+      sub.actions.forEach((action) => {
+        modulePerms.push(`${module.module}:${sub.name}:${action}`);
+      });
+    });
+
+    setFormData((prev) => ({
+      ...prev,
+      permission_names: checked
+        ? [...new Set([...prev.permission_names, ...modulePerms])]
+        : prev.permission_names.filter((p) => !modulePerms.includes(p)),
+    }));
+  };
+
+  const isModuleFullySelected = (module: PermissionModule): boolean => {
+    const modulePerms: string[] = [];
+    module.submodules.forEach((sub) => {
+      sub.actions.forEach((action) => {
+        modulePerms.push(`${module.module}:${sub.name}:${action}`);
+      });
+    });
+    return modulePerms.every((p) => formData.permission_names.includes(p));
+  };
+
+  const isModulePartiallySelected = (module: PermissionModule): boolean => {
+    const modulePerms: string[] = [];
+    module.submodules.forEach((sub) => {
+      sub.actions.forEach((action) => {
+        modulePerms.push(`${module.module}:${sub.name}:${action}`);
+      });
+    });
+    const selected = modulePerms.filter((p) => formData.permission_names.includes(p));
+    return selected.length > 0 && selected.length < modulePerms.length;
+  };
+
+  const columns = [
+    {
+      header: 'Role',
+      accessor: (role: AdminRole) => (
+        <div>
+          <div className="font-medium text-white flex items-center gap-2">
+            {role.name}
+            {role.is_system_role && (
+              <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs">
+                System
+              </span>
+            )}
+          </div>
+          {role.description && (
+            <div className="text-sm text-slate-400">{role.description}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: 'Users',
+      accessor: (role: AdminRole) => (
+        <span className="text-slate-300">{role.user_count}</span>
+      ),
+    },
+    {
+      header: 'Permissions',
+      accessor: (role: AdminRole) => (
+        <span className="text-slate-300">{role.permissions.length}</span>
+      ),
+    },
+    {
+      header: 'Actions',
+      accessor: (role: AdminRole) => (
+        <div className="flex space-x-2">
+          <button
+            onClick={() => handleEdit(role)}
+            className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-white rounded text-sm"
+          >
+            {role.is_system_role ? 'View' : 'Edit'}
+          </button>
+          {!role.is_system_role && (
+            <button
+              onClick={() => handleDelete(role)}
+              className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded text-sm"
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Role Management"
+        subtitle="Create and manage roles with granular permissions"
+      />
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-red-400">
+          {error}
+          <button onClick={() => setError(null)} className="ml-4 underline">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <button
+          onClick={handleCreate}
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors"
+        >
+          + Create Role
+        </button>
+      </div>
+
+      <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+        <DataTable data={roles} columns={columns} />
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-slate-800 border border-slate-700 rounded-lg w-full max-w-4xl my-8">
+            <div className="p-6 border-b border-slate-700">
+              <h2 className="text-lg font-semibold text-white">
+                {editingRole ? (editingRole.is_system_role ? 'View Role' : 'Edit Role') : 'Create Role'}
+              </h2>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                    Role Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                    className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    required
+                    disabled={editingRole?.is_system_role}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                    Description
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    disabled={editingRole?.is_system_role}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-4">
+                  Permissions Matrix
+                </label>
+                <div className="border border-slate-700 rounded-lg overflow-hidden max-h-96 overflow-y-auto">
+                  {permissionMatrix.map((module) => (
+                    <div key={module.module} className="border-b border-slate-700 last:border-b-0">
+                      <div
+                        className="flex items-center justify-between p-4 bg-slate-900 cursor-pointer hover:bg-slate-800"
+                        onClick={() => toggleModuleExpand(module.module)}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <input
+                            type="checkbox"
+                            checked={isModuleFullySelected(module)}
+                            ref={(el) => {
+                              if (el) el.indeterminate = isModulePartiallySelected(module);
+                            }}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleAllModulePermissions(module, e.target.checked);
+                            }}
+                            className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-purple-500 focus:ring-purple-500"
+                            disabled={editingRole?.is_system_role}
+                          />
+                          <span className="font-medium text-white">{module.display_name}</span>
+                        </div>
+                        <svg
+                          className={`w-5 h-5 text-slate-400 transition-transform ${
+                            expandedModules.has(module.module) ? 'rotate-180' : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+
+                      {expandedModules.has(module.module) && (
+                        <div className="bg-slate-800/50 p-4">
+                          {module.submodules.map((sub) => (
+                            <div key={sub.name} className="mb-4 last:mb-0">
+                              <div className="text-sm font-medium text-slate-300 mb-2">
+                                {sub.display_name}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {sub.actions.map((action) => {
+                                  const permName = `${module.module}:${sub.name}:${action}`;
+                                  const isSelected = formData.permission_names.includes(permName);
+                                  return (
+                                    <label
+                                      key={action}
+                                      className={`flex items-center space-x-2 px-3 py-1.5 rounded cursor-pointer transition-colors ${
+                                        isSelected
+                                          ? 'bg-purple-500/30 border border-purple-500'
+                                          : 'bg-slate-700 border border-slate-600 hover:border-slate-500'
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => togglePermission(permName)}
+                                        className="hidden"
+                                        disabled={editingRole?.is_system_role}
+                                      />
+                                      <span
+                                        className={`text-sm ${
+                                          isSelected ? 'text-purple-300' : 'text-slate-300'
+                                        }`}
+                                      >
+                                        {action.replace('_', ' ')}
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t border-slate-700">
+                <div className="text-sm text-slate-400">
+                  {formData.permission_names.length} permission(s) selected
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm"
+                  >
+                    {editingRole?.is_system_role ? 'Close' : 'Cancel'}
+                  </button>
+                  {!editingRole?.is_system_role && (
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : editingRole ? 'Update Role' : 'Create Role'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

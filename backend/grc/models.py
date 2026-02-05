@@ -27,6 +27,8 @@ class Tenant(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     slug = Column(String(100), unique=True, nullable=False, index=True)
+    subdomain = Column(String(100), unique=True, nullable=True, index=True)
+    schema_name = Column(String(100), unique=True, nullable=True, index=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     settings = Column(JSON, default={})

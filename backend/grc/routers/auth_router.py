@@ -9,6 +9,10 @@ from jose import jwt, JWTError
 
 from ..models import GRCUser, TenantUser, Tenant, BusinessUnit, Role, UserRole, get_db
 from ..schemas import UserCreate, UserLogin, UserResponse, TokenResponse, OrganizationRegisterRequest
+from ..tenant_manager import (
+    full_tenant_provisioning, sanitize_schema_name, get_tenant_session
+)
+from ..tenant_models import TenantUser as TenantSchemaUser
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -346,11 +350,11 @@ def register_organization(request: OrganizationRegisterRequest, db: Session = De
             detail="Personal email addresses are not allowed. Please use your corporate email address."
         )
     
-    existing_user = db.query(GRCUser).filter(GRCUser.email == request.email).first()
-    if existing_user:
+    existing_tenant = db.query(Tenant).filter(Tenant.primary_contact_email == request.email).first()
+    if existing_tenant:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="An organization with this email already exists"
         )
     
     base_slug = generate_slug(request.organization_name)
@@ -360,9 +364,45 @@ def register_organization(request: OrganizationRegisterRequest, db: Session = De
         slug = f"{base_slug}-{counter}"
         counter += 1
     
+    subdomain = slug.replace("-", "")[:20]
+    base_subdomain = subdomain
+    counter = 1
+    while db.query(Tenant).filter(Tenant.subdomain == subdomain).first():
+        subdomain = f"{base_subdomain}{counter}"
+        counter += 1
+    
+    username = request.email.split('@')[0]
+    password_hash = hash_password(request.password)
+    
+    try:
+        result = full_tenant_provisioning(
+            subdomain=subdomain,
+            org_name=request.organization_name,
+            admin_username=username,
+            admin_email=request.email,
+            admin_password_hash=password_hash,
+            admin_display_name=request.display_name,
+            org_details={
+                'legal_entity': request.legal_entity,
+                'industry': request.industry,
+                'company_size': request.company_size,
+                'geography': request.geography,
+                'regulatory_scope': request.regulatory_scope,
+                'contact_phone': request.primary_contact_phone
+            }
+        )
+        schema_name = result["schema_name"]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to provision tenant database: {str(e)}"
+        )
+    
     tenant = Tenant(
         name=request.organization_name,
         slug=slug,
+        subdomain=subdomain,
+        schema_name=schema_name,
         legal_entity=request.legal_entity,
         industry=request.industry,
         regulatory_scope=request.regulatory_scope,
@@ -377,61 +417,110 @@ def register_organization(request: OrganizationRegisterRequest, db: Session = De
     db.commit()
     db.refresh(tenant)
     
-    default_bu = BusinessUnit(
-        tenant_id=tenant.id,
-        name="Organization"
-    )
-    db.add(default_bu)
-    db.commit()
-    db.refresh(default_bu)
+    token = create_access_token({
+        "sub": username,
+        "tenant_id": tenant.id,
+        "subdomain": subdomain,
+        "schema_name": schema_name
+    })
     
-    admin_role = Role(
-        tenant_id=tenant.id,
-        name="Tenant Admin",
-        description="Full administrative access to all tenant resources",
-        is_system_role=False
-    )
-    db.add(admin_role)
-    db.commit()
-    db.refresh(admin_role)
-    
-    username = request.email.split('@')[0]
-    base_username = username
-    counter = 1
-    while db.query(GRCUser).filter(GRCUser.username == username).first():
-        username = f"{base_username}{counter}"
-        counter += 1
-    
-    user = GRCUser(
-        username=username,
-        email=request.email,
-        password_hash=hash_password(request.password),
-        display_name=request.display_name
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    
-    tenant_user = TenantUser(
-        user_id=user.id,
-        tenant_id=tenant.id,
-        is_primary=True
-    )
-    db.add(tenant_user)
-    db.commit()
-    
-    user_role = UserRole(
-        user_id=user.id,
-        role_id=admin_role.id,
-        tenant_id=tenant.id,
-        business_unit_id=default_bu.id
-    )
-    db.add(user_role)
-    db.commit()
-    
-    token = create_access_token({"sub": user.username})
     response = JSONResponse(content={
         "message": "Organization registration successful",
+        "admin_credentials": {
+            "username": username,
+            "email": request.email,
+            "password": request.password
+        },
+        "tenant": {
+            "id": tenant.id,
+            "name": tenant.name,
+            "slug": tenant.slug,
+            "subdomain": subdomain
+        },
+        "login_url": f"https://{subdomain}.yourdomain.com/login"
+    }, status_code=status.HTTP_201_CREATED)
+    set_auth_cookie(response, token)
+    return response
+
+
+@router.post("/tenant-login")
+def tenant_login(request: UserLogin, subdomain: str = None, db: Session = Depends(get_db)):
+    if not subdomain:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Subdomain is required for tenant login"
+        )
+    
+    tenant = db.query(Tenant).filter(
+        Tenant.subdomain == subdomain,
+        Tenant.is_active == True
+    ).first()
+    
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found"
+        )
+    
+    if not tenant.schema_name:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Tenant database not configured"
+        )
+    
+    try:
+        SessionClass = get_tenant_session(tenant.schema_name)
+        tenant_db = SessionClass()
+        
+        user = tenant_db.query(TenantSchemaUser).filter(
+            (TenantSchemaUser.username == request.username) | 
+            (TenantSchemaUser.email == request.username)
+        ).first()
+        
+        if not user:
+            tenant_db.close()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid username or password"
+            )
+        
+        if not verify_password(request.password, user.password_hash):
+            tenant_db.close()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid username or password"
+            )
+        
+        if not user.is_active:
+            tenant_db.close()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is deactivated"
+            )
+        
+        from datetime import datetime
+        user.last_login = datetime.utcnow()
+        tenant_db.commit()
+        
+        tenant_db.close()
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login error: {str(e)}"
+        )
+    
+    token = create_access_token({
+        "sub": user.username,
+        "tenant_id": tenant.id,
+        "subdomain": tenant.subdomain,
+        "schema_name": tenant.schema_name
+    })
+    
+    response = JSONResponse(content={
+        "message": "Login successful",
         "user": {
             "id": user.id,
             "username": user.username,
@@ -441,8 +530,69 @@ def register_organization(request: OrganizationRegisterRequest, db: Session = De
         "tenant": {
             "id": tenant.id,
             "name": tenant.name,
-            "slug": tenant.slug
+            "subdomain": tenant.subdomain
         }
-    }, status_code=status.HTTP_201_CREATED)
+    })
     set_auth_cookie(response, token)
     return response
+
+
+@router.get("/tenant-me")
+def get_tenant_me(
+    token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+    db: Session = Depends(get_db)
+):
+    if not token:
+        return {"authenticated": False, "user": None}
+    
+    payload = decode_token(token)
+    if not payload:
+        return {"authenticated": False, "user": None}
+    
+    username = payload.get("sub")
+    schema_name = payload.get("schema_name")
+    tenant_id = payload.get("tenant_id")
+    subdomain = payload.get("subdomain")
+    
+    if not username or not schema_name:
+        return {"authenticated": False, "user": None}
+    
+    try:
+        SessionClass = get_tenant_session(schema_name)
+        tenant_db = SessionClass()
+        
+        user = tenant_db.query(TenantSchemaUser).filter(
+            TenantSchemaUser.username == username
+        ).first()
+        
+        if not user:
+            tenant_db.close()
+            return {"authenticated": False, "user": None}
+        
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        
+        from ..tenant_models import Role, UserRole
+        roles = tenant_db.query(Role).join(UserRole).filter(
+            UserRole.user_id == user.id
+        ).all()
+        
+        tenant_db.close()
+        
+        return {
+            "authenticated": True,
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "display_name": user.display_name,
+                "is_active": user.is_active,
+                "roles": [{"id": r.id, "name": r.name} for r in roles]
+            },
+            "tenant": {
+                "id": tenant.id if tenant else None,
+                "name": tenant.name if tenant else None,
+                "subdomain": subdomain
+            }
+        }
+    except Exception as e:
+        return {"authenticated": False, "user": None, "error": str(e)}

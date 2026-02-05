@@ -109,8 +109,44 @@ Major improvement to Evidence AI to move beyond literal clause extraction:
 
 - **Enhanced UI Display**: Color-coded match_type badges (green=explicit, amber=implicit, purple=inferred), intent analysis section with AI reasoning, and cross-framework equivalent controls display
 
+### Multi-Tenant Architecture (February 2026)
+Complete schema-per-tenant isolation system for organization-level data separation:
+
+**Database Isolation:**
+- Each organization gets an isolated PostgreSQL schema (e.g., `tenant_acme`, `tenant_hbf`)
+- Master tenant registry in public schema stores org metadata, subdomain, and schema_name
+- Automatic schema provisioning on organization registration
+
+**Subdomain System:**
+- Tenant identification via subdomain (e.g., `hbf.domain.com`)
+- Alternative: X-Tenant-Slug header for development/testing
+- TenantMiddleware extracts tenant context on each request
+
+**Permission Matrix:**
+- 12 modules with granular permissions (view, create, edit, delete, approve, publish)
+- Modules: Dashboard, Risks, ERM, Controls, Compliance, Evidence, Governance, Vulnerabilities, Assets, Frameworks, Reports, Admin
+- Each role has a set of permissions; users inherit permissions from assigned roles
+
+**Admin Dashboard (`/admin`):**
+- Organization Profile: View and edit org details, industry, geography, regulatory scope
+- User Management: Create users with username/email/password, assign roles
+- Role Management: Create roles with checkbox-based permission matrix
+- Audit Logs: Track all system activity with timestamps
+
+**Registration Flow:**
+1. User registers organization via `/auth/register-organization`
+2. System creates tenant schema with isolated tables
+3. Seeds permission matrix and creates Administrator role
+4. Creates admin user in tenant schema with full permissions
+5. Returns admin credentials and tenant subdomain
+
+**Tenant-Scoped Authentication:**
+- JWT tokens include `tenant_id`, `subdomain`, and `schema_name`
+- `/auth/tenant-login` authenticates against specific tenant schema
+- `/auth/tenant-me` returns user info with tenant context
+
 ## External Dependencies
-- **PostgreSQL**: Primary relational database.
+- **PostgreSQL**: Primary relational database with schema-per-tenant isolation.
 - **FastAPI**: Python web framework for building APIs.
 - **SQLAlchemy**: Python SQL toolkit and Object-Relational Mapper.
 - **Next.js 14**: React framework for frontend development.

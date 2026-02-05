@@ -112,8 +112,11 @@ const navigation: NavEntry[] = [
     name: 'Administration',
     icon: Settings,
     items: [
-      { name: 'Users', href: '/users', icon: Users },
-      { name: 'Settings', href: '/settings', icon: Settings },
+      { name: 'Overview', href: '/admin', icon: Settings },
+      { name: 'Organization', href: '/admin/organization', icon: Server },
+      { name: 'User Management', href: '/admin/users', icon: Users },
+      { name: 'Role Management', href: '/admin/roles', icon: Shield },
+      { name: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },
     ],
   },
 ];

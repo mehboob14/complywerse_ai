@@ -1091,4 +1091,115 @@ export const controlLibraryApi = {
   },
 };
 
+export interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  display_name: string;
+  is_active: boolean;
+  created_at: string;
+  last_login: string | null;
+  roles: { id: number; name: string }[];
+}
+
+export interface AdminRole {
+  id: number;
+  name: string;
+  description: string;
+  is_system_role: boolean;
+  user_count: number;
+  permissions: string[];
+  created_at: string;
+}
+
+export interface OrganizationProfile {
+  id: number | null;
+  name: string;
+  legal_entity?: string;
+  industry?: string;
+  company_size?: string;
+  geography?: string;
+  regulatory_scope?: string;
+  primary_contact_name?: string;
+  primary_contact_email?: string;
+  primary_contact_phone?: string;
+  address?: string;
+  website?: string;
+  logo_url?: string;
+  settings?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PermissionModule {
+  module: string;
+  display_name: string;
+  submodules: {
+    name: string;
+    display_name: string;
+    actions: string[];
+  }[];
+}
+
+export const adminApi = {
+  getOrganization: () => apiClient.get<OrganizationProfile>('/admin/organization'),
+  updateOrganization: (data: Partial<OrganizationProfile>) => 
+    apiClient.put('/admin/organization', data),
+
+  getUsers: () => apiClient.get<AdminUser[]>('/admin/users'),
+  getUser: (id: number) => apiClient.get<AdminUser>(`/admin/users/${id}`),
+  createUser: (data: { 
+    username: string; 
+    email: string; 
+    password: string; 
+    display_name?: string; 
+    role_ids?: number[] 
+  }) => apiClient.post('/admin/users', data),
+  updateUser: (id: number, data: { 
+    display_name?: string; 
+    email?: string; 
+    is_active?: boolean; 
+    role_ids?: number[] 
+  }) => apiClient.put(`/admin/users/${id}`, data),
+  deleteUser: (id: number) => apiClient.delete(`/admin/users/${id}`),
+
+  getRoles: () => apiClient.get<AdminRole[]>('/admin/roles'),
+  getRole: (id: number) => apiClient.get<AdminRole>(`/admin/roles/${id}`),
+  createRole: (data: { 
+    name: string; 
+    description?: string; 
+    permission_names: string[] 
+  }) => apiClient.post('/admin/roles', data),
+  updateRole: (id: number, data: { 
+    name?: string; 
+    description?: string; 
+    permission_names?: string[] 
+  }) => apiClient.put(`/admin/roles/${id}`, data),
+  deleteRole: (id: number) => apiClient.delete(`/admin/roles/${id}`),
+
+  getPermissions: () => apiClient.get<{ name: string; module: string; submodule: string; action: string; description: string }[]>('/admin/permissions'),
+  getPermissionMatrix: () => apiClient.get<PermissionModule[]>('/admin/permissions/matrix'),
+
+  getAuditLogs: (params?: { limit?: number; offset?: number }) => 
+    apiClient.get('/admin/audit-logs', { params }),
+};
+
+export const tenantAuthApi = {
+  login: (data: { username: string; password: string }, subdomain: string) => 
+    apiClient.post('/auth/tenant-login', data, { params: { subdomain } }),
+  getMe: () => apiClient.get('/auth/tenant-me'),
+  registerOrganization: (data: {
+    email: string;
+    password: string;
+    display_name: string;
+    organization_name: string;
+    legal_entity?: string;
+    industry?: string;
+    regulatory_scope?: string;
+    company_size?: string;
+    geography?: string;
+    primary_contact_phone?: string;
+  }) => apiClient.post('/auth/register-organization', data),
+};
+
 export default apiClient;
