@@ -59,8 +59,18 @@ export default function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [tenantName, setTenantName] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedTenantName = localStorage.getItem('tenant_name');
+      if (storedTenantName) {
+        setTenantName(storedTenantName);
+      }
+    }
+  }, []);
 
   const { data: currentUser } = useQuery<CurrentUser | null>({
     queryKey: ['current-user'],
@@ -277,7 +287,7 @@ export default function Header() {
             </div>
             <div className="hidden lg:block text-left">
               <p className="text-sm font-medium text-slate-200">{currentUser?.display_name || 'User'}</p>
-              <p className="text-xs text-slate-500">{currentUser?.primary_tenant_name || 'No Organization'}</p>
+              <p className="text-xs text-slate-500">{currentUser?.primary_tenant_name || tenantName || 'No Organization'}</p>
             </div>
             <ChevronDown 
               size={14} 

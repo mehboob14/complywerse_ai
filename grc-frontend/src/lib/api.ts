@@ -58,9 +58,15 @@ const apiClient: AxiosInstance = axios.create({
 
 apiClient.interceptors.request.use(
   (config) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      const tenantSlug = localStorage.getItem('tenant_slug');
+      if (tenantSlug) {
+        config.headers['X-Tenant-Slug'] = tenantSlug;
+      }
     }
     return config;
   },

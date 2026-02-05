@@ -26,7 +26,11 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
-def get_tenant_from_request(request: Request, db: Session = Depends(get_db)) -> Tenant:
+def get_tenant_from_request(
+    request: Request, 
+    token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+    db: Session = Depends(get_db)
+) -> Tenant:
     tenant = getattr(request.state, 'tenant', None)
     if tenant:
         return tenant
@@ -40,14 +44,38 @@ def get_tenant_from_request(request: Request, db: Session = Depends(get_db)) -> 
         if tenant:
             return tenant
     
+    if token:
+        payload = decode_token(token)
+        if payload:
+            tenant_id = payload.get("tenant_id")
+            subdomain = payload.get("subdomain")
+            if tenant_id:
+                tenant = db.query(Tenant).filter(
+                    Tenant.id == tenant_id,
+                    Tenant.is_active == True
+                ).first()
+                if tenant:
+                    return tenant
+            elif subdomain:
+                tenant = db.query(Tenant).filter(
+                    Tenant.subdomain == subdomain,
+                    Tenant.is_active == True
+                ).first()
+                if tenant:
+                    return tenant
+    
     raise HTTPException(
         status_code=400,
         detail="Tenant not identified. Use subdomain or X-Tenant-Slug header."
     )
 
 
-def get_tenant_db(request: Request, db: Session = Depends(get_db)):
-    tenant = get_tenant_from_request(request, db)
+def get_tenant_db(
+    request: Request, 
+    token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+    db: Session = Depends(get_db)
+):
+    tenant = get_tenant_from_request(request, token, db)
     if not tenant.schema_name:
         raise HTTPException(status_code=400, detail="Tenant schema not configured")
     
