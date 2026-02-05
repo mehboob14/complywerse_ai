@@ -25,6 +25,15 @@ export default function LoginPage() {
       });
 
       if (response.ok) {
+        const data = await response.json();
+        
+        // Store tenant info if returned (for organization users)
+        if (data.tenant) {
+          localStorage.setItem('tenant_slug', data.tenant.slug || '');
+          localStorage.setItem('tenant_name', data.tenant.name || '');
+          localStorage.setItem('tenant_id', String(data.tenant.id || ''));
+        }
+        
         router.push('/dashboard');
       } else {
         const data = await response.json();
