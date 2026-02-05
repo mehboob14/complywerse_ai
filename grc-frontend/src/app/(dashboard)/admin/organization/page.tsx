@@ -4,6 +4,29 @@ import { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/ui';
 import { adminApi, OrganizationProfile } from '@/lib/api';
 
+async function ensureTenantContext(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  
+  const existingSlug = localStorage.getItem('tenant_slug');
+  if (existingSlug) return true;
+  
+  try {
+    const response = await fetch('/api/auth/me', { credentials: 'include' });
+    if (!response.ok) return false;
+    
+    const data = await response.json();
+    if (data.authenticated && data.tenant) {
+      localStorage.setItem('tenant_slug', data.tenant.slug || '');
+      localStorage.setItem('tenant_name', data.tenant.name || '');
+      localStorage.setItem('tenant_id', String(data.tenant.id || ''));
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 export default function OrganizationProfilePage() {
   const [profile, setProfile] = useState<OrganizationProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -12,9 +35,20 @@ export default function OrganizationProfilePage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<OrganizationProfile>>({});
+  const [tenantReady, setTenantReady] = useState(false);
 
   useEffect(() => {
-    fetchProfile();
+    const init = async () => {
+      const ready = await ensureTenantContext();
+      setTenantReady(ready);
+      if (ready) {
+        fetchProfile();
+      } else {
+        setLoading(false);
+        setError('No organization context found. Please log out and log in with your organization credentials.');
+      }
+    };
+    init();
   }, []);
 
   const fetchProfile = async () => {

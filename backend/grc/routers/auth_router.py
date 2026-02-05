@@ -294,6 +294,63 @@ def get_me(
     token: Optional[str] = Cookie(None, alias="grc_auth_token"),
     db: Session = Depends(get_db)
 ):
+    if not token:
+        return {"authenticated": False, "user": None}
+    
+    payload = decode_token(token)
+    if not payload:
+        return {"authenticated": False, "user": None}
+    
+    schema_name = payload.get("schema_name")
+    tenant_id = payload.get("tenant_id")
+    subdomain = payload.get("subdomain")
+    username = payload.get("sub")
+    
+    if schema_name and tenant_id:
+        try:
+            SessionClass = get_tenant_session(schema_name)
+            tenant_db = SessionClass()
+            
+            tenant_user = tenant_db.query(TenantSchemaUser).filter(
+                TenantSchemaUser.username == username
+            ).first()
+            
+            if tenant_user:
+                tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+                
+                from ..tenant_models import Role, UserRole
+                roles = tenant_db.query(Role).join(UserRole).filter(
+                    UserRole.user_id == tenant_user.id
+                ).all()
+                
+                tenant_db.close()
+                
+                return {
+                    "authenticated": True,
+                    "user": {
+                        "id": tenant_user.id,
+                        "username": tenant_user.username,
+                        "email": tenant_user.email,
+                        "display_name": tenant_user.display_name,
+                        "is_active": tenant_user.is_active,
+                        "created_at": tenant_user.created_at.isoformat() if hasattr(tenant_user, 'created_at') and tenant_user.created_at else None,
+                        "last_login": None,
+                        "tenant_ids": [tenant_id],
+                        "primary_tenant_id": tenant_id,
+                        "primary_tenant_name": tenant.name if tenant else None,
+                        "roles": [{"id": r.id, "name": r.name} for r in roles]
+                    },
+                    "tenant": {
+                        "id": tenant_id,
+                        "name": tenant.name if tenant else None,
+                        "slug": tenant.slug if tenant else None,
+                        "subdomain": subdomain
+                    }
+                }
+            tenant_db.close()
+        except Exception:
+            pass
+    
     user = get_current_user(token, db)
     if not user:
         return {"authenticated": False, "user": None}
@@ -323,13 +380,11 @@ def get_me(
         }
     }
     
-    if token:
-        payload = decode_token(token)
-        if payload and should_refresh_token(payload):
-            new_token = create_access_token({"sub": user.username})
-            response = JSONResponse(content=response_data)
-            set_auth_cookie(response, new_token)
-            return response
+    if payload and should_refresh_token(payload):
+        new_token = create_access_token({"sub": user.username})
+        response = JSONResponse(content=response_data)
+        set_auth_cookie(response, new_token)
+        return response
     
     return response_data
 

@@ -4,6 +4,29 @@ import { useState, useEffect } from 'react';
 import { PageHeader, DataTable } from '@/components/ui';
 import { adminApi, AdminRole, PermissionModule } from '@/lib/api';
 
+async function ensureTenantContext(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  
+  const existingSlug = localStorage.getItem('tenant_slug');
+  if (existingSlug) return true;
+  
+  try {
+    const response = await fetch('/api/auth/me', { credentials: 'include' });
+    if (!response.ok) return false;
+    
+    const data = await response.json();
+    if (data.authenticated && data.tenant) {
+      localStorage.setItem('tenant_slug', data.tenant.slug || '');
+      localStorage.setItem('tenant_name', data.tenant.name || '');
+      localStorage.setItem('tenant_id', String(data.tenant.id || ''));
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 export default function RolesManagementPage() {
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [permissionMatrix, setPermissionMatrix] = useState<PermissionModule[]>([]);
@@ -20,7 +43,16 @@ export default function RolesManagementPage() {
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetchData();
+    const init = async () => {
+      const ready = await ensureTenantContext();
+      if (ready) {
+        fetchData();
+      } else {
+        setLoading(false);
+        setError('No organization context found. Please log out and log in with your organization credentials.');
+      }
+    };
+    init();
   }, []);
 
   const fetchData = async () => {

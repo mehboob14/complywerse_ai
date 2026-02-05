@@ -51,7 +51,7 @@ interface CurrentUser {
   primary_tenant_name: string | null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/grc';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export default function Header() {
   const router = useRouter();
@@ -80,7 +80,16 @@ export default function Header() {
       });
       if (!response.ok) return null;
       const data = await response.json();
-      return data.authenticated ? data.user : null;
+      if (data.authenticated) {
+        if (data.tenant && typeof window !== 'undefined') {
+          localStorage.setItem('tenant_slug', data.tenant.slug || '');
+          localStorage.setItem('tenant_name', data.tenant.name || '');
+          localStorage.setItem('tenant_id', String(data.tenant.id || ''));
+          setTenantName(data.tenant.name || null);
+        }
+        return data.user;
+      }
+      return null;
     },
     staleTime: 60000,
   });
