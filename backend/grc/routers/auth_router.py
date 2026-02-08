@@ -116,7 +116,54 @@ def get_current_user(
     username = payload.get("sub")
     if not username:
         return None
+    
     user = db.query(GRCUser).filter(GRCUser.username == username).first()
+    
+    if not user:
+        schema_name = payload.get("schema_name")
+        tenant_id = payload.get("tenant_id")
+        if schema_name and tenant_id:
+            try:
+                SessionClass = get_tenant_session(schema_name)
+                tenant_db = SessionClass()
+                tenant_user = tenant_db.query(TenantSchemaUser).filter(
+                    TenantSchemaUser.username == username
+                ).first()
+                if tenant_user:
+                    t_email = tenant_user.email
+                    t_display = tenant_user.display_name
+                    t_active = tenant_user.is_active
+                    tenant_db.close()
+                    
+                    user = GRCUser(
+                        username=username,
+                        email=t_email,
+                        password_hash="tenant_managed",
+                        display_name=t_display,
+                        is_active=t_active
+                    )
+                    db.add(user)
+                    db.commit()
+                    db.refresh(user)
+                    
+                    existing_link = db.query(TenantUser).filter(
+                        TenantUser.user_id == user.id,
+                        TenantUser.tenant_id == tenant_id
+                    ).first()
+                    if not existing_link:
+                        link = TenantUser(
+                            user_id=user.id,
+                            tenant_id=tenant_id,
+                            is_primary=True
+                        )
+                        db.add(link)
+                        db.commit()
+                    
+                    return user
+                tenant_db.close()
+            except Exception:
+                pass
+    
     return user
 
 
