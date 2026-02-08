@@ -1,14 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from router import router
-from models import init_db
-from seed_data import seed_database
 from grc.main import app as grc_app
 from grc.models import init_grc_db
 import os
 
-app = FastAPI(title="PCI DSS Lifecycle API", version="1.0.0")
+app = FastAPI(title="ComplyVerse GRC Platform API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,25 +15,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router)
-
 app.mount("/grc", grc_app)
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(uploads_dir, exist_ok=True)
+
 
 @app.on_event("startup")
 def on_startup():
-    init_db()
-    seed_database()
     init_grc_db()
 
 
 @app.get("/")
 def root():
-    return {"message": "PCI DSS Lifecycle API", "version": "1.0.0", "grc_api": "/grc"}
+    return {
+        "message": "ComplyVerse GRC Platform API",
+        "version": "1.0.0",
+        "docs": "/grc/docs",
+        "health": "/grc/health"
+    }
 
 
 if __name__ == "__main__":

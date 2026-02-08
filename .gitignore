@@ -46,3 +46,14 @@ Thumbs.db
 # Build
 dist/
 build/
+.next/
+
+# Uploads (user files)
+backend/uploads/
+
+# Attached assets (reference screenshots)
+attached_assets/
+
+# Temporary files
+cookies.txt
+*.sql
