@@ -247,12 +247,17 @@ def login(
                     detail="User account is deactivated"
                 )
             
+            user_id = tenant_user.id
+            user_username = tenant_user.username
+            user_email = tenant_user.email
+            user_display_name = tenant_user.display_name
+            
             tenant_user.last_login = datetime.utcnow()
             tenant_db.commit()
             tenant_db.close()
             
             token = create_access_token({
-                "sub": tenant_user.username,
+                "sub": user_username,
                 "tenant_id": tenant.id,
                 "subdomain": tenant.subdomain,
                 "schema_name": tenant.schema_name,
@@ -262,10 +267,10 @@ def login(
             response = JSONResponse(content={
                 "message": "Login successful",
                 "user": {
-                    "id": tenant_user.id,
-                    "username": tenant_user.username,
-                    "email": tenant_user.email,
-                    "display_name": tenant_user.display_name
+                    "id": user_id,
+                    "username": user_username,
+                    "email": user_email,
+                    "display_name": user_display_name
                 },
                 "tenant": {
                     "id": tenant.id,
