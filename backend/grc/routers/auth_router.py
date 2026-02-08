@@ -45,7 +45,10 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    except (ValueError, Exception):
+        return False
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -336,38 +339,99 @@ def login(
                 detail=f"Login error: {str(e)}"
             )
     
-    # No subdomain - authenticate against public schema only (platform admins)
+    # No subdomain - try public schema first (platform admins), then auto-discover tenant
     user = db.query(GRCUser).filter(
         (GRCUser.username == request.username) | (GRCUser.email == request.username)
     ).first()
     
-    if not user or not verify_password(request.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password"
-        )
+    if user and user.password_hash != "tenant_managed" and verify_password(request.password, user.password_hash):
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is deactivated"
+            )
+        
+        user.last_login = datetime.utcnow()
+        db.commit()
+        
+        token = create_access_token({"sub": user.username})
+        response = JSONResponse(content={
+            "message": "Login successful",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "display_name": user.display_name
+            }
+        })
+        set_auth_cookie(response, token)
+        return response
     
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is deactivated"
-        )
+    # Auto-discover tenant: search all active tenant schemas for this user
+    tenants = db.query(Tenant).filter(Tenant.is_active == True, Tenant.schema_name.isnot(None)).all()
     
-    user.last_login = datetime.utcnow()
-    db.commit()
+    for tenant in tenants:
+        try:
+            SessionClass = get_tenant_session(tenant.schema_name)
+            tenant_db = SessionClass()
+            
+            tenant_user = tenant_db.query(TenantSchemaUser).filter(
+                (TenantSchemaUser.username == request.username) | 
+                (TenantSchemaUser.email == request.username)
+            ).first()
+            
+            if tenant_user and verify_password(request.password, tenant_user.password_hash):
+                if not tenant_user.is_active:
+                    tenant_db.close()
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="User account is deactivated"
+                    )
+                
+                user_id = tenant_user.id
+                user_username = tenant_user.username
+                user_email = tenant_user.email
+                user_display_name = tenant_user.display_name
+                
+                tenant_user.last_login = datetime.utcnow()
+                tenant_db.commit()
+                tenant_db.close()
+                
+                token = create_access_token({
+                    "sub": user_username,
+                    "tenant_id": tenant.id,
+                    "subdomain": tenant.subdomain,
+                    "schema_name": tenant.schema_name,
+                    "user_type": "tenant"
+                })
+                
+                response = JSONResponse(content={
+                    "message": "Login successful",
+                    "user": {
+                        "id": user_id,
+                        "username": user_username,
+                        "email": user_email,
+                        "display_name": user_display_name
+                    },
+                    "tenant": {
+                        "id": tenant.id,
+                        "name": tenant.name,
+                        "slug": tenant.subdomain
+                    }
+                })
+                set_auth_cookie(response, token)
+                return response
+            
+            tenant_db.close()
+        except HTTPException:
+            raise
+        except Exception:
+            continue
     
-    token = create_access_token({"sub": user.username})
-    response = JSONResponse(content={
-        "message": "Login successful",
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "display_name": user.display_name
-        }
-    })
-    set_auth_cookie(response, token)
-    return response
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid username or password"
+    )
 
 
 @router.post("/logout")
