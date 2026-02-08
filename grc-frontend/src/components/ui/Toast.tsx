@@ -91,12 +91,12 @@ export function Toast({ id, title, message, type, duration = 5000, onDismiss }: 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-white">{title}</p>
           {message && (
-            <p className="mt-1 text-sm text-slate-400">{message}</p>
+            <p className="mt-1 text-sm text-slate-600">{message}</p>
           )}
         </div>
         <button
           onClick={handleDismiss}
-          className="flex-shrink-0 text-slate-400 hover:text-white transition-colors"
+          className="flex-shrink-0 text-slate-600 hover:text-white transition-colors"
           aria-label="Dismiss notification"
         >
           <X size={16} />

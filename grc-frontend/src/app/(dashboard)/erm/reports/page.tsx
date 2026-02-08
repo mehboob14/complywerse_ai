@@ -70,7 +70,7 @@ export default function ReportsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -78,8 +78,8 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-slate-800">Reports & Analytics</h2>
-        <p className="text-sm text-slate-400">Generate risk reports and view analytics</p>
+        <h2 className="text-lg font-semibold text-black">Reports & Analytics</h2>
+        <p className="text-sm text-slate-600">Generate risk reports and view analytics</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -102,36 +102,36 @@ export default function ReportsPage() {
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-sm text-slate-400">Total Risks</p>
-              <p className="text-3xl font-bold text-slate-800">{executiveDashboard.summary?.total_risks || 0}</p>
+              <p className="text-sm text-slate-600">Total Risks</p>
+              <p className="text-3xl font-bold text-black">{executiveDashboard.summary?.total_risks || 0}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-sm text-slate-400">Critical Risks</p>
-              <p className="text-3xl font-bold text-red-400">{executiveDashboard.summary?.critical_risks || 0}</p>
+              <p className="text-sm text-slate-600">Critical Risks</p>
+              <p className="text-3xl font-bold text-red-600">{executiveDashboard.summary?.critical_risks || 0}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-sm text-slate-400">Avg Risk Score</p>
-              <p className="text-3xl font-bold text-slate-800">{executiveDashboard.summary?.avg_risk_score?.toFixed(1) || 0}</p>
+              <p className="text-sm text-slate-600">Avg Risk Score</p>
+              <p className="text-3xl font-bold text-black">{executiveDashboard.summary?.avg_risk_score?.toFixed(1) || 0}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-sm text-slate-400">Appetite Breaches</p>
-              <p className="text-3xl font-bold text-orange-400">{executiveDashboard.summary?.risks_exceeding_appetite || 0}</p>
+              <p className="text-sm text-slate-600">Appetite Breaches</p>
+              <p className="text-3xl font-bold text-orange-600">{executiveDashboard.summary?.risks_exceeding_appetite || 0}</p>
             </div>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h3 className="font-medium text-slate-800">Top Risks</h3>
+              <h3 className="font-medium text-black">Top Risks</h3>
               <div className="mt-4 space-y-3">
                 {executiveDashboard.top_risks?.slice(0, 5).map((risk) => (
                   <div key={risk.id} className="flex items-center justify-between">
                     <span className="text-sm text-slate-600">{risk.title}</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-800">{risk.score}</span>
+                      <span className="font-medium text-black">{risk.score}</span>
                       {risk.trend === 'up' ? (
-                        <TrendingUp className="h-4 w-4 text-red-400" />
+                        <TrendingUp className="h-4 w-4 text-red-600" />
                       ) : risk.trend === 'down' ? (
-                        <TrendingDown className="h-4 w-4 text-green-400" />
+                        <TrendingDown className="h-4 w-4 text-green-600" />
                       ) : null}
                     </div>
                   </div>
@@ -140,13 +140,13 @@ export default function ReportsPage() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h3 className="font-medium text-slate-800">KRI Alerts</h3>
+              <h3 className="font-medium text-black">KRI Alerts</h3>
               <div className="mt-4 space-y-3">
                 {executiveDashboard.kri_alerts?.slice(0, 5).map((alert) => (
                   <div key={alert.id} className="flex items-center justify-between">
                     <span className="text-sm text-slate-600">{alert.name}</span>
                     <span className={`rounded-full px-2 py-0.5 text-xs ${
-                      alert.status === 'red' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'
+                      alert.status === 'red' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
                     }`}>
                       {alert.value} ({alert.status})
                     </span>
@@ -161,28 +161,28 @@ export default function ReportsPage() {
       {selectedReportType === 'board' && boardSummary && (
         <div className="space-y-6">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="font-medium text-slate-800">Risk Profile Summary</h3>
-            <p className="text-sm text-slate-400">Period: {boardSummary.period || 'Current Quarter'}</p>
+            <h3 className="font-medium text-black">Risk Profile Summary</h3>
+            <p className="text-sm text-slate-600">Period: {boardSummary.period || 'Current Quarter'}</p>
             
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               <div>
-                <p className="text-sm text-slate-400">Total Risks</p>
-                <p className="text-2xl font-bold text-slate-800">{boardSummary.risk_profile_summary?.total_risks || 0}</p>
+                <p className="text-sm text-slate-600">Total Risks</p>
+                <p className="text-2xl font-bold text-black">{boardSummary.risk_profile_summary?.total_risks || 0}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-400">New Risks</p>
-                <p className="text-2xl font-bold text-yellow-400">{boardSummary.risk_profile_summary?.new_risks || 0}</p>
+                <p className="text-sm text-slate-600">New Risks</p>
+                <p className="text-2xl font-bold text-yellow-600">{boardSummary.risk_profile_summary?.new_risks || 0}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-400">Closed Risks</p>
-                <p className="text-2xl font-bold text-green-400">{boardSummary.risk_profile_summary?.closed_risks || 0}</p>
+                <p className="text-sm text-slate-600">Closed Risks</p>
+                <p className="text-2xl font-bold text-green-600">{boardSummary.risk_profile_summary?.closed_risks || 0}</p>
               </div>
             </div>
           </div>
 
           {boardSummary.key_risk_changes && boardSummary.key_risk_changes.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h3 className="font-medium text-slate-800">Key Risk Changes</h3>
+              <h3 className="font-medium text-black">Key Risk Changes</h3>
               <div className="mt-4 space-y-3">
                 {boardSummary.key_risk_changes.map((change) => (
                   <div key={change.risk_id} className="flex items-center justify-between">
@@ -190,7 +190,7 @@ export default function ReportsPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-slate-500">{change.previous_score}</span>
                       <ArrowRight className="h-4 w-4 text-slate-500" />
-                      <span className={change.change > 0 ? 'text-red-400' : 'text-green-400'}>
+                      <span className={change.change > 0 ? 'text-red-600' : 'text-green-600'}>
                         {change.current_score}
                       </span>
                     </div>
@@ -205,22 +205,22 @@ export default function ReportsPage() {
       {selectedReportType === 'department' && aggregatedView && (
         <div className="space-y-6">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="font-medium text-slate-800">Risk by Category</h3>
+            <h3 className="font-medium text-black">Risk by Category</h3>
             <div className="mt-4 space-y-4">
               {aggregatedView.map((view) => (
                 <div key={view.category} className="rounded-lg bg-slate-50 p-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium capitalize text-slate-800">{view.category}</span>
-                    <span className="text-sm text-slate-400">{view.total_count} risks</span>
+                    <span className="font-medium capitalize text-black">{view.category}</span>
+                    <span className="text-sm text-slate-600">{view.total_count} risks</span>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-slate-400">Avg Inherent: </span>
-                      <span className="text-slate-800">{view.avg_inherent_score?.toFixed(1) || 0}</span>
+                      <span className="text-slate-600">Avg Inherent: </span>
+                      <span className="text-black">{view.avg_inherent_score?.toFixed(1) || 0}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400">Avg Residual: </span>
-                      <span className="text-slate-800">{view.avg_residual_score?.toFixed(1) || 0}</span>
+                      <span className="text-slate-600">Avg Residual: </span>
+                      <span className="text-black">{view.avg_residual_score?.toFixed(1) || 0}</span>
                     </div>
                   </div>
                 </div>
@@ -233,24 +233,24 @@ export default function ReportsPage() {
       {selectedReportType === 'audit' && (
         <div className="space-y-6">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="font-medium text-slate-800">Appetite Breaches</h3>
+            <h3 className="font-medium text-black">Appetite Breaches</h3>
             {appetiteBreaches && appetiteBreaches.length > 0 ? (
               <div className="mt-4 space-y-3">
                 {appetiteBreaches.map((breach) => (
-                  <div key={breach.risk_id} className="flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                  <div key={breach.risk_id} className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3">
                     <div>
-                      <p className="font-medium text-slate-800">{breach.risk_title}</p>
-                      <p className="text-sm text-slate-400">{breach.category}</p>
+                      <p className="font-medium text-black">{breach.risk_title}</p>
+                      <p className="text-sm text-slate-600">{breach.category}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-red-400">+{breach.breach_percentage.toFixed(0)}% over appetite</p>
+                      <p className="text-red-600">+{breach.breach_percentage.toFixed(0)}% over appetite</p>
                       <p className="text-xs text-slate-500">{breach.days_in_breach} days in breach</p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="mt-4 text-sm text-slate-400">No appetite breaches detected</p>
+              <p className="mt-4 text-sm text-slate-600">No appetite breaches detected</p>
             )}
           </div>
 

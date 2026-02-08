@@ -122,34 +122,34 @@ const STATUS_OPTIONS = [
 ];
 
 const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string; icon: typeof CheckCircle }> = {
-  complied: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Complied', icon: CheckCircle },
-  partially_complied: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Partial', icon: AlertTriangle },
-  not_complied: { bg: 'bg-rose-500/20', text: 'text-rose-400', label: 'Not Complied', icon: XCircle },
-  in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress', icon: Clock },
-  na: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'N/A', icon: Minus },
+  complied: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Complied', icon: CheckCircle },
+  partially_complied: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Partial', icon: AlertTriangle },
+  not_complied: { bg: 'bg-rose-50', text: 'text-rose-600', label: 'Not Complied', icon: XCircle },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Progress', icon: Clock },
+  na: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'N/A', icon: Minus },
 };
 
 const ASSESSMENT_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Draft' },
-  in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Completed' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Progress' },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Completed' },
   archived: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Archived' },
 };
 
 const EVIDENCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Draft' },
-  pending_review: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Pending Review' },
-  in_approval: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Approval' },
-  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Approved' },
-  rejected: { bg: 'bg-rose-500/20', text: 'text-rose-400', label: 'Rejected' },
-  returned: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Returned' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
+  pending_review: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Pending Review' },
+  in_approval: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Approval' },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Approved' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-600', label: 'Rejected' },
+  returned: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'Returned' },
 };
 
 function getScoreColor(score: number | null): { bg: string; text: string } {
-  if (score === null) return { bg: 'bg-slate-500/20', text: 'text-slate-400' };
-  if (score >= 80) return { bg: 'bg-emerald-500/20', text: 'text-emerald-400' };
-  if (score >= 50) return { bg: 'bg-amber-500/20', text: 'text-amber-400' };
-  return { bg: 'bg-rose-500/20', text: 'text-rose-400' };
+  if (score === null) return { bg: 'bg-slate-50', text: 'text-slate-600' };
+  if (score >= 80) return { bg: 'bg-emerald-50', text: 'text-emerald-600' };
+  if (score >= 50) return { bg: 'bg-amber-50', text: 'text-amber-600' };
+  return { bg: 'bg-rose-50', text: 'text-rose-600' };
 }
 
 function getScoreBarColor(score: number | null): string {
@@ -407,17 +407,17 @@ export default function AssessmentDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
 
   if (error || !assessment) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center text-red-600">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load assessment details</p>
-        <Link href="/compliance/assessments" className="mt-4 text-primary-400 hover:underline">
+        <Link href="/compliance/assessments" className="mt-4 text-primary-600 hover:underline">
           Back to Assessments
         </Link>
       </div>
@@ -445,18 +445,18 @@ export default function AssessmentDetailPage() {
       <div className="flex items-start gap-4">
         <Link
           href="/compliance/assessments"
-          className="mt-1 rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-900"
+          className="mt-1 rounded-lg p-2 text-slate-600 hover:bg-white hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-900/50 text-primary-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-900/50 text-primary-600">
               <FileText className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">{assessment.name}</h1>
-              <p className="text-slate-400">
+              <h1 className="text-2xl font-bold text-black">{assessment.name}</h1>
+              <p className="text-slate-600">
                 {assessment.assessment_type.replace(/_/g, ' ')} • {assessment.file_name}
               </p>
             </div>
@@ -477,50 +477,50 @@ export default function AssessmentDetailPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between mb-2">
             <div className="rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-3">
-              <CheckCircle className="h-5 w-5 text-emerald-400" />
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
             </div>
           </div>
-          <p className="stat-value text-emerald-400">{assessment.complied_count || 0}</p>
+          <p className="stat-value text-emerald-600">{assessment.complied_count || 0}</p>
           <p className="stat-label">Complied</p>
         </div>
 
         <div className="stat-card">
           <div className="flex items-start justify-between mb-2">
             <div className="rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 p-3">
-              <AlertTriangle className="h-5 w-5 text-amber-400" />
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
             </div>
           </div>
-          <p className="stat-value text-amber-400">{assessment.partially_complied_count || 0}</p>
+          <p className="stat-value text-amber-600">{assessment.partially_complied_count || 0}</p>
           <p className="stat-label">Partially Complied</p>
         </div>
 
         <div className="stat-card">
           <div className="flex items-start justify-between mb-2">
             <div className="rounded-xl bg-gradient-to-br from-rose-500/20 to-rose-600/10 p-3">
-              <XCircle className="h-5 w-5 text-rose-400" />
+              <XCircle className="h-5 w-5 text-rose-600" />
             </div>
           </div>
-          <p className="stat-value text-rose-400">{assessment.not_complied_count || 0}</p>
+          <p className="stat-value text-rose-600">{assessment.not_complied_count || 0}</p>
           <p className="stat-label">Not Complied</p>
         </div>
 
         <div className="stat-card">
           <div className="flex items-start justify-between mb-2">
             <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
-              <Clock className="h-5 w-5 text-blue-400" />
+              <Clock className="h-5 w-5 text-blue-600" />
             </div>
           </div>
-          <p className="stat-value text-blue-400">{assessment.in_progress_count || 0}</p>
+          <p className="stat-value text-blue-600">{assessment.in_progress_count || 0}</p>
           <p className="stat-label">In Progress</p>
         </div>
 
         <div className="stat-card">
           <div className="flex items-start justify-between mb-2">
             <div className="rounded-xl bg-gradient-to-br from-slate-500/20 to-slate-600/10 p-3">
-              <Minus className="h-5 w-5 text-slate-400" />
+              <Minus className="h-5 w-5 text-slate-600" />
             </div>
           </div>
-          <p className="stat-value text-slate-400">{assessment.na_count || 0}</p>
+          <p className="stat-value text-slate-600">{assessment.na_count || 0}</p>
           <p className="stat-label">N/A</p>
         </div>
       </div>
@@ -561,31 +561,31 @@ export default function AssessmentDetailPage() {
           <div className="space-y-3">
             {assessment.source && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Source</span>
-                <span className="text-slate-800">{assessment.source}</span>
+                <span className="text-slate-600">Source</span>
+                <span className="text-black">{assessment.source}</span>
               </div>
             )}
             {assessment.assessor && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Assessor</span>
+                <span className="text-slate-600">Assessor</span>
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-slate-500" />
-                  <span className="text-slate-800">{assessment.assessor}</span>
+                  <span className="text-black">{assessment.assessor}</span>
                 </div>
               </div>
             )}
             {assessment.due_date && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Due Date</span>
+                <span className="text-slate-600">Due Date</span>
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-slate-500" />
-                  <span className="text-slate-800">{formatDate(assessment.due_date)}</span>
+                  <span className="text-black">{formatDate(assessment.due_date)}</span>
                 </div>
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Created</span>
-              <span className="text-slate-800">{formatDate(assessment.created_at)}</span>
+              <span className="text-slate-600">Created</span>
+              <span className="text-black">{formatDate(assessment.created_at)}</span>
             </div>
           </div>
         </div>
@@ -613,7 +613,7 @@ export default function AssessmentDetailPage() {
           {domains.length === 0 ? (
             <div className="text-center py-8">
               <FileText className="h-12 w-12 text-slate-500 mx-auto mb-3" />
-              <p className="text-slate-400">No assessment items found</p>
+              <p className="text-slate-600">No assessment items found</p>
             </div>
           ) : (
             domains.map((domain) => {
@@ -633,11 +633,11 @@ export default function AssessmentDetailPage() {
                   >
                     <div className="flex items-center gap-3">
                       {isExpanded ? (
-                        <ChevronDown className="h-5 w-5 text-slate-400" />
+                        <ChevronDown className="h-5 w-5 text-slate-600" />
                       ) : (
-                        <ChevronRight className="h-5 w-5 text-slate-400" />
+                        <ChevronRight className="h-5 w-5 text-slate-600" />
                       )}
-                      <span className="font-medium text-slate-800">{domain}</span>
+                      <span className="font-medium text-black">{domain}</span>
                       <span className="text-sm text-slate-500">({items.length} items)</span>
                     </div>
                     <div className="flex items-center gap-3">
@@ -648,7 +648,7 @@ export default function AssessmentDetailPage() {
                             style={{ width: `${domainPercentage}%` }}
                           />
                         </div>
-                        <span className="text-sm text-slate-400">{domainPercentage}%</span>
+                        <span className="text-sm text-slate-600">{domainPercentage}%</span>
                       </div>
                     </div>
                   </button>
@@ -673,7 +673,7 @@ export default function AssessmentDetailPage() {
                                   {item.item_number}
                                 </span>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-slate-800 mb-2">{item.control_description}</p>
+                                  <p className="text-black mb-2">{item.control_description}</p>
 
                                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
                                     {item.gaps_identified && (
@@ -761,7 +761,7 @@ export default function AssessmentDetailPage() {
                                       </button>
                                       <button
                                         onClick={() => toggleEvidencePanel(item.id)}
-                                        className={`btn-ghost btn-sm relative ${isEvidenceExpanded ? 'text-primary-400' : ''}`}
+                                        className={`btn-ghost btn-sm relative ${isEvidenceExpanded ? 'text-primary-600' : ''}`}
                                         title="Evidence"
                                       >
                                         <Paperclip className="h-4 w-4" />
@@ -807,16 +807,16 @@ export default function AssessmentDetailPage() {
                                       {aiRecommendation.recommendations.map((rec, idx) => (
                                         <div key={idx} className="bg-slate-50/50 rounded-lg p-3">
                                           <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium text-slate-800">{rec.evidence_type}</span>
+                                            <span className="text-sm font-medium text-black">{rec.evidence_type}</span>
                                             <span className={`text-xs px-2 py-0.5 rounded ${
-                                              rec.priority === 'high' ? 'bg-rose-500/20 text-rose-400' :
-                                              rec.priority === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                                              'bg-slate-500/20 text-slate-400'
+                                              rec.priority === 'high' ? 'bg-rose-50 text-rose-700' :
+                                              rec.priority === 'medium' ? 'bg-amber-50 text-amber-700' :
+                                              'bg-slate-50 text-slate-700'
                                             }`}>
                                               {rec.priority}
                                             </span>
                                           </div>
-                                          <p className="text-xs text-slate-400 mb-2">{rec.description}</p>
+                                          <p className="text-xs text-slate-600 mb-2">{rec.description}</p>
                                           {rec.example_files.length > 0 && (
                                             <div className="text-xs text-slate-500">
                                               Examples: {rec.example_files.join(', ')}
@@ -862,8 +862,8 @@ export default function AssessmentDetailPage() {
                                             <div className="flex items-start justify-between">
                                               <div className="flex-1">
                                                 <div className="flex items-center gap-2">
-                                                  <FileText className="h-4 w-4 text-slate-400" />
-                                                  <span className="text-sm font-medium text-slate-800">
+                                                  <FileText className="h-4 w-4 text-slate-600" />
+                                                  <span className="text-sm font-medium text-black">
                                                     {ev.evidence?.name || 'Evidence'}
                                                   </span>
                                                   <span className={`badge ${evStatusStyle.bg} ${evStatusStyle.text} text-xs`}>
@@ -909,7 +909,7 @@ export default function AssessmentDetailPage() {
                                                   <button
                                                     onClick={() => handleApprovalAction(ev.id, 'approve')}
                                                     disabled={approvalActionMutation.isPending}
-                                                    className="btn-ghost btn-sm text-emerald-400 hover:bg-emerald-500/20"
+                                                    className="btn-ghost btn-sm text-emerald-600 hover:bg-emerald-50"
                                                     title="Approve"
                                                   >
                                                     <ThumbsUp className="h-4 w-4" />
@@ -917,7 +917,7 @@ export default function AssessmentDetailPage() {
                                                   <button
                                                     onClick={() => handleApprovalAction(ev.id, 'reject')}
                                                     disabled={approvalActionMutation.isPending}
-                                                    className="btn-ghost btn-sm text-rose-400 hover:bg-rose-500/20"
+                                                    className="btn-ghost btn-sm text-rose-600 hover:bg-rose-50"
                                                     title="Reject"
                                                   >
                                                     <ThumbsDown className="h-4 w-4" />
@@ -925,7 +925,7 @@ export default function AssessmentDetailPage() {
                                                   <button
                                                     onClick={() => handleApprovalAction(ev.id, 'return')}
                                                     disabled={approvalActionMutation.isPending}
-                                                    className="btn-ghost btn-sm text-orange-400 hover:bg-orange-500/20"
+                                                    className="btn-ghost btn-sm text-orange-600 hover:bg-orange-50"
                                                     title="Return for revision"
                                                   >
                                                     <RotateCcw className="h-4 w-4" />
@@ -938,11 +938,11 @@ export default function AssessmentDetailPage() {
                                                 <p className="text-xs text-slate-500 mb-1">Approval History</p>
                                                 <div className="space-y-1">
                                                   {ev.approval_history.map((history) => (
-                                                    <div key={history.id} className="text-xs text-slate-400">
+                                                    <div key={history.id} className="text-xs text-slate-600">
                                                       <span className={`font-medium ${
-                                                        history.action === 'approved' ? 'text-emerald-400' :
-                                                        history.action === 'rejected' ? 'text-rose-400' :
-                                                        'text-orange-400'
+                                                        history.action === 'approved' ? 'text-emerald-600' :
+                                                        history.action === 'rejected' ? 'text-rose-600' :
+                                                        'text-orange-600'
                                                       }`}>
                                                         {history.action}
                                                       </span>

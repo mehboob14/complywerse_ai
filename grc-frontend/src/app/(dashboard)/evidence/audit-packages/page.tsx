@@ -107,9 +107,9 @@ interface EvidenceListResponse {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string; icon: typeof Clock }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Draft', icon: Clock },
-  finalized: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Finalized', icon: Lock },
-  exported: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Exported', icon: Download },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft', icon: Clock },
+  finalized: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'Finalized', icon: Lock },
+  exported: { bg: 'bg-green-50', text: 'text-green-600', label: 'Exported', icon: Download },
   archived: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Archived', icon: Archive },
 };
 
@@ -375,7 +375,7 @@ export default function AuditPackagesPage() {
           {style.label}
         </span>
         {isLegalHold && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400">
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
             <Lock size={10} />
             Legal Hold
           </span>
@@ -386,10 +386,10 @@ export default function AuditPackagesPage() {
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-600">
         <AlertCircle className="h-12 w-12" />
         <p>Failed to load audit packages</p>
-        <button onClick={() => refetch()} className="text-primary-400 hover:underline">Try again</button>
+        <button onClick={() => refetch()} className="text-primary-600 hover:underline">Try again</button>
       </div>
     );
   }
@@ -398,8 +398,8 @@ export default function AuditPackagesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Audit Package Builder</h1>
-          <p className="text-slate-400">Create and manage audit evidence packages</p>
+          <h1 className="text-2xl font-bold text-black">Audit Package Builder</h1>
+          <p className="text-slate-600">Create and manage audit evidence packages</p>
         </div>
         <button
           onClick={() => setIsCreateModalOpen(true)}
@@ -413,19 +413,19 @@ export default function AuditPackagesPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
             <input
               type="text"
               placeholder="Search packages..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
           >
             <option value="">All Statuses</option>
             <option value="draft">Draft</option>
@@ -441,10 +441,10 @@ export default function AuditPackagesPage() {
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
             {isLoading ? (
               <div className="flex h-64 items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
               </div>
             ) : filteredPackages.length === 0 ? (
-              <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-400">
+              <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-600">
                 <Package className="h-12 w-12" />
                 <p>No audit packages found</p>
                 <button
@@ -461,12 +461,12 @@ export default function AuditPackagesPage() {
                   <table className="w-full">
                     <thead className="bg-slate-50/50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Framework</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Audit Period</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Evidence</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Actions</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Framework</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Audit Period</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Evidence</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
@@ -478,15 +478,15 @@ export default function AuditPackagesPage() {
                         >
                           <td className="px-4 py-4">
                             <div>
-                              <p className="font-medium text-slate-800">{pkg.name}</p>
+                              <p className="font-medium text-black">{pkg.name}</p>
                               {pkg.description && (
-                                <p className="text-sm text-slate-400 truncate max-w-xs">{pkg.description}</p>
+                                <p className="text-sm text-slate-600 truncate max-w-xs">{pkg.description}</p>
                               )}
                             </div>
                           </td>
                           <td className="whitespace-nowrap px-4 py-4">
                             {pkg.framework_name ? (
-                              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-500/20 px-2.5 py-1 text-xs font-medium text-primary-400">
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-600">
                                 <Shield size={12} />
                                 {pkg.framework_name}
                               </span>
@@ -497,7 +497,7 @@ export default function AuditPackagesPage() {
                           <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
                             {pkg.audit_period_start || pkg.audit_period_end ? (
                               <div className="flex items-center gap-1">
-                                <Calendar size={14} className="text-slate-400" />
+                                <Calendar size={14} className="text-slate-600" />
                                 {formatDate(pkg.audit_period_start)} - {formatDate(pkg.audit_period_end)}
                               </div>
                             ) : (
@@ -509,7 +509,7 @@ export default function AuditPackagesPage() {
                           </td>
                           <td className="whitespace-nowrap px-4 py-4">
                             <span className="inline-flex items-center gap-1 text-sm text-slate-600">
-                              <FileCheck size={14} className="text-slate-400" />
+                              <FileCheck size={14} className="text-slate-600" />
                               {pkg.evidence_count}
                             </span>
                           </td>
@@ -517,7 +517,7 @@ export default function AuditPackagesPage() {
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => setSelectedPackage(pkg)}
-                                className="rounded p-1.5 text-slate-400 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                                className="rounded p-1.5 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
                                 title="View Details"
                               >
                                 <Eye className="h-4 w-4" />
@@ -526,7 +526,7 @@ export default function AuditPackagesPage() {
                                 <button
                                   onClick={() => handleFinalize(pkg)}
                                   disabled={finalizeMutation.isPending}
-                                  className="rounded p-1.5 text-blue-400 hover:bg-blue-500/20 transition-colors"
+                                  className="rounded p-1.5 text-blue-600 hover:bg-blue-50 transition-colors"
                                   title="Finalize"
                                 >
                                   <Lock className="h-4 w-4" />
@@ -536,7 +536,7 @@ export default function AuditPackagesPage() {
                                 <button
                                   onClick={() => handleExport(pkg)}
                                   disabled={exportMutation.isPending}
-                                  className="rounded p-1.5 text-green-400 hover:bg-green-500/20 transition-colors"
+                                  className="rounded p-1.5 text-green-600 hover:bg-green-50 transition-colors"
                                   title="Export ZIP"
                                 >
                                   <Download className="h-4 w-4" />
@@ -545,7 +545,7 @@ export default function AuditPackagesPage() {
                               <button
                                 onClick={() => toggleLegalHold(pkg)}
                                 disabled={legalHoldMutation.isPending}
-                                className={`rounded p-1.5 transition-colors ${pkg.is_legal_hold ? 'text-red-400 hover:bg-red-500/20' : 'text-slate-400 hover:bg-slate-600'}`}
+                                className={`rounded p-1.5 transition-colors ${pkg.is_legal_hold ? 'text-red-600 hover:bg-red-50' : 'text-slate-600 hover:bg-slate-600'}`}
                                 title={pkg.is_legal_hold ? 'Remove Legal Hold' : 'Set Legal Hold'}
                               >
                                 {pkg.is_legal_hold ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
@@ -554,7 +554,7 @@ export default function AuditPackagesPage() {
                                 <button
                                   onClick={() => handleDelete(pkg)}
                                   disabled={deleteMutation.isPending}
-                                  className="rounded p-1.5 text-red-400 hover:bg-red-500/20 transition-colors"
+                                  className="rounded p-1.5 text-red-600 hover:bg-red-50 transition-colors"
                                   title="Delete"
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -570,14 +570,14 @@ export default function AuditPackagesPage() {
 
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-slate-600">
                       Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalItems)} of {totalItems}
                     </p>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setPage(p => Math.max(0, p - 1))}
                         disabled={page === 0}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-200 disabled:opacity-50"
+                        className="rounded p-1.5 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
                       >
                         <ChevronLeft size={18} />
                       </button>
@@ -585,7 +585,7 @@ export default function AuditPackagesPage() {
                       <button
                         onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                         disabled={page >= totalPages - 1}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-200 disabled:opacity-50"
+                        className="rounded p-1.5 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
                       >
                         <ChevronRight size={18} />
                       </button>
@@ -602,10 +602,10 @@ export default function AuditPackagesPage() {
             <div className="rounded-xl border border-slate-200 bg-white overflow-hidden sticky top-4">
               <div className="border-b border-slate-200 p-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-slate-800">Package Details</h2>
+                  <h2 className="text-lg font-semibold text-black">Package Details</h2>
                   <button
                     onClick={() => setSelectedPackage(null)}
-                    className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                    className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                   >
                     <X size={18} />
                   </button>
@@ -614,8 +614,8 @@ export default function AuditPackagesPage() {
 
               <div className="p-4 space-y-4">
                 <div>
-                  <h3 className="font-medium text-slate-800">{packageDetail?.name || selectedPackage.name}</h3>
-                  <p className="text-sm text-slate-400 mt-1">{packageDetail?.description || selectedPackage.description || 'No description'}</p>
+                  <h3 className="font-medium text-black">{packageDetail?.name || selectedPackage.name}</h3>
+                  <p className="text-sm text-slate-600 mt-1">{packageDetail?.description || selectedPackage.description || 'No description'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
@@ -648,7 +648,7 @@ export default function AuditPackagesPage() {
                 {(packageDetail?.status || selectedPackage.status) === 'draft' && (
                   <button
                     onClick={() => setIsEvidenceSelectorOpen(true)}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-primary-600 bg-primary-600/10 px-4 py-2 text-sm font-medium text-primary-400 hover:bg-primary-600/20 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-primary-600 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-600/20 transition-colors"
                   >
                     <Plus size={16} />
                     Add Evidence
@@ -672,28 +672,28 @@ export default function AuditPackagesPage() {
                                 <button
                                   onClick={() => moveEvidence(item, 'up')}
                                   disabled={index === 0}
-                                  className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-30"
+                                  className="p-0.5 text-slate-600 hover:text-slate-900 disabled:opacity-30"
                                 >
                                   <ChevronLeft size={14} className="rotate-90" />
                                 </button>
                                 <button
                                   onClick={() => moveEvidence(item, 'down')}
                                   disabled={index === packageDetail.evidence_items!.length - 1}
-                                  className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-30"
+                                  className="p-0.5 text-slate-600 hover:text-slate-900 disabled:opacity-30"
                                 >
                                   <ChevronRight size={14} className="rotate-90" />
                                 </button>
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-800 truncate">{item.evidence?.name || `Evidence #${item.evidence_id}`}</p>
-                              <p className="text-xs text-slate-400">{item.evidence?.evidence_type || 'Unknown type'}</p>
+                              <p className="text-sm font-medium text-black truncate">{item.evidence?.name || `Evidence #${item.evidence_id}`}</p>
+                              <p className="text-xs text-slate-600">{item.evidence?.evidence_type || 'Unknown type'}</p>
                             </div>
                             {(packageDetail.status || selectedPackage.status) === 'draft' && (
                               <button
                                 onClick={() => handleRemoveEvidence(item.id)}
                                 disabled={removeEvidenceMutation.isPending}
-                                className="p-1 text-red-400 hover:bg-red-500/20 rounded"
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
                               >
                                 <X size={14} />
                               </button>
@@ -760,10 +760,10 @@ export default function AuditPackagesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-slate-800">Create Audit Package</h2>
+              <h2 className="text-xl font-semibold text-black">Create Audit Package</h2>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X size={20} />
               </button>
@@ -783,7 +783,7 @@ export default function AuditPackagesPage() {
                   type="text"
                   value={createForm.name}
                   onChange={(e) => setCreateForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                   placeholder="Q4 2025 Audit Package"
                   required
                 />
@@ -794,7 +794,7 @@ export default function AuditPackagesPage() {
                 <textarea
                   value={createForm.description}
                   onChange={(e) => setCreateForm(f => ({ ...f, description: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
                   rows={3}
                   placeholder="Description of the audit package..."
                 />
@@ -805,7 +805,7 @@ export default function AuditPackagesPage() {
                 <select
                   value={createForm.framework_id}
                   onChange={(e) => setCreateForm(f => ({ ...f, framework_id: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                 >
                   <option value="">Select a framework...</option>
                   {frameworksData?.map(fw => (
@@ -821,7 +821,7 @@ export default function AuditPackagesPage() {
                     type="date"
                     value={createForm.audit_period_start}
                     onChange={(e) => setCreateForm(f => ({ ...f, audit_period_start: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -830,7 +830,7 @@ export default function AuditPackagesPage() {
                     type="date"
                     value={createForm.audit_period_end}
                     onChange={(e) => setCreateForm(f => ({ ...f, audit_period_end: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -861,23 +861,23 @@ export default function AuditPackagesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-slate-800">Add Evidence to Package</h2>
+              <h2 className="text-xl font-semibold text-black">Add Evidence to Package</h2>
               <button
                 onClick={() => { setIsEvidenceSelectorOpen(false); setSelectedEvidenceIds([]); }}
-                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X size={20} />
               </button>
             </div>
 
             <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
               <input
                 type="text"
                 placeholder="Search approved evidence..."
                 value={evidenceSearchTerm}
                 onChange={(e) => setEvidenceSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
               />
             </div>
 
@@ -893,7 +893,7 @@ export default function AuditPackagesPage() {
                         key={evidence.id}
                         className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${
                           alreadyAdded ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'
-                        } ${isSelected ? 'bg-primary-600/10' : ''}`}
+                        } ${isSelected ? 'bg-primary-50' : ''}`}
                       >
                         <input
                           type="checkbox"
@@ -903,8 +903,8 @@ export default function AuditPackagesPage() {
                           className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-slate-800">{evidence.name}</p>
-                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                          <p className="font-medium text-black">{evidence.name}</p>
+                          <div className="flex items-center gap-2 text-xs text-slate-600">
                             <span>{evidence.evidence_type || 'Unknown type'}</span>
                             {evidence.collection_date && (
                               <>
@@ -917,7 +917,7 @@ export default function AuditPackagesPage() {
                         {alreadyAdded && (
                           <span className="text-xs text-slate-500">Already added</span>
                         )}
-                        <span className="inline-flex items-center rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-400">
+                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-600">
                           <CheckCircle size={10} className="mr-1" />
                           Approved
                         </span>
@@ -926,7 +926,7 @@ export default function AuditPackagesPage() {
                   })}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <div className="flex flex-col items-center justify-center py-12 text-slate-600">
                   <FileText className="h-8 w-8 mb-2" />
                   <p>No approved evidence found</p>
                 </div>
@@ -934,7 +934,7 @@ export default function AuditPackagesPage() {
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t border-slate-200 mt-4">
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-slate-600">
                 {selectedEvidenceIds.length} item{selectedEvidenceIds.length !== 1 ? 's' : ''} selected
               </p>
               <div className="flex gap-3">

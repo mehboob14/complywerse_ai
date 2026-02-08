@@ -103,13 +103,13 @@ export default function AssetsPage() {
   const getAssetIcon = (type: string) => {
     const assetType = ASSET_TYPES.find(t => t.value === type);
     const Icon = assetType?.icon || Server;
-    return <Icon className="h-5 w-5 text-primary-400" />;
+    return <Icon className="h-5 w-5 text-primary-600" />;
   };
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      active: 'bg-green-900/50 text-green-400',
-      inactive: 'bg-yellow-900/50 text-yellow-400',
+      active: 'bg-green-900/50 text-green-600',
+      inactive: 'bg-yellow-900/50 text-yellow-600',
       decommissioned: 'bg-slate-200 text-slate-500',
     };
     return (
@@ -121,10 +121,10 @@ export default function AssetsPage() {
 
   const getCriticalityBadge = (criticality: string) => {
     const colors: Record<string, string> = {
-      critical: 'bg-red-900/50 text-red-400',
-      high: 'bg-orange-900/50 text-orange-400',
-      medium: 'bg-yellow-900/50 text-yellow-400',
-      low: 'bg-green-900/50 text-green-400',
+      critical: 'bg-red-900/50 text-red-600',
+      high: 'bg-orange-900/50 text-orange-600',
+      medium: 'bg-yellow-900/50 text-yellow-600',
+      low: 'bg-green-900/50 text-green-600',
     };
     return (
       <span className={`rounded-full px-2 py-0.5 text-xs ${colors[criticality] || 'bg-slate-200 text-slate-500'}`}>
@@ -136,7 +136,7 @@ export default function AssetsPage() {
   const getTypeBadge = (type: string) => {
     const assetType = ASSET_TYPES.find(t => t.value === type);
     return (
-      <span className="rounded-full bg-primary-900/50 px-2 py-0.5 text-xs text-primary-400">
+      <span className="rounded-full bg-primary-900/50 px-2 py-0.5 text-xs text-primary-600">
         {assetType?.label || type}
       </span>
     );
@@ -196,14 +196,14 @@ export default function AssetsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center text-red-600">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load assets</p>
       </div>
@@ -214,8 +214,8 @@ export default function AssetsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">IT Asset Inventory & Valuation</h1>
-          <p className="text-slate-400">Manage and track IT assets with CIA ratings and valuations</p>
+          <h1 className="text-2xl font-bold text-black">IT Asset Inventory & Valuation</h1>
+          <p className="text-slate-600">Manage and track IT assets with CIA ratings and valuations</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -228,7 +228,7 @@ export default function AssetsPage() {
           </button>
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-primary-600 bg-primary-600/20 px-3 py-2 text-sm font-medium text-primary-400 hover:bg-primary-600/30"
+            className="flex items-center gap-2 rounded-lg border border-primary-600 bg-primary-600/20 px-3 py-2 text-sm font-medium text-primary-600 hover:bg-primary-600/30"
           >
             <Upload size={16} />
             Import
@@ -246,83 +246,75 @@ export default function AssetsPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <div className="rounded-lg bg-white p-4 border border-slate-200">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary-500/20 p-2">
-              <Server className="h-5 w-5 text-primary-400" />
-            </div>
+                          <Server className="h-5 w-5 text-primary-600" />
             <div>
-              <p className="text-sm text-slate-400">Total Assets</p>
-              <p className="text-2xl font-semibold text-slate-800">{dashboard?.total_assets || 0}</p>
+              <p className="text-sm text-slate-600">Total Assets</p>
+              <p className="text-2xl font-semibold text-black">{dashboard?.total_assets || 0}</p>
             </div>
           </div>
         </div>
 
         <div className="rounded-lg bg-white p-4 border border-slate-200">
-          <p className="text-sm text-slate-400 mb-2">By Type</p>
+          <p className="text-sm text-slate-600 mb-2">By Type</p>
           <div className="space-y-1">
             {Object.entries(dashboard?.by_type || {}).map(([type, count]) => (
               <div key={type} className="flex justify-between text-xs">
                 <span className="text-slate-600 capitalize">{type.replace('_', ' ')}</span>
-                <span className="text-slate-800 font-medium">{count as number}</span>
+                <span className="text-black font-medium">{count as number}</span>
               </div>
             ))}
           </div>
         </div>
 
         <div className="rounded-lg bg-white p-4 border border-slate-200">
-          <p className="text-sm text-slate-400 mb-2">By Criticality</p>
+          <p className="text-sm text-slate-600 mb-2">By Criticality</p>
           <div className="space-y-1">
             <div className="flex justify-between text-xs">
-              <span className="text-red-400">Critical</span>
-              <span className="text-slate-800 font-medium">{dashboard?.by_criticality?.critical || 0}</span>
+              <span className="text-red-600">Critical</span>
+              <span className="text-black font-medium">{dashboard?.by_criticality?.critical || 0}</span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-orange-400">High</span>
-              <span className="text-slate-800 font-medium">{dashboard?.by_criticality?.high || 0}</span>
+              <span className="text-orange-600">High</span>
+              <span className="text-black font-medium">{dashboard?.by_criticality?.high || 0}</span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-yellow-400">Medium</span>
-              <span className="text-slate-800 font-medium">{dashboard?.by_criticality?.medium || 0}</span>
+              <span className="text-yellow-600">Medium</span>
+              <span className="text-black font-medium">{dashboard?.by_criticality?.medium || 0}</span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-green-400">Low</span>
-              <span className="text-slate-800 font-medium">{dashboard?.by_criticality?.low || 0}</span>
+              <span className="text-green-600">Low</span>
+              <span className="text-black font-medium">{dashboard?.by_criticality?.low || 0}</span>
             </div>
           </div>
         </div>
 
         <div className="rounded-lg bg-white p-4 border border-slate-200">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-2">
-              <DollarSign className="h-5 w-5 text-green-400" />
-            </div>
+                          <DollarSign className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-sm text-slate-400">High Value</p>
-              <p className="text-2xl font-semibold text-slate-800">{dashboard?.high_value_assets || 0}</p>
+              <p className="text-sm text-slate-600">High Value</p>
+              <p className="text-2xl font-semibold text-black">{dashboard?.high_value_assets || 0}</p>
             </div>
           </div>
         </div>
 
         <div className="rounded-lg bg-white p-4 border border-slate-200">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-yellow-500/20 p-2">
-              <AlertCircle className="h-5 w-5 text-yellow-400" />
-            </div>
+                          <AlertCircle className="h-5 w-5 text-yellow-600" />
             <div>
-              <p className="text-sm text-slate-400">Need Assessment</p>
-              <p className="text-2xl font-semibold text-slate-800">{dashboard?.assets_needing_assessment || 0}</p>
+              <p className="text-sm text-slate-600">Need Assessment</p>
+              <p className="text-2xl font-semibold text-black">{dashboard?.assets_needing_assessment || 0}</p>
             </div>
           </div>
         </div>
 
         <div className="rounded-lg bg-white p-4 border border-slate-200">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-500/20 p-2">
-              <Shield className="h-5 w-5 text-blue-400" />
-            </div>
+                          <Shield className="h-5 w-5 text-blue-600" />
             <div>
-              <p className="text-sm text-slate-400">Status</p>
+              <p className="text-sm text-slate-600">Status</p>
               <div className="flex gap-2 text-sm">
-                <span className="text-green-400">{dashboard?.by_status?.active || 0} active</span>
+                <span className="text-green-600">{dashboard?.by_status?.active || 0} active</span>
               </div>
             </div>
           </div>
@@ -331,22 +323,22 @@ export default function AssetsPage() {
 
       <div className="flex flex-wrap gap-4">
         <div className="relative flex-1 sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
           <input
             type="text"
             placeholder="Search assets..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-400" />
+          <Filter className="h-4 w-4 text-slate-600" />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
@@ -358,7 +350,7 @@ export default function AssetsPage() {
         <select
           value={criticalityFilter}
           onChange={(e) => setCriticalityFilter(e.target.value as CriticalityFilter)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
         >
           <option value="all">All Criticality</option>
           <option value="critical">Critical</option>
@@ -394,8 +386,8 @@ export default function AssetsPage() {
                       <div className="flex items-center gap-3">
                         {getAssetIcon(asset.asset_type)}
                         <div>
-                          <p className="font-medium text-slate-800">{asset.name}</p>
-                          <p className="text-sm text-slate-400 line-clamp-1">{asset.description || 'No description'}</p>
+                          <p className="font-medium text-black">{asset.name}</p>
+                          <p className="text-sm text-slate-600 line-clamp-1">{asset.description || 'No description'}</p>
                         </div>
                       </div>
                     </td>
@@ -411,7 +403,7 @@ export default function AssetsPage() {
                     </td>
                     <td className="hidden px-4 py-3 lg:table-cell">
                       <div className="flex items-center gap-1 text-sm">
-                        <DollarSign className="h-3 w-3 text-green-400" />
+                        <DollarSign className="h-3 w-3 text-green-600" />
                         <span className="text-slate-600">{formatCurrency(asset.valuation)}</span>
                       </div>
                     </td>
@@ -421,29 +413,29 @@ export default function AssetsPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={(e) => handleView(e, asset.id)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                          className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                           title="View"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
                           onClick={(e) => handleEdit(e, asset)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                          className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                           title="Edit"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={(e) => handleDelete(e, asset.id)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-red-400"
+                          className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-red-600"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                         {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-slate-400" />
+                          <ChevronDown className="h-4 w-4 text-slate-600" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-slate-400" />
+                          <ChevronRight className="h-4 w-4 text-slate-600" />
                         )}
                       </div>
                     </td>
@@ -453,26 +445,26 @@ export default function AssetsPage() {
                       <td colSpan={7} className="bg-slate-50 px-4 py-4">
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                           <div>
-                            <h4 className="text-sm font-medium text-slate-400">Description</h4>
-                            <p className="mt-1 text-sm text-slate-800">{asset.description || 'No description'}</p>
+                            <h4 className="text-sm font-medium text-slate-600">Description</h4>
+                            <p className="mt-1 text-sm text-black">{asset.description || 'No description'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-400">Owner</h4>
-                            <p className="mt-1 text-sm text-slate-800">{asset.owner_name || 'Not assigned'}</p>
+                            <h4 className="text-sm font-medium text-slate-600">Owner</h4>
+                            <p className="mt-1 text-sm text-black">{asset.owner_name || 'Not assigned'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-400">Vendor</h4>
-                            <p className="mt-1 text-sm text-slate-800">{asset.vendor || 'N/A'}</p>
+                            <h4 className="text-sm font-medium text-slate-600">Vendor</h4>
+                            <p className="mt-1 text-sm text-black">{asset.vendor || 'N/A'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-400">Location</h4>
-                            <p className="mt-1 text-sm text-slate-800">{asset.location || 'Unknown'}</p>
+                            <h4 className="text-sm font-medium text-slate-600">Location</h4>
+                            <p className="mt-1 text-sm text-black">{asset.location || 'Unknown'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-400">Linked Controls</h4>
+                            <h4 className="text-sm font-medium text-slate-600">Linked Controls</h4>
                             <button 
                               onClick={(e) => handleView(e, asset.id)}
-                              className="mt-1 flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300"
+                              className="mt-1 flex items-center gap-1 text-sm text-primary-600 hover:text-primary-300"
                             >
                               <Shield size={14} />
                               <span>View details</span>
@@ -492,8 +484,8 @@ export default function AssetsPage() {
       {(!filteredAssets || filteredAssets.length === 0) && (
         <div className="card flex flex-col items-center justify-center py-12 text-center">
           <Server className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-slate-800">No assets found</h3>
-          <p className="mt-1 text-slate-400">Add your first IT asset to get started</p>
+          <h3 className="text-lg font-medium text-black">No assets found</h3>
+          <p className="mt-1 text-slate-600">Add your first IT asset to get started</p>
         </div>
       )}
 
@@ -597,7 +589,7 @@ function AssetModal({
             onClick={() => onChange(rating)}
             className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm font-medium transition-colors ${
               rating <= value
-                ? `${color} border-transparent text-slate-800`
+                ? `${color} border-transparent text-black`
                 : 'border-slate-300 bg-slate-200 text-slate-500 hover:border-slate-400'
             }`}
           >
@@ -612,15 +604,15 @@ function AssetModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">{isEditMode ? 'Edit Asset' : 'Add Asset'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-black">{isEditMode ? 'Edit Asset' : 'Add Asset'}</h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="border-b border-slate-200 pb-4">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">Basic Information</h3>
+            <h3 className="text-sm font-medium text-slate-600 mb-3">Basic Information</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-600">Name *</label>
@@ -628,7 +620,7 @@ function AssetModal({
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   required
                 />
               </div>
@@ -638,7 +630,7 @@ function AssetModal({
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   rows={2}
                 />
               </div>
@@ -660,9 +652,9 @@ function AssetModal({
                             : 'border-slate-300 bg-slate-200 hover:border-slate-400'
                         }`}
                       >
-                        <Icon className={`h-5 w-5 ${isSelected ? 'text-primary-400' : 'text-slate-400'}`} />
+                        <Icon className={`h-5 w-5 ${isSelected ? 'text-primary-600' : 'text-slate-600'}`} />
                         <div>
-                          <p className={`text-sm font-medium ${isSelected ? 'text-slate-800' : 'text-slate-600'}`}>
+                          <p className={`text-sm font-medium ${isSelected ? 'text-black' : 'text-slate-600'}`}>
                             {type.label}
                           </p>
                           <p className="text-xs text-slate-500 line-clamp-1">{type.description}</p>
@@ -676,7 +668,7 @@ function AssetModal({
           </div>
 
           <div className="border-b border-slate-200 pb-4">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">Ownership & Location</h3>
+            <h3 className="text-sm font-medium text-slate-600 mb-3">Ownership & Location</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-600">Vendor</label>
@@ -684,7 +676,7 @@ function AssetModal({
                   type="text"
                   value={formData.vendor}
                   onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   placeholder="e.g., Microsoft, AWS"
                 />
               </div>
@@ -694,7 +686,7 @@ function AssetModal({
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   placeholder="e.g., US-East, On-Premise"
                 />
               </div>
@@ -702,13 +694,13 @@ function AssetModal({
           </div>
 
           <div className="border-b border-slate-200 pb-4">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">Classification</h3>
+            <h3 className="text-sm font-medium text-slate-600 mb-3">Classification</h3>
             <div>
               <label className="block text-sm font-medium text-slate-600">Criticality</label>
               <select
                 value={formData.criticality}
                 onChange={(e) => setFormData({ ...formData, criticality: e.target.value as typeof formData.criticality })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
               >
                 <option value="low">Low - Minimal business impact</option>
                 <option value="medium">Medium - Moderate business impact</option>
@@ -719,7 +711,7 @@ function AssetModal({
           </div>
 
           <div className="border-b border-slate-200 pb-4">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">CIA Ratings</h3>
+            <h3 className="text-sm font-medium text-slate-600 mb-3">CIA Ratings</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <RatingSelector
                 label="Confidentiality"
@@ -743,16 +735,16 @@ function AssetModal({
           </div>
 
           <div className="pb-2">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">Valuation</h3>
+            <h3 className="text-sm font-medium text-slate-600 mb-3">Valuation</h3>
             <div>
               <label className="block text-sm font-medium text-slate-600">Asset Value (USD)</label>
               <div className="relative mt-1">
-                <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
                 <input
                   type="number"
                   value={formData.valuation || ''}
                   onChange={(e) => setFormData({ ...formData, valuation: e.target.value ? Number(e.target.value) : null })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-slate-800 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-black focus:border-primary-500 focus:outline-none"
                   placeholder="0"
                   min="0"
                 />
@@ -762,11 +754,11 @@ function AssetModal({
 
           {isEditMode && (
             <div className="border-t border-slate-200 pt-4">
-              <h3 className="text-sm font-medium text-slate-400 mb-3">Status</h3>
+              <h3 className="text-sm font-medium text-slate-600 mb-3">Status</h3>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-black focus:border-primary-500 focus:outline-none"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -876,8 +868,8 @@ function ImportAssetsModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded-lg bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">Import IT Assets</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-black">Import IT Assets</h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -886,10 +878,10 @@ function ImportAssetsModal({
           <>
             <div className="mb-4 rounded-lg border border-slate-300 bg-slate-200/50 p-4">
               <div className="flex items-start gap-3">
-                <FileSpreadsheet className="h-5 w-5 text-primary-400 mt-0.5" />
+                <FileSpreadsheet className="h-5 w-5 text-primary-600 mt-0.5" />
                 <div>
-                  <p className="text-sm text-slate-800 font-medium">How to import assets:</p>
-                  <ol className="mt-2 text-xs text-slate-400 space-y-1 list-decimal list-inside">
+                  <p className="text-sm text-black font-medium">How to import assets:</p>
+                  <ol className="mt-2 text-xs text-slate-600 space-y-1 list-decimal list-inside">
                     <li>Click "Template" button to download the CSV template</li>
                     <li>Fill in your assets (keep the header row)</li>
                     <li>Upload the completed file here</li>
@@ -920,9 +912,9 @@ function ImportAssetsModal({
               
               {file ? (
                 <div className="flex flex-col items-center">
-                  <CheckCircle2 className="h-10 w-10 text-green-400 mb-2" />
-                  <p className="text-slate-800 font-medium">{file.name}</p>
-                  <p className="text-sm text-slate-400 mt-1">
+                  <CheckCircle2 className="h-10 w-10 text-green-600 mb-2" />
+                  <p className="text-black font-medium">{file.name}</p>
+                  <p className="text-sm text-slate-600 mt-1">
                     {(file.size / 1024).toFixed(1)} KB
                   </p>
                   <button
@@ -931,7 +923,7 @@ function ImportAssetsModal({
                       e.stopPropagation();
                       setFile(null);
                     }}
-                    className="mt-2 text-xs text-slate-400 hover:text-slate-900"
+                    className="mt-2 text-xs text-slate-600 hover:text-slate-900"
                   >
                     Choose different file
                   </button>
@@ -939,8 +931,8 @@ function ImportAssetsModal({
               ) : (
                 <div className="flex flex-col items-center">
                   <Upload className="h-10 w-10 text-slate-500 mb-2" />
-                  <p className="text-slate-800">Drag and drop your file here</p>
-                  <p className="text-sm text-slate-400 mt-1">or click to browse</p>
+                  <p className="text-black">Drag and drop your file here</p>
+                  <p className="text-sm text-slate-600 mt-1">or click to browse</p>
                   <p className="text-xs text-slate-500 mt-2">Supports CSV, XLSX, XLS</p>
                 </div>
               )}
@@ -972,20 +964,20 @@ function ImportAssetsModal({
             }`}>
               <div className="flex items-start gap-3">
                 {result.success && result.imported > 0 ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-400 mt-0.5" />
+                  <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
                 ) : (
-                  <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
                 )}
                 <div>
                   <p className={`font-medium ${
-                    result.success && result.imported > 0 ? 'text-green-400' : 'text-red-400'
+                    result.success && result.imported > 0 ? 'text-green-600' : 'text-red-600'
                   }`}>
                     {result.message}
                   </p>
                   <div className="mt-2 text-sm text-slate-600">
                     <p>Imported: {result.imported} of {result.total_rows} rows</p>
                     {result.total_errors > 0 && (
-                      <p className="text-red-400">Errors: {result.total_errors}</p>
+                      <p className="text-red-600">Errors: {result.total_errors}</p>
                     )}
                   </div>
                 </div>
@@ -994,8 +986,8 @@ function ImportAssetsModal({
 
             {result.errors.length > 0 && (
               <div className="mb-4 max-h-40 overflow-y-auto rounded-lg bg-slate-200/50 p-3">
-                <p className="text-xs font-medium text-slate-400 mb-2">Error Details:</p>
-                <ul className="text-xs text-red-400 space-y-1">
+                <p className="text-xs font-medium text-slate-600 mb-2">Error Details:</p>
+                <ul className="text-xs text-red-600 space-y-1">
                   {result.errors.map((error, idx) => (
                     <li key={idx}>{error}</li>
                   ))}

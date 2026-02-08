@@ -132,17 +132,17 @@ export default function ControlImplementationModal({
   }, []);
 
   const getConfidenceColor = (score: number) => {
-    if (score >= 80) return 'text-green-400 bg-green-500/20';
-    if (score >= 60) return 'text-yellow-400 bg-yellow-500/20';
-    if (score >= 40) return 'text-orange-400 bg-orange-500/20';
-    return 'text-red-400 bg-red-500/20';
+    if (score >= 80) return 'text-green-600 bg-green-50';
+    if (score >= 60) return 'text-yellow-600 bg-yellow-50';
+    if (score >= 40) return 'text-orange-600 bg-orange-50';
+    return 'text-red-600 bg-red-50';
   };
 
   const getReviewStatusBadge = (status: string) => {
     switch (status) {
-      case 'approved': return 'bg-green-500/20 text-green-400';
-      case 'rejected': return 'bg-red-500/20 text-red-400';
-      default: return 'bg-yellow-500/20 text-yellow-400';
+      case 'approved': return 'bg-green-50 text-green-700';
+      case 'rejected': return 'bg-red-50 text-red-700';
+      default: return 'bg-yellow-50 text-yellow-700';
     }
   };
 
@@ -158,19 +158,19 @@ export default function ControlImplementationModal({
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary-500/20 p-2">
-                <Shield className="h-5 w-5 text-primary-400" />
+              <div className="rounded-lg bg-primary-50 p-2">
+                <Shield className="h-5 w-5 text-primary-600" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">
                   {control.framework_control?.code}
                 </h2>
-                <p className="text-sm text-slate-400">Control Implementation</p>
+                <p className="text-sm text-slate-600">Control Implementation</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-700"
             >
               <X className="h-5 w-5" />
             </button>
@@ -183,7 +183,7 @@ export default function ControlImplementationModal({
                   {control.framework_control?.name}
                 </h3>
                 {control.framework_control?.statement && (
-                  <p className="mt-2 text-sm text-slate-400">
+                  <p className="mt-2 text-sm text-slate-600">
                     {control.framework_control.statement}
                   </p>
                 )}
@@ -204,7 +204,7 @@ export default function ControlImplementationModal({
                         </option>
                       ))}
                     </select>
-                    <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600 pointer-events-none" />
                   </div>
                 </div>
 
@@ -222,7 +222,7 @@ export default function ControlImplementationModal({
                         </option>
                       ))}
                     </select>
-                    <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600 pointer-events-none" />
                   </div>
                 </div>
               </div>
@@ -263,23 +263,23 @@ export default function ControlImplementationModal({
                   onDragLeave={handleDragLeave}
                   className={`mb-4 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
                     isDragging
-                      ? 'border-primary-500 bg-primary-500/10'
+                      ? 'border-primary-500 bg-primary-50'
                       : 'border-slate-300 hover:border-slate-500'
                   }`}
                 >
                   {uploading ? (
                     <div className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
-                      <span className="text-slate-400">Uploading...</span>
+                      <Loader2 className="h-5 w-5 animate-spin text-primary-600" />
+                      <span className="text-slate-600">Uploading...</span>
                     </div>
                   ) : (
                     <>
                       <Upload className="mx-auto h-8 w-8 text-slate-500" />
-                      <p className="mt-2 text-sm text-slate-400">
+                      <p className="mt-2 text-sm text-slate-600">
                         Drag and drop files here, or{' '}
                         <button
                           onClick={() => fileInputRef.current?.click()}
-                          className="text-primary-400 hover:underline"
+                          className="text-primary-600 hover:underline"
                         >
                           browse
                         </button>
@@ -307,7 +307,7 @@ export default function ControlImplementationModal({
                       >
                         <div className="flex items-start gap-3">
                           <div className="rounded-lg bg-slate-700 p-2">
-                            <FileText className="h-5 w-5 text-slate-400" />
+                            <FileText className="h-5 w-5 text-slate-600" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
@@ -331,7 +331,7 @@ export default function ControlImplementationModal({
                           <div className="mt-3 rounded-lg bg-slate-50 p-3">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <Sparkles className="h-4 w-4 text-primary-400" />
+                                <Sparkles className="h-4 w-4 text-primary-600" />
                                 <span className="text-sm font-medium text-slate-300">AI Assessment</span>
                               </div>
                               <span className={`rounded-full px-2 py-1 text-xs font-bold ${getConfidenceColor(ev.ai_confidence_score)}`}>
@@ -339,7 +339,7 @@ export default function ControlImplementationModal({
                               </span>
                             </div>
                             {ev.ai_assessment_notes && (
-                              <p className="mt-2 text-sm text-slate-400">
+                              <p className="mt-2 text-sm text-slate-600">
                                 {ev.ai_assessment_notes}
                               </p>
                             )}
@@ -385,15 +385,15 @@ export default function ControlImplementationModal({
               </div>
 
               {control.implementation_date && (
-                <div className="flex items-center gap-2 text-sm text-slate-400">
-                  <Check className="h-4 w-4 text-blue-400" />
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <Check className="h-4 w-4 text-blue-600" />
                   Implemented on {new Date(control.implementation_date).toLocaleDateString()}
                 </div>
               )}
 
               {control.verified_date && (
-                <div className="flex items-center gap-2 text-sm text-slate-400">
-                  <CheckCircle2 className="h-4 w-4 text-green-400" />
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
                   Verified on {new Date(control.verified_date).toLocaleDateString()}
                 </div>
               )}

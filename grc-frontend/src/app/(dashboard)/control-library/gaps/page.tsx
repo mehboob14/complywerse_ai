@@ -261,10 +261,10 @@ export default function GapAnalysisDashboardPage() {
   };
 
   const getCoverageTextColor = (percentage: number) => {
-    if (percentage >= 80) return 'text-green-400';
-    if (percentage >= 50) return 'text-yellow-400';
-    if (percentage >= 20) return 'text-orange-400';
-    return 'text-red-400';
+    if (percentage >= 80) return 'text-green-600';
+    if (percentage >= 50) return 'text-yellow-600';
+    if (percentage >= 20) return 'text-orange-600';
+    return 'text-red-600';
   };
 
   if (dashboardLoading) {
@@ -302,8 +302,8 @@ export default function GapAnalysisDashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Gap Analysis Dashboard</h1>
-          <p className="text-slate-400">Identify and address control mapping and evidence gaps</p>
+          <h1 className="text-2xl font-bold text-black">Gap Analysis Dashboard</h1>
+          <p className="text-slate-600">Identify and address control mapping and evidence gaps</p>
         </div>
         <div className="relative">
           <button
@@ -475,19 +475,19 @@ export default function GapAnalysisDashboardPage() {
                 key={index}
                 className={`flex items-start gap-4 rounded-lg border p-4 transition-all ${
                   gap.priority === 'critical'
-                    ? 'border-red-500/30 bg-red-500/10 hover:border-red-500/50'
+                    ? 'border-red-200 bg-red-50 hover:border-red-500/50'
                     : gap.priority === 'high'
-                    ? 'border-amber-500/30 bg-amber-500/10 hover:border-amber-500/50'
+                    ? 'border-amber-500/30 bg-amber-50 hover:border-amber-500/50'
                     : 'border-slate-200 bg-white/50 hover:border-slate-300'
                 }`}
               >
                 <div className={`rounded-lg p-2 ${
-                  gap.priority === 'critical' ? 'bg-red-500/20' :
-                  gap.priority === 'high' ? 'bg-amber-500/20' : 'bg-slate-200'
+                  gap.priority === 'critical' ? 'bg-red-50' :
+                  gap.priority === 'high' ? 'bg-amber-50' : 'bg-slate-200'
                 }`}>
                   <AlertTriangle className={`h-5 w-5 ${
-                    gap.priority === 'critical' ? 'text-red-400' :
-                    gap.priority === 'high' ? 'text-amber-400' : 'text-slate-400'
+                    gap.priority === 'critical' ? 'text-red-600' :
+                    gap.priority === 'high' ? 'text-amber-600' : 'text-slate-600'
                   }`} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -497,9 +497,9 @@ export default function GapAnalysisDashboardPage() {
                       {gap.type.replace(/_/g, ' ')}
                     </span>
                   </div>
-                  <p className="text-slate-800">{gap.description}</p>
+                  <p className="text-black">{gap.description}</p>
                   {gap.details && (
-                    <p className="mt-1 text-sm text-slate-400">
+                    <p className="mt-1 text-sm text-slate-600">
                       {gap.details.controls_without_evidence !== undefined && (
                         <span>{gap.details.controls_without_evidence} of {gap.details.total_controls} controls without evidence</span>
                       )}
@@ -543,20 +543,20 @@ export default function GapAnalysisDashboardPage() {
         {!dashboard?.coverage_by_framework?.length ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <BarChart3 className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-slate-800">No framework data available</h3>
-            <p className="mt-1 text-slate-400">Add frameworks and controls to see coverage</p>
+            <h3 className="text-lg font-medium text-black">No framework data available</h3>
+            <p className="mt-1 text-slate-600">Add frameworks and controls to see coverage</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Framework</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400">Total Controls</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400">With Evidence</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400">Without Evidence</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400">Coverage</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-slate-400">Action</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Framework</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-600">Total Controls</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-600">With Evidence</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-600">Without Evidence</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-600">Coverage</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-slate-600">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
@@ -569,17 +569,17 @@ export default function GapAnalysisDashboardPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-200">
-                          <Shield className="h-4 w-4 text-slate-400" />
+                          <Shield className="h-4 w-4 text-slate-600" />
                         </div>
                         <div>
-                          <p className="font-medium text-slate-800">{fw.framework_code}</p>
-                          <p className="text-xs text-slate-400 truncate max-w-xs">{fw.framework_name}</p>
+                          <p className="font-medium text-black">{fw.framework_code}</p>
+                          <p className="text-xs text-slate-600 truncate max-w-xs">{fw.framework_name}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center text-slate-800">{fw.total_controls}</td>
-                    <td className="px-4 py-3 text-center text-green-400">{fw.controls_with_evidence}</td>
-                    <td className="px-4 py-3 text-center text-red-400">{fw.controls_without_evidence}</td>
+                    <td className="px-4 py-3 text-center text-black">{fw.total_controls}</td>
+                    <td className="px-4 py-3 text-center text-green-600">{fw.controls_with_evidence}</td>
+                    <td className="px-4 py-3 text-center text-red-600">{fw.controls_without_evidence}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
                         <ProgressRing
@@ -613,19 +613,19 @@ export default function GapAnalysisDashboardPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'border-primary-500 text-primary-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-900'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <tab.icon className="h-4 w-4" />
                 {tab.label}
                 {tab.id === 'unmapped' && unmappedControls?.total ? (
-                  <span className="ml-1 rounded-full bg-orange-500/20 px-2 py-0.5 text-xs text-orange-400">
+                  <span className="ml-1 rounded-full bg-orange-50 px-2 py-0.5 text-xs text-orange-600">
                     {unmappedControls.total}
                   </span>
                 ) : null}
                 {tab.id === 'no-evidence' && controlsWithoutEvidence?.total ? (
-                  <span className="ml-1 rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
+                  <span className="ml-1 rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600">
                     {controlsWithoutEvidence.total}
                   </span>
                 ) : null}
@@ -637,11 +637,11 @@ export default function GapAnalysisDashboardPage() {
         <div className="p-4">
           <div className="mb-4 flex items-center gap-3">
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
               <select
                 value={selectedFrameworkId || ''}
                 onChange={(e) => setSelectedFrameworkId(e.target.value ? Number(e.target.value) : null)}
-                className="appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-10 text-slate-800 focus:border-primary-500 focus:outline-none"
+                className="appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-10 text-black focus:border-primary-500 focus:outline-none"
               >
                 <option value="">All Frameworks</option>
                 {dashboard?.coverage_by_framework?.map(fw => (
@@ -650,7 +650,7 @@ export default function GapAnalysisDashboardPage() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600 pointer-events-none" />
             </div>
           </div>
 
@@ -658,40 +658,40 @@ export default function GapAnalysisDashboardPage() {
             <div>
               {unmappedLoading ? (
                 <div className="flex h-48 items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+                  <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
                 </div>
               ) : !unmappedControls?.controls.length ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <CheckCircle className="mb-4 h-12 w-12 text-green-400" />
-                  <h3 className="text-lg font-medium text-slate-800">All Controls Mapped!</h3>
-                  <p className="mt-1 text-slate-400">All controls have been mapped to control groups</p>
+                  <CheckCircle className="mb-4 h-12 w-12 text-green-600" />
+                  <h3 className="text-lg font-medium text-black">All Controls Mapped!</h3>
+                  <p className="mt-1 text-slate-600">All controls have been mapped to control groups</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-slate-200">
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Control Code</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Framework</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Type</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium uppercase text-slate-400">Action</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Control Code</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Framework</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Type</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium uppercase text-slate-600">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
                       {unmappedControls.controls.map((control) => (
                         <tr key={`${control.control_type}-${control.id}`} className="hover:bg-slate-50">
                           <td className="px-4 py-3">
-                            <span className="rounded bg-slate-200 px-2 py-1 text-sm font-mono text-slate-800">
+                            <span className="rounded bg-slate-200 px-2 py-1 text-sm font-mono text-black">
                               {control.code}
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <p className="text-slate-800 truncate max-w-xs">{control.name}</p>
+                            <p className="text-black truncate max-w-xs">{control.name}</p>
                           </td>
                           <td className="px-4 py-3">
                             {control.framework ? (
-                              <span className="rounded bg-primary-500/20 px-2 py-0.5 text-xs text-primary-400">
+                              <span className="rounded bg-primary-50 px-2 py-0.5 text-xs text-primary-600">
                                 {control.framework.short_code}
                               </span>
                             ) : (
@@ -700,7 +700,7 @@ export default function GapAnalysisDashboardPage() {
                           </td>
                           <td className="px-4 py-3">
                             <span className={`text-xs capitalize ${
-                              control.control_type === 'normalized' ? 'text-cyan-400' : 'text-primary-600'
+                              control.control_type === 'normalized' ? 'text-cyan-600' : 'text-primary-600'
                             }`}>
                               {control.control_type}
                             </span>
@@ -719,7 +719,7 @@ export default function GapAnalysisDashboardPage() {
                     </tbody>
                   </table>
                   {unmappedControls.total > 100 && (
-                    <div className="mt-4 text-center text-sm text-slate-400">
+                    <div className="mt-4 text-center text-sm text-slate-600">
                       Showing 100 of {unmappedControls.total} unmapped controls
                     </div>
                   )}
@@ -732,40 +732,40 @@ export default function GapAnalysisDashboardPage() {
             <div>
               {noEvidenceLoading ? (
                 <div className="flex h-48 items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+                  <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
                 </div>
               ) : !controlsWithoutEvidence?.controls.length ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <CheckCircle className="mb-4 h-12 w-12 text-green-400" />
-                  <h3 className="text-lg font-medium text-slate-800">All Controls Have Evidence!</h3>
-                  <p className="mt-1 text-slate-400">All controls have at least one piece of evidence</p>
+                  <CheckCircle className="mb-4 h-12 w-12 text-green-600" />
+                  <h3 className="text-lg font-medium text-black">All Controls Have Evidence!</h3>
+                  <p className="mt-1 text-slate-600">All controls have at least one piece of evidence</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-slate-200">
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Control Code</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Framework</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400">Evidence</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium uppercase text-slate-400">Action</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Control Code</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-600">Framework</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-600">Evidence</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium uppercase text-slate-600">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
                       {controlsWithoutEvidence.controls.map((control) => (
                         <tr key={`${control.control_type}-${control.id}`} className="hover:bg-slate-50">
                           <td className="px-4 py-3">
-                            <span className="rounded bg-slate-200 px-2 py-1 text-sm font-mono text-slate-800">
+                            <span className="rounded bg-slate-200 px-2 py-1 text-sm font-mono text-black">
                               {control.code}
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <p className="text-slate-800 truncate max-w-xs">{control.name}</p>
+                            <p className="text-black truncate max-w-xs">{control.name}</p>
                           </td>
                           <td className="px-4 py-3">
                             {control.framework ? (
-                              <span className="rounded bg-primary-500/20 px-2 py-0.5 text-xs text-primary-400">
+                              <span className="rounded bg-primary-50 px-2 py-0.5 text-xs text-primary-600">
                                 {control.framework.short_code}
                               </span>
                             ) : (
@@ -773,7 +773,7 @@ export default function GapAnalysisDashboardPage() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className="rounded bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
+                            <span className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-600">
                               0
                             </span>
                           </td>
@@ -791,7 +791,7 @@ export default function GapAnalysisDashboardPage() {
                     </tbody>
                   </table>
                   {controlsWithoutEvidence.total > 100 && (
-                    <div className="mt-4 text-center text-sm text-slate-400">
+                    <div className="mt-4 text-center text-sm text-slate-600">
                       Showing 100 of {controlsWithoutEvidence.total} controls without evidence
                     </div>
                   )}
@@ -804,13 +804,13 @@ export default function GapAnalysisDashboardPage() {
             <div>
               {evidenceGapsLoading ? (
                 <div className="flex h-48 items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+                  <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
                 </div>
               ) : !evidenceGaps?.controls_with_gaps?.length ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <CheckCircle className="mb-4 h-12 w-12 text-green-400" />
-                  <h3 className="text-lg font-medium text-slate-800">No Evidence Gaps!</h3>
-                  <p className="mt-1 text-slate-400">All recommended evidence has been uploaded</p>
+                  <CheckCircle className="mb-4 h-12 w-12 text-green-600" />
+                  <h3 className="text-lg font-medium text-black">No Evidence Gaps!</h3>
+                  <p className="mt-1 text-slate-600">All recommended evidence has been uploaded</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -822,18 +822,18 @@ export default function GapAnalysisDashboardPage() {
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="rounded bg-slate-200 px-2 py-1 text-sm font-mono text-slate-800">
+                            <span className="rounded bg-slate-200 px-2 py-1 text-sm font-mono text-black">
                               {control.code}
                             </span>
                             {control.framework && (
-                              <span className="rounded bg-primary-500/20 px-2 py-0.5 text-xs text-primary-400">
+                              <span className="rounded bg-primary-50 px-2 py-0.5 text-xs text-primary-600">
                                 {control.framework.short_code}
                               </span>
                             )}
                           </div>
-                          <p className="text-slate-800">{control.name}</p>
+                          <p className="text-black">{control.name}</p>
                         </div>
-                        <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-400">
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
                           {control.missing_count} missing
                         </span>
                       </div>
@@ -844,11 +844,11 @@ export default function GapAnalysisDashboardPage() {
                             className="flex items-center justify-between rounded bg-slate-200/50 px-3 py-2"
                           >
                             <div className="flex items-center gap-3">
-                              <AlertCircle className="h-4 w-4 text-amber-400" />
+                              <AlertCircle className="h-4 w-4 text-amber-600" />
                               <div>
-                                <p className="text-sm text-slate-800">{missing.evidence_type}</p>
+                                <p className="text-sm text-black">{missing.evidence_type}</p>
                                 {missing.description && (
-                                  <p className="text-xs text-slate-400">{missing.description}</p>
+                                  <p className="text-xs text-slate-600">{missing.description}</p>
                                 )}
                               </div>
                             </div>
@@ -868,7 +868,7 @@ export default function GapAnalysisDashboardPage() {
                     </div>
                   ))}
                   {evidenceGaps.total > 100 && (
-                    <div className="mt-4 text-center text-sm text-slate-400">
+                    <div className="mt-4 text-center text-sm text-slate-600">
                       Showing 100 of {evidenceGaps.total} controls with evidence gaps
                     </div>
                   )}
@@ -887,22 +887,22 @@ export default function GapAnalysisDashboardPage() {
                 setShowFrameworkDrillDown(false);
                 setSelectedFrameworkId(null);
               }}
-              className="absolute right-4 top-4 rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+              className="absolute right-4 top-4 rounded-lg p-2 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
             >
               <XCircle className="h-5 w-5" />
             </button>
 
             {frameworkGapsLoading ? (
               <div className="flex h-64 items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
               </div>
             ) : frameworkGaps ? (
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">
+                  <h2 className="text-xl font-bold text-black">
                     {frameworkGaps.framework_code} - {frameworkGaps.framework_name}
                   </h2>
-                  <p className="text-slate-400">Framework gap analysis drill-down</p>
+                  <p className="text-slate-600">Framework gap analysis drill-down</p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
@@ -944,14 +944,14 @@ export default function GapAnalysisDashboardPage() {
 
                 {frameworkGaps.unmapped_controls.length > 0 && (
                   <div>
-                    <h3 className="mb-3 font-medium text-slate-800">Unmapped Controls ({frameworkGaps.summary.unmapped_controls_count})</h3>
+                    <h3 className="mb-3 font-medium text-black">Unmapped Controls ({frameworkGaps.summary.unmapped_controls_count})</h3>
                     <div className="max-h-40 overflow-y-auto space-y-2">
                       {frameworkGaps.unmapped_controls.map((ctrl) => (
                         <div key={ctrl.id} className="flex items-center justify-between rounded bg-white px-3 py-2">
-                          <span className="text-sm text-slate-800">{ctrl.code} - {ctrl.name}</span>
+                          <span className="text-sm text-black">{ctrl.code} - {ctrl.name}</span>
                           <Link
                             href={`/control-library?map=${ctrl.id}`}
-                            className="btn-ghost btn-sm text-primary-400"
+                            className="btn-ghost btn-sm text-primary-600"
                           >
                             Map
                           </Link>
@@ -963,14 +963,14 @@ export default function GapAnalysisDashboardPage() {
 
                 {frameworkGaps.no_evidence_controls.length > 0 && (
                   <div>
-                    <h3 className="mb-3 font-medium text-slate-800">Controls Without Evidence ({frameworkGaps.summary.no_evidence_count})</h3>
+                    <h3 className="mb-3 font-medium text-black">Controls Without Evidence ({frameworkGaps.summary.no_evidence_count})</h3>
                     <div className="max-h-40 overflow-y-auto space-y-2">
                       {frameworkGaps.no_evidence_controls.map((ctrl) => (
                         <div key={ctrl.id} className="flex items-center justify-between rounded bg-white px-3 py-2">
-                          <span className="text-sm text-slate-800">{ctrl.code} - {ctrl.name}</span>
+                          <span className="text-sm text-black">{ctrl.code} - {ctrl.name}</span>
                           <Link
                             href={`/evidence?control=${ctrl.id}`}
-                            className="btn-ghost btn-sm text-primary-400"
+                            className="btn-ghost btn-sm text-primary-600"
                           >
                             Add Evidence
                           </Link>
@@ -983,7 +983,7 @@ export default function GapAnalysisDashboardPage() {
             ) : (
               <div className="flex h-64 flex-col items-center justify-center text-center">
                 <AlertCircle className="mb-4 h-12 w-12 text-slate-600" />
-                <p className="text-slate-400">Unable to load framework gaps</p>
+                <p className="text-slate-600">Unable to load framework gaps</p>
               </div>
             )}
           </div>

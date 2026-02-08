@@ -62,12 +62,12 @@ interface BreachesResponse {
 }
 
 const RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string; borderColor: string }[] = [
-  { value: 'strategic', label: 'Strategic', color: 'text-primary-600', bgColor: 'bg-primary-500/20', borderColor: 'border-primary-500' },
-  { value: 'operational', label: 'Operational', color: 'text-blue-400', bgColor: 'bg-blue-500/20', borderColor: 'border-blue-500' },
-  { value: 'financial', label: 'Financial', color: 'text-green-400', bgColor: 'bg-green-500/20', borderColor: 'border-green-500' },
-  { value: 'compliance', label: 'Compliance', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20', borderColor: 'border-yellow-500' },
-  { value: 'technology', label: 'Technology', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20', borderColor: 'border-cyan-500' },
-  { value: 'third_party', label: 'Third Party', color: 'text-orange-400', bgColor: 'bg-orange-500/20', borderColor: 'border-orange-500' },
+  { value: 'strategic', label: 'Strategic', color: 'text-primary-600', bgColor: 'bg-primary-50', borderColor: 'border-primary-500' },
+  { value: 'operational', label: 'Operational', color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-500' },
+  { value: 'financial', label: 'Financial', color: 'text-green-600', bgColor: 'bg-green-50', borderColor: 'border-green-500' },
+  { value: 'compliance', label: 'Compliance', color: 'text-yellow-600', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-500' },
+  { value: 'technology', label: 'Technology', color: 'text-cyan-600', bgColor: 'bg-cyan-50', borderColor: 'border-cyan-500' },
+  { value: 'third_party', label: 'Third Party', color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-500' },
   { value: 'project_change', label: 'Project/Change', color: 'text-pink-400', bgColor: 'bg-pink-500/20', borderColor: 'border-pink-500' },
 ];
 
@@ -90,13 +90,13 @@ const getAppetiteLevelLabel = (level: AppetiteLevel) => {
 
 const getAppetiteLevelColor = (level: AppetiteLevel) => {
   switch (level) {
-    case 'averse': return 'text-green-400 bg-green-500/20';
-    case 'minimal': return 'text-emerald-400 bg-emerald-500/20';
-    case 'cautious': return 'text-yellow-400 bg-yellow-500/20';
-    case 'moderate': return 'text-orange-400 bg-orange-500/20';
-    case 'open': return 'text-red-400 bg-red-500/20';
-    case 'hungry': return 'text-rose-400 bg-rose-500/20';
-    default: return 'text-slate-400 bg-slate-500/20';
+    case 'averse': return 'text-green-600 bg-green-50';
+    case 'minimal': return 'text-emerald-600 bg-emerald-50';
+    case 'cautious': return 'text-yellow-600 bg-yellow-50';
+    case 'moderate': return 'text-orange-600 bg-orange-50';
+    case 'open': return 'text-red-600 bg-red-50';
+    case 'hungry': return 'text-rose-600 bg-rose-50';
+    default: return 'text-slate-600 bg-slate-50';
   }
 };
 
@@ -193,7 +193,7 @@ export default function RiskAppetitePage() {
   if (configsLoading || breachesLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -202,16 +202,16 @@ export default function RiskAppetitePage() {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-xl font-semibold text-slate-800">Risk Appetite Management</h2>
-          <p className="text-sm text-slate-400">Configure risk appetite levels and monitor tolerance breaches</p>
+          <h2 className="text-xl font-semibold text-black">Risk Appetite Management</h2>
+          <p className="text-sm text-slate-600">Configure risk appetite levels and monitor tolerance breaches</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-200">
-            <Database className="h-8 w-8 text-slate-400" />
+            <Database className="h-8 w-8 text-slate-600" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-800 mb-2">No Appetite Configurations Found</h3>
-          <p className="text-sm text-slate-400 mb-6">
+          <h3 className="text-lg font-semibold text-black mb-2">No Appetite Configurations Found</h3>
+          <p className="text-sm text-slate-600 mb-6">
             Get started by seeding default risk appetite configurations for all risk categories.
           </p>
           <button
@@ -237,12 +237,12 @@ export default function RiskAppetitePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-800">Risk Appetite Management</h2>
-          <p className="text-sm text-slate-400">Configure risk appetite levels and monitor tolerance breaches</p>
+          <h2 className="text-xl font-semibold text-black">Risk Appetite Management</h2>
+          <p className="text-sm text-slate-600">Configure risk appetite levels and monitor tolerance breaches</p>
         </div>
         <div className="flex items-center gap-3">
           {saveSuccess && (
-            <span className="text-sm text-green-400">Configuration saved successfully!</span>
+            <span className="text-sm text-green-600">Configuration saved successfully!</span>
           )}
           <button
             onClick={handleSave}
@@ -282,28 +282,28 @@ export default function RiskAppetitePage() {
               
               <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-400">Appetite Level</span>
+                  <span className="text-sm text-slate-600">Appetite Level</span>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${getAppetiteLevelColor(getConfigValue(config, 'appetite_level') as AppetiteLevel)}`}>
                     {getAppetiteLevelLabel(getConfigValue(config, 'appetite_level') as AppetiteLevel)}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-400">Tolerance Threshold</span>
-                  <span className="text-slate-800 font-medium">{getConfigValue(config, 'tolerance_threshold') || '-'}</span>
+                  <span className="text-sm text-slate-600">Tolerance Threshold</span>
+                  <span className="text-black font-medium">{getConfigValue(config, 'tolerance_threshold') || '-'}</span>
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-400">Risks Exceeding</span>
-                  <span className={`font-bold ${config.exceeding_count > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  <span className="text-sm text-slate-600">Risks Exceeding</span>
+                  <span className={`font-bold ${config.exceeding_count > 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {config.exceeding_count} / {config.risks_count}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-400">Alerts</span>
+                  <span className="text-sm text-slate-600">Alerts</span>
                   {getConfigValue(config, 'alert_enabled') ? (
-                    <Bell className="h-4 w-4 text-green-400" />
+                    <Bell className="h-4 w-4 text-green-600" />
                   ) : (
                     <BellOff className="h-4 w-4 text-slate-500" />
                   )}
@@ -317,12 +317,12 @@ export default function RiskAppetitePage() {
       {toleranceBreaches.length > 0 && (
         <div className="rounded-xl border-2 border-red-500/50 bg-red-500/5 p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-red-500/20">
-              <AlertTriangle className="h-6 w-6 text-red-400" />
+            <div className="p-2 rounded-lg bg-red-50">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-red-400">Tolerance Breach Alerts</h3>
-              <p className="text-sm text-slate-400">{toleranceBreaches.length} risk(s) currently exceed their category tolerance threshold</p>
+              <h3 className="text-lg font-semibold text-red-600">Tolerance Breach Alerts</h3>
+              <p className="text-sm text-slate-600">{toleranceBreaches.length} risk(s) currently exceed their category tolerance threshold</p>
             </div>
           </div>
           
@@ -332,13 +332,13 @@ export default function RiskAppetitePage() {
               return (
                 <div
                   key={breach.risk_id}
-                  className="flex items-center justify-between rounded-lg border border-red-500/30 bg-white p-4"
+                  className="flex items-center justify-between rounded-lg border border-red-200 bg-white p-4"
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex flex-col">
                       <Link
                         href={`/erm/risks?id=${breach.risk_id}`}
-                        className="text-slate-800 font-medium hover:text-primary-400 flex items-center gap-1"
+                        className="text-black font-medium hover:text-primary-600 flex items-center gap-1"
                       >
                         {breach.risk_title}
                         <ExternalLink className="h-3 w-3" />
@@ -349,20 +349,20 @@ export default function RiskAppetitePage() {
                   
                   <div className="flex items-center gap-6 text-sm">
                     <div className="text-center">
-                      <p className="text-slate-400">Score vs Threshold</p>
+                      <p className="text-slate-600">Score vs Threshold</p>
                       <p className="font-medium">
-                        <span className="text-red-400">{breach.current_score}</span>
+                        <span className="text-red-600">{breach.current_score}</span>
                         <span className="text-slate-500"> / </span>
                         <span className="text-slate-600">{breach.tolerance}</span>
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-slate-400">Days Over</p>
-                      <p className="font-medium text-orange-400">{breach.days_over}</p>
+                      <p className="text-slate-600">Days Over</p>
+                      <p className="font-medium text-orange-600">{breach.days_over}</p>
                     </div>
                     <Link
                       href={`/erm/risks?id=${breach.risk_id}`}
-                      className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/30 transition-colors"
+                      className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-medium hover:bg-red-100 transition-colors"
                     >
                       Remediate
                     </Link>
@@ -375,14 +375,14 @@ export default function RiskAppetitePage() {
       )}
 
       {toleranceBreaches.length === 0 && (
-        <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-6">
+        <div className="rounded-xl border border-green-200 bg-green-500/5 p-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-500/20">
-              <Target className="h-6 w-6 text-green-400" />
+            <div className="p-2 rounded-lg bg-green-50">
+              <Target className="h-6 w-6 text-green-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-green-400">All Risks Within Tolerance</h3>
-              <p className="text-sm text-slate-400">No risks currently exceed their category tolerance threshold</p>
+              <h3 className="text-lg font-semibold text-green-600">All Risks Within Tolerance</h3>
+              <p className="text-sm text-slate-600">No risks currently exceed their category tolerance threshold</p>
             </div>
           </div>
         </div>
@@ -391,21 +391,21 @@ export default function RiskAppetitePage() {
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200">
           <div className="flex items-center gap-3">
-            <TrendingUp className="h-5 w-5 text-primary-400" />
-            <h3 className="text-lg font-semibold text-slate-800">Risk Appetite Configuration</h3>
+            <TrendingUp className="h-5 w-5 text-primary-600" />
+            <h3 className="text-lg font-semibold text-black">Risk Appetite Configuration</h3>
           </div>
-          <p className="text-sm text-slate-400 mt-1">Configure appetite levels, thresholds, and escalation settings for each risk category</p>
+          <p className="text-sm text-slate-600 mt-1">Configure appetite levels, thresholds, and escalation settings for each risk category</p>
         </div>
         
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Appetite Level</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Tolerance Threshold</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Escalation Owner</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider">Alerts Enabled</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Category</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Appetite Level</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Tolerance Threshold</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Escalation Owner</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-slate-600 uppercase tracking-wider">Alerts Enabled</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
@@ -423,7 +423,7 @@ export default function RiskAppetitePage() {
                       <select
                         value={getConfigValue(config, 'appetite_level') as string}
                         onChange={(e) => handleConfigChange(config.id, 'appetite_level', e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+                        className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
                       >
                         {APPETITE_LEVELS.map(level => (
                           <option key={level.value} value={level.value}>{level.label}</option>
@@ -437,7 +437,7 @@ export default function RiskAppetitePage() {
                         max="25"
                         value={getConfigValue(config, 'tolerance_threshold') as number}
                         onChange={(e) => handleConfigChange(config.id, 'tolerance_threshold', parseFloat(e.target.value) || 0)}
-                        className="w-24 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+                        className="w-24 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
                       />
                     </td>
                     <td className="px-6 py-4">

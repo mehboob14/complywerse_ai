@@ -56,16 +56,16 @@ interface Campaign {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  closed: { bg: 'bg-blue-50', text: 'text-blue-600' },
 };
 
 const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  pending: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
-  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
-  escalated: { bg: 'bg-primary-500/20', text: 'text-primary-600', icon: AlertTriangle },
+  pending: { bg: 'bg-amber-50', text: 'text-amber-600', icon: Clock },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: CheckCircle },
+  overdue: { bg: 'bg-rose-50', text: 'text-rose-600', icon: AlertCircle },
+  escalated: { bg: 'bg-primary-50', text: 'text-primary-600', icon: AlertTriangle },
 };
 
 export default function CampaignDetailPage() {
@@ -156,14 +156,14 @@ export default function CampaignDetailPage() {
   if (error || !campaign) {
     return (
       <div className="space-y-8">
-        <Link href="/governance/attestations/campaigns" className="inline-flex items-center gap-2 text-slate-400 hover:text-slate-900 transition-colors">
+        <Link href="/governance/attestations/campaigns" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors">
           <ArrowLeft className="h-4 w-4" />
           Back to Campaigns
         </Link>
         <div className="card p-12 text-center">
-          <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-slate-800 mb-2">Campaign Not Found</h2>
-          <p className="text-slate-400 mb-6">The campaign you're looking for doesn't exist or you don't have access to it.</p>
+          <AlertCircle className="h-12 w-12 text-rose-600 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-black mb-2">Campaign Not Found</h2>
+          <p className="text-slate-600 mb-6">The campaign you're looking for doesn't exist or you don't have access to it.</p>
           <Link href="/governance/attestations/campaigns" className="btn-primary inline-flex items-center gap-2">
             <ArrowLeft className="h-4 w-4" />
             Go Back
@@ -181,17 +181,17 @@ export default function CampaignDetailPage() {
     <div className="space-y-8">
       <div className="page-header">
         <div className="flex items-center gap-4 mb-4">
-          <Link href="/governance/attestations/campaigns" className="text-slate-400 hover:text-slate-900">
+          <Link href="/governance/attestations/campaigns" className="text-slate-600 hover:text-slate-900">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-slate-800">{campaign.name}</h1>
+              <h1 className="text-2xl font-semibold text-black">{campaign.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
                 {campaign.status}
               </span>
             </div>
-            <p className="text-slate-400 mt-1">{campaign.description || `${campaign.attestation_type.replace('_', ' ')} attestation`}</p>
+            <p className="text-slate-600 mt-1">{campaign.description || `${campaign.attestation_type.replace('_', ' ')} attestation`}</p>
           </div>
           <div className="flex items-center gap-3">
             {campaign.status === 'draft' && (
@@ -227,29 +227,29 @@ export default function CampaignDetailPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Type</p>
-            <p className="text-slate-800 font-medium capitalize">{campaign.attestation_type.replace('_', ' ')}</p>
+            <p className="text-slate-600 text-sm">Type</p>
+            <p className="text-black font-medium capitalize">{campaign.attestation_type.replace('_', ' ')}</p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Duration</p>
-            <p className="text-slate-800 font-medium text-sm">
+            <p className="text-slate-600 text-sm">Duration</p>
+            <p className="text-black font-medium text-sm">
               {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
             </p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Total Requests</p>
-            <p className="text-slate-800 font-medium">{campaign.total_requests}</p>
+            <p className="text-slate-600 text-sm">Total Requests</p>
+            <p className="text-black font-medium">{campaign.total_requests}</p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Completed</p>
-            <p className="text-emerald-400 font-medium">{campaign.completed_requests}</p>
+            <p className="text-slate-600 text-sm">Completed</p>
+            <p className="text-emerald-600 font-medium">{campaign.completed_requests}</p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Overdue</p>
-            <p className="text-rose-400 font-medium">{campaign.overdue_requests}</p>
+            <p className="text-slate-600 text-sm">Overdue</p>
+            <p className="text-rose-600 font-medium">{campaign.overdue_requests}</p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Progress</p>
+            <p className="text-slate-600 text-sm">Progress</p>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                 <div
@@ -257,7 +257,7 @@ export default function CampaignDetailPage() {
                   style={{ width: `${campaign.progress}%` }}
                 />
               </div>
-              <span className="text-slate-800 font-medium text-sm">{campaign.progress}%</span>
+              <span className="text-black font-medium text-sm">{campaign.progress}%</span>
             </div>
           </div>
         </div>
@@ -265,8 +265,8 @@ export default function CampaignDetailPage() {
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-            <FileCheck className="h-5 w-5 text-primary-400" />
+          <h3 className="text-lg font-medium text-black flex items-center gap-2">
+            <FileCheck className="h-5 w-5 text-primary-600" />
             Attestation Statement
           </h3>
         </div>
@@ -274,7 +274,7 @@ export default function CampaignDetailPage() {
           <p className="text-slate-600">{campaign.attestation_text}</p>
         </div>
         {campaign.requires_evidence && (
-          <p className="text-sm text-amber-400 mt-2 flex items-center gap-1.5">
+          <p className="text-sm text-amber-600 mt-2 flex items-center gap-1.5">
             <AlertCircle className="h-4 w-4" />
             Evidence upload is required for this attestation
           </p>
@@ -283,8 +283,8 @@ export default function CampaignDetailPage() {
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary-400" />
+          <h3 className="text-lg font-medium text-black flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary-600" />
             Attestation Requests ({filteredRequests.length})
           </h3>
           <div className="flex items-center gap-3">
@@ -323,12 +323,12 @@ export default function CampaignDetailPage() {
                     className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
                   />
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">User</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Department</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Completed</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Evidence</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Actions</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">User</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Department</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Status</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Completed</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Evidence</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -348,14 +348,14 @@ export default function CampaignDetailPage() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-slate-400" />
+                        <User className="h-4 w-4 text-slate-600" />
                         <div>
-                          <p className="text-slate-800 font-medium">{request.user_name}</p>
+                          <p className="text-black font-medium">{request.user_name}</p>
                           <p className="text-xs text-slate-500">{request.user_email}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-slate-400 text-sm">
+                    <td className="py-3 px-4 text-slate-600 text-sm">
                       {request.department || '-'}
                     </td>
                     <td className="py-3 px-4">
@@ -364,12 +364,12 @@ export default function CampaignDetailPage() {
                         {request.status}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-sm text-slate-400">
+                    <td className="py-3 px-4 text-sm text-slate-600">
                       {request.completed_at ? new Date(request.completed_at).toLocaleDateString() : '-'}
                     </td>
                     <td className="py-3 px-4">
                       {request.has_evidence ? (
-                        <span className="text-emerald-400 text-sm">Yes</span>
+                        <span className="text-emerald-600 text-sm">Yes</span>
                       ) : (
                         <span className="text-slate-500 text-sm">No</span>
                       )}
@@ -380,7 +380,7 @@ export default function CampaignDetailPage() {
                           <>
                             <button
                               onClick={() => sendReminderMutation.mutate(request.id)}
-                              className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-primary-500/20 rounded"
+                              className="p-1.5 text-slate-600 hover:text-primary-600 hover:bg-primary-50 rounded"
                               title="Send Reminder"
                             >
                               <Send className="h-4 w-4" />
@@ -391,7 +391,7 @@ export default function CampaignDetailPage() {
                                   escalateMutation.mutate(request.id);
                                 }
                               }}
-                              className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-500/20 rounded"
+                              className="p-1.5 text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded"
                               title="Escalate"
                             >
                               <AlertTriangle className="h-4 w-4" />
@@ -410,8 +410,8 @@ export default function CampaignDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-slate-800 mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary-400" />
+          <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary-600" />
             Status Summary
           </h3>
           <div className="space-y-3">
@@ -432,8 +432,8 @@ export default function CampaignDetailPage() {
         </div>
 
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-slate-800 mb-4 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-amber-400" />
+          <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-amber-600" />
             Pending Actions
           </h3>
           {pendingRequests.length > 0 ? (
@@ -441,9 +441,9 @@ export default function CampaignDetailPage() {
               {pendingRequests.slice(0, 5).map((request) => (
                 <div key={request.id} className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <User className="h-4 w-4 text-slate-400" />
+                    <User className="h-4 w-4 text-slate-600" />
                     <div>
-                      <p className="text-slate-800 text-sm">{request.user_name}</p>
+                      <p className="text-black text-sm">{request.user_name}</p>
                       <p className="text-xs text-slate-500">{request.department}</p>
                     </div>
                   </div>
@@ -457,7 +457,7 @@ export default function CampaignDetailPage() {
               )}
             </div>
           ) : (
-            <p className="text-slate-400 text-center py-4">All attestations completed</p>
+            <p className="text-slate-600 text-center py-4">All attestations completed</p>
           )}
         </div>
       </div>

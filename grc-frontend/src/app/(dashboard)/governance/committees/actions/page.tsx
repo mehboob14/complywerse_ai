@@ -40,17 +40,17 @@ interface Committee {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  open: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
-  in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: Clock },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
-  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
+  open: { bg: 'bg-amber-50', text: 'text-amber-600', icon: Clock },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-600', icon: Clock },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: CheckCircle },
+  overdue: { bg: 'bg-rose-50', text: 'text-rose-600', icon: AlertCircle },
 };
 
 const ACTION_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  follow_up: { label: 'Follow Up', bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  policy_approval: { label: 'Policy Approval', bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  risk_review: { label: 'Risk Review', bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  audit_response: { label: 'Audit Response', bg: 'bg-primary-500/20', text: 'text-primary-600' },
+  follow_up: { label: 'Follow Up', bg: 'bg-slate-50', text: 'text-slate-600' },
+  policy_approval: { label: 'Policy Approval', bg: 'bg-blue-50', text: 'text-blue-600' },
+  risk_review: { label: 'Risk Review', bg: 'bg-rose-50', text: 'text-rose-600' },
+  audit_response: { label: 'Audit Response', bg: 'bg-primary-50', text: 'text-primary-600' },
 };
 
 export default function ActionsPage() {
@@ -145,60 +145,60 @@ export default function ActionsPage() {
     <div className="space-y-8">
       <div className="page-header">
         <div>
-          <Link href="/governance/committees" className="flex items-center gap-2 text-slate-400 hover:text-slate-900 mb-4">
+          <Link href="/governance/committees" className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4">
             <ArrowLeft className="h-4 w-4" />
             Back to Committees
           </Link>
-          <h1 className="text-2xl font-semibold text-slate-800">Oversight Actions</h1>
-          <p className="text-slate-400 mt-1">Track and manage actions across all committees</p>
+          <h1 className="text-2xl font-semibold text-black">Oversight Actions</h1>
+          <p className="text-slate-600 mt-1">Track and manage actions across all committees</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20">
-              <Clock className="h-6 w-6 text-amber-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50">
+              <Clock className="h-6 w-6 text-amber-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{openCount}</p>
-              <p className="text-sm text-slate-400">Open</p>
+              <p className="text-2xl font-bold text-black">{openCount}</p>
+              <p className="text-sm text-slate-600">Open</p>
             </div>
           </div>
         </div>
 
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/20">
-              <Clock className="h-6 w-6 text-blue-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50">
+              <Clock className="h-6 w-6 text-blue-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{inProgressCount}</p>
-              <p className="text-sm text-slate-400">In Progress</p>
+              <p className="text-2xl font-bold text-black">{inProgressCount}</p>
+              <p className="text-sm text-slate-600">In Progress</p>
             </div>
           </div>
         </div>
 
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/20">
-              <AlertCircle className="h-6 w-6 text-rose-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50">
+              <AlertCircle className="h-6 w-6 text-rose-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{overdueCount}</p>
-              <p className="text-sm text-slate-400">Overdue</p>
+              <p className="text-2xl font-bold text-black">{overdueCount}</p>
+              <p className="text-sm text-slate-600">Overdue</p>
             </div>
           </div>
         </div>
 
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">
-              <CheckCircle className="h-6 w-6 text-emerald-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50">
+              <CheckCircle className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{completedCount}</p>
-              <p className="text-sm text-slate-400">Completed</p>
+              <p className="text-2xl font-bold text-black">{completedCount}</p>
+              <p className="text-sm text-slate-600">Completed</p>
             </div>
           </div>
         </div>
@@ -206,7 +206,7 @@ export default function ActionsPage() {
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
           <input
             type="text"
             placeholder="Search actions..."
@@ -236,7 +236,7 @@ export default function ActionsPage() {
             <option key={committee.id} value={committee.id}>{committee.name}</option>
           ))}
         </select>
-        <label className="flex items-center gap-2 text-slate-400 text-sm cursor-pointer">
+        <label className="flex items-center gap-2 text-slate-600 text-sm cursor-pointer">
           <input
             type="checkbox"
             checked={overdueOnly}
@@ -259,7 +259,7 @@ export default function ActionsPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-slate-800 font-medium">{action.title}</h3>
+                    <h3 className="text-black font-medium">{action.title}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
                       <StatusIcon className="h-3 w-3" />
                       {action.status.replace('_', ' ')}
@@ -269,7 +269,7 @@ export default function ActionsPage() {
                     </span>
                   </div>
                   {action.description && (
-                    <p className="text-slate-400 text-sm mb-3">{action.description}</p>
+                    <p className="text-slate-600 text-sm mb-3">{action.description}</p>
                   )}
                   <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
                     <span className="flex items-center gap-1.5">
@@ -314,7 +314,7 @@ export default function ActionsPage() {
       {filteredActions.length === 0 && (
         <div className="text-center py-12">
           <CheckSquare className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-          <p className="text-slate-400">No actions found</p>
+          <p className="text-slate-600">No actions found</p>
         </div>
       )}
     </div>

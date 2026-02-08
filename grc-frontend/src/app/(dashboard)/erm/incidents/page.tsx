@@ -31,18 +31,18 @@ import {
 } from 'lucide-react';
 
 const SEVERITIES: { value: IncidentSeverity; label: string; color: string }[] = [
-  { value: 'low', label: 'Low', color: 'bg-green-500/20 text-green-400' },
-  { value: 'medium', label: 'Medium', color: 'bg-yellow-500/20 text-yellow-400' },
-  { value: 'high', label: 'High', color: 'bg-orange-500/20 text-orange-400' },
-  { value: 'critical', label: 'Critical', color: 'bg-red-500/20 text-red-400' },
+  { value: 'low', label: 'Low', color: 'bg-green-50 text-green-700' },
+  { value: 'medium', label: 'Medium', color: 'bg-yellow-50 text-yellow-700' },
+  { value: 'high', label: 'High', color: 'bg-orange-50 text-orange-700' },
+  { value: 'critical', label: 'Critical', color: 'bg-red-50 text-red-700' },
 ];
 
 const INCIDENT_STATUSES: { value: IncidentStatus; label: string; color: string }[] = [
-  { value: 'open', label: 'Open', color: 'bg-red-500/20 text-red-400' },
-  { value: 'investigating', label: 'Investigating', color: 'bg-yellow-500/20 text-yellow-400' },
-  { value: 'mitigating', label: 'Mitigating', color: 'bg-blue-500/20 text-blue-400' },
-  { value: 'resolved', label: 'Resolved', color: 'bg-green-500/20 text-green-400' },
-  { value: 'closed', label: 'Closed', color: 'bg-slate-500/20 text-slate-400' },
+  { value: 'open', label: 'Open', color: 'bg-red-50 text-red-700' },
+  { value: 'investigating', label: 'Investigating', color: 'bg-yellow-50 text-yellow-700' },
+  { value: 'mitigating', label: 'Mitigating', color: 'bg-blue-50 text-blue-700' },
+  { value: 'resolved', label: 'Resolved', color: 'bg-green-50 text-green-700' },
+  { value: 'closed', label: 'Closed', color: 'bg-slate-50 text-slate-700' },
 ];
 
 type AIAnalysisResult = {
@@ -146,7 +146,7 @@ export default function IncidentsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -156,47 +156,39 @@ export default function IncidentsPage() {
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-500/20 p-2">
-              <AlertTriangle className="h-5 w-5 text-red-400" />
-            </div>
+                          <AlertTriangle className="h-5 w-5 text-red-600" />
             <div>
-              <p className="text-2xl font-bold text-slate-800">{incidentDashboard?.open_incidents || 0}</p>
-              <p className="text-sm text-slate-400">Open Incidents</p>
+              <p className="text-2xl font-bold text-black">{incidentDashboard?.open_incidents || 0}</p>
+              <p className="text-sm text-slate-600">Open Incidents</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-yellow-500/20 p-2">
-              <Clock className="h-5 w-5 text-yellow-400" />
-            </div>
+                          <Clock className="h-5 w-5 text-yellow-600" />
             <div>
-              <p className="text-2xl font-bold text-slate-800">{incidentDashboard?.investigating || 0}</p>
-              <p className="text-sm text-slate-400">Investigating</p>
+              <p className="text-2xl font-bold text-black">{incidentDashboard?.investigating || 0}</p>
+              <p className="text-sm text-slate-600">Investigating</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-2">
-              <CheckCircle className="h-5 w-5 text-green-400" />
-            </div>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-2xl font-bold text-slate-800">{incidentDashboard?.resolved_this_month || 0}</p>
-              <p className="text-sm text-slate-400">Resolved (Month)</p>
+              <p className="text-2xl font-bold text-black">{incidentDashboard?.resolved_this_month || 0}</p>
+              <p className="text-sm text-slate-600">Resolved (Month)</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-orange-500/20 p-2">
-              <DollarSign className="h-5 w-5 text-orange-400" />
-            </div>
+                          <DollarSign className="h-5 w-5 text-orange-600" />
             <div>
-              <p className="text-2xl font-bold text-slate-800">
+              <p className="text-2xl font-bold text-black">
                 ${((incidentDashboard?.total_financial_impact || 0) / 1000).toFixed(0)}K
               </p>
-              <p className="text-sm text-slate-400">Total Impact</p>
+              <p className="text-sm text-slate-600">Total Impact</p>
             </div>
           </div>
         </div>
@@ -207,7 +199,7 @@ export default function IncidentsPage() {
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black"
           >
             <option value="all">All Severities</option>
             {SEVERITIES.map((s) => (
@@ -217,7 +209,7 @@ export default function IncidentsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black"
           >
             <option value="all">All Statuses</option>
             {INCIDENT_STATUSES.map((s) => (
@@ -247,8 +239,8 @@ export default function IncidentsPage() {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="font-medium text-slate-800">{incident.title}</h3>
-                    <p className="mt-1 text-sm text-slate-400 line-clamp-2">{incident.description}</p>
+                    <h3 className="font-medium text-black">{incident.title}</h3>
+                    <p className="mt-1 text-sm text-slate-600 line-clamp-2">{incident.description}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${severityStyle?.color || ''}`}>
                         {incident.severity}
@@ -260,7 +252,7 @@ export default function IncidentsPage() {
                         {new Date(incident.incident_date).toLocaleDateString()}
                       </span>
                       {incident.financial_impact && (
-                        <span className="flex items-center gap-1 text-xs text-orange-400">
+                        <span className="flex items-center gap-1 text-xs text-orange-600">
                           <DollarSign className="h-3 w-3" />
                           {incident.financial_impact.toLocaleString()}
                         </span>
@@ -270,14 +262,14 @@ export default function IncidentsPage() {
                   <div className="ml-4 flex gap-1">
                     <button
                       onClick={() => handleAnalyzeWithAI(incident)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-primary-500/20 hover:text-primary-600"
+                      className="rounded p-1.5 text-slate-600 hover:bg-primary-50 hover:text-primary-600"
                       title="AI Analysis"
                     >
                       <Sparkles className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => setEditingIncident(incident)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                      className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>
@@ -287,7 +279,7 @@ export default function IncidentsPage() {
                           deleteMutation.mutate(incident.id);
                         }
                       }}
-                      className="rounded p-1.5 text-slate-400 hover:bg-red-500/20 hover:text-red-400"
+                      className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -300,8 +292,8 @@ export default function IncidentsPage() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <AlertCircle className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-slate-800">No incidents found</h3>
-          <p className="mt-1 text-slate-400">Report incidents as they occur to track and resolve them</p>
+          <h3 className="mt-4 text-lg font-medium text-black">No incidents found</h3>
+          <p className="mt-1 text-slate-600">Report incidents as they occur to track and resolve them</p>
         </div>
       )}
 
@@ -386,31 +378,31 @@ function IncidentModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">{incident ? 'Edit Incident' : 'Report Incident'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-black">{incident ? 'Edit Incident' : 'Report Incident'}</h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
-            <label className="block text-sm text-slate-400">Title</label>
+            <label className="block text-sm text-slate-600">Title</label>
             <input
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400">Related Risk</label>
+              <label className="block text-sm text-slate-600">Related Risk</label>
               <select
                 value={formData.risk_id}
                 onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 required
               >
                 {risks.map((risk) => (
@@ -421,12 +413,12 @@ function IncidentModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400">Incident Date</label>
+              <label className="block text-sm text-slate-600">Incident Date</label>
               <input
                 type="date"
                 value={formData.incident_date}
                 onChange={(e) => setFormData({ ...formData, incident_date: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 required
               />
             </div>
@@ -434,11 +426,11 @@ function IncidentModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400">Severity</label>
+              <label className="block text-sm text-slate-600">Severity</label>
               <select
                 value={formData.severity}
                 onChange={(e) => setFormData({ ...formData, severity: e.target.value as IncidentSeverity })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               >
                 {SEVERITIES.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -449,11 +441,11 @@ function IncidentModal({
             </div>
             {incident && (
               <div>
-                <label className="block text-sm text-slate-400">Status</label>
+                <label className="block text-sm text-slate-600">Status</label>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as IncidentStatus)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 >
                   {INCIDENT_STATUSES.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -464,42 +456,42 @@ function IncidentModal({
               </div>
             )}
             <div>
-              <label className="block text-sm text-slate-400">Financial Impact ($)</label>
+              <label className="block text-sm text-slate-600">Financial Impact ($)</label>
               <input
                 type="number"
                 value={formData.financial_impact || ''}
                 onChange={(e) => setFormData({ ...formData, financial_impact: e.target.value ? Number(e.target.value) : undefined })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Description</label>
+            <label className="block text-sm text-slate-600">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               rows={2}
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Root Cause</label>
+            <label className="block text-sm text-slate-600">Root Cause</label>
             <textarea
               value={formData.root_cause}
               onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               rows={2}
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Corrective Actions</label>
+            <label className="block text-sm text-slate-600">Corrective Actions</label>
             <textarea
               value={formData.corrective_actions}
               onChange={(e) => setFormData({ ...formData, corrective_actions: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               rows={2}
             />
           </div>
@@ -540,20 +532,20 @@ function AIAnalysisModal({
 }) {
   const getImpactColor = (level: string) => {
     switch (level) {
-      case 'critical': return 'bg-red-500/20 text-red-400 border-red-500/30';
-      case 'high': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
-      case 'medium': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-      case 'low': return 'bg-green-500/20 text-green-400 border-green-500/30';
-      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+      case 'critical': return 'bg-red-50 text-red-700 border-red-200';
+      case 'high': return 'bg-orange-50 text-orange-700 border-orange-500/30';
+      case 'medium': return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+      case 'low': return 'bg-green-50 text-green-700 border-green-200';
+      default: return 'bg-slate-50 text-slate-700 border-slate-500/30';
     }
   };
 
   const getRelevanceColor = (level: string) => {
     switch (level) {
-      case 'high': return 'bg-primary-500/20 text-primary-600';
-      case 'medium': return 'bg-blue-500/20 text-blue-400';
-      case 'low': return 'bg-slate-500/20 text-slate-400';
-      default: return 'bg-slate-500/20 text-slate-400';
+      case 'high': return 'bg-primary-50 text-primary-700';
+      case 'medium': return 'bg-blue-50 text-blue-700';
+      case 'low': return 'bg-slate-50 text-slate-700';
+      default: return 'bg-slate-50 text-slate-700';
     }
   };
 
@@ -562,15 +554,13 @@ function AIAnalysisModal({
       <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
         <div className="flex items-center justify-between border-b border-slate-200 pb-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 p-2">
-              <Brain className="h-6 w-6 text-primary-600" />
-            </div>
+                          <Brain className="h-6 w-6 text-primary-600" />
             <div>
-              <h2 className="text-lg font-semibold text-slate-800">AI Analysis</h2>
-              <p className="text-sm text-slate-400">{incident.title}</p>
+              <h2 className="text-lg font-semibold text-black">AI Analysis</h2>
+              <p className="text-sm text-slate-600">{incident.title}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -581,7 +571,7 @@ function AIAnalysisModal({
               <div className="absolute inset-0 animate-ping rounded-full bg-primary-500/30" />
               <Sparkles className="relative h-12 w-12 text-primary-600 animate-pulse" />
             </div>
-            <p className="mt-4 text-slate-400">Analyzing incident with AI...</p>
+            <p className="mt-4 text-slate-600">Analyzing incident with AI...</p>
             <p className="text-xs text-slate-500 mt-1">This may take a few seconds</p>
           </div>
         ) : analysis ? (
@@ -589,12 +579,12 @@ function AIAnalysisModal({
             <div className="rounded-xl border border-primary-500/20 bg-gradient-to-br from-purple-900/20 to-blue-900/20 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Target className="h-5 w-5 text-primary-600" />
-                <h3 className="font-semibold text-slate-800">Root Cause Analysis</h3>
+                <h3 className="font-semibold text-black">Root Cause Analysis</h3>
               </div>
               <p className="text-slate-600">{analysis.root_cause_analysis.primary_cause}</p>
               {analysis.root_cause_analysis.contributing_factors.length > 0 && (
                 <div className="mt-3">
-                  <p className="text-xs text-slate-400 mb-2">Contributing Factors:</p>
+                  <p className="text-xs text-slate-600 mb-2">Contributing Factors:</p>
                   <ul className="space-y-1">
                     {analysis.root_cause_analysis.contributing_factors.map((factor, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
@@ -637,16 +627,16 @@ function AIAnalysisModal({
             {analysis.related_risks.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <AlertTriangle className="h-5 w-5 text-orange-400" />
-                  <h3 className="font-semibold text-slate-800">Related Risks</h3>
+                  <AlertTriangle className="h-5 w-5 text-orange-600" />
+                  <h3 className="font-semibold text-black">Related Risks</h3>
                 </div>
                 <div className="space-y-2">
                   {analysis.related_risks.map((risk, i) => (
                     <div key={i} className="rounded-lg border border-slate-200 bg-white/50 p-3">
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="font-medium text-slate-800">{risk.risk_title}</p>
-                          <p className="text-sm text-slate-400 mt-1">{risk.explanation}</p>
+                          <p className="font-medium text-black">{risk.risk_title}</p>
+                          <p className="text-sm text-slate-600 mt-1">{risk.explanation}</p>
                         </div>
                         <span className={`rounded-full px-2 py-0.5 text-xs ${getRelevanceColor(risk.relevance)}`}>
                           {risk.relevance}
@@ -661,8 +651,8 @@ function AIAnalysisModal({
             {analysis.related_controls.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <Shield className="h-5 w-5 text-blue-400" />
-                  <h3 className="font-semibold text-slate-800">Related Controls</h3>
+                  <Shield className="h-5 w-5 text-blue-600" />
+                  <h3 className="font-semibold text-black">Related Controls</h3>
                 </div>
                 <div className="space-y-2">
                   {analysis.related_controls.map((control, i) => (
@@ -670,12 +660,12 @@ function AIAnalysisModal({
                       <div className="flex items-start justify-between">
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="font-medium text-slate-800">{control.control_title}</p>
-                            <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-xs text-blue-400">
+                            <p className="font-medium text-black">{control.control_title}</p>
+                            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">
                               {control.framework}
                             </span>
                           </div>
-                          <p className="text-sm text-slate-400 mt-1">{control.status_recommendation}</p>
+                          <p className="text-sm text-slate-600 mt-1">{control.status_recommendation}</p>
                         </div>
                         <span className={`rounded-full px-2 py-0.5 text-xs ${getRelevanceColor(control.relevance)}`}>
                           {control.relevance}
@@ -690,8 +680,8 @@ function AIAnalysisModal({
             {analysis.recommended_actions.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <CheckCircle className="h-5 w-5 text-green-400" />
-                  <h3 className="font-semibold text-slate-800">Recommended Actions</h3>
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <h3 className="font-semibold text-black">Recommended Actions</h3>
                 </div>
                 <div className="space-y-2">
                   {analysis.recommended_actions.map((action, i) => (
@@ -709,14 +699,14 @@ function AIAnalysisModal({
             {analysis.similar_incidents.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <Link2 className="h-5 w-5 text-slate-400" />
-                  <h3 className="font-semibold text-slate-800">Similar Incidents</h3>
+                  <Link2 className="h-5 w-5 text-slate-600" />
+                  <h3 className="font-semibold text-black">Similar Incidents</h3>
                 </div>
                 <div className="space-y-2">
                   {analysis.similar_incidents.map((inc, i) => (
                     <div key={i} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/50 p-3">
                       <p className="text-sm text-slate-600">{inc.title}</p>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-slate-600">
                         {Math.round(inc.similarity * 100)}% match
                       </span>
                     </div>
@@ -727,8 +717,8 @@ function AIAnalysisModal({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-16">
-            <AlertCircle className="h-12 w-12 text-red-400" />
-            <p className="mt-4 text-slate-400">Failed to analyze incident</p>
+            <AlertCircle className="h-12 w-12 text-red-600" />
+            <p className="mt-4 text-slate-600">Failed to analyze incident</p>
           </div>
         )}
 

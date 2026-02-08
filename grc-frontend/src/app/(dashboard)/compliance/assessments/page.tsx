@@ -73,17 +73,17 @@ const TYPE_OPTIONS = [
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Draft' },
-  in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Completed' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Progress' },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Completed' },
   archived: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Archived' },
 };
 
 function getScoreColor(score: number | null): { bg: string; text: string } {
-  if (score === null) return { bg: 'bg-slate-500/20', text: 'text-slate-400' };
-  if (score >= 80) return { bg: 'bg-emerald-500/20', text: 'text-emerald-400' };
-  if (score >= 50) return { bg: 'bg-amber-500/20', text: 'text-amber-400' };
-  return { bg: 'bg-rose-500/20', text: 'text-rose-400' };
+  if (score === null) return { bg: 'bg-slate-50', text: 'text-slate-600' };
+  if (score >= 80) return { bg: 'bg-emerald-50', text: 'text-emerald-600' };
+  if (score >= 50) return { bg: 'bg-amber-50', text: 'text-amber-600' };
+  return { bg: 'bg-rose-50', text: 'text-rose-600' };
 }
 
 function getScoreBarColor(score: number | null): string {
@@ -241,8 +241,8 @@ export default function AssessmentsPage() {
     const due = new Date(dueDate);
     const now = new Date();
     const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) return { text: 'Overdue', color: 'text-rose-400' };
-    if (diffDays <= 7) return { text: 'Due Soon', color: 'text-amber-400' };
+    if (diffDays < 0) return { text: 'Overdue', color: 'text-rose-600' };
+    if (diffDays <= 7) return { text: 'Due Soon', color: 'text-amber-600' };
     return null;
   };
 
@@ -250,8 +250,8 @@ export default function AssessmentsPage() {
     return (
       <div className="card">
         <div className="flex flex-col items-center justify-center py-12">
-          <AlertCircle className="h-12 w-12 text-rose-400 mb-4" />
-          <p className="text-slate-400">Failed to load assessments</p>
+          <AlertCircle className="h-12 w-12 text-rose-600 mb-4" />
+          <p className="text-slate-600">Failed to load assessments</p>
         </div>
       </div>
     );
@@ -261,7 +261,7 @@ export default function AssessmentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-600" />
           <input
             type="text"
             placeholder="Search assessments..."
@@ -320,7 +320,7 @@ export default function AssessmentsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <FileText className="h-6 w-6 text-primary-400" />
+              <FileText className="h-6 w-6 text-primary-600" />
             </div>
           </div>
           <p className="stat-value">{data?.summary?.total_assessments || 0}</p>
@@ -330,7 +330,7 @@ export default function AssessmentsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
-              <Clock className="h-6 w-6 text-blue-400" />
+              <Clock className="h-6 w-6 text-blue-600" />
             </div>
           </div>
           <p className="stat-value">{data?.summary?.total_items || 0}</p>
@@ -340,7 +340,7 @@ export default function AssessmentsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-3">
-              <CheckCircle className="h-6 w-6 text-emerald-400" />
+              <CheckCircle className="h-6 w-6 text-emerald-600" />
             </div>
           </div>
           <p className="stat-value">{data?.summary?.total_complied || 0}</p>
@@ -350,7 +350,7 @@ export default function AssessmentsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-rose-500/20 to-rose-600/10 p-3">
-              <XCircle className="h-6 w-6 text-rose-400" />
+              <XCircle className="h-6 w-6 text-rose-600" />
             </div>
           </div>
           <p className="stat-value">{data?.summary?.total_not_complied || 0}</p>
@@ -376,14 +376,14 @@ export default function AssessmentsPage() {
             {isLoading ? (
               <tr>
                 <td colSpan={8} className="text-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-400" />
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-600" />
                 </td>
               </tr>
             ) : filteredAssessments.length === 0 ? (
               <tr>
                 <td colSpan={8} className="text-center py-8">
                   <FileText className="h-12 w-12 text-slate-500 mx-auto mb-3" />
-                  <p className="text-slate-400">No assessments found</p>
+                  <p className="text-slate-600">No assessments found</p>
                   <p className="text-sm text-slate-500 mt-1">
                     Upload an Excel or CSV file to create a new assessment
                   </p>
@@ -400,7 +400,7 @@ export default function AssessmentsPage() {
                     <td>
                       <Link
                         href={`/compliance/assessments/${assessment.id}`}
-                        className="font-medium text-slate-800 hover:text-primary-400 transition-colors"
+                        className="font-medium text-black hover:text-primary-600 transition-colors"
                       >
                         {assessment.name}
                       </Link>
@@ -412,7 +412,7 @@ export default function AssessmentsPage() {
                       </span>
                     </td>
                     <td>
-                      <span className="text-sm text-slate-400">
+                      <span className="text-sm text-slate-600">
                         {assessment.source || '-'}
                       </span>
                     </td>
@@ -449,7 +449,7 @@ export default function AssessmentsPage() {
                     <td>
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-slate-500" />
-                        <span className="text-sm text-slate-400">
+                        <span className="text-sm text-slate-600">
                           {assessment.assessor || '-'}
                         </span>
                       </div>
@@ -465,7 +465,7 @@ export default function AssessmentsPage() {
                         </Link>
                         <button
                           onClick={() => handleDeleteClick(assessment)}
-                          className="btn-ghost btn-sm text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                          className="btn-ghost btn-sm text-rose-600 hover:text-rose-300 hover:bg-rose-50"
                           title="Delete Assessment"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -482,7 +482,7 @@ export default function AssessmentsPage() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-600">
             Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, total)} of{' '}
             {total} assessments
           </p>
@@ -494,7 +494,7 @@ export default function AssessmentsPage() {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-sm text-slate-400">
+            <span className="text-sm text-slate-600">
               Page {page + 1} of {totalPages}
             </span>
             <button
@@ -513,8 +513,8 @@ export default function AssessmentsPage() {
           <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-slate-200">
               <div>
-                <h2 className="text-lg font-semibold text-slate-800">Upload Assessment</h2>
-                <p className="text-sm text-slate-400">
+                <h2 className="text-lg font-semibold text-black">Upload Assessment</h2>
+                <p className="text-sm text-slate-600">
                   Upload an Excel or CSV file with assessment data
                 </p>
               </div>
@@ -531,8 +531,8 @@ export default function AssessmentsPage() {
 
             <div className="p-6 space-y-4">
               {uploadError && (
-                <div className="bg-rose-500/20 border border-rose-500/30 rounded-lg p-3 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-rose-400" />
+                <div className="bg-rose-50 border border-rose-500/30 rounded-lg p-3 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-rose-600" />
                   <p className="text-sm text-rose-300">{uploadError}</p>
                 </div>
               )}
@@ -625,10 +625,10 @@ export default function AssessmentsPage() {
                   <label htmlFor="file-upload" className="cursor-pointer">
                     <Upload className="h-8 w-8 text-slate-500 mx-auto mb-2" />
                     {uploadFile ? (
-                      <p className="text-slate-800">{uploadFile.name}</p>
+                      <p className="text-black">{uploadFile.name}</p>
                     ) : (
                       <>
-                        <p className="text-slate-400">Click to upload or drag and drop</p>
+                        <p className="text-slate-600">Click to upload or drag and drop</p>
                         <p className="text-sm text-slate-500">Excel (.xlsx, .xls) or CSV</p>
                       </>
                     )}
@@ -668,7 +668,7 @@ export default function AssessmentsPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md">
             <div className="flex items-center justify-between p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800">Delete Assessment</h2>
+              <h2 className="text-lg font-semibold text-black">Delete Assessment</h2>
               <button
                 onClick={() => {
                   setDeleteModalOpen(false);
@@ -682,23 +682,23 @@ export default function AssessmentsPage() {
 
             <div className="p-6">
               {deleteError && (
-                <div className="bg-rose-500/20 border border-rose-500/30 rounded-lg p-3 flex items-center gap-2 mb-4">
-                  <AlertCircle className="h-4 w-4 text-rose-400 flex-shrink-0" />
+                <div className="bg-rose-50 border border-rose-500/30 rounded-lg p-3 flex items-center gap-2 mb-4">
+                  <AlertCircle className="h-4 w-4 text-rose-600 flex-shrink-0" />
                   <p className="text-sm text-rose-300">{deleteError}</p>
                 </div>
               )}
               <div className="flex items-center gap-3 mb-4">
-                <div className="flex-shrink-0 w-10 h-10 bg-rose-500/20 rounded-full flex items-center justify-center">
-                  <AlertCircle className="h-5 w-5 text-rose-400" />
+                <div className="flex-shrink-0 w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center">
+                  <AlertCircle className="h-5 w-5 text-rose-600" />
                 </div>
                 <div>
-                  <p className="text-slate-800">Are you sure you want to delete this assessment?</p>
-                  <p className="text-sm text-slate-400 mt-1">
+                  <p className="text-black">Are you sure you want to delete this assessment?</p>
+                  <p className="text-sm text-slate-600 mt-1">
                     <strong>{assessmentToDelete.name}</strong>
                   </p>
                 </div>
               </div>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-slate-600">
                 This will permanently delete the assessment and all its items. This action cannot be undone.
               </p>
             </div>

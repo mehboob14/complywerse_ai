@@ -56,12 +56,12 @@ interface Campaign {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  pending: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
-  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', icon: FileCheck },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: Play },
-  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle },
+  pending: { bg: 'bg-amber-50', text: 'text-amber-600', icon: Clock },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: CheckCircle },
+  overdue: { bg: 'bg-rose-50', text: 'text-rose-600', icon: AlertCircle },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600', icon: FileCheck },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: Play },
+  closed: { bg: 'bg-blue-50', text: 'text-blue-600', icon: CheckCircle },
 };
 
 export default function AttestationsPage() {
@@ -231,8 +231,8 @@ export default function AttestationsPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-800">Attestations & Certifications</h1>
-            <p className="text-slate-400 mt-1">Manage attestation campaigns and track compliance certifications</p>
+            <h1 className="text-2xl font-semibold text-black">Attestations & Certifications</h1>
+            <p className="text-slate-600 mt-1">Manage attestation campaigns and track compliance certifications</p>
           </div>
           <div className="flex items-center gap-3">
             <Link href="/governance/attestations/campaigns" className="btn-secondary flex items-center gap-2">
@@ -250,48 +250,48 @@ export default function AttestationsPage() {
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-500/20">
-              <ClipboardCheck className="h-6 w-6 text-primary-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50">
+              <ClipboardCheck className="h-6 w-6 text-primary-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{dashboard?.total_campaigns || 0}</p>
-              <p className="text-sm text-slate-400">Total Campaigns</p>
+              <p className="text-2xl font-bold text-black">{dashboard?.total_campaigns || 0}</p>
+              <p className="text-sm text-slate-600">Total Campaigns</p>
             </div>
           </div>
         </div>
 
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20">
-              <Clock className="h-6 w-6 text-amber-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50">
+              <Clock className="h-6 w-6 text-amber-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{dashboard?.pending_attestations || 0}</p>
-              <p className="text-sm text-slate-400">Pending Attestations</p>
+              <p className="text-2xl font-bold text-black">{dashboard?.pending_attestations || 0}</p>
+              <p className="text-sm text-slate-600">Pending Attestations</p>
             </div>
           </div>
         </div>
 
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/20">
-              <AlertTriangle className="h-6 w-6 text-rose-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50">
+              <AlertTriangle className="h-6 w-6 text-rose-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{dashboard?.overdue_attestations || 0}</p>
-              <p className="text-sm text-slate-400">Overdue</p>
+              <p className="text-2xl font-bold text-black">{dashboard?.overdue_attestations || 0}</p>
+              <p className="text-sm text-slate-600">Overdue</p>
             </div>
           </div>
         </div>
 
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">
-              <TrendingUp className="h-6 w-6 text-emerald-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50">
+              <TrendingUp className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{dashboard?.completion_rate || 0}%</p>
-              <p className="text-sm text-slate-400">Completion Rate</p>
+              <p className="text-2xl font-bold text-black">{dashboard?.completion_rate || 0}%</p>
+              <p className="text-sm text-slate-600">Completion Rate</p>
             </div>
           </div>
         </div>
@@ -300,8 +300,8 @@ export default function AttestationsPage() {
       {pendingAttestations.length > 0 && (
         <div className="card p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-400" />
+            <h3 className="text-lg font-medium text-black flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
               My Pending Attestations
             </h3>
           </div>
@@ -317,13 +317,13 @@ export default function AttestationsPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h4 className="text-slate-800 font-medium">{attestation.campaign_name}</h4>
+                        <h4 className="text-black font-medium">{attestation.campaign_name}</h4>
                         <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
                           <StatusIcon className="h-3 w-3" />
                           {attestation.status}
                         </span>
                       </div>
-                      <p className="text-slate-400 text-sm line-clamp-2 mb-2">{attestation.attestation_text}</p>
+                      <p className="text-slate-600 text-sm line-clamp-2 mb-2">{attestation.attestation_text}</p>
                       <div className="flex items-center gap-4 text-sm text-slate-500">
                         <span className="flex items-center gap-1.5">
                           <Calendar className="h-4 w-4" />
@@ -350,8 +350,8 @@ export default function AttestationsPage() {
       {completedAttestations.length > 0 && (
         <div className="card p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-emerald-400" />
+            <h3 className="text-lg font-medium text-black flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
               Completed Attestations
             </h3>
             <div className="flex items-center gap-3">
@@ -359,7 +359,7 @@ export default function AttestationsPage() {
                 onClick={() => setShowUnlinkedOnly(!showUnlinkedOnly)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                   showUnlinkedOnly 
-                    ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30' 
+                    ? 'bg-primary-50 text-primary-700 border border-primary-200' 
                     : 'bg-slate-200 text-slate-600 border border-slate-300 hover:bg-slate-600'
                 }`}
               >
@@ -371,14 +371,14 @@ export default function AttestationsPage() {
           </div>
 
           {selectedCompletedIds.length > 0 && (
-            <div className="mb-4 p-3 bg-primary-500/10 border border-primary-500/30 rounded-lg flex items-center justify-between">
+            <div className="mb-4 p-3 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
               <span className="text-sm text-primary-300">
                 {selectedCompletedIds.length} attestation(s) selected
               </span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setSelectedAttestations([])}
-                  className="text-sm text-slate-400 hover:text-slate-900 px-3 py-1"
+                  className="text-sm text-slate-600 hover:text-slate-900 px-3 py-1"
                 >
                   Clear Selection
                 </button>
@@ -395,7 +395,7 @@ export default function AttestationsPage() {
           )}
 
           <div className="space-y-3">
-            <div className="flex items-center gap-3 px-4 py-2 text-sm text-slate-400 border-b border-slate-200">
+            <div className="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 border-b border-slate-200">
               <input
                 type="checkbox"
                 checked={
@@ -426,19 +426,19 @@ export default function AttestationsPage() {
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-1">
-                        <h4 className="text-slate-800 font-medium">{attestation.campaign_name}</h4>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 inline-flex items-center gap-1">
+                        <h4 className="text-black font-medium">{attestation.campaign_name}</h4>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1">
                           <CheckCircle className="h-3 w-3" />
                           completed
                         </span>
                         {isLinked && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 inline-flex items-center gap-1">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 inline-flex items-center gap-1">
                             <Link2 className="h-3 w-3" />
                             linked to evidence
                           </span>
                         )}
                       </div>
-                      <p className="text-slate-400 text-sm line-clamp-1">{attestation.attestation_text}</p>
+                      <p className="text-slate-600 text-sm line-clamp-1">{attestation.attestation_text}</p>
                       <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
                         <span className="capitalize">{attestation.attestation_type.replace('_', ' ')}</span>
                         <span>Completed: {new Date(attestation.due_date).toLocaleDateString()}</span>
@@ -460,7 +460,7 @@ export default function AttestationsPage() {
             })}
 
             {filteredCompletedAttestations.length === 0 && (
-              <div className="text-center py-8 text-slate-400">
+              <div className="text-center py-8 text-slate-600">
                 {showUnlinkedOnly 
                   ? 'All completed attestations have been linked to evidence'
                   : 'No completed attestations found'
@@ -473,11 +473,11 @@ export default function AttestationsPage() {
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-            <ClipboardCheck className="h-5 w-5 text-primary-400" />
+          <h3 className="text-lg font-medium text-black flex items-center gap-2">
+            <ClipboardCheck className="h-5 w-5 text-primary-600" />
             Recent Campaigns
           </h3>
-          <Link href="/governance/attestations/campaigns" className="text-primary-400 hover:text-primary-300 text-sm flex items-center gap-1">
+          <Link href="/governance/attestations/campaigns" className="text-primary-600 hover:text-primary-300 text-sm flex items-center gap-1">
             View All <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -486,12 +486,12 @@ export default function AttestationsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Campaign</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Type</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Duration</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Progress</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Actions</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Campaign</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Type</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Status</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Duration</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Progress</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -503,7 +503,7 @@ export default function AttestationsPage() {
                   <tr key={campaign.id} className="border-b border-slate-200 hover:bg-white/50">
                     <td className="py-3 px-4">
                       <div>
-                        <p className="text-slate-800 font-medium">{campaign.name}</p>
+                        <p className="text-black font-medium">{campaign.name}</p>
                         {campaign.description && (
                           <p className="text-xs text-slate-500">{campaign.description}</p>
                         )}
@@ -518,7 +518,7 @@ export default function AttestationsPage() {
                         {campaign.status}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-sm text-slate-400">
+                    <td className="py-3 px-4 text-sm text-slate-600">
                       {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
                     </td>
                     <td className="py-3 px-4">
@@ -529,13 +529,13 @@ export default function AttestationsPage() {
                             style={{ width: `${campaign.progress}%` }}
                           />
                         </div>
-                        <span className="text-sm text-slate-400">{campaign.progress}%</span>
+                        <span className="text-sm text-slate-600">{campaign.progress}%</span>
                       </div>
                     </td>
                     <td className="py-3 px-4">
                       <Link
                         href={`/governance/attestations/campaigns/${campaign.id}`}
-                        className="text-primary-400 hover:text-primary-300 text-sm"
+                        className="text-primary-600 hover:text-primary-300 text-sm"
                       >
                         View Details
                       </Link>
@@ -550,7 +550,7 @@ export default function AttestationsPage() {
         {(!recentCampaigns || recentCampaigns.length === 0) && (
           <div className="text-center py-8">
             <ClipboardCheck className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-            <p className="text-slate-400">No campaigns found</p>
+            <p className="text-slate-600">No campaigns found</p>
             <Link href="/governance/attestations/campaigns?action=new" className="btn-primary mt-4 inline-flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Create First Campaign

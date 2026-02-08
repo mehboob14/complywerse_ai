@@ -279,8 +279,8 @@ export default function ERMOverviewPage() {
               showPercentage={false}
             />
             <div>
-              <p className="text-sm font-medium text-slate-400">Avg Risk Score</p>
-              <p className="text-2xl font-bold text-slate-800">{avgRiskScore.value.toFixed(1)}</p>
+              <p className="text-sm font-medium text-slate-600">Avg Risk Score</p>
+              <p className="text-2xl font-bold text-black">{avgRiskScore.value.toFixed(1)}</p>
               <p className="text-xs text-slate-500">out of 25</p>
             </div>
           </div>
@@ -294,8 +294,8 @@ export default function ERMOverviewPage() {
               color={mitigationProgress.percentage >= 70 ? 'success' : mitigationProgress.percentage >= 40 ? 'warning' : 'danger'}
             />
             <div>
-              <p className="text-sm font-medium text-slate-400">Mitigation Progress</p>
-              <p className="text-2xl font-bold text-slate-800">{mitigationProgress.percentage}%</p>
+              <p className="text-sm font-medium text-slate-600">Mitigation Progress</p>
+              <p className="text-2xl font-bold text-black">{mitigationProgress.percentage}%</p>
               <p className="text-xs text-slate-500">{mitigationProgress.completed}/{mitigationProgress.total} complete</p>
             </div>
           </div>
@@ -335,7 +335,7 @@ export default function ERMOverviewPage() {
           
           <div className="relative">
             <div className="flex">
-              <div className="flex flex-col justify-between pr-2 text-xs text-slate-400 py-1" style={{ width: '80px' }}>
+              <div className="flex flex-col justify-between pr-2 text-xs text-slate-600 py-1" style={{ width: '80px' }}>
                 {IMPACT_LABELS.slice().reverse().map((label, idx) => (
                   <div key={idx} className="h-14 flex items-center justify-end text-right">
                     <span className="truncate">{label}</span>
@@ -360,14 +360,14 @@ export default function ERMOverviewPage() {
                           onMouseEnter={() => setHoveredCell({ likelihood, impact })}
                           onMouseLeave={() => setHoveredCell(null)}
                         >
-                          <span className={`font-bold ${cellData.count > 0 ? 'text-slate-800 text-lg' : 'text-slate-800/50 text-sm'}`}>
+                          <span className={`font-bold ${cellData.count > 0 ? 'text-black text-lg' : 'text-black/50 text-sm'}`}>
                             {cellData.count || '-'}
                           </span>
                           
                           {isHovered && cellData.count > 0 && (
                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 min-w-[200px] max-w-[280px]">
                               <div className="bg-white border border-slate-300 rounded-lg shadow-xl p-3">
-                                <div className="text-xs font-semibold text-slate-800 mb-2 border-b border-slate-300 pb-2">
+                                <div className="text-xs font-semibold text-black mb-2 border-b border-slate-300 pb-2">
                                   L{likelihood} × I{impact} = Score {likelihood * impact}
                                 </div>
                                 <div className="space-y-1.5 max-h-32 overflow-y-auto">
@@ -375,7 +375,7 @@ export default function ERMOverviewPage() {
                                     <Link
                                       key={risk.id}
                                       href={`/erm/risks`}
-                                      className="block text-xs text-slate-600 hover:text-primary-400 truncate"
+                                      className="block text-xs text-slate-600 hover:text-primary-600 truncate"
                                     >
                                       • {risk.title}
                                     </Link>
@@ -396,7 +396,7 @@ export default function ERMOverviewPage() {
                 
                 <div className="flex justify-between mt-2 px-1">
                   {LIKELIHOOD_LABELS.map((label, idx) => (
-                    <div key={idx} className="text-xs text-slate-400 text-center flex-1">
+                    <div key={idx} className="text-xs text-slate-600 text-center flex-1">
                       {label}
                     </div>
                   ))}
@@ -414,23 +414,23 @@ export default function ERMOverviewPage() {
             <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-slate-200">
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-emerald-500" />
-                <span className="text-xs text-slate-400">Low (1-4)</span>
+                <span className="text-xs text-slate-600">Low (1-4)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-yellow-500" />
-                <span className="text-xs text-slate-400">Medium (5-9)</span>
+                <span className="text-xs text-slate-600">Medium (5-9)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-amber-500" />
-                <span className="text-xs text-slate-400">High (10-14)</span>
+                <span className="text-xs text-slate-600">High (10-14)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-orange-500" />
-                <span className="text-xs text-slate-400">Very High (15-19)</span>
+                <span className="text-xs text-slate-600">Very High (15-19)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-rose-600" />
-                <span className="text-xs text-slate-400">Critical (20-25)</span>
+                <span className="text-xs text-slate-600">Critical (20-25)</span>
               </div>
             </div>
           </div>
@@ -448,17 +448,17 @@ export default function ERMOverviewPage() {
           </div>
           
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-emerald-400">{kriSummary.green}</p>
-              <p className="text-xs text-emerald-400/80">Green</p>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-emerald-600">{kriSummary.green}</p>
+              <p className="text-xs text-emerald-600/80">Green</p>
             </div>
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-amber-400">{kriSummary.amber}</p>
-              <p className="text-xs text-amber-400/80">Amber</p>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-amber-600">{kriSummary.amber}</p>
+              <p className="text-xs text-amber-600/80">Amber</p>
             </div>
-            <div className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-rose-400">{kriSummary.red}</p>
-              <p className="text-xs text-rose-400/80">Red</p>
+            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-rose-600">{kriSummary.red}</p>
+              <p className="text-xs text-rose-600/80">Red</p>
             </div>
           </div>
           
@@ -469,25 +469,25 @@ export default function ERMOverviewPage() {
                   key={kri.id}
                   className={`flex items-center gap-3 rounded-lg p-3 transition-all ${
                     kri.current_status === 'red'
-                      ? 'bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40'
-                      : 'bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40'
+                      ? 'bg-rose-50 border border-rose-200 hover:border-rose-300'
+                      : 'bg-amber-50 border border-amber-200 hover:border-amber-300'
                   }`}
                 >
                   <div className={`h-2.5 w-2.5 rounded-full ${
                     kri.current_status === 'red' ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'
                   }`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">{kri.name}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-sm font-medium text-black truncate">{kri.name}</p>
+                    <p className="text-xs text-slate-600">
                       {kri.current_value}{kri.unit || ''} / {kri.amber_threshold}
                     </p>
                   </div>
                   {kri.last_measured_at && (
                     <div className="flex items-center text-slate-500">
                       {kri.current_value > (kri.amber_threshold || 0) ? (
-                        <TrendingUp className="h-4 w-4 text-rose-400" />
+                        <TrendingUp className="h-4 w-4 text-rose-600" />
                       ) : (
-                        <TrendingDown className="h-4 w-4 text-emerald-400" />
+                        <TrendingDown className="h-4 w-4 text-emerald-600" />
                       )}
                     </div>
                   )}
@@ -496,8 +496,8 @@ export default function ERMOverviewPage() {
             </div>
           ) : (
             <div className="empty-state py-6">
-              <div className="empty-state-icon bg-emerald-500/10">
-                <CheckCircle className="h-6 w-6 text-emerald-400" />
+              <div className="empty-state-icon bg-emerald-50">
+                <CheckCircle className="h-6 w-6 text-emerald-600" />
               </div>
               <p className="empty-state-title text-sm">All KRIs Normal</p>
               <p className="empty-state-description text-xs">All indicators within thresholds</p>
@@ -563,8 +563,8 @@ export default function ERMOverviewPage() {
               {categoryData.slice(0, 5).map((cat) => (
                 <div key={cat.category} className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded" style={{ backgroundColor: cat.color }} />
-                  <span className="text-xs text-slate-400">
-                    {cat.label}: <span className="text-slate-800 font-medium">{cat.count}</span>
+                  <span className="text-xs text-slate-600">
+                    {cat.label}: <span className="text-black font-medium">{cat.count}</span>
                   </span>
                 </div>
               ))}
@@ -585,8 +585,8 @@ export default function ERMOverviewPage() {
           
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-slate-400">Overall Progress</span>
-              <span className="text-sm font-medium text-slate-800">{mitigationProgress.completed}/{mitigationProgress.total}</span>
+              <span className="text-sm text-slate-600">Overall Progress</span>
+              <span className="text-sm font-medium text-black">{mitigationProgress.completed}/{mitigationProgress.total}</span>
             </div>
             <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
               <div
@@ -598,21 +598,21 @@ export default function ERMOverviewPage() {
           
           {overdueActions && overdueActions.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-rose-400 flex items-center gap-1.5 mb-3">
+              <p className="text-xs font-medium text-rose-600 flex items-center gap-1.5 mb-3">
                 <AlertCircle className="h-3.5 w-3.5" />
                 {overdueActions.length} Overdue Actions
               </p>
               {overdueActions.slice(0, 4).map((action: any) => (
                 <div
                   key={action.id}
-                  className="flex items-center gap-3 rounded-lg bg-rose-500/5 border border-rose-500/20 p-3 hover:border-rose-500/40 transition-all"
+                  className="flex items-center gap-3 rounded-lg bg-rose-50 border border-rose-200 p-3 hover:border-rose-300 transition-all"
                 >
                   <div className="flex-shrink-0">
-                    <Clock className="h-4 w-4 text-rose-400" />
+                    <Clock className="h-4 w-4 text-rose-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">{action.title}</p>
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <p className="text-sm font-medium text-black truncate">{action.title}</p>
+                    <div className="flex items-center gap-2 text-xs text-slate-600">
                       {action.owner_name && (
                         <span className="flex items-center gap-1">
                           <Users className="h-3 w-3" />
@@ -620,7 +620,7 @@ export default function ERMOverviewPage() {
                         </span>
                       )}
                       {action.due_date && (
-                        <span className="flex items-center gap-1 text-rose-400">
+                        <span className="flex items-center gap-1 text-rose-600">
                           <Calendar className="h-3 w-3" />
                           {new Date(action.due_date).toLocaleDateString()}
                         </span>
@@ -633,8 +633,8 @@ export default function ERMOverviewPage() {
             </div>
           ) : (
             <div className="empty-state py-6">
-              <div className="empty-state-icon bg-emerald-500/10">
-                <CheckCircle className="h-6 w-6 text-emerald-400" />
+              <div className="empty-state-icon bg-emerald-50">
+                <CheckCircle className="h-6 w-6 text-emerald-600" />
               </div>
               <p className="empty-state-title text-sm">No Overdue Actions</p>
               <p className="empty-state-description text-xs">All actions are on track</p>
@@ -663,19 +663,19 @@ export default function ERMOverviewPage() {
                   className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white/30 p-3 hover:border-slate-300 hover:bg-white/50 transition-all"
                 >
                   <div className={`rounded-lg p-2 ${
-                    incident.severity === 'critical' ? 'bg-rose-500/20' :
-                    incident.severity === 'high' ? 'bg-orange-500/20' :
-                    incident.severity === 'medium' ? 'bg-amber-500/20' : 'bg-slate-200/50'
+                    incident.severity === 'critical' ? 'bg-rose-50' :
+                    incident.severity === 'high' ? 'bg-orange-50' :
+                    incident.severity === 'medium' ? 'bg-amber-50' : 'bg-slate-200/50'
                   }`}>
                     <AlertCircle className={`h-4 w-4 ${
-                      incident.severity === 'critical' ? 'text-rose-400' :
-                      incident.severity === 'high' ? 'text-orange-400' :
-                      incident.severity === 'medium' ? 'text-amber-400' : 'text-slate-400'
+                      incident.severity === 'critical' ? 'text-rose-600' :
+                      incident.severity === 'high' ? 'text-orange-600' :
+                      incident.severity === 'medium' ? 'text-amber-600' : 'text-slate-600'
                     }`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">{incident.title}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-sm font-medium text-black truncate">{incident.title}</p>
+                    <p className="text-xs text-slate-600">
                       {new Date(incident.incident_date).toLocaleDateString()}
                       {incident.risk_title && ` • ${incident.risk_title}`}
                     </p>
@@ -724,7 +724,7 @@ export default function ERMOverviewPage() {
                       <span className="text-sm text-slate-600">{item.label}</span>
                       <span className="text-xs text-slate-500">({item.range})</span>
                     </div>
-                    <span className="text-sm font-semibold text-slate-800">{item.count}</span>
+                    <span className="text-sm font-semibold text-black">{item.count}</span>
                   </div>
                   <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                     <div
@@ -740,12 +740,12 @@ export default function ERMOverviewPage() {
           <div className="mt-6 pt-4 border-t border-slate-200">
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-3 rounded-lg bg-white/50">
-                <p className="text-2xl font-bold text-slate-800">{dashboard?.avg_inherent_score?.toFixed(1) || '0.0'}</p>
-                <p className="text-xs text-slate-400">Avg Inherent Score</p>
+                <p className="text-2xl font-bold text-black">{dashboard?.avg_inherent_score?.toFixed(1) || '0.0'}</p>
+                <p className="text-xs text-slate-600">Avg Inherent Score</p>
               </div>
               <div className="text-center p-3 rounded-lg bg-white/50">
-                <p className="text-2xl font-bold text-slate-800">{dashboard?.avg_residual_score?.toFixed(1) || '0.0'}</p>
-                <p className="text-xs text-slate-400">Avg Residual Score</p>
+                <p className="text-2xl font-bold text-black">{dashboard?.avg_residual_score?.toFixed(1) || '0.0'}</p>
+                <p className="text-xs text-slate-600">Avg Residual Score</p>
               </div>
             </div>
           </div>
@@ -755,17 +755,15 @@ export default function ERMOverviewPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Link
           href="/erm/risks"
-          className="card group hover:border-primary-500/30 transition-all duration-200"
+          className="card group hover:border-primary-200 transition-all duration-200"
         >
           <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3 group-hover:from-primary-500/30 group-hover:to-primary-600/20 transition-all">
-              <AlertTriangle className="h-5 w-5 text-primary-400" />
-            </div>
+                          <AlertTriangle className="h-5 w-5 text-primary-600" />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-800 group-hover:text-primary-300 transition-colors truncate">Risk Register</p>
-              <p className="text-xs text-slate-400">Manage all risks</p>
+              <p className="font-semibold text-black group-hover:text-primary-300 transition-colors truncate">Risk Register</p>
+              <p className="text-xs text-slate-600">Manage all risks</p>
             </div>
-            <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-primary-400 transition-colors" />
+            <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-primary-600 transition-colors" />
           </div>
         </Link>
 
@@ -774,14 +772,12 @@ export default function ERMOverviewPage() {
           className="card group hover:border-cyan-500/30 transition-all duration-200"
         >
           <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 p-3 group-hover:from-cyan-500/30 group-hover:to-cyan-600/20 transition-all">
-              <Activity className="h-5 w-5 text-cyan-400" />
-            </div>
+                          <Activity className="h-5 w-5 text-cyan-600" />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-800 group-hover:text-cyan-300 transition-colors truncate">KRIs</p>
-              <p className="text-xs text-slate-400">Monitor indicators</p>
+              <p className="font-semibold text-black group-hover:text-cyan-300 transition-colors truncate">KRIs</p>
+              <p className="text-xs text-slate-600">Monitor indicators</p>
             </div>
-            <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-cyan-400 transition-colors" />
+            <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-cyan-600 transition-colors" />
           </div>
         </Link>
 
@@ -790,28 +786,24 @@ export default function ERMOverviewPage() {
           className="card group hover:border-emerald-500/30 transition-all duration-200"
         >
           <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-3 group-hover:from-emerald-500/30 group-hover:to-emerald-600/20 transition-all">
-              <Target className="h-5 w-5 text-emerald-400" />
-            </div>
+                          <Target className="h-5 w-5 text-emerald-600" />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-800 group-hover:text-emerald-300 transition-colors truncate">Mitigations</p>
-              <p className="text-xs text-slate-400">Track actions</p>
+              <p className="font-semibold text-black group-hover:text-emerald-300 transition-colors truncate">Mitigations</p>
+              <p className="text-xs text-slate-600">Track actions</p>
             </div>
-            <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-emerald-400 transition-colors" />
+            <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-emerald-600 transition-colors" />
           </div>
         </Link>
 
         <Link
           href="/erm/reports"
-          className="card group hover:border-primary-500/30 transition-all duration-200"
+          className="card group hover:border-primary-200 transition-all duration-200"
         >
           <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-3 group-hover:from-purple-500/30 group-hover:to-purple-600/20 transition-all">
-              <BarChart3 className="h-5 w-5 text-primary-600" />
-            </div>
+                          <BarChart3 className="h-5 w-5 text-primary-600" />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-800 group-hover:text-primary-500 transition-colors truncate">Reports</p>
-              <p className="text-xs text-slate-400">Analytics</p>
+              <p className="font-semibold text-black group-hover:text-primary-500 transition-colors truncate">Reports</p>
+              <p className="text-xs text-slate-600">Analytics</p>
             </div>
             <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-primary-600 transition-colors" />
           </div>

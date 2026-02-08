@@ -74,7 +74,7 @@ export default function KRIsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -84,18 +84,18 @@ export default function KRIsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-800">Key Risk Indicators</h2>
-            <p className="text-sm text-slate-400">Monitor and track risk metrics</p>
+            <h2 className="text-lg font-semibold text-black">Key Risk Indicators</h2>
+            <p className="text-sm text-slate-600">Monitor and track risk metrics</p>
           </div>
           {alertCount > 0 && (
             <div className="flex items-center gap-2">
               {redAlerts > 0 && (
-                <span className="rounded-full bg-red-500/20 px-3 py-1 text-sm text-red-400">
+                <span className="rounded-full bg-red-50 px-3 py-1 text-sm text-red-600">
                   {redAlerts} Critical
                 </span>
               )}
               {amberAlerts > 0 && (
-                <span className="rounded-full bg-amber-500/20 px-3 py-1 text-sm text-amber-400">
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-sm text-amber-600">
                   {amberAlerts} Warning
                 </span>
               )}
@@ -130,8 +130,8 @@ export default function KRIsPage() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <Activity className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-slate-800">No KRIs defined</h3>
-          <p className="mt-1 text-slate-400">Create Key Risk Indicators to monitor risk metrics</p>
+          <h3 className="mt-4 text-lg font-medium text-black">No KRIs defined</h3>
+          <p className="mt-1 text-slate-600">Create Key Risk Indicators to monitor risk metrics</p>
         </div>
       )}
 
@@ -195,20 +195,20 @@ function KRICard({
         <div className="flex items-center gap-3">
           <div className={`h-3 w-3 rounded-full ${statusColor}`} />
           <div>
-            <h3 className="font-medium text-slate-800">{kri.name}</h3>
-            <p className="text-sm text-slate-400">{kri.frequency} measurement</p>
+            <h3 className="font-medium text-black">{kri.name}</h3>
+            <p className="text-sm text-slate-600">{kri.frequency} measurement</p>
           </div>
         </div>
         <div className="flex gap-1">
           <button
             onClick={onEdit}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
           >
             <Edit2 className="h-4 w-4" />
           </button>
           <button
             onClick={onDelete}
-            className="rounded p-1.5 text-slate-400 hover:bg-red-500/20 hover:text-red-400"
+            className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -218,7 +218,7 @@ function KRICard({
       <div className="mt-4">
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-3xl font-bold text-slate-800">
+            <p className="text-3xl font-bold text-black">
               {kri.current_value !== undefined && kri.current_value !== null
                 ? `${kri.current_value}${kri.unit || ''}`
                 : '—'}
@@ -230,7 +230,7 @@ function KRICard({
             )}
           </div>
           {trend !== 0 && (
-            <div className={`flex items-center gap-1 ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <div className={`flex items-center gap-1 ${trend > 0 ? 'text-green-600' : 'text-red-600'}`}>
               {trend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
               <span className="text-sm">{Math.abs(trend).toFixed(1)}</span>
             </div>
@@ -240,15 +240,15 @@ function KRICard({
         <div className="mt-4 flex gap-2">
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-green-500" />
-            <span className="text-xs text-slate-400">≤{kri.green_threshold}</span>
+            <span className="text-xs text-slate-600">≤{kri.green_threshold}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-amber-500" />
-            <span className="text-xs text-slate-400">≤{kri.amber_threshold}</span>
+            <span className="text-xs text-slate-600">≤{kri.amber_threshold}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-red-500" />
-            <span className="text-xs text-slate-400">&gt;{kri.amber_threshold}</span>
+            <span className="text-xs text-slate-600">&gt;{kri.amber_threshold}</span>
           </div>
         </div>
       </div>
@@ -312,19 +312,19 @@ function KRIModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-lg rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">{kri ? 'Edit KRI' : 'Create KRI'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-black">{kri ? 'Edit KRI' : 'Create KRI'}</h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
-            <label className="block text-sm text-slate-400">Risk</label>
+            <label className="block text-sm text-slate-600">Risk</label>
             <select
               value={formData.risk_id}
               onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               required
             >
               {risks.map((risk) => (
@@ -336,33 +336,33 @@ function KRIModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Name</label>
+            <label className="block text-sm text-slate-600">Name</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Description</label>
+            <label className="block text-sm text-slate-600">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               rows={2}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400">Metric Type</label>
+              <label className="block text-sm text-slate-600">Metric Type</label>
               <select
                 value={formData.metric_type}
                 onChange={(e) => setFormData({ ...formData, metric_type: e.target.value as KRIMetricType })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               >
                 <option value="percentage">Percentage</option>
                 <option value="count">Count</option>
@@ -372,55 +372,55 @@ function KRIModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400">Unit</label>
+              <label className="block text-sm text-slate-600">Unit</label>
               <input
                 type="text"
                 value={formData.unit}
                 onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400">Green Threshold</label>
+              <label className="block text-sm text-slate-600">Green Threshold</label>
               <input
                 type="number"
                 value={formData.green_threshold}
                 onChange={(e) => setFormData({ ...formData, green_threshold: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400">Amber Threshold</label>
+              <label className="block text-sm text-slate-600">Amber Threshold</label>
               <input
                 type="number"
                 value={formData.amber_threshold}
                 onChange={(e) => setFormData({ ...formData, amber_threshold: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400">Direction</label>
+              <label className="block text-sm text-slate-600">Direction</label>
               <select
                 value={formData.threshold_direction}
                 onChange={(e) => setFormData({ ...formData, threshold_direction: e.target.value as KRIThresholdDirection })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               >
                 <option value="higher_is_better">Higher is Better</option>
                 <option value="lower_is_better">Lower is Better</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400">Frequency</label>
+              <label className="block text-sm text-slate-600">Frequency</label>
               <select
                 value={formData.frequency}
                 onChange={(e) => setFormData({ ...formData, frequency: e.target.value as KRIFrequency })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               >
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
@@ -480,36 +480,36 @@ function MeasureKRIModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">Record Measurement</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-black">Record Measurement</h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <p className="mt-2 text-slate-400">{kri.name}</p>
+        <p className="mt-2 text-slate-600">{kri.name}</p>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
-            <label className="block text-sm text-slate-400">Value</label>
+            <label className="block text-sm text-slate-600">Value</label>
             <div className="mt-1 flex items-center gap-2">
               <input
                 type="number"
                 step="0.01"
                 value={value}
                 onChange={(e) => setValue(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 required
               />
-              {kri.unit && <span className="text-slate-400">{kri.unit}</span>}
+              {kri.unit && <span className="text-slate-600">{kri.unit}</span>}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Notes (optional)</label>
+            <label className="block text-sm text-slate-600">Notes (optional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               rows={2}
             />
           </div>

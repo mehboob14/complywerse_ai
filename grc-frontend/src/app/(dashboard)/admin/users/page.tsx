@@ -150,8 +150,8 @@ export default function UsersManagementPage() {
       header: 'User',
       accessor: (user: AdminUser) => (
         <div>
-          <div className="font-medium text-slate-800">{user.display_name}</div>
-          <div className="text-sm text-slate-400">@{user.username}</div>
+          <div className="font-medium text-black">{user.display_name}</div>
+          <div className="text-sm text-slate-600">@{user.username}</div>
         </div>
       ),
     },
@@ -166,7 +166,7 @@ export default function UsersManagementPage() {
           {user.roles.map((role) => (
             <span
               key={role.id}
-              className="px-2 py-0.5 bg-primary-500/20 text-primary-600 rounded text-xs"
+              className="px-2 py-0.5 bg-primary-50 text-primary-700 rounded text-xs"
             >
               {role.name}
             </span>
@@ -180,8 +180,8 @@ export default function UsersManagementPage() {
         <span
           className={`px-2 py-1 rounded text-xs ${
             user.is_active
-              ? 'bg-green-500/20 text-green-400'
-              : 'bg-red-500/20 text-red-400'
+              ? 'bg-green-50 text-green-700'
+              : 'bg-red-50 text-red-700'
           }`}
         >
           {user.is_active ? 'Active' : 'Inactive'}
@@ -191,7 +191,7 @@ export default function UsersManagementPage() {
     {
       header: 'Last Login',
       accessor: (user: AdminUser) => (
-        <span className="text-slate-400 text-sm">
+        <span className="text-slate-600 text-sm">
           {user.last_login
             ? new Date(user.last_login).toLocaleDateString()
             : 'Never'}
@@ -204,13 +204,13 @@ export default function UsersManagementPage() {
         <div className="flex space-x-2">
           <button
             onClick={() => handleEdit(user)}
-            className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-slate-800 rounded text-sm"
+            className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-black rounded text-sm"
           >
             Edit
           </button>
           <button
             onClick={() => handleDelete(user)}
-            className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded text-sm"
+            className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-600 rounded text-sm"
           >
             Delete
           </button>
@@ -235,7 +235,7 @@ export default function UsersManagementPage() {
       />
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-red-400">
+        <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-red-600">
           {error}
           <button onClick={() => setError(null)} className="ml-4 underline">
             Dismiss
@@ -260,14 +260,14 @@ export default function UsersManagementPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-white border border-slate-200 rounded-lg w-full max-w-lg mx-4">
             <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800">
+              <h2 className="text-lg font-semibold text-black">
                 {editingUser ? 'Edit User' : 'Create User'}
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {!editingUser && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                  <label className="block text-sm font-medium text-slate-600 mb-2">
                     Username
                   </label>
                   <input
@@ -276,14 +276,14 @@ export default function UsersManagementPage() {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, username: e.target.value }))
                     }
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
                     required
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">
+                <label className="block text-sm font-medium text-slate-600 mb-2">
                   Email
                 </label>
                 <input
@@ -292,14 +292,14 @@ export default function UsersManagementPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, email: e.target.value }))
                   }
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
                   required
                 />
               </div>
 
               {!editingUser && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                  <label className="block text-sm font-medium text-slate-600 mb-2">
                     Password
                   </label>
                   <input
@@ -308,14 +308,14 @@ export default function UsersManagementPage() {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, password: e.target.value }))
                     }
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
                     required
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">
+                <label className="block text-sm font-medium text-slate-600 mb-2">
                   Display Name
                 </label>
                 <input
@@ -324,12 +324,12 @@ export default function UsersManagementPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, display_name: e.target.value }))
                   }
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">
+                <label className="block text-sm font-medium text-slate-600 mb-2">
                   Assign Roles
                 </label>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -345,9 +345,9 @@ export default function UsersManagementPage() {
                         className="w-4 h-4 rounded border-slate-300 bg-slate-50 text-primary-600 focus:ring-primary-500"
                       />
                       <div>
-                        <span className="text-slate-800">{role.name}</span>
+                        <span className="text-black">{role.name}</span>
                         {role.description && (
-                          <p className="text-xs text-slate-400">{role.description}</p>
+                          <p className="text-xs text-slate-600">{role.description}</p>
                         )}
                       </div>
                     </label>
@@ -359,7 +359,7 @@ export default function UsersManagementPage() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-slate-800 rounded-lg text-sm"
+                  className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-black rounded-lg text-sm"
                 >
                   Cancel
                 </button>

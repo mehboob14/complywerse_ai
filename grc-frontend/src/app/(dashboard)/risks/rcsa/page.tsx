@@ -26,15 +26,15 @@ import {
 import Link from 'next/link';
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  not_started: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  in_progress: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  submitted: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  under_review: { bg: 'bg-primary-500/20', text: 'text-primary-600' },
-  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  rejected: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  closed: { bg: 'bg-blue-50', text: 'text-blue-600' },
+  not_started: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  in_progress: { bg: 'bg-amber-50', text: 'text-amber-600' },
+  submitted: { bg: 'bg-blue-50', text: 'text-blue-600' },
+  under_review: { bg: 'bg-primary-50', text: 'text-primary-600' },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-600' },
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -118,8 +118,8 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
       >
         <div className="absolute inset-4 rounded-full bg-white flex items-center justify-center">
           <div className="text-center">
-            <p className="text-xl font-bold text-slate-800">{total}</p>
-            <p className="text-xs text-slate-400">Total</p>
+            <p className="text-xl font-bold text-black">{total}</p>
+            <p className="text-xs text-slate-600">Total</p>
           </div>
         </div>
       </div>
@@ -128,7 +128,7 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
           <div key={idx} className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-full" style={{ backgroundColor: seg.color }}></div>
             <span className="text-sm text-slate-600 flex-1 capitalize">{seg.label}</span>
-            <span className="text-sm font-medium text-slate-800">{seg.value}</span>
+            <span className="text-sm font-medium text-black">{seg.value}</span>
           </div>
         ))}
       </div>
@@ -142,7 +142,7 @@ function ProgressBar({ label, value, total, color }: { label: string; value: num
     <div className="space-y-1">
       <div className="flex justify-between text-sm">
         <span className="text-slate-600">{label}</span>
-        <span className="text-slate-400">{value}/{total} ({Math.round(percent)}%)</span>
+        <span className="text-slate-600">{value}/{total} ({Math.round(percent)}%)</span>
       </div>
       <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
         <div 
@@ -280,7 +280,7 @@ export default function RCSADashboardPage() {
       name: 'Active Campaigns',
       value: summary?.active_campaigns || 0,
       icon: ClipboardList,
-      iconColor: 'text-primary-400',
+      iconColor: 'text-primary-600',
       bgColor: 'from-primary-500/20 to-primary-600/10',
       href: '/risks/rcsa/campaigns',
     },
@@ -288,7 +288,7 @@ export default function RCSADashboardPage() {
       name: 'Pending Assessments',
       value: summary?.pending_assessments || 0,
       icon: Clock,
-      iconColor: 'text-amber-400',
+      iconColor: 'text-amber-600',
       bgColor: 'from-amber-500/20 to-amber-600/10',
       href: '/risks/rcsa/campaigns',
     },
@@ -296,7 +296,7 @@ export default function RCSADashboardPage() {
       name: 'Open Findings',
       value: summary?.open_findings || 0,
       icon: AlertTriangle,
-      iconColor: 'text-rose-400',
+      iconColor: 'text-rose-600',
       bgColor: 'from-rose-500/20 to-rose-600/10',
       href: '/risks/rcsa/campaigns',
     },
@@ -304,7 +304,7 @@ export default function RCSADashboardPage() {
       name: 'Completion Rate',
       value: `${summary?.completion_rate || 0}%`,
       icon: TrendingUp,
-      iconColor: 'text-emerald-400',
+      iconColor: 'text-emerald-600',
       bgColor: 'from-emerald-500/20 to-emerald-600/10',
       href: '/risks/rcsa/campaigns',
     },
@@ -322,8 +322,8 @@ export default function RCSADashboardPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-800">RCSA Dashboard</h1>
-            <p className="text-slate-400 mt-1">Risk & Control Self-Assessment Overview</p>
+            <h1 className="text-2xl font-semibold text-black">RCSA Dashboard</h1>
+            <p className="text-slate-600 mt-1">Risk & Control Self-Assessment Overview</p>
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -358,8 +358,8 @@ export default function RCSADashboardPage() {
               <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${kpi.bgColor} mb-4`}>
                 <kpi.icon className={`h-6 w-6 ${kpi.iconColor}`} />
               </div>
-              <p className="text-2xl font-semibold text-slate-800">{kpi.value}</p>
-              <p className="text-sm text-slate-400 mt-1">{kpi.name}</p>
+              <p className="text-2xl font-semibold text-black">{kpi.value}</p>
+              <p className="text-sm text-slate-600 mt-1">{kpi.name}</p>
             </div>
           </Link>
         ))}
@@ -368,8 +368,8 @@ export default function RCSADashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-primary-400" />
+            <h3 className="text-lg font-medium text-black flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary-600" />
               Findings by Severity
             </h3>
           </div>
@@ -378,8 +378,8 @@ export default function RCSADashboardPage() {
 
         <div className="card p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary-400" />
+            <h3 className="text-lg font-medium text-black flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary-600" />
               Completion by Business Unit
             </h3>
           </div>
@@ -399,11 +399,11 @@ export default function RCSADashboardPage() {
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-primary-400" />
+          <h3 className="text-lg font-medium text-black flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-primary-600" />
             Recent Campaigns
           </h3>
-          <Link href="/risks/rcsa/campaigns" className="text-primary-400 hover:text-primary-300 text-sm flex items-center gap-1">
+          <Link href="/risks/rcsa/campaigns" className="text-primary-600 hover:text-primary-300 text-sm flex items-center gap-1">
             View All <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -411,20 +411,20 @@ export default function RCSADashboardPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Campaign</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Template</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Period</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Progress</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Actions</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Campaign</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Template</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Period</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Status</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Progress</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Actions</th>
               </tr>
             </thead>
             <tbody>
               {(recentCampaigns || []).map((campaign) => (
                 <tr key={campaign.id} className="border-b border-slate-200 hover:bg-white/50">
                   <td className="py-3 px-4">
-                    <p className="text-slate-800 font-medium">{campaign.name}</p>
-                    <p className="text-slate-400 text-sm">{campaign.assigned_units} units assigned</p>
+                    <p className="text-black font-medium">{campaign.name}</p>
+                    <p className="text-slate-600 text-sm">{campaign.assigned_units} units assigned</p>
                   </td>
                   <td className="py-3 px-4 text-slate-600">{campaign.template_name}</td>
                   <td className="py-3 px-4 text-slate-600">{campaign.period}</td>
@@ -441,13 +441,13 @@ export default function RCSADashboardPage() {
                           style={{ width: `${campaign.progress}%` }}
                         />
                       </div>
-                      <span className="text-sm text-slate-400">{campaign.progress}%</span>
+                      <span className="text-sm text-slate-600">{campaign.progress}%</span>
                     </div>
                   </td>
                   <td className="py-3 px-4">
                     <Link 
                       href={`/risks/rcsa/campaigns/${campaign.id}`}
-                      className="text-primary-400 hover:text-primary-300 text-sm"
+                      className="text-primary-600 hover:text-primary-300 text-sm"
                     >
                       View Details
                     </Link>
@@ -462,36 +462,36 @@ export default function RCSADashboardPage() {
       {/* My Assessments Section */}
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-            <Edit3 className="h-5 w-5 text-primary-400" />
+          <h3 className="text-lg font-medium text-black flex items-center gap-2">
+            <Edit3 className="h-5 w-5 text-primary-600" />
             My Assessments
           </h3>
-          <span className="text-slate-400 text-sm">Assessments assigned to you</span>
+          <span className="text-slate-600 text-sm">Assessments assigned to you</span>
         </div>
         {myAssessments && myAssessments.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Assessment</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Business Unit</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Due Date</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Actions</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Assessment</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Business Unit</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Due Date</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Status</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {myAssessments.map((assessment) => (
                   <tr key={assessment.id} className="border-b border-slate-200 hover:bg-white/50">
                     <td className="py-3 px-4">
-                      <p className="text-slate-800 font-medium">{assessment.campaign_name}</p>
+                      <p className="text-black font-medium">{assessment.campaign_name}</p>
                     </td>
                     <td className="py-3 px-4 text-slate-600">{assessment.business_unit_name}</td>
                     <td className="py-3 px-4 text-slate-600">
                       {assessment.due_date ? new Date(assessment.due_date).toLocaleDateString() : 'No due date'}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[assessment.status]?.bg || 'bg-slate-500/20'} ${STATUS_COLORS[assessment.status]?.text || 'text-slate-400'}`}>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[assessment.status]?.bg || 'bg-slate-50'} ${STATUS_COLORS[assessment.status]?.text || 'text-slate-600'}`}>
                         {assessment.status?.replace('_', ' ')}
                       </span>
                     </td>
@@ -500,8 +500,8 @@ export default function RCSADashboardPage() {
                         href={`/risks/rcsa/assessments/${assessment.id}`}
                         className={`inline-flex items-center gap-1 text-sm ${
                           assessment.status === 'in_progress' || assessment.status === 'not_started'
-                            ? 'text-primary-400 hover:text-primary-300'
-                            : 'text-slate-400 hover:text-slate-600'
+                            ? 'text-primary-600 hover:text-primary-300'
+                            : 'text-slate-600 hover:text-slate-600'
                         }`}
                       >
                         {assessment.status === 'in_progress' || assessment.status === 'not_started' ? (
@@ -525,7 +525,7 @@ export default function RCSADashboardPage() {
         ) : (
           <div className="text-center py-8">
             <ClipboardList className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-400">No assessments assigned to you yet</p>
+            <p className="text-slate-600">No assessments assigned to you yet</p>
             <p className="text-slate-500 text-sm mt-1">Assessments will appear here when a campaign assigns your business unit</p>
           </div>
         )}
@@ -535,30 +535,30 @@ export default function RCSADashboardPage() {
       {pendingReviews && pendingReviews.length > 0 && (
         <div className="card p-6 border-amber-500/30">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-              <Clock className="h-5 w-5 text-amber-400" />
+            <h3 className="text-lg font-medium text-black flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-600" />
               Pending Reviews
-              <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-sm">
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-sm">
                 {pendingReviews.length}
               </span>
             </h3>
-            <span className="text-slate-400 text-sm">Assessments awaiting your review</span>
+            <span className="text-slate-600 text-sm">Assessments awaiting your review</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Assessment</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Business Unit</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Submitted</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Actions</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Assessment</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Business Unit</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Submitted</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {pendingReviews.map((assessment) => (
                   <tr key={assessment.id} className="border-b border-slate-200 hover:bg-white/50">
                     <td className="py-3 px-4">
-                      <p className="text-slate-800 font-medium">{assessment.campaign_name}</p>
+                      <p className="text-black font-medium">{assessment.campaign_name}</p>
                     </td>
                     <td className="py-3 px-4 text-slate-600">{assessment.business_unit_name}</td>
                     <td className="py-3 px-4 text-slate-600">
@@ -568,7 +568,7 @@ export default function RCSADashboardPage() {
                       <div className="flex items-center gap-2">
                         <Link 
                           href={`/risks/rcsa/assessments/${assessment.id}?mode=review`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary-500/20 text-primary-400 text-sm hover:bg-primary-500/30 transition-colors"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 text-sm hover:bg-primary-100 transition-colors"
                         >
                           <Eye className="h-4 w-4" />
                           Review
@@ -586,34 +586,34 @@ export default function RCSADashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link href="/risks/rcsa/campaigns?action=new" className="card p-6 hover:border-primary-500/50 transition-all cursor-pointer group">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-500/20">
-              <Plus className="h-6 w-6 text-primary-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50">
+              <Plus className="h-6 w-6 text-primary-600" />
             </div>
             <div>
-              <p className="text-slate-800 font-medium group-hover:text-primary-400 transition-colors">New Campaign</p>
-              <p className="text-sm text-slate-400">Start a new RCSA campaign</p>
+              <p className="text-black font-medium group-hover:text-primary-600 transition-colors">New Campaign</p>
+              <p className="text-sm text-slate-600">Start a new RCSA campaign</p>
             </div>
           </div>
         </Link>
         <Link href="/risks/rcsa/templates?action=new" className="card p-6 hover:border-primary-500/50 transition-all cursor-pointer group">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">
-              <FileText className="h-6 w-6 text-emerald-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50">
+              <FileText className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <p className="text-slate-800 font-medium group-hover:text-primary-400 transition-colors">New Template</p>
-              <p className="text-sm text-slate-400">Create custom RCSA template</p>
+              <p className="text-black font-medium group-hover:text-primary-600 transition-colors">New Template</p>
+              <p className="text-sm text-slate-600">Create custom RCSA template</p>
             </div>
           </div>
         </Link>
         <Link href="/risks/rcsa/campaigns" className="card p-6 hover:border-primary-500/50 transition-all cursor-pointer group">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20">
-              <Eye className="h-6 w-6 text-amber-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50">
+              <Eye className="h-6 w-6 text-amber-600" />
             </div>
             <div>
-              <p className="text-slate-800 font-medium group-hover:text-primary-400 transition-colors">View Findings</p>
-              <p className="text-sm text-slate-400">Review all RCSA findings</p>
+              <p className="text-black font-medium group-hover:text-primary-600 transition-colors">View Findings</p>
+              <p className="text-sm text-slate-600">Review all RCSA findings</p>
             </div>
           </div>
         </Link>

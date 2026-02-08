@@ -87,26 +87,26 @@ const DOMAINS = [
 ];
 
 const PRIORITIES = [
-  { value: 'high', label: 'High', color: 'text-red-400', bgColor: 'bg-red-500/20' },
-  { value: 'medium', label: 'Medium', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  { value: 'low', label: 'Low', color: 'text-green-400', bgColor: 'bg-green-500/20' },
+  { value: 'high', label: 'High', color: 'text-red-600', bgColor: 'bg-red-50' },
+  { value: 'medium', label: 'Medium', color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
+  { value: 'low', label: 'Low', color: 'text-green-600', bgColor: 'bg-green-50' },
 ];
 
 const DOMAIN_COLORS: Record<string, { color: string; bgColor: string }> = {
-  Governance: { color: 'text-primary-600', bgColor: 'bg-primary-500/20' },
-  Risk: { color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
-  Security: { color: 'text-red-400', bgColor: 'bg-red-500/20' },
-  'Access Control': { color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+  Governance: { color: 'text-primary-600', bgColor: 'bg-primary-50' },
+  Risk: { color: 'text-orange-600', bgColor: 'bg-orange-50' },
+  Security: { color: 'text-red-600', bgColor: 'bg-red-50' },
+  'Access Control': { color: 'text-blue-600', bgColor: 'bg-blue-50' },
   'Incident Management': { color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
-  'Business Continuity': { color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
-  'Data Protection': { color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  Compliance: { color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  Operations: { color: 'text-slate-400', bgColor: 'bg-slate-500/20' },
+  'Business Continuity': { color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
+  'Data Protection': { color: 'text-green-600', bgColor: 'bg-green-50' },
+  Compliance: { color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
+  Operations: { color: 'text-slate-600', bgColor: 'bg-slate-50' },
 };
 
 const getDomainStyle = (domain: string | null) => {
-  if (!domain) return { color: 'text-slate-400', bgColor: 'bg-slate-500/20' };
-  return DOMAIN_COLORS[domain] || { color: 'text-slate-400', bgColor: 'bg-slate-500/20' };
+  if (!domain) return { color: 'text-slate-600', bgColor: 'bg-slate-50' };
+  return DOMAIN_COLORS[domain] || { color: 'text-slate-600', bgColor: 'bg-slate-50' };
 };
 
 const getPriorityStyle = (priority: string) => {
@@ -114,10 +114,10 @@ const getPriorityStyle = (priority: string) => {
 };
 
 const getConfidenceColor = (confidence: number | null) => {
-  if (confidence === null) return 'text-slate-400';
-  if (confidence >= 0.9) return 'text-green-400';
-  if (confidence >= 0.7) return 'text-yellow-400';
-  return 'text-orange-400';
+  if (confidence === null) return 'text-slate-600';
+  if (confidence >= 0.9) return 'text-green-600';
+  if (confidence >= 0.7) return 'text-yellow-600';
+  return 'text-orange-600';
 };
 
 export default function ParsedControlsPage() {
@@ -279,7 +279,7 @@ export default function ParsedControlsPage() {
 
   if (parsedFrameworks.length === 0 && !isLoading) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-400">
+      <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-600">
         <FileText className="h-12 w-12" />
         <p>No parsed frameworks available</p>
         <p className="text-sm">Upload and parse a framework document first</p>
@@ -289,7 +289,7 @@ export default function ParsedControlsPage() {
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-600">
         <AlertCircle className="h-12 w-12" />
         <p>Failed to load parsed controls</p>
       </div>
@@ -304,7 +304,7 @@ export default function ParsedControlsPage() {
           <select
             value={effectiveFrameworkId || ''}
             onChange={(e) => setSelectedFrameworkId(e.target.value ? parseInt(e.target.value) : null)}
-            className="w-full appearance-none rounded-lg border border-slate-300 bg-slate-200 px-4 py-2.5 pr-10 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full appearance-none rounded-lg border border-slate-300 bg-slate-200 px-4 py-2.5 pr-10 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           >
             {parsedFrameworks.map((framework) => (
               <option key={framework.id} value={framework.id}>
@@ -312,42 +312,36 @@ export default function ParsedControlsPage() {
               </option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-600" />
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-500/20 p-2">
-              <FileText className="h-5 w-5 text-blue-400" />
-            </div>
+                          <FileText className="h-5 w-5 text-blue-600" />
             <div>
-              <p className="text-sm text-slate-400">Total Controls</p>
-              <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
+              <p className="text-sm text-slate-600">Total Controls</p>
+              <p className="text-2xl font-bold text-black">{stats.total}</p>
             </div>
           </div>
         </div>
         
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-2">
-              <CheckCircle className="h-5 w-5 text-green-400" />
-            </div>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-sm text-slate-400">Verified</p>
-              <p className="text-2xl font-bold text-slate-800">{stats.verified}</p>
+              <p className="text-sm text-slate-600">Verified</p>
+              <p className="text-2xl font-bold text-black">{stats.verified}</p>
             </div>
           </div>
         </div>
         
         <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary-500/20 p-2">
-              <Shield className="h-5 w-5 text-primary-600" />
-            </div>
+                          <Shield className="h-5 w-5 text-primary-600" />
             <div className="flex-1">
-              <p className="mb-2 text-sm text-slate-400">By Domain</p>
+              <p className="mb-2 text-sm text-slate-600">By Domain</p>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(stats.byDomain).slice(0, 5).map(([domain, count]) => {
                   const style = getDomainStyle(domain);
@@ -361,7 +355,7 @@ export default function ParsedControlsPage() {
                   );
                 })}
                 {Object.keys(stats.byDomain).length > 5 && (
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-600">
                     +{Object.keys(stats.byDomain).length - 5} more
                   </span>
                 )}
@@ -376,8 +370,8 @@ export default function ParsedControlsPage() {
           <div className="flex items-center gap-3">
             <Sparkles className="h-5 w-5 text-primary-600" />
             <div>
-              <h3 className="text-sm font-medium text-slate-800">AI Evidence Requirements</h3>
-              <p className="text-xs text-slate-400">Generate evidence requirements for all controls using AI</p>
+              <h3 className="text-sm font-medium text-black">AI Evidence Requirements</h3>
+              <p className="text-xs text-slate-600">Generate evidence requirements for all controls using AI</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -410,39 +404,39 @@ export default function ParsedControlsPage() {
       )}
 
       {generateSuccess && (
-        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-center gap-3">
-          <CheckCircle className="h-5 w-5 text-emerald-400 flex-shrink-0" />
-          <p className="text-sm text-emerald-400">{generateSuccess}</p>
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 flex items-center gap-3">
+          <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+          <p className="text-sm text-emerald-600">{generateSuccess}</p>
         </div>
       )}
 
       {generateError && (
-        <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-3 flex items-center gap-3">
-          <AlertCircle className="h-5 w-5 text-rose-400 flex-shrink-0" />
-          <p className="text-sm text-rose-400">{generateError}</p>
+        <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-rose-600 flex-shrink-0" />
+          <p className="text-sm text-rose-600">{generateError}</p>
         </div>
       )}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
             <input
               type="text"
               placeholder="Search by title, description, or ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
           </div>
           
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-slate-400" />
+            <Filter className="h-4 w-4 text-slate-600" />
             
             <select
               value={domainFilter}
               onChange={(e) => setDomainFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
             >
               <option value="all">All Domains</option>
               {DOMAINS.map((domain) => (
@@ -453,7 +447,7 @@ export default function ParsedControlsPage() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
             >
               <option value="all">All Categories</option>
               {uniqueCategories.map((category) => (
@@ -464,7 +458,7 @@ export default function ParsedControlsPage() {
             <select
               value={verifiedFilter}
               onChange={(e) => setVerifiedFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
             >
               <option value="all">All Status</option>
               <option value="verified">Verified</option>
@@ -476,15 +470,15 @@ export default function ParsedControlsPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-200 p-4">
-          <h2 className="text-lg font-semibold text-slate-800">
+          <h2 className="text-lg font-semibold text-black">
             Parsed Controls
             {controlsData?.framework_name && (
-              <span className="ml-2 text-sm font-normal text-slate-400">
+              <span className="ml-2 text-sm font-normal text-slate-600">
                 - {controlsData.framework_name}
               </span>
             )}
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-600">
             Showing {filteredControls.length} of {stats.total} controls
           </p>
         </div>
@@ -494,7 +488,7 @@ export default function ParsedControlsPage() {
             <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
           </div>
         ) : filteredControls.length === 0 ? (
-          <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-400">
+          <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-600">
             <FileText className="h-12 w-12" />
             <p>No controls found</p>
           </div>
@@ -503,34 +497,34 @@ export default function ParsedControlsPage() {
             <table className="w-full">
               <thead className="border-b border-slate-200 bg-slate-50/50">
                 <tr>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">
                     Control ID
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">
                     Title
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">
                     Domain
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">
                     Category
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-600">
                     Mandatory
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-600">
                     Priority
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-600">
                     AI Confidence
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-600">
                     Verified
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-600">
                     Evidence
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-600">
                     Actions
                   </th>
                 </tr>
@@ -546,7 +540,7 @@ export default function ParsedControlsPage() {
                       <td className="whitespace-nowrap px-4 py-3 text-sm font-mono text-slate-600">
                         {control.control_id}
                       </td>
-                      <td className="max-w-xs truncate px-4 py-3 text-sm text-slate-800">
+                      <td className="max-w-xs truncate px-4 py-3 text-sm text-black">
                         {control.title}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
@@ -558,14 +552,14 @@ export default function ParsedControlsPage() {
                           <span className="text-xs text-slate-500">-</span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-400">
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-600">
                         {control.category || '-'}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-center">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
                           control.is_mandatory
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-slate-500/20 text-slate-400'
+                            ? 'bg-red-50 text-red-700'
+                            : 'bg-slate-50 text-slate-700'
                         }`}>
                           {control.is_mandatory ? 'Yes' : 'No'}
                         </span>
@@ -584,13 +578,13 @@ export default function ParsedControlsPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-center">
                         {control.is_verified ? (
-                          <CheckCircle className="mx-auto h-5 w-5 text-green-400" />
+                          <CheckCircle className="mx-auto h-5 w-5 text-green-600" />
                         ) : (
                           <span className="text-slate-500">-</span>
                         )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-center">
-                        <span className="inline-flex rounded-full bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400">
+                        <span className="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
                           {control.evidence_mappings.length}
                         </span>
                       </td>
@@ -598,14 +592,14 @@ export default function ParsedControlsPage() {
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => setViewingControl(control)}
-                            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-600 hover:text-slate-900"
+                            className="rounded p-1 text-slate-600 transition-colors hover:bg-slate-600 hover:text-slate-900"
                             title="View"
                           >
                             <Eye className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleEditControl(control)}
-                            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-600 hover:text-slate-900"
+                            className="rounded p-1 text-slate-600 transition-colors hover:bg-slate-600 hover:text-slate-900"
                             title="Edit"
                           >
                             <Edit2 className="h-4 w-4" />
@@ -616,7 +610,7 @@ export default function ParsedControlsPage() {
                             className={`rounded p-1 transition-colors ${
                               control.is_verified
                                 ? 'cursor-not-allowed text-green-500'
-                                : 'text-slate-400 hover:bg-green-600 hover:text-slate-900'
+                                : 'text-slate-600 hover:bg-green-600 hover:text-slate-900'
                             }`}
                             title={control.is_verified ? 'Verified' : 'Verify'}
                           >
@@ -637,32 +631,32 @@ export default function ParsedControlsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <h3 className="text-lg font-semibold text-slate-800">Control Details</h3>
+              <h3 className="text-lg font-semibold text-black">Control Details</h3>
               <button
                 onClick={() => setViewingControl(null)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="space-y-4 p-4">
               <div>
-                <span className="text-sm text-slate-400">Control ID</span>
-                <p className="font-mono text-slate-800">{viewingControl.control_id}</p>
+                <span className="text-sm text-slate-600">Control ID</span>
+                <p className="font-mono text-black">{viewingControl.control_id}</p>
               </div>
               <div>
-                <span className="text-sm text-slate-400">Title</span>
-                <p className="text-slate-800">{viewingControl.title}</p>
+                <span className="text-sm text-slate-600">Title</span>
+                <p className="text-black">{viewingControl.title}</p>
               </div>
               {viewingControl.description && (
                 <div>
-                  <span className="text-sm text-slate-400">Description</span>
+                  <span className="text-sm text-slate-600">Description</span>
                   <p className="text-slate-600">{viewingControl.description}</p>
                 </div>
               )}
               {viewingControl.full_text && (
                 <div>
-                  <span className="text-sm text-slate-400">Full Text</span>
+                  <span className="text-sm text-slate-600">Full Text</span>
                   <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
                     {viewingControl.full_text}
                   </p>
@@ -670,33 +664,33 @@ export default function ParsedControlsPage() {
               )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-sm text-slate-400">Domain</span>
-                  <p className="text-slate-800">{viewingControl.domain || '-'}</p>
+                  <span className="text-sm text-slate-600">Domain</span>
+                  <p className="text-black">{viewingControl.domain || '-'}</p>
                 </div>
                 <div>
-                  <span className="text-sm text-slate-400">Category</span>
-                  <p className="text-slate-800">{viewingControl.category || '-'}</p>
+                  <span className="text-sm text-slate-600">Category</span>
+                  <p className="text-black">{viewingControl.category || '-'}</p>
                 </div>
                 <div>
-                  <span className="text-sm text-slate-400">Mandatory</span>
-                  <p className="text-slate-800">{viewingControl.is_mandatory ? 'Yes' : 'No'}</p>
+                  <span className="text-sm text-slate-600">Mandatory</span>
+                  <p className="text-black">{viewingControl.is_mandatory ? 'Yes' : 'No'}</p>
                 </div>
                 <div>
-                  <span className="text-sm text-slate-400">Priority</span>
-                  <p className="capitalize text-slate-800">{viewingControl.priority}</p>
+                  <span className="text-sm text-slate-600">Priority</span>
+                  <p className="capitalize text-black">{viewingControl.priority}</p>
                 </div>
               </div>
               {viewingControl.evidence_mappings.length > 0 && (
                 <div>
-                  <span className="mb-2 block text-sm text-slate-400">Expected Evidence Types</span>
+                  <span className="mb-2 block text-sm text-slate-600">Expected Evidence Types</span>
                   <div className="flex flex-wrap gap-2">
                     {viewingControl.evidence_mappings.map((em) => (
                       <span
                         key={em.id}
-                        className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-1 text-xs font-medium text-blue-400"
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600"
                       >
                         {em.evidence_type}
-                        {em.is_required && <span className="text-red-400">*</span>}
+                        {em.is_required && <span className="text-red-600">*</span>}
                       </span>
                     ))}
                   </div>
@@ -711,10 +705,10 @@ export default function ParsedControlsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <h3 className="text-lg font-semibold text-slate-800">Edit Control</h3>
+              <h3 className="text-lg font-semibold text-black">Edit Control</h3>
               <button
                 onClick={() => setEditingControl(null)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -726,7 +720,7 @@ export default function ParsedControlsPage() {
                   type="text"
                   value={editFormData.title}
                   onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div>
@@ -735,7 +729,7 @@ export default function ParsedControlsPage() {
                   value={editFormData.description}
                   onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
                   rows={4}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -744,7 +738,7 @@ export default function ParsedControlsPage() {
                   <select
                     value={editFormData.domain}
                     onChange={(e) => setEditFormData({ ...editFormData, domain: e.target.value })}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   >
                     <option value="">Select Domain</option>
                     {DOMAINS.map((domain) => (
@@ -758,7 +752,7 @@ export default function ParsedControlsPage() {
                     type="text"
                     value={editFormData.category}
                     onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
               </div>
@@ -768,7 +762,7 @@ export default function ParsedControlsPage() {
                   <select
                     value={editFormData.priority}
                     onChange={(e) => setEditFormData({ ...editFormData, priority: e.target.value })}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   >
                     {PRIORITIES.map((priority) => (
                       <option key={priority.value} value={priority.value}>{priority.label}</option>
@@ -782,7 +776,7 @@ export default function ParsedControlsPage() {
                     onClick={() => setEditFormData({ ...editFormData, is_mandatory: !editFormData.is_mandatory })}
                     className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 ${
                       editFormData.is_mandatory
-                        ? 'border-green-500 bg-green-500/20 text-green-400'
+                        ? 'border-green-500 bg-green-50 text-green-700'
                         : 'border-slate-300 bg-slate-200 text-slate-600'
                     }`}
                   >
@@ -804,7 +798,7 @@ export default function ParsedControlsPage() {
                     {editingControl.evidence_mappings.map((em) => (
                       <span
                         key={em.id}
-                        className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-1 text-xs font-medium text-blue-400"
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600"
                       >
                         {em.evidence_type}
                       </span>

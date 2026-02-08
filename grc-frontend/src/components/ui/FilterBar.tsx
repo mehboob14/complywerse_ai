@@ -53,7 +53,7 @@ export function FilterBar({
           <div className="relative flex-1 min-w-64">
             <Search
               size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
               aria-hidden="true"
             />
             <input
@@ -61,13 +61,13 @@ export function FilterBar({
               value={searchValue}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors"
+              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors"
               aria-label={searchPlaceholder}
             />
             {searchValue && (
               <button
                 onClick={() => onSearchChange('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
                 aria-label="Clear search"
               >
                 <X size={14} />
@@ -92,7 +92,7 @@ export function FilterBar({
             </select>
             <ChevronDown
               size={14}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
               aria-hidden="true"
             />
           </div>
@@ -101,11 +101,11 @@ export function FilterBar({
 
       {hasActiveFilters && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-slate-400">Active filters:</span>
+          <span className="text-xs text-slate-500">Active filters:</span>
           {activeFilters.map((filter) => (
             <span
               key={`${filter.id}-${filter.value}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-primary-500/30 bg-primary-500/10 px-2.5 py-0.5 text-xs text-primary-400"
+              className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-0.5 text-xs text-primary-600"
             >
               <span>{filter.label}: {filter.displayValue}</span>
               {onClearFilter && (
@@ -122,7 +122,7 @@ export function FilterBar({
           {onClearAll && (
             <button
               onClick={onClearAll}
-              className="text-xs text-slate-400 hover:text-white transition-colors underline underline-offset-2"
+              className="text-xs text-slate-500 hover:text-white transition-colors underline underline-offset-2"
             >
               Clear all
             </button>

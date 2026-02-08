@@ -58,25 +58,25 @@ export default function DocumentsPage() {
     switch (status) {
       case 'approved':
         return (
-          <span className="flex items-center gap-1 rounded-full bg-green-900/50 px-2 py-0.5 text-xs text-green-400">
+          <span className="flex items-center gap-1 rounded-full bg-green-900/50 px-2 py-0.5 text-xs text-green-600">
             <CheckCircle size={12} /> Approved
           </span>
         );
       case 'review':
         return (
-          <span className="flex items-center gap-1 rounded-full bg-yellow-900/50 px-2 py-0.5 text-xs text-yellow-400">
+          <span className="flex items-center gap-1 rounded-full bg-yellow-900/50 px-2 py-0.5 text-xs text-yellow-600">
             <Clock size={12} /> In Review
           </span>
         );
       case 'archived':
         return (
-          <span className="flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-400">
+          <span className="flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
             <XCircle size={12} /> Archived
           </span>
         );
       default:
         return (
-          <span className="flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-400">
+          <span className="flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
             <FileText size={12} /> Draft
           </span>
         );
@@ -86,7 +86,7 @@ export default function DocumentsPage() {
   const getCategoryBadge = (docType: string) => {
     const category = CATEGORIES.find(c => c.value === docType);
     return (
-      <span className={`rounded px-2 py-0.5 text-xs text-slate-800 ${category?.color || 'bg-slate-600'}`}>
+      <span className={`rounded px-2 py-0.5 text-xs text-black ${category?.color || 'bg-slate-600'}`}>
         {category?.label || docType || 'Other'}
       </span>
     );
@@ -106,14 +106,14 @@ export default function DocumentsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center text-red-600">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load documents</p>
       </div>
@@ -124,8 +124,8 @@ export default function DocumentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Document Library</h1>
-          <p className="text-slate-400">Manage policies, procedures, and documentation</p>
+          <h1 className="text-2xl font-bold text-black">Document Library</h1>
+          <p className="text-slate-600">Manage policies, procedures, and documentation</p>
         </div>
         <button
           onClick={() => setIsUploadModalOpen(true)}
@@ -138,22 +138,22 @@ export default function DocumentsPage() {
 
       <div className="flex flex-wrap gap-4">
         <div className="relative flex-1 sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
           <input
             type="text"
             placeholder="Search documents..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <FolderOpen className="h-4 w-4 text-slate-400" />
+          <FolderOpen className="h-4 w-4 text-slate-600" />
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Categories</option>
             {CATEGORIES.map(cat => (
@@ -163,11 +163,11 @@ export default function DocumentsPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-400" />
+          <Filter className="h-4 w-4 text-slate-600" />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Status</option>
             <option value="draft">Draft</option>
@@ -194,10 +194,10 @@ export default function DocumentsPage() {
               <tr key={doc.id} className="bg-white/50 hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <FileText className="h-5 w-5 text-primary-400" />
+                    <FileText className="h-5 w-5 text-primary-600" />
                     <div>
-                      <p className="font-medium text-slate-800">{doc.title}</p>
-                      <p className="text-sm text-slate-400 line-clamp-1">{doc.description}</p>
+                      <p className="font-medium text-black">{doc.title}</p>
+                      <p className="text-sm text-slate-600 line-clamp-1">{doc.description}</p>
                     </div>
                   </div>
                 </td>
@@ -206,7 +206,7 @@ export default function DocumentsPage() {
                 </td>
                 <td className="hidden px-4 py-3 lg:table-cell">
                   <button 
-                    className="flex items-center gap-1 text-sm text-slate-400 hover:text-primary-400"
+                    className="flex items-center gap-1 text-sm text-slate-600 hover:text-primary-600"
                     onClick={() => setSelectedDocument(doc)}
                   >
                     <History size={14} />
@@ -215,7 +215,7 @@ export default function DocumentsPage() {
                 </td>
                 <td className="px-4 py-3">{getStatusBadge(doc.status)}</td>
                 <td className="px-4 py-3 text-right">
-                  <button className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900">
+                  <button className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900">
                     <Download size={18} />
                   </button>
                 </td>
@@ -228,8 +228,8 @@ export default function DocumentsPage() {
       {(!filteredDocuments || filteredDocuments.length === 0) && (
         <div className="card flex flex-col items-center justify-center py-12 text-center">
           <FileText className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-slate-800">No documents found</h3>
-          <p className="mt-1 text-slate-400">Upload your first document to get started</p>
+          <h3 className="text-lg font-medium text-black">No documents found</h3>
+          <p className="mt-1 text-slate-600">Upload your first document to get started</p>
         </div>
       )}
 
@@ -281,8 +281,8 @@ function UploadModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-lg bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">Upload Document</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-black">Upload Document</h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -294,7 +294,7 @@ function UploadModal({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
               required
             />
           </div>
@@ -304,7 +304,7 @@ function UploadModal({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
               rows={3}
             />
           </div>
@@ -314,7 +314,7 @@ function UploadModal({
             <select
               value={documentType}
               onChange={(e) => setDocumentType(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
             >
               {CATEGORIES.map(cat => (
                 <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -326,8 +326,8 @@ function UploadModal({
             <label className="block text-sm font-medium text-slate-600">File</label>
             <div className="mt-1 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-300 p-6">
               <div className="text-center">
-                <Upload className="mx-auto h-8 w-8 text-slate-400" />
-                <label className="mt-2 block cursor-pointer text-sm text-primary-400 hover:text-primary-300">
+                <Upload className="mx-auto h-8 w-8 text-slate-600" />
+                <label className="mt-2 block cursor-pointer text-sm text-primary-600 hover:text-primary-300">
                   <span>Choose a file</span>
                   <input
                     type="file"
@@ -335,7 +335,7 @@ function UploadModal({
                     onChange={(e) => setFile(e.target.files?.[0] || null)}
                   />
                 </label>
-                {file && <p className="mt-2 text-sm text-slate-400">{file.name}</p>}
+                {file && <p className="mt-2 text-sm text-slate-600">{file.name}</p>}
               </div>
             </div>
           </div>
@@ -374,8 +374,8 @@ function VersionHistoryModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-lg bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">Version History</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-black">Version History</h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -388,19 +388,19 @@ function VersionHistoryModal({
                 className="flex items-center justify-between rounded-lg bg-slate-200/50 p-3"
               >
                 <div>
-                  <p className="font-medium text-slate-800">v{version.version_number}</p>
-                  <p className="text-sm text-slate-400">{version.changes_summary || 'No changes noted'}</p>
+                  <p className="font-medium text-black">v{version.version_number}</p>
+                  <p className="text-sm text-slate-600">{version.changes_summary || 'No changes noted'}</p>
                   <p className="text-xs text-slate-500">
                     {new Date(version.created_at).toLocaleString()}
                   </p>
                 </div>
-                <button className="rounded p-1 text-slate-400 hover:bg-slate-600 hover:text-slate-900">
+                <button className="rounded p-1 text-slate-600 hover:bg-slate-600 hover:text-slate-900">
                   <Download size={16} />
                 </button>
               </div>
             ))
           ) : (
-            <p className="text-center text-slate-400">No version history available</p>
+            <p className="text-center text-slate-600">No version history available</p>
           )}
         </div>
 

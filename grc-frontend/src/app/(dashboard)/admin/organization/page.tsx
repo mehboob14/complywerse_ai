@@ -112,7 +112,7 @@ export default function OrganizationProfilePage() {
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-card">
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">Company Details</h2>
+          <h2 className="text-lg font-semibold text-black">Company Details</h2>
           {!editing ? (
             <button
               onClick={() => setEditing(true)}
@@ -153,10 +153,10 @@ export default function OrganizationProfilePage() {
                   type="text"
                   value={formData.name || ''}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-slate-800">{profile?.name || '-'}</p>
+                <p className="text-black">{profile?.name || '-'}</p>
               )}
             </div>
 
@@ -169,10 +169,10 @@ export default function OrganizationProfilePage() {
                   type="text"
                   value={formData.legal_entity || ''}
                   onChange={(e) => handleChange('legal_entity', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-slate-800">{profile?.legal_entity || '-'}</p>
+                <p className="text-black">{profile?.legal_entity || '-'}</p>
               )}
             </div>
 
@@ -184,7 +184,7 @@ export default function OrganizationProfilePage() {
                 <select
                   value={formData.industry || ''}
                   onChange={(e) => handleChange('industry', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="">Select Industry</option>
                   <option value="Banking">Banking</option>
@@ -197,7 +197,7 @@ export default function OrganizationProfilePage() {
                   <option value="Other">Other</option>
                 </select>
               ) : (
-                <p className="text-slate-800">{profile?.industry || '-'}</p>
+                <p className="text-black">{profile?.industry || '-'}</p>
               )}
             </div>
 
@@ -209,7 +209,7 @@ export default function OrganizationProfilePage() {
                 <select
                   value={formData.company_size || ''}
                   onChange={(e) => handleChange('company_size', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="">Select Size</option>
                   <option value="1-50">1-50 employees</option>
@@ -219,7 +219,7 @@ export default function OrganizationProfilePage() {
                   <option value="1000+">1000+ employees</option>
                 </select>
               ) : (
-                <p className="text-slate-800">{profile?.company_size || '-'}</p>
+                <p className="text-black">{profile?.company_size || '-'}</p>
               )}
             </div>
 
@@ -232,10 +232,10 @@ export default function OrganizationProfilePage() {
                   type="text"
                   value={formData.geography || ''}
                   onChange={(e) => handleChange('geography', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-slate-800">{profile?.geography || '-'}</p>
+                <p className="text-black">{profile?.geography || '-'}</p>
               )}
             </div>
 
@@ -248,10 +248,10 @@ export default function OrganizationProfilePage() {
                   type="text"
                   value={formData.regulatory_scope || ''}
                   onChange={(e) => handleChange('regulatory_scope', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-slate-800">{profile?.regulatory_scope || '-'}</p>
+                <p className="text-black">{profile?.regulatory_scope || '-'}</p>
               )}
             </div>
 
@@ -264,16 +264,16 @@ export default function OrganizationProfilePage() {
                   type="url"
                   value={formData.website || ''}
                   onChange={(e) => handleChange('website', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-slate-800">{profile?.website || '-'}</p>
+                <p className="text-black">{profile?.website || '-'}</p>
               )}
             </div>
           </div>
 
           <div className="border-t border-slate-200 pt-6">
-            <h3 className="text-md font-semibold text-slate-800 mb-4">Primary Contact</h3>
+            <h3 className="text-md font-semibold text-black mb-4">Primary Contact</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-slate-500 mb-2">
@@ -284,10 +284,10 @@ export default function OrganizationProfilePage() {
                     type="text"
                     value={formData.primary_contact_name || ''}
                     onChange={(e) => handleChange('primary_contact_name', e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   />
                 ) : (
-                  <p className="text-slate-800">{profile?.primary_contact_name || '-'}</p>
+                  <p className="text-black">{profile?.primary_contact_name || '-'}</p>
                 )}
               </div>
 
@@ -300,10 +300,10 @@ export default function OrganizationProfilePage() {
                     type="email"
                     value={formData.primary_contact_email || ''}
                     onChange={(e) => handleChange('primary_contact_email', e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   />
                 ) : (
-                  <p className="text-slate-800">{profile?.primary_contact_email || '-'}</p>
+                  <p className="text-black">{profile?.primary_contact_email || '-'}</p>
                 )}
               </div>
 
@@ -316,10 +316,10 @@ export default function OrganizationProfilePage() {
                     type="tel"
                     value={formData.primary_contact_phone || ''}
                     onChange={(e) => handleChange('primary_contact_phone', e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   />
                 ) : (
-                  <p className="text-slate-800">{profile?.primary_contact_phone || '-'}</p>
+                  <p className="text-black">{profile?.primary_contact_phone || '-'}</p>
                 )}
               </div>
             </div>
@@ -335,10 +335,10 @@ export default function OrganizationProfilePage() {
                   value={formData.address || ''}
                   onChange={(e) => handleChange('address', e.target.value)}
                   rows={3}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-slate-800">{profile?.address || '-'}</p>
+                <p className="text-black">{profile?.address || '-'}</p>
               )}
             </div>
           </div>

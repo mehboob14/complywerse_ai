@@ -127,24 +127,24 @@ const TABS = [
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Draft' },
-  pending_approval: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pending Approval' },
-  active: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Active' },
-  inactive: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Inactive' },
-  rejected: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rejected' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
+  pending_approval: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Pending Approval' },
+  active: { bg: 'bg-green-50', text: 'text-green-600', label: 'Active' },
+  inactive: { bg: 'bg-red-50', text: 'text-red-600', label: 'Inactive' },
+  rejected: { bg: 'bg-red-50', text: 'text-red-600', label: 'Rejected' },
 };
 
 const EFFECTIVENESS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  effective: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Effective' },
-  partially_effective: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Partially Effective' },
-  ineffective: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Ineffective' },
-  not_tested: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Not Tested' },
+  effective: { bg: 'bg-green-50', text: 'text-green-600', label: 'Effective' },
+  partially_effective: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Partially Effective' },
+  ineffective: { bg: 'bg-red-50', text: 'text-red-600', label: 'Ineffective' },
+  not_tested: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Not Tested' },
 };
 
 const TEST_RESULT_STYLES: Record<string, { bg: string; text: string }> = {
-  effective: { bg: 'bg-green-500/20', text: 'text-green-400' },
-  partially_effective: { bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
-  ineffective: { bg: 'bg-red-500/20', text: 'text-red-400' },
+  effective: { bg: 'bg-green-50', text: 'text-green-600' },
+  partially_effective: { bg: 'bg-yellow-50', text: 'text-yellow-600' },
+  ineffective: { bg: 'bg-red-50', text: 'text-red-600' },
 };
 
 function getStatusStyle(status: string) {
@@ -268,7 +268,7 @@ export default function InternalControlDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -276,9 +276,9 @@ export default function InternalControlDetailPage() {
   if (error || !control) {
     return (
       <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <XCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load control details</p>
-        <Link href="/erm/internal-controls" className="mt-4 inline-block text-primary-400 hover:underline">
+        <XCircle className="mx-auto h-8 w-8 text-red-600" />
+        <p className="mt-2 text-red-600">Failed to load control details</p>
+        <Link href="/erm/internal-controls" className="mt-4 inline-block text-primary-600 hover:underline">
           Back to Controls
         </Link>
       </div>
@@ -297,15 +297,15 @@ export default function InternalControlDetailPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/erm/internal-controls"
-          className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+          className="rounded-lg p-2 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-800">{control.name}</h1>
+            <h1 className="text-2xl font-bold text-black">{control.name}</h1>
             {control.is_key_control && (
-              <span className="flex items-center gap-1 rounded bg-primary-500/20 px-2 py-1 text-xs font-medium text-primary-600">
+              <span className="flex items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs font-medium text-primary-600">
                 <Key className="h-3 w-3" />
                 Key Control
               </span>
@@ -314,7 +314,7 @@ export default function InternalControlDetailPage() {
               {statusStyle.label}
             </span>
           </div>
-          <p className="mt-1 font-mono text-sm text-slate-400">{control.control_id}</p>
+          <p className="mt-1 font-mono text-sm text-slate-600">{control.control_id}</p>
         </div>
         <div className="flex items-center gap-2">
           {canSubmit && (
@@ -366,7 +366,7 @@ export default function InternalControlDetailPage() {
             className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-primary-600 text-white'
-                : 'text-slate-400 hover:bg-slate-200 hover:text-slate-900'
+                : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
             }`}
           >
             <tab.icon className="h-4 w-4" />
@@ -379,50 +379,50 @@ export default function InternalControlDetailPage() {
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
             <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h3 className="mb-4 text-lg font-semibold text-slate-800">Control Information</h3>
+              <h3 className="mb-4 text-lg font-semibold text-black">Control Information</h3>
               <dl className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <dt className="text-sm text-slate-400">Category</dt>
-                  <dd className="mt-1 text-slate-800">{control.category || '-'}</dd>
+                  <dt className="text-sm text-slate-600">Category</dt>
+                  <dd className="mt-1 text-black">{control.category || '-'}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm text-slate-400">Sub-Category</dt>
-                  <dd className="mt-1 text-slate-800">{control.sub_category || '-'}</dd>
+                  <dt className="text-sm text-slate-600">Sub-Category</dt>
+                  <dd className="mt-1 text-black">{control.sub_category || '-'}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm text-slate-400">Control Type</dt>
-                  <dd className="mt-1 capitalize text-slate-800">{control.control_type || '-'}</dd>
+                  <dt className="text-sm text-slate-600">Control Type</dt>
+                  <dd className="mt-1 capitalize text-black">{control.control_type || '-'}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm text-slate-400">Control Nature</dt>
-                  <dd className="mt-1 capitalize text-slate-800">
+                  <dt className="text-sm text-slate-600">Control Nature</dt>
+                  <dd className="mt-1 capitalize text-black">
                     {control.control_nature?.replace('_', ' ') || '-'}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-sm text-slate-400">Frequency</dt>
-                  <dd className="mt-1 capitalize text-slate-800">{control.frequency || '-'}</dd>
+                  <dt className="text-sm text-slate-600">Frequency</dt>
+                  <dd className="mt-1 capitalize text-black">{control.frequency || '-'}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm text-slate-400">Priority</dt>
-                  <dd className="mt-1 capitalize text-slate-800">{control.priority || '-'}</dd>
+                  <dt className="text-sm text-slate-600">Priority</dt>
+                  <dd className="mt-1 capitalize text-black">{control.priority || '-'}</dd>
                 </div>
                 <div className="sm:col-span-2">
-                  <dt className="text-sm text-slate-400">Description</dt>
-                  <dd className="mt-1 text-slate-800">{control.description || 'No description provided'}</dd>
+                  <dt className="text-sm text-slate-600">Description</dt>
+                  <dd className="mt-1 text-black">{control.description || 'No description provided'}</dd>
                 </div>
                 <div className="sm:col-span-2">
-                  <dt className="text-sm text-slate-400">Regulatory Source</dt>
-                  <dd className="mt-1 text-slate-800">{control.regulatory_source || '-'}</dd>
+                  <dt className="text-sm text-slate-600">Regulatory Source</dt>
+                  <dd className="mt-1 text-black">{control.regulatory_source || '-'}</dd>
                 </div>
               </dl>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h3 className="mb-4 text-lg font-semibold text-slate-800">Effectiveness</h3>
+              <h3 className="mb-4 text-lg font-semibold text-black">Effectiveness</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-lg border border-slate-300 bg-slate-200/50 p-4">
-                  <p className="text-sm text-slate-400">Design Effectiveness</p>
+                  <p className="text-sm text-slate-600">Design Effectiveness</p>
                   <span
                     className={`mt-2 inline-block rounded-full px-3 py-1 text-sm font-medium ${designStyle.bg} ${designStyle.text}`}
                   >
@@ -430,7 +430,7 @@ export default function InternalControlDetailPage() {
                   </span>
                 </div>
                 <div className="rounded-lg border border-slate-300 bg-slate-200/50 p-4">
-                  <p className="text-sm text-slate-400">Operating Effectiveness</p>
+                  <p className="text-sm text-slate-600">Operating Effectiveness</p>
                   <span
                     className={`mt-2 inline-block rounded-full px-3 py-1 text-sm font-medium ${operatingStyle.bg} ${operatingStyle.text}`}
                   >
@@ -443,40 +443,40 @@ export default function InternalControlDetailPage() {
 
           <div className="space-y-6">
             <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h3 className="mb-4 text-lg font-semibold text-slate-800">Ownership</h3>
+              <h3 className="mb-4 text-lg font-semibold text-black">Ownership</h3>
               <dl className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <User className="mt-1 h-4 w-4 text-slate-400" />
+                  <User className="mt-1 h-4 w-4 text-slate-600" />
                   <div>
-                    <dt className="text-sm text-slate-400">Owner</dt>
-                    <dd className="text-slate-800">{control.owner_name || 'Not assigned'}</dd>
+                    <dt className="text-sm text-slate-600">Owner</dt>
+                    <dd className="text-black">{control.owner_name || 'Not assigned'}</dd>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <User className="mt-1 h-4 w-4 text-slate-400" />
+                  <User className="mt-1 h-4 w-4 text-slate-600" />
                   <div>
-                    <dt className="text-sm text-slate-400">Backup Owner</dt>
-                    <dd className="text-slate-800">{control.backup_owner_name || 'Not assigned'}</dd>
+                    <dt className="text-sm text-slate-600">Backup Owner</dt>
+                    <dd className="text-black">{control.backup_owner_name || 'Not assigned'}</dd>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Building2 className="mt-1 h-4 w-4 text-slate-400" />
+                  <Building2 className="mt-1 h-4 w-4 text-slate-600" />
                   <div>
-                    <dt className="text-sm text-slate-400">Department</dt>
-                    <dd className="text-slate-800">{control.department_name || 'Not assigned'}</dd>
+                    <dt className="text-sm text-slate-600">Department</dt>
+                    <dd className="text-black">{control.department_name || 'Not assigned'}</dd>
                   </div>
                 </div>
               </dl>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h3 className="mb-4 text-lg font-semibold text-slate-800">Dates</h3>
+              <h3 className="mb-4 text-lg font-semibold text-black">Dates</h3>
               <dl className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <Calendar className="mt-1 h-4 w-4 text-slate-400" />
+                  <Calendar className="mt-1 h-4 w-4 text-slate-600" />
                   <div>
-                    <dt className="text-sm text-slate-400">Effective Date</dt>
-                    <dd className="text-slate-800">
+                    <dt className="text-sm text-slate-600">Effective Date</dt>
+                    <dd className="text-black">
                       {control.effective_date
                         ? new Date(control.effective_date).toLocaleDateString()
                         : '-'}
@@ -484,19 +484,19 @@ export default function InternalControlDetailPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Calendar className="mt-1 h-4 w-4 text-slate-400" />
+                  <Calendar className="mt-1 h-4 w-4 text-slate-600" />
                   <div>
-                    <dt className="text-sm text-slate-400">Review Date</dt>
-                    <dd className="text-slate-800">
+                    <dt className="text-sm text-slate-600">Review Date</dt>
+                    <dd className="text-black">
                       {control.review_date ? new Date(control.review_date).toLocaleDateString() : '-'}
                     </dd>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Clock className="mt-1 h-4 w-4 text-slate-400" />
+                  <Clock className="mt-1 h-4 w-4 text-slate-600" />
                   <div>
-                    <dt className="text-sm text-slate-400">Last Tested</dt>
-                    <dd className="text-slate-800">
+                    <dt className="text-sm text-slate-600">Last Tested</dt>
+                    <dd className="text-black">
                       {control.last_tested_at
                         ? new Date(control.last_tested_at).toLocaleDateString()
                         : 'Never'}
@@ -504,10 +504,10 @@ export default function InternalControlDetailPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Clock className="mt-1 h-4 w-4 text-slate-400" />
+                  <Clock className="mt-1 h-4 w-4 text-slate-600" />
                   <div>
-                    <dt className="text-sm text-slate-400">Next Test Date</dt>
-                    <dd className="text-slate-800">
+                    <dt className="text-sm text-slate-600">Next Test Date</dt>
+                    <dd className="text-black">
                       {control.next_test_date
                         ? new Date(control.next_test_date).toLocaleDateString()
                         : '-'}
@@ -523,7 +523,7 @@ export default function InternalControlDetailPage() {
       {activeTab === 'testing' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-800">Control Tests</h3>
+            <h3 className="text-lg font-semibold text-black">Control Tests</h3>
             <button
               onClick={() => setShowTestModal(true)}
               className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
@@ -535,31 +535,31 @@ export default function InternalControlDetailPage() {
           {(!control.tests || control.tests.length === 0) ? (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
               <ClipboardCheck className="mx-auto h-12 w-12 text-slate-500" />
-              <p className="mt-4 text-lg font-medium text-slate-800">No tests recorded</p>
-              <p className="mt-1 text-sm text-slate-400">Add a test to evaluate control effectiveness</p>
+              <p className="mt-4 text-lg font-medium text-black">No tests recorded</p>
+              <p className="mt-1 text-sm text-slate-600">Add a test to evaluate control effectiveness</p>
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200">
-                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Type</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Date</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Result</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Exceptions</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Tester</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Type</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Date</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Result</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Exceptions</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Tester</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {control.tests?.map((test) => {
                     const resultStyle = TEST_RESULT_STYLES[test.result || ''] || {
-                      bg: 'bg-slate-500/20',
-                      text: 'text-slate-400',
+                      bg: 'bg-slate-50',
+                      text: 'text-slate-600',
                     };
                     return (
                       <tr key={test.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 capitalize text-slate-800">{test.test_type}</td>
+                        <td className="px-4 py-3 capitalize text-black">{test.test_type}</td>
                         <td className="px-4 py-3 text-slate-600">
                           {test.test_date ? new Date(test.test_date).toLocaleDateString() : '-'}
                         </td>
@@ -586,7 +586,7 @@ export default function InternalControlDetailPage() {
       {activeTab === 'risks' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-800">Linked Risks</h3>
+            <h3 className="text-lg font-semibold text-black">Linked Risks</h3>
             <button
               onClick={() => setShowRiskModal(true)}
               className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
@@ -598,8 +598,8 @@ export default function InternalControlDetailPage() {
           {(!control.risk_links || control.risk_links.length === 0) ? (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
               <AlertTriangle className="mx-auto h-12 w-12 text-slate-500" />
-              <p className="mt-4 text-lg font-medium text-slate-800">No risks linked</p>
-              <p className="mt-1 text-sm text-slate-400">Link risks that this control mitigates</p>
+              <p className="mt-4 text-lg font-medium text-black">No risks linked</p>
+              <p className="mt-1 text-sm text-slate-600">Link risks that this control mitigates</p>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -612,18 +612,18 @@ export default function InternalControlDetailPage() {
                     <div>
                       <Link
                         href={`/erm/risks/${link.risk_id}`}
-                        className="font-medium text-slate-800 hover:text-primary-400"
+                        className="font-medium text-black hover:text-primary-600"
                       >
                         {link.risk_title || `Risk #${link.risk_id}`}
                       </Link>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {link.link_type && (
-                          <span className="rounded bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                          <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
                             {link.link_type}
                           </span>
                         )}
                         {link.effectiveness_rating && (
-                          <span className="rounded bg-green-500/20 px-2 py-0.5 text-xs capitalize text-green-400">
+                          <span className="rounded bg-green-50 px-2 py-0.5 text-xs capitalize text-green-600">
                             {link.effectiveness_rating.replace('_', ' ')}
                           </span>
                         )}
@@ -631,7 +631,7 @@ export default function InternalControlDetailPage() {
                     </div>
                     <button
                       onClick={() => unlinkRiskMutation.mutate(link.id)}
-                      className="rounded p-1 text-slate-400 hover:bg-red-600/20 hover:text-red-400"
+                      className="rounded p-1 text-slate-600 hover:bg-red-600/20 hover:text-red-600"
                       title="Unlink"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -647,7 +647,7 @@ export default function InternalControlDetailPage() {
       {activeTab === 'escalations' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-800">Escalation Rules</h3>
+            <h3 className="text-lg font-semibold text-black">Escalation Rules</h3>
             <button
               onClick={() => setShowEscalationModal(true)}
               className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
@@ -659,8 +659,8 @@ export default function InternalControlDetailPage() {
           {(!control.escalations || control.escalations.length === 0) ? (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
               <Shield className="mx-auto h-12 w-12 text-slate-500" />
-              <p className="mt-4 text-lg font-medium text-slate-800">No escalation rules</p>
-              <p className="mt-1 text-sm text-slate-400">Define escalation rules for control failures</p>
+              <p className="mt-4 text-lg font-medium text-black">No escalation rules</p>
+              <p className="mt-1 text-sm text-slate-600">Define escalation rules for control failures</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -670,13 +670,13 @@ export default function InternalControlDetailPage() {
                   className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600/20 text-lg font-bold text-primary-400">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600/20 text-lg font-bold text-primary-600">
                       {esc.escalation_level}
                     </div>
                     <div>
-                      <p className="font-medium text-slate-800">{esc.escalation_name}</p>
+                      <p className="font-medium text-black">{esc.escalation_name}</p>
                       {esc.trigger_condition && (
-                        <p className="text-sm text-slate-400">{esc.trigger_condition}</p>
+                        <p className="text-sm text-slate-600">{esc.trigger_condition}</p>
                       )}
                     </div>
                   </div>
@@ -684,15 +684,15 @@ export default function InternalControlDetailPage() {
                     <span
                       className={`rounded-full px-2 py-1 text-xs ${
                         esc.is_active
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-slate-500/20 text-slate-400'
+                          ? 'bg-green-50 text-green-700'
+                          : 'bg-slate-50 text-slate-700'
                       }`}
                     >
                       {esc.is_active ? 'Active' : 'Inactive'}
                     </span>
                     <button
                       onClick={() => deleteEscalationMutation.mutate(esc.id)}
-                      className="rounded p-1 text-slate-400 hover:bg-red-600/20 hover:text-red-400"
+                      className="rounded p-1 text-slate-600 hover:bg-red-600/20 hover:text-red-600"
                       title="Delete"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -707,12 +707,12 @@ export default function InternalControlDetailPage() {
 
       {activeTab === 'framework' && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-slate-800">Framework Mappings</h3>
+          <h3 className="text-lg font-semibold text-black">Framework Mappings</h3>
           {(!control.framework_links || control.framework_links.length === 0) ? (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
               <LinkIcon className="mx-auto h-12 w-12 text-slate-500" />
-              <p className="mt-4 text-lg font-medium text-slate-800">No framework mappings</p>
-              <p className="mt-1 text-sm text-slate-400">
+              <p className="mt-4 text-lg font-medium text-black">No framework mappings</p>
+              <p className="mt-1 text-sm text-slate-600">
                 Link this control to framework controls or normalized controls
               </p>
             </div>
@@ -721,16 +721,16 @@ export default function InternalControlDetailPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200">
-                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Type</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">ID</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Mapping Type</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Coverage</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Type</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">ID</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Mapping Type</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Coverage</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {control.framework_links?.map((link) => (
                     <tr key={link.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-slate-800">
+                      <td className="px-4 py-3 text-black">
                         {link.framework_control_id ? 'Framework Control' : 'Normalized Control'}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
@@ -751,12 +751,12 @@ export default function InternalControlDetailPage() {
 
       {activeTab === 'workflow' && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-slate-800">Workflow History</h3>
+          <h3 className="text-lg font-semibold text-black">Workflow History</h3>
           {!workflowHistory || workflowHistory.length === 0 ? (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
               <Clock className="mx-auto h-12 w-12 text-slate-500" />
-              <p className="mt-4 text-lg font-medium text-slate-800">No workflow actions</p>
-              <p className="mt-1 text-sm text-slate-400">Workflow actions will appear here</p>
+              <p className="mt-4 text-lg font-medium text-black">No workflow actions</p>
+              <p className="mt-1 text-sm text-slate-600">Workflow actions will appear here</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -775,21 +775,21 @@ export default function InternalControlDetailPage() {
                     }`}
                   >
                     {action.action === 'approve' ? (
-                      <CheckCircle className="h-5 w-5 text-slate-800" />
+                      <CheckCircle className="h-5 w-5 text-black" />
                     ) : action.action === 'reject' ? (
-                      <XCircle className="h-5 w-5 text-slate-800" />
+                      <XCircle className="h-5 w-5 text-black" />
                     ) : (
-                      <Send className="h-5 w-5 text-slate-800" />
+                      <Send className="h-5 w-5 text-black" />
                     )}
                   </div>
                   <div className="flex-1 rounded-xl border border-slate-200 bg-white p-4">
                     <div className="flex items-center justify-between">
-                      <p className="font-medium capitalize text-slate-800">{action.action}</p>
-                      <p className="text-sm text-slate-400">
+                      <p className="font-medium capitalize text-black">{action.action}</p>
+                      <p className="text-sm text-slate-600">
                         {new Date(action.action_at).toLocaleString()}
                       </p>
                     </div>
-                    <p className="mt-1 text-sm text-slate-400">
+                    <p className="mt-1 text-sm text-slate-600">
                       by {action.actor_name || 'Unknown'} · {action.from_status} → {action.to_status}
                     </p>
                     {action.comments && <p className="mt-2 text-sm text-slate-600">{action.comments}</p>}
@@ -805,10 +805,10 @@ export default function InternalControlDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-800">Add Test</h2>
+              <h2 className="text-xl font-bold text-black">Add Test</h2>
               <button
                 onClick={() => setShowTestModal(false)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -839,7 +839,7 @@ export default function InternalControlDetailPage() {
                 <select
                   name="test_type"
                   required
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 >
                   <option value="design">Design</option>
                   <option value="operating">Operating</option>
@@ -851,7 +851,7 @@ export default function InternalControlDetailPage() {
                   <input
                     name="test_period_start"
                     type="date"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                   />
                 </div>
                 <div>
@@ -859,7 +859,7 @@ export default function InternalControlDetailPage() {
                   <input
                     name="test_period_end"
                     type="date"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                   />
                 </div>
               </div>
@@ -870,7 +870,7 @@ export default function InternalControlDetailPage() {
                     name="sample_size"
                     type="number"
                     min="0"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                   />
                 </div>
                 <div>
@@ -879,7 +879,7 @@ export default function InternalControlDetailPage() {
                     name="exceptions_found"
                     type="number"
                     min="0"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                   />
                 </div>
               </div>
@@ -887,7 +887,7 @@ export default function InternalControlDetailPage() {
                 <label className="mb-1 block text-sm font-medium text-slate-600">Result</label>
                 <select
                   name="result"
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 >
                   <option value="">Select result</option>
                   <option value="effective">Effective</option>
@@ -900,7 +900,7 @@ export default function InternalControlDetailPage() {
                 <textarea
                   name="findings"
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 />
               </div>
               <div>
@@ -908,7 +908,7 @@ export default function InternalControlDetailPage() {
                 <textarea
                   name="recommendations"
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-4">
@@ -937,10 +937,10 @@ export default function InternalControlDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-800">Link Risk</h2>
+              <h2 className="text-xl font-bold text-black">Link Risk</h2>
               <button
                 onClick={() => setShowRiskModal(false)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -962,7 +962,7 @@ export default function InternalControlDetailPage() {
                 <select
                   name="risk_id"
                   required
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 >
                   <option value="">Select risk</option>
                   {risks?.map((risk: { id: number; title: string }) => (
@@ -976,7 +976,7 @@ export default function InternalControlDetailPage() {
                 <label className="mb-1 block text-sm font-medium text-slate-600">Link Type</label>
                 <select
                   name="link_type"
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 >
                   <option value="">Select type</option>
                   <option value="mitigates">Mitigates</option>
@@ -991,7 +991,7 @@ export default function InternalControlDetailPage() {
                 </label>
                 <select
                   name="effectiveness_rating"
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                 >
                   <option value="">Select rating</option>
                   <option value="effective">Effective</option>
@@ -1025,10 +1025,10 @@ export default function InternalControlDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-800">Add Escalation Rule</h2>
+              <h2 className="text-xl font-bold text-black">Add Escalation Rule</h2>
               <button
                 onClick={() => setShowEscalationModal(false)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1055,7 +1055,7 @@ export default function InternalControlDetailPage() {
                     min="1"
                     max="5"
                     required
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                   />
                 </div>
                 <div>
@@ -1064,7 +1064,7 @@ export default function InternalControlDetailPage() {
                     name="escalation_name"
                     type="text"
                     required
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                     placeholder="e.g., Manager Review"
                   />
                 </div>
@@ -1074,7 +1074,7 @@ export default function InternalControlDetailPage() {
                 <textarea
                   name="trigger_condition"
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
                   placeholder="Describe when this escalation should trigger..."
                 />
               </div>
@@ -1114,7 +1114,7 @@ export default function InternalControlDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold capitalize text-slate-800">
+              <h2 className="text-xl font-bold capitalize text-black">
                 {showWorkflowModal === 'submit'
                   ? 'Submit for Approval'
                   : showWorkflowModal === 'approve'
@@ -1126,7 +1126,7 @@ export default function InternalControlDetailPage() {
                   setShowWorkflowModal(null);
                   setWorkflowComments('');
                 }}
-                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1138,7 +1138,7 @@ export default function InternalControlDetailPage() {
                   value={workflowComments}
                   onChange={(e) => setWorkflowComments(e.target.value)}
                   rows={4}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder:text-slate-400"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600"
                   placeholder="Add comments (optional)..."
                 />
               </div>
@@ -1165,7 +1165,7 @@ export default function InternalControlDetailPage() {
                   disabled={
                     submitMutation.isPending || approveMutation.isPending || rejectMutation.isPending
                   }
-                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50 ${
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-black disabled:opacity-50 ${
                     showWorkflowModal === 'reject'
                       ? 'bg-red-600 hover:bg-red-500'
                       : showWorkflowModal === 'approve'

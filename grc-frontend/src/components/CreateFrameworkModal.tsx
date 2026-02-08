@@ -219,17 +219,17 @@ export default function CreateFrameworkModal({
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary-500/20 p-2">
-                <FileStack className="h-5 w-5 text-primary-400" />
+              <div className="rounded-lg bg-primary-50 p-2">
+                <FileStack className="h-5 w-5 text-primary-600" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">Create Custom Framework</h2>
-                <p className="text-sm text-slate-400">Define your institutional compliance framework</p>
+                <p className="text-sm text-slate-600">Define your institutional compliance framework</p>
               </div>
             </div>
             <button
               onClick={handleClose}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-700"
             >
               <X className="h-5 w-5" />
             </button>
@@ -258,7 +258,7 @@ export default function CreateFrameworkModal({
                     placeholder='{"name": "Custom Framework", "version": "1.0", "domains": [...]}'
                   />
                   {importError && (
-                    <p className="mt-2 text-sm text-red-400">{importError}</p>
+                    <p className="mt-2 text-sm text-red-600">{importError}</p>
                   )}
                   <div className="mt-3 flex justify-end gap-2">
                     <button
@@ -327,7 +327,7 @@ export default function CreateFrameworkModal({
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="label flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-slate-400" />
+                    <Building2 className="h-4 w-4 text-slate-600" />
                     Regulator / Authority
                   </label>
                   <input
@@ -340,7 +340,7 @@ export default function CreateFrameworkModal({
                 </div>
                 <div>
                   <label className="label flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-slate-400" />
+                    <Globe className="h-4 w-4 text-slate-600" />
                     Jurisdiction
                   </label>
                   <input
@@ -365,7 +365,7 @@ export default function CreateFrameworkModal({
                 {domains.length === 0 ? (
                   <div className="rounded-lg border-2 border-dashed border-slate-200 p-8 text-center">
                     <FileStack className="mx-auto h-12 w-12 text-slate-600" />
-                    <p className="mt-2 text-slate-400">No domains defined yet</p>
+                    <p className="mt-2 text-slate-600">No domains defined yet</p>
                     <p className="text-sm text-slate-500">
                       Add domains to organize your control objectives
                     </p>
@@ -388,9 +388,9 @@ export default function CreateFrameworkModal({
                           onClick={() => updateDomain(domain.id, 'isExpanded', !domain.isExpanded)}
                         >
                           {domain.isExpanded ? (
-                            <ChevronDown className="h-5 w-5 text-slate-400" />
+                            <ChevronDown className="h-5 w-5 text-slate-600" />
                           ) : (
-                            <ChevronRight className="h-5 w-5 text-slate-400" />
+                            <ChevronRight className="h-5 w-5 text-slate-600" />
                           )}
                           <span className="flex h-6 w-6 items-center justify-center rounded bg-slate-700 text-xs font-bold text-slate-300">
                             {index + 1}
@@ -416,7 +416,7 @@ export default function CreateFrameworkModal({
                               e.stopPropagation();
                               removeDomain(domain.id);
                             }}
-                            className="rounded p-1 text-slate-500 hover:bg-slate-700 hover:text-red-400"
+                            className="rounded p-1 text-slate-500 hover:bg-slate-700 hover:text-red-600"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -443,7 +443,7 @@ export default function CreateFrameworkModal({
                               </label>
                               <button
                                 onClick={() => addObjective(domain.id)}
-                                className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-400 hover:bg-primary-500/10"
+                                className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
                               >
                                 <Plus className="h-3 w-3" />
                                 Add Objective
@@ -507,7 +507,7 @@ export default function CreateFrameworkModal({
                                     </div>
                                     <button
                                       onClick={() => removeObjective(domain.id, objective.id)}
-                                      className="rounded p-1 text-slate-500 hover:text-red-400"
+                                      className="rounded p-1 text-slate-500 hover:text-red-600"
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </button>

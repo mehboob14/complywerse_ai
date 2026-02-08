@@ -101,14 +101,14 @@ export function StatCard({
     >
       <div className="flex items-start gap-3">
         {Icon && (
-          <div className={clsx('rounded-lg p-2.5', styles.icon)} aria-hidden="true">
+          <div className={clsx(styles.icon)} aria-hidden="true">
             <Icon size={20} />
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-500 truncate">{title}</p>
+          <p className="text-sm font-medium text-slate-600 truncate">{title}</p>
           <div className="flex items-baseline gap-2 mt-1">
-            <p className="text-2xl font-bold text-slate-900">{value}</p>
+            <p className="text-2xl font-bold text-black">{value}</p>
             {trend && (
               <TrendIndicator
                 direction={trend.direction}
@@ -119,7 +119,7 @@ export function StatCard({
             )}
           </div>
           {subtitle && (
-            <p className="mt-1 text-xs text-slate-500 truncate">{subtitle}</p>
+            <p className="mt-1 text-xs text-slate-600 truncate">{subtitle}</p>
           )}
         </div>
       </div>

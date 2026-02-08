@@ -38,8 +38,8 @@ interface CurrentUser {
 }
 
 const STATUS_LABELS: Record<string, { label: string; bg: string; text: string; icon: typeof UserCheck }> = {
-  active: { label: 'Active', bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: UserCheck },
-  inactive: { label: 'Inactive', bg: 'bg-slate-500/20', text: 'text-slate-400', icon: UserX },
+  active: { label: 'Active', bg: 'bg-emerald-50', text: 'text-emerald-600', icon: UserCheck },
+  inactive: { label: 'Inactive', bg: 'bg-slate-50', text: 'text-slate-600', icon: UserX },
 };
 
 export default function UsersPage() {
@@ -84,8 +84,8 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">User Management</h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold text-black">User Management</h1>
+          <p className="text-sm text-slate-600 mt-1">
             Manage users, roles, and permissions for your organization
           </p>
         </div>
@@ -94,36 +94,36 @@ export default function UsersPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white/50 rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
-              <Users className="h-5 w-5 text-primary-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
+              <Users className="h-5 w-5 text-primary-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{users.length}</p>
-              <p className="text-xs text-slate-400">Total Users</p>
+              <p className="text-2xl font-bold text-black">{users.length}</p>
+              <p className="text-xs text-slate-600">Total Users</p>
             </div>
           </div>
         </div>
 
         <div className="bg-white/50 rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20">
-              <UserCheck className="h-5 w-5 text-emerald-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
+              <UserCheck className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{activeCount}</p>
-              <p className="text-xs text-slate-400">Active Users</p>
+              <p className="text-2xl font-bold text-black">{activeCount}</p>
+              <p className="text-xs text-slate-600">Active Users</p>
             </div>
           </div>
         </div>
 
         <div className="bg-white/50 rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-500/20">
-              <UserX className="h-5 w-5 text-slate-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-50">
+              <UserX className="h-5 w-5 text-slate-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{inactiveCount}</p>
-              <p className="text-xs text-slate-400">Inactive Users</p>
+              <p className="text-2xl font-bold text-black">{inactiveCount}</p>
+              <p className="text-xs text-slate-600">Inactive Users</p>
             </div>
           </div>
         </div>
@@ -155,7 +155,7 @@ export default function UsersPage() {
         {error ? (
           <div className="p-8 text-center">
             <AlertCircle className="h-12 w-12 text-rose-500 mx-auto mb-3" />
-            <p className="text-rose-400">Failed to load users</p>
+            <p className="text-rose-600">Failed to load users</p>
             <p className="text-sm text-slate-500 mt-1">
               Please check your connection and try again
             </p>
@@ -163,12 +163,12 @@ export default function UsersPage() {
         ) : isLoading ? (
           <div className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary-500 border-t-transparent mx-auto" />
-            <p className="mt-3 text-sm text-slate-400">Loading users...</p>
+            <p className="mt-3 text-sm text-slate-600">Loading users...</p>
           </div>
         ) : filteredUsers.length === 0 ? (
           <div className="p-8 text-center">
             <Users className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-400">No users found</p>
+            <p className="text-slate-600">No users found</p>
             {searchTerm && (
               <p className="text-sm text-slate-500 mt-1">
                 Try adjusting your search criteria
@@ -179,19 +179,19 @@ export default function UsersPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200 bg-white/50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
                   User
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
                   Department
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
                   Joined
                 </th>
               </tr>
@@ -210,12 +210,12 @@ export default function UsersPage() {
                   >
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500/20 text-primary-400 font-medium">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-700 font-medium">
                           {user.name?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
                         <div>
-                          <p className="font-medium text-slate-800">{user.name || 'Unknown User'}</p>
-                          <p className="text-xs text-slate-400 flex items-center gap-1">
+                          <p className="font-medium text-black">{user.name || 'Unknown User'}</p>
+                          <p className="text-xs text-slate-600 flex items-center gap-1">
                             <Mail className="h-3 w-3" />
                             {user.email}
                           </p>
@@ -247,7 +247,7 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-2 text-sm text-slate-400">
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
                         <Clock className="h-4 w-4" />
                         {new Date(user.created_at).toLocaleDateString()}
                       </div>

@@ -22,25 +22,25 @@ import {
 import Link from 'next/link';
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  compliant: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Compliant' },
-  partially_compliant: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Partially Compliant' },
-  non_compliant: { bg: 'bg-rose-500/20', text: 'text-rose-400', label: 'Non-Compliant' },
-  not_assessed: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Not Assessed' },
+  compliant: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Compliant' },
+  partially_compliant: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Partially Compliant' },
+  non_compliant: { bg: 'bg-rose-50', text: 'text-rose-600', label: 'Non-Compliant' },
+  not_assessed: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Not Assessed' },
   not_applicable: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Not Applicable' },
 };
 
 const PRIORITY_COLORS: Record<string, { bg: string; text: string }> = {
-  critical: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  high: { bg: 'bg-orange-500/20', text: 'text-orange-400' },
-  medium: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  low: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  critical: { bg: 'bg-rose-50', text: 'text-rose-600' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-600' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-600' },
+  low: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
 };
 
 const IMPACT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  critical: { bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30' },
-  high: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
-  medium: { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
-  low: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
+  critical: { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-500/30' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-500/30' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-500/30' },
+  low: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200' },
 };
 
 interface PrioritizedGap {
@@ -181,28 +181,28 @@ export default function ComplianceOverviewPage() {
       name: 'Total Statements',
       value: totalStatements,
       icon: FileText,
-      iconColor: 'text-primary-400',
+      iconColor: 'text-primary-600',
       bgColor: 'from-primary-500/20 to-primary-600/10',
     },
     {
       name: 'Compliant Rate',
       value: `${compliantPercent}%`,
       icon: CheckCircle,
-      iconColor: 'text-emerald-400',
+      iconColor: 'text-emerald-600',
       bgColor: 'from-emerald-500/20 to-emerald-600/10',
     },
     {
       name: 'Non-Compliant',
       value: nonCompliantCount,
       icon: XCircle,
-      iconColor: 'text-rose-400',
+      iconColor: 'text-rose-600',
       bgColor: 'from-rose-500/20 to-rose-600/10',
     },
     {
       name: 'Not Assessed',
       value: notAssessedCount,
       icon: HelpCircle,
-      iconColor: 'text-slate-400',
+      iconColor: 'text-slate-600',
       bgColor: 'from-slate-500/20 to-slate-600/10',
     },
   ];
@@ -251,7 +251,7 @@ export default function ComplianceOverviewPage() {
                 <div key={key} className="group">
                   <div className="flex items-center justify-between mb-2">
                     <span className={`text-sm font-medium ${style.text}`}>{label}</span>
-                    <span className="text-sm text-slate-400">{count} ({percentage}%)</span>
+                    <span className="text-sm text-slate-600">{count} ({percentage}%)</span>
                   </div>
                   <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                     <div
@@ -278,7 +278,7 @@ export default function ComplianceOverviewPage() {
                 <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors capitalize">
                   {category.replace(/_/g, ' ')}
                 </span>
-                <span className="text-base font-semibold text-slate-800">{count as number}</span>
+                <span className="text-base font-semibold text-black">{count as number}</span>
               </div>
             ))}
             {Object.keys(summary?.by_category || {}).length === 0 && (
@@ -293,7 +293,7 @@ export default function ComplianceOverviewPage() {
           <div className="card-header">
             <div>
               <h2 className="card-title flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-400" />
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
                 Overdue Assessments
               </h2>
               <p className="card-description">{overdue?.total || 0} overdue</p>
@@ -310,19 +310,19 @@ export default function ComplianceOverviewPage() {
                   className="flex items-center justify-between p-3 bg-white/50 rounded-lg hover:bg-slate-50 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">
+                    <p className="text-sm font-medium text-black truncate">
                       {item.statement_code || 'No Code'}
                     </p>
-                    <p className="text-xs text-slate-400 truncate">
+                    <p className="text-xs text-slate-600 truncate">
                       {item.document_title || 'No Document'}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-rose-400 flex items-center gap-1">
+                    <span className="text-xs text-rose-600 flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       {item.days_overdue}d overdue
                     </span>
-                    <span className={`badge ${PRIORITY_COLORS[item.priority]?.bg || 'bg-slate-500/20'} ${PRIORITY_COLORS[item.priority]?.text || 'text-slate-400'}`}>
+                    <span className={`badge ${PRIORITY_COLORS[item.priority]?.bg || 'bg-slate-50'} ${PRIORITY_COLORS[item.priority]?.text || 'text-slate-600'}`}>
                       {item.priority || 'medium'}
                     </span>
                   </div>
@@ -330,8 +330,8 @@ export default function ComplianceOverviewPage() {
               ))
             ) : (
               <div className="text-center py-8">
-                <CheckCircle className="h-12 w-12 text-emerald-400 mx-auto mb-3" />
-                <p className="text-slate-400">No overdue assessments</p>
+                <CheckCircle className="h-12 w-12 text-emerald-600 mx-auto mb-3" />
+                <p className="text-slate-600">No overdue assessments</p>
               </div>
             )}
           </div>
@@ -358,10 +358,10 @@ export default function ComplianceOverviewPage() {
                     className="flex items-center justify-between p-3 bg-white/50 rounded-lg hover:bg-slate-50 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">
+                      <p className="text-sm font-medium text-black truncate">
                         {stmt.statement_code || 'No Code'}
                       </p>
-                      <p className="text-xs text-slate-400 truncate">
+                      <p className="text-xs text-slate-600 truncate">
                         {stmt.statement_summary || stmt.statement_text?.slice(0, 60) + '...' || 'No text'}
                       </p>
                     </div>
@@ -374,7 +374,7 @@ export default function ComplianceOverviewPage() {
             ) : (
               <div className="text-center py-8">
                 <FileText className="h-12 w-12 text-slate-500 mx-auto mb-3" />
-                <p className="text-slate-400">No statements found</p>
+                <p className="text-slate-600">No statements found</p>
               </div>
             )}
           </div>
@@ -385,7 +385,7 @@ export default function ComplianceOverviewPage() {
         <div className="card-header">
           <div>
             <h2 className="card-title flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary-400" />
+              <TrendingUp className="h-5 w-5 text-primary-600" />
               Compliance Score
             </h2>
             <p className="card-description">Overall compliance health</p>
@@ -413,26 +413,26 @@ export default function ComplianceOverviewPage() {
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl font-bold text-slate-800">{summary?.compliance_score?.toFixed(0) || compliantPercent}%</span>
+              <span className="text-2xl font-bold text-black">{summary?.compliance_score?.toFixed(0) || compliantPercent}%</span>
             </div>
           </div>
           <div className="flex-1">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-slate-400">Assessed</p>
-                <p className="text-xl font-semibold text-slate-800">{summary?.statistics?.assessed_count || 0}</p>
+                <p className="text-sm text-slate-600">Assessed</p>
+                <p className="text-xl font-semibold text-black">{summary?.statistics?.assessed_count || 0}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-400">Mandatory</p>
-                <p className="text-xl font-semibold text-slate-800">{summary?.statistics?.mandatory_count || 0}</p>
+                <p className="text-sm text-slate-600">Mandatory</p>
+                <p className="text-xl font-semibold text-black">{summary?.statistics?.mandatory_count || 0}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-400">Active</p>
-                <p className="text-xl font-semibold text-slate-800">{summary?.statistics?.active_count || 0}</p>
+                <p className="text-sm text-slate-600">Active</p>
+                <p className="text-xl font-semibold text-black">{summary?.statistics?.active_count || 0}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-400">Compliance Rate</p>
-                <p className="text-xl font-semibold text-emerald-400">{summary?.compliance_rate?.toFixed(1) || 0}%</p>
+                <p className="text-sm text-slate-600">Compliance Rate</p>
+                <p className="text-xl font-semibold text-emerald-600">{summary?.compliance_rate?.toFixed(1) || 0}%</p>
               </div>
             </div>
           </div>
@@ -440,11 +440,11 @@ export default function ComplianceOverviewPage() {
       </div>
 
       {/* AI Gap Prioritization Section */}
-      <div className="card border border-primary-500/20">
+      <div className="card border border-primary-200">
         <div className="card-header">
           <div>
             <h2 className="card-title flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary-400" />
+              <Sparkles className="h-5 w-5 text-primary-600" />
               AI Gap Prioritization
             </h2>
             <p className="card-description">
@@ -471,8 +471,8 @@ export default function ComplianceOverviewPage() {
         </div>
 
         {aiPrioritizeMutation.isError && (
-          <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg mb-4">
-            <p className="text-sm text-rose-400">
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg mb-4">
+            <p className="text-sm text-rose-600">
               Failed to analyze gaps. Please try again.
             </p>
           </div>
@@ -482,7 +482,7 @@ export default function ComplianceOverviewPage() {
           <div className="space-y-6">
             {aiResult.message && aiResult.total_gaps_analyzed === 0 && (
               <div className="text-center py-8">
-                <CheckCircle className="h-12 w-12 text-emerald-400 mx-auto mb-3" />
+                <CheckCircle className="h-12 w-12 text-emerald-600 mx-auto mb-3" />
                 <p className="text-slate-600">{aiResult.message}</p>
               </div>
             )}
@@ -490,8 +490,8 @@ export default function ComplianceOverviewPage() {
             {aiResult.total_gaps_analyzed > 0 && (
               <>
                 {aiResult.fallback && (
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                    <p className="text-sm text-amber-400">
+                  <div className="p-3 bg-amber-50 border border-amber-500/20 rounded-lg">
+                    <p className="text-sm text-amber-600">
                       {aiResult.error || 'AI analysis unavailable. Showing basic prioritization.'}
                     </p>
                   </div>
@@ -499,21 +499,21 @@ export default function ComplianceOverviewPage() {
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg">
-                    <p className="text-2xl font-bold text-rose-400">{aiResult.summary.critical_gaps}</p>
-                    <p className="text-sm text-slate-400">Critical</p>
+                  <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg">
+                    <p className="text-2xl font-bold text-rose-600">{aiResult.summary.critical_gaps}</p>
+                    <p className="text-sm text-slate-600">Critical</p>
                   </div>
-                  <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                    <p className="text-2xl font-bold text-orange-400">{aiResult.summary.high_gaps}</p>
-                    <p className="text-sm text-slate-400">High</p>
+                  <div className="p-4 bg-orange-50 border border-orange-500/20 rounded-lg">
+                    <p className="text-2xl font-bold text-orange-600">{aiResult.summary.high_gaps}</p>
+                    <p className="text-sm text-slate-600">High</p>
                   </div>
-                  <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                    <p className="text-2xl font-bold text-amber-400">{aiResult.summary.medium_gaps}</p>
-                    <p className="text-sm text-slate-400">Medium</p>
+                  <div className="p-4 bg-amber-50 border border-amber-500/20 rounded-lg">
+                    <p className="text-2xl font-bold text-amber-600">{aiResult.summary.medium_gaps}</p>
+                    <p className="text-sm text-slate-600">Medium</p>
                   </div>
-                  <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                    <p className="text-2xl font-bold text-blue-400">{aiResult.summary.low_gaps}</p>
-                    <p className="text-sm text-slate-400">Low</p>
+                  <div className="p-4 bg-blue-50 border border-blue-500/20 rounded-lg">
+                    <p className="text-2xl font-bold text-blue-600">{aiResult.summary.low_gaps}</p>
+                    <p className="text-sm text-slate-600">Low</p>
                   </div>
                 </div>
 
@@ -530,18 +530,18 @@ export default function ComplianceOverviewPage() {
 
                 {/* Quick Wins */}
                 {aiResult.quick_wins && aiResult.quick_wins.length > 0 && (
-                  <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
-                    <h3 className="text-sm font-semibold text-emerald-400 flex items-center gap-2 mb-3">
+                  <div className="p-4 bg-emerald-500/5 border border-emerald-200 rounded-lg">
+                    <h3 className="text-sm font-semibold text-emerald-600 flex items-center gap-2 mb-3">
                       <Zap className="h-4 w-4" />
                       Quick Wins
                     </h3>
                     <div className="space-y-3">
                       {aiResult.quick_wins.map((win, idx) => (
                         <div key={idx} className="flex items-start gap-3">
-                          <Lightbulb className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                          <Lightbulb className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
                           <div>
-                            <p className="text-sm text-slate-800">{win.gap_description}</p>
-                            <p className="text-xs text-slate-400 mt-1">{win.recommendation}</p>
+                            <p className="text-sm text-black">{win.gap_description}</p>
+                            <p className="text-xs text-slate-600 mt-1">{win.recommendation}</p>
                           </div>
                         </div>
                       ))}
@@ -552,7 +552,7 @@ export default function ComplianceOverviewPage() {
                 {/* Prioritized Gaps List */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold text-slate-600 flex items-center gap-2">
-                    <Target className="h-4 w-4 text-primary-400" />
+                    <Target className="h-4 w-4 text-primary-600" />
                     Prioritized Gaps ({aiResult.prioritized_gaps.length})
                   </h3>
                   {aiResult.prioritized_gaps.map((gap) => {
@@ -569,11 +569,11 @@ export default function ComplianceOverviewPage() {
                         >
                           <div className="flex items-start gap-3 flex-1">
                             <div className="flex-shrink-0 w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
-                              <span className="text-sm font-bold text-slate-800">#{gap.rank}</span>
+                              <span className="text-sm font-bold text-black">#{gap.rank}</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-medium text-slate-800">{gap.control_title}</h4>
+                                <h4 className="font-medium text-black">{gap.control_title}</h4>
                                 <span className={`badge ${impactStyle.bg} ${impactStyle.text}`}>
                                   {gap.business_impact}
                                 </span>
@@ -581,10 +581,10 @@ export default function ComplianceOverviewPage() {
                                   {gap.gap_type.replace('_', ' ')}
                                 </span>
                               </div>
-                              <p className="text-sm text-slate-400 mt-1">{gap.framework_name}</p>
+                              <p className="text-sm text-slate-600 mt-1">{gap.framework_name}</p>
                             </div>
                           </div>
-                          <button className="text-slate-400 hover:text-slate-900 p-1">
+                          <button className="text-slate-600 hover:text-slate-900 p-1">
                             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </button>
                         </div>
@@ -592,36 +592,36 @@ export default function ComplianceOverviewPage() {
                         {isExpanded && (
                           <div className="mt-4 pt-4 border-t border-slate-200 space-y-4">
                             <div>
-                              <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Impact Reasoning</p>
+                              <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Impact Reasoning</p>
                               <p className="text-sm text-slate-600">{gap.impact_reasoning}</p>
                             </div>
                             <div>
-                              <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Regulatory Risk</p>
+                              <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Regulatory Risk</p>
                               <p className="text-sm text-slate-600">{gap.regulatory_risk}</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                               <div>
-                                <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Remediation Effort</p>
+                                <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Remediation Effort</p>
                                 <span className={`badge ${
-                                  gap.remediation_effort === 'low' ? 'bg-emerald-500/20 text-emerald-400' :
-                                  gap.remediation_effort === 'high' ? 'bg-rose-500/20 text-rose-400' :
-                                  'bg-amber-500/20 text-amber-400'
+                                  gap.remediation_effort === 'low' ? 'bg-emerald-50 text-emerald-700' :
+                                  gap.remediation_effort === 'high' ? 'bg-rose-50 text-rose-700' :
+                                  'bg-amber-50 text-amber-700'
                                 }`}>
                                   {gap.remediation_effort}
                                 </span>
                               </div>
                               <div>
-                                <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Deadline</p>
-                                <span className="text-sm text-slate-800">{gap.deadline_recommendation}</span>
+                                <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Deadline</p>
+                                <span className="text-sm text-black">{gap.deadline_recommendation}</span>
                               </div>
                             </div>
                             {gap.suggested_actions && gap.suggested_actions.length > 0 && (
                               <div>
-                                <p className="text-xs font-semibold text-slate-400 uppercase mb-2">Suggested Actions</p>
+                                <p className="text-xs font-semibold text-slate-600 uppercase mb-2">Suggested Actions</p>
                                 <ul className="space-y-1">
                                   {gap.suggested_actions.map((action, idx) => (
                                     <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                                      <span className="text-primary-400">•</span>
+                                      <span className="text-primary-600">•</span>
                                       {action}
                                     </li>
                                   ))}

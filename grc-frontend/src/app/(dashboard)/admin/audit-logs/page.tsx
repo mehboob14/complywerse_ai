@@ -48,15 +48,15 @@ export default function AuditLogsPage() {
 
   const getActionBadgeColor = (action: string) => {
     if (action.includes('create') || action.includes('add')) {
-      return 'bg-green-500/20 text-green-400';
+      return 'bg-green-50 text-green-700';
     }
     if (action.includes('delete') || action.includes('remove')) {
-      return 'bg-red-500/20 text-red-400';
+      return 'bg-red-50 text-red-700';
     }
     if (action.includes('update') || action.includes('edit')) {
-      return 'bg-blue-500/20 text-blue-400';
+      return 'bg-blue-50 text-blue-700';
     }
-    return 'bg-slate-500/20 text-slate-400';
+    return 'bg-slate-50 text-slate-700';
   };
 
   const columns = [
@@ -71,7 +71,7 @@ export default function AuditLogsPage() {
     {
       header: 'User',
       accessor: (log: AuditLogEntry) => (
-        <span className="text-slate-800">{log.user_name}</span>
+        <span className="text-black">{log.user_name}</span>
       ),
     },
     {
@@ -96,7 +96,7 @@ export default function AuditLogsPage() {
     {
       header: 'IP Address',
       accessor: (log: AuditLogEntry) => (
-        <span className="text-slate-400 text-sm">{log.ip_address || '-'}</span>
+        <span className="text-slate-600 text-sm">{log.ip_address || '-'}</span>
       ),
     },
     {
@@ -130,7 +130,7 @@ export default function AuditLogsPage() {
       />
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-red-400">
+        <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-red-600">
           {error}
           <button onClick={() => setError(null)} className="ml-4 underline">
             Dismiss
@@ -144,21 +144,21 @@ export default function AuditLogsPage() {
 
       {total > limit && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-400">
+          <div className="text-sm text-slate-600">
             Showing {page * limit + 1} - {Math.min((page + 1) * limit, total)} of {total}
           </div>
           <div className="flex space-x-2">
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-600 text-slate-800 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-slate-200 hover:bg-slate-600 text-black rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={(page + 1) * limit >= total}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-600 text-slate-800 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-slate-200 hover:bg-slate-600 text-black rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>

@@ -47,9 +47,9 @@ interface Template {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', icon: FileText },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: Play },
-  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600', icon: FileText },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: Play },
+  closed: { bg: 'bg-blue-50', text: 'text-blue-600', icon: CheckCircle },
 };
 
 const PERIOD_OPTIONS = [
@@ -165,8 +165,8 @@ export default function RCSACampaignsPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-800">RCSA Campaigns</h1>
-            <p className="text-slate-400 mt-1">Manage Risk & Control Self-Assessment campaigns</p>
+            <h1 className="text-2xl font-semibold text-black">RCSA Campaigns</h1>
+            <p className="text-slate-600 mt-1">Manage Risk & Control Self-Assessment campaigns</p>
           </div>
           <button
             onClick={() => setIsModalOpen(true)}
@@ -180,7 +180,7 @@ export default function RCSACampaignsPage() {
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
           <input
             type="text"
             placeholder="Search campaigns..."
@@ -219,11 +219,11 @@ export default function RCSACampaignsPage() {
             <div key={campaign.id} className="card p-6 hover:border-primary-500/50 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
-                    <ClipboardList className="h-5 w-5 text-primary-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
+                    <ClipboardList className="h-5 w-5 text-primary-600" />
                   </div>
                   <div>
-                    <h3 className="text-slate-800 font-medium">{campaign.name}</h3>
+                    <h3 className="text-black font-medium">{campaign.name}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
                       <StatusIcon className="h-3 w-3" />
                       {campaign.status}
@@ -232,35 +232,35 @@ export default function RCSACampaignsPage() {
                 </div>
               </div>
 
-              <p className="text-slate-400 text-sm mb-4 line-clamp-2">
+              <p className="text-slate-600 text-sm mb-4 line-clamp-2">
                 {campaign.description || `Using ${campaign.template_name} template`}
               </p>
 
               <div className="space-y-3 mb-4">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400 flex items-center gap-1.5">
+                  <span className="text-slate-600 flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
                     {campaign.period}
                   </span>
-                  <span className="text-slate-400">
+                  <span className="text-slate-600">
                     {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400 flex items-center gap-1.5">
+                  <span className="text-slate-600 flex items-center gap-1.5">
                     <Building2 className="h-4 w-4" />
                     {campaign.assigned_units} units assigned
                   </span>
-                  <span className="text-slate-400">
+                  <span className="text-slate-600">
                     {campaign.completed_units} completed
                   </span>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-slate-400">Progress</span>
-                    <span className="text-slate-800 font-medium">{campaign.progress}%</span>
+                    <span className="text-slate-600">Progress</span>
+                    <span className="text-black font-medium">{campaign.progress}%</span>
                   </div>
                   <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                     <div
@@ -271,7 +271,7 @@ export default function RCSACampaignsPage() {
                 </div>
 
                 {campaign.pending_assessments > 0 && (
-                  <div className="flex items-center gap-1.5 text-amber-400 text-sm">
+                  <div className="flex items-center gap-1.5 text-amber-600 text-sm">
                     <Clock className="h-4 w-4" />
                     {campaign.pending_assessments} pending assessments
                   </div>
@@ -294,7 +294,7 @@ export default function RCSACampaignsPage() {
                         activateMutation.mutate(campaign.id);
                       }
                     }}
-                    className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/20 rounded"
+                    className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded"
                     title="Activate Campaign"
                   >
                     <Play className="h-4 w-4" />
@@ -308,7 +308,7 @@ export default function RCSACampaignsPage() {
                         closeMutation.mutate(campaign.id);
                       }
                     }}
-                    className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-500/20 rounded"
+                    className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded"
                     title="Close Campaign"
                   >
                     <XCircle className="h-4 w-4" />
@@ -322,7 +322,7 @@ export default function RCSACampaignsPage() {
                         deleteMutation.mutate(campaign.id);
                       }
                     }}
-                    className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 rounded"
+                    className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded"
                     title="Delete Campaign"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -337,8 +337,8 @@ export default function RCSACampaignsPage() {
       {filteredCampaigns.length === 0 && (
         <div className="card p-12 text-center">
           <ClipboardList className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-slate-800 mb-2">No Campaigns Found</h3>
-          <p className="text-slate-400 mb-4">
+          <h3 className="text-lg font-medium text-black mb-2">No Campaigns Found</h3>
+          <p className="text-slate-600 mb-4">
             {searchTerm || statusFilter || periodFilter
               ? 'No campaigns match your filters'
               : 'Create your first RCSA campaign to get started'}
@@ -354,8 +354,8 @@ export default function RCSACampaignsPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-slate-200 mx-4">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-800">Create New Campaign</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900">
+              <h3 className="text-lg font-medium text-black">Create New Campaign</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>

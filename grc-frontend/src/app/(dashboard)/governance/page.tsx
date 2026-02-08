@@ -44,12 +44,12 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
 };
 
 const TYPE_COLORS: Record<string, { bg: string; text: string; fill: string }> = {
-  policy: { bg: 'bg-blue-500/20', text: 'text-blue-400', fill: '#3b82f6' },
-  standard: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', fill: '#10b981' },
-  procedure: { bg: 'bg-primary-500/20', text: 'text-primary-600', fill: '#a855f7' },
-  guideline: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', fill: '#06b6d4' },
-  charter: { bg: 'bg-amber-500/20', text: 'text-amber-400', fill: '#f59e0b' },
-  framework: { bg: 'bg-rose-500/20', text: 'text-rose-400', fill: '#f43f5e' },
+  policy: { bg: '', text: 'text-blue-600', fill: '#3b82f6' },
+  standard: { bg: '', text: 'text-emerald-600', fill: '#10b981' },
+  procedure: { bg: '', text: 'text-primary-600', fill: '#a855f7' },
+  guideline: { bg: '', text: 'text-cyan-600', fill: '#06b6d4' },
+  charter: { bg: '', text: 'text-amber-600', fill: '#f59e0b' },
+  framework: { bg: '', text: 'text-rose-600', fill: '#f43f5e' },
 };
 
 const DONUT_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#06b6d4', '#f59e0b', '#f43f5e'];
@@ -88,8 +88,8 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
       >
         <div className="absolute inset-4 rounded-full bg-white flex items-center justify-center">
           <div className="text-center">
-            <p className="text-2xl font-bold text-slate-800">{total}</p>
-            <p className="text-xs text-slate-400">Total</p>
+            <p className="text-2xl font-bold text-black">{total}</p>
+            <p className="text-xs text-slate-600">Total</p>
           </div>
         </div>
       </div>
@@ -98,7 +98,7 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
           <div key={idx} className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-full" style={{ backgroundColor: seg.color }}></div>
             <span className="text-sm text-slate-600 flex-1">{seg.label}</span>
-            <span className="text-sm font-medium text-slate-800">{seg.value}</span>
+            <span className="text-sm font-medium text-black">{seg.value}</span>
           </div>
         ))}
       </div>
@@ -111,7 +111,7 @@ function TrendBarChart({ data }: { data: { month: string; created: number; publi
   
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4 text-xs text-slate-400 mb-4">
+      <div className="flex items-center gap-4 text-xs text-slate-600 mb-4">
         <div className="flex items-center gap-1.5">
           <div className="h-2.5 w-2.5 rounded bg-primary-500"></div>
           <span>Created</span>
@@ -130,7 +130,7 @@ function TrendBarChart({ data }: { data: { month: string; created: number; publi
           return (
             <div key={idx} className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400 w-16">{monthLabel}</span>
+                <span className="text-slate-600 w-16">{monthLabel}</span>
                 <span className="text-slate-500">{item.created + item.published} docs</span>
               </div>
               <div className="flex gap-1 h-4">
@@ -255,7 +255,7 @@ export default function GovernanceDashboardPage() {
       name: 'Total Documents',
       value: totalDocuments,
       icon: FileText,
-      iconColor: 'text-primary-400',
+      iconColor: 'text-primary-600',
       bgColor: 'from-primary-500/20 to-primary-600/10',
       href: '/governance/documents',
     },
@@ -263,7 +263,7 @@ export default function GovernanceDashboardPage() {
       name: 'Published',
       value: publishedCount,
       icon: CheckCircle,
-      iconColor: 'text-emerald-400',
+      iconColor: 'text-emerald-600',
       bgColor: 'from-emerald-500/20 to-emerald-600/10',
       href: '/governance/documents?status=published',
     },
@@ -271,7 +271,7 @@ export default function GovernanceDashboardPage() {
       name: 'Pending Approvals',
       value: pendingCount,
       icon: Clock,
-      iconColor: 'text-amber-400',
+      iconColor: 'text-amber-600',
       bgColor: 'from-amber-500/20 to-amber-600/10',
       href: '/governance/approvals',
     },
@@ -279,7 +279,7 @@ export default function GovernanceDashboardPage() {
       name: 'Overdue Reviews',
       value: overdueCount,
       icon: AlertTriangle,
-      iconColor: 'text-rose-400',
+      iconColor: 'text-rose-600',
       bgColor: 'from-rose-500/20 to-rose-600/10',
       href: '/governance/reviews',
     },
@@ -290,7 +290,7 @@ export default function GovernanceDashboardPage() {
       name: 'Reviews This Month',
       value: reviewsDueThisMonth,
       icon: Calendar,
-      iconColor: 'text-cyan-400',
+      iconColor: 'text-cyan-600',
       bgColor: 'from-cyan-500/20 to-cyan-600/10',
       description: 'Documents due for review',
     },
@@ -306,7 +306,7 @@ export default function GovernanceDashboardPage() {
       name: 'Expiring Soon',
       value: expiringCount,
       icon: AlertCircle,
-      iconColor: 'text-orange-400',
+      iconColor: 'text-orange-600',
       bgColor: 'from-orange-500/20 to-orange-600/10',
       description: 'Within next 30 days',
     },
@@ -314,7 +314,7 @@ export default function GovernanceDashboardPage() {
       name: 'Active Policies',
       value: byType['policy'] || 0,
       icon: BookOpen,
-      iconColor: 'text-blue-400',
+      iconColor: 'text-blue-600',
       bgColor: 'from-blue-500/20 to-blue-600/10',
       description: 'Total policy documents',
     },
@@ -356,9 +356,7 @@ export default function GovernanceDashboardPage() {
             className="stat-card group hover:border-slate-300 transition-all duration-200 hover:shadow-xl cursor-pointer"
           >
             <div className="flex items-start justify-between mb-4">
-              <div className={`rounded-xl bg-gradient-to-br ${stat.bgColor} p-3`}>
-                <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
-              </div>
+                              <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
               <ArrowRight className="h-4 w-4 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <p className="stat-value">{stat.value.toLocaleString()}</p>
@@ -374,12 +372,10 @@ export default function GovernanceDashboardPage() {
             className="stat-card hover:border-slate-300 transition-all duration-200"
           >
             <div className="flex items-start justify-between mb-3">
-              <div className={`rounded-xl bg-gradient-to-br ${stat.bgColor} p-2.5`}>
-                <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
-              </div>
+                              <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
             </div>
-            <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
-            <p className="text-sm text-slate-400">{stat.name}</p>
+            <p className="text-2xl font-bold text-black">{stat.value}</p>
+            <p className="text-sm text-slate-600">{stat.name}</p>
             <p className="text-xs text-slate-500 mt-1">{stat.description}</p>
           </div>
         ))}
@@ -397,12 +393,10 @@ export default function GovernanceDashboardPage() {
             href="/governance/approvals"
             className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 hover:border-amber-500/50 transition-all duration-200 group"
           >
-            <div className="rounded-lg bg-amber-500/20 p-3 group-hover:bg-amber-500/30 transition-colors">
-              <Eye className="h-5 w-5 text-amber-400" />
-            </div>
+                          <Eye className="h-5 w-5 text-amber-600" />
             <div>
-              <p className="font-medium text-slate-800">View Pending Approvals</p>
-              <p className="text-sm text-slate-400">{pendingCount} items awaiting action</p>
+              <p className="font-medium text-black">View Pending Approvals</p>
+              <p className="text-sm text-slate-600">{pendingCount} items awaiting action</p>
             </div>
           </Link>
           
@@ -410,12 +404,10 @@ export default function GovernanceDashboardPage() {
             href="/governance/reviews"
             className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 hover:border-rose-500/50 transition-all duration-200 group"
           >
-            <div className="rounded-lg bg-rose-500/20 p-3 group-hover:bg-rose-500/30 transition-colors">
-              <AlertTriangle className="h-5 w-5 text-rose-400" />
-            </div>
+                          <AlertTriangle className="h-5 w-5 text-rose-600" />
             <div>
-              <p className="font-medium text-slate-800">View Overdue Reviews</p>
-              <p className="text-sm text-slate-400">{overdueCount} reviews overdue</p>
+              <p className="font-medium text-black">View Overdue Reviews</p>
+              <p className="text-sm text-slate-600">{overdueCount} reviews overdue</p>
             </div>
           </Link>
           
@@ -423,12 +415,10 @@ export default function GovernanceDashboardPage() {
             href="/governance/documents?action=upload"
             className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 hover:border-primary-500/50 transition-all duration-200 group"
           >
-            <div className="rounded-lg bg-primary-500/20 p-3 group-hover:bg-primary-500/30 transition-colors">
-              <Upload className="h-5 w-5 text-primary-400" />
-            </div>
+                          <Upload className="h-5 w-5 text-primary-600" />
             <div>
-              <p className="font-medium text-slate-800">Upload New Document</p>
-              <p className="text-sm text-slate-400">Add policies, standards & more</p>
+              <p className="font-medium text-black">Upload New Document</p>
+              <p className="text-sm text-slate-600">Add policies, standards & more</p>
             </div>
           </Link>
         </div>
@@ -438,7 +428,7 @@ export default function GovernanceDashboardPage() {
         <div className="card">
           <div className="card-header">
             <div className="flex items-center gap-2">
-              <PieChart className="h-5 w-5 text-primary-400" />
+              <PieChart className="h-5 w-5 text-primary-600" />
               <div>
                 <h2 className="card-title">Documents by Type</h2>
                 <p className="card-description">Distribution of governance artifacts</p>
@@ -451,7 +441,7 @@ export default function GovernanceDashboardPage() {
         <div className="card">
           <div className="card-header">
             <div className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-emerald-400" />
+              <BarChart3 className="h-5 w-5 text-emerald-600" />
               <div>
                 <h2 className="card-title">Document Trends</h2>
                 <p className="card-description">Created vs published over time</p>
@@ -463,7 +453,7 @@ export default function GovernanceDashboardPage() {
           ) : (
             <div className="empty-state py-8">
               <TrendingUp className="h-8 w-8 text-slate-500" />
-              <p className="text-sm text-slate-400 mt-2">No trend data available</p>
+              <p className="text-sm text-slate-600 mt-2">No trend data available</p>
             </div>
           )}
         </div>
@@ -495,7 +485,7 @@ export default function GovernanceDashboardPage() {
                       <span className={`h-3 w-3 rounded-full ${STATUS_COLORS[key]}`}></span>
                       <span className="text-sm text-slate-600">{label}</span>
                     </span>
-                    <span className="text-sm font-semibold text-slate-800">{count}</span>
+                    <span className="text-sm font-semibold text-black">{count}</span>
                   </div>
                   <div className="progress-bar">
                     <div
@@ -526,19 +516,17 @@ export default function GovernanceDashboardPage() {
               { key: 'framework', label: 'Frameworks' },
             ].map(({ key, label }) => {
               const Icon = TYPE_ICONS[key] || FileText;
-              const colors = TYPE_COLORS[key] || { bg: 'bg-slate-500/20', text: 'text-slate-400' };
+              const colors = TYPE_COLORS[key] || { bg: 'bg-slate-50', text: 'text-slate-600' };
               const count = byType[key] || 0;
               return (
                 <div
                   key={key}
                   className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 transition-all duration-200"
                 >
-                  <div className={`rounded-lg ${colors.bg} p-2.5`}>
-                    <Icon className={`h-5 w-5 ${colors.text}`} />
-                  </div>
+                                      <Icon className={`h-5 w-5 ${colors.text}`} />
                   <div>
-                    <p className="text-xl font-bold text-slate-800">{count}</p>
-                    <p className="text-xs text-slate-400">{label}</p>
+                    <p className="text-xl font-bold text-black">{count}</p>
+                    <p className="text-xs text-slate-600">{label}</p>
                   </div>
                 </div>
               );
@@ -577,12 +565,10 @@ export default function GovernanceDashboardPage() {
                   className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/50 p-3 hover:bg-slate-50 transition-all duration-200"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="rounded-lg bg-emerald-500/20 p-2">
-                      <CheckCircle className="h-4 w-4 text-emerald-400" />
-                    </div>
+                                          <CheckCircle className="h-4 w-4 text-emerald-600" />
                     <div>
-                      <p className="font-medium text-slate-800 text-sm">{doc.title}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="font-medium text-black text-sm">{doc.title}</p>
+                      <p className="text-xs text-slate-600">
                         <span className="capitalize">{doc.doc_type}</span> • {doc.document_code}
                       </p>
                     </div>
@@ -649,7 +635,7 @@ export default function GovernanceDashboardPage() {
                   {pendingApprovals?.approvals?.slice(0, 3).map((approval: any) => (
                     <div key={approval.id} className="mt-2 text-xs opacity-70">
                       • {approval.document_title} - Step: {approval.step_name}
-                      {approval.is_overdue && <span className="text-rose-400 ml-1 font-medium">(Overdue)</span>}
+                      {approval.is_overdue && <span className="text-rose-600 ml-1 font-medium">(Overdue)</span>}
                     </div>
                   ))}
                 </div>
@@ -658,8 +644,8 @@ export default function GovernanceDashboardPage() {
 
             {expiringCount === 0 && overdueCount === 0 && pendingCount === 0 && (
               <div className="empty-state py-8">
-                <div className="empty-state-icon bg-emerald-500/20">
-                  <CheckCircle className="h-8 w-8 text-emerald-400" />
+                <div className="empty-state-icon bg-emerald-50">
+                  <CheckCircle className="h-8 w-8 text-emerald-600" />
                 </div>
                 <p className="empty-state-title">All caught up!</p>
                 <p className="empty-state-description text-sm">

@@ -93,10 +93,10 @@ interface ControlGroup {
 }
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; bar: string }> = {
-  critical: { bg: 'bg-red-500/20', text: 'text-red-400', bar: 'bg-red-500' },
-  high: { bg: 'bg-orange-500/20', text: 'text-orange-400', bar: 'bg-orange-500' },
-  medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', bar: 'bg-yellow-500' },
-  low: { bg: 'bg-green-500/20', text: 'text-green-400', bar: 'bg-green-500' },
+  critical: { bg: 'bg-red-50', text: 'text-red-600', bar: 'bg-red-500' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-600', bar: 'bg-orange-500' },
+  medium: { bg: 'bg-yellow-50', text: 'text-yellow-600', bar: 'bg-yellow-500' },
+  low: { bg: 'bg-green-50', text: 'text-green-600', bar: 'bg-green-500' },
 };
 
 export default function EvidenceSuggestionsPage() {
@@ -249,7 +249,7 @@ export default function EvidenceSuggestionsPage() {
   const getConfidenceBadge = (confidence: number | null) => {
     if (confidence === null) return null;
     const pct = Math.round(confidence * 100);
-    const color = pct >= 80 ? 'text-green-400' : pct >= 60 ? 'text-yellow-400' : 'text-orange-400';
+    const color = pct >= 80 ? 'text-green-600' : pct >= 60 ? 'text-yellow-600' : 'text-orange-600';
     return (
       <span className={`text-xs ${color}`}>
         {pct}%
@@ -267,8 +267,8 @@ export default function EvidenceSuggestionsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Evidence Suggestions & Reuse</h1>
-          <p className="text-slate-400">AI-recommended evidence types and reuse metrics</p>
+          <h1 className="text-2xl font-bold text-black">Evidence Suggestions & Reuse</h1>
+          <p className="text-slate-600">AI-recommended evidence types and reuse metrics</p>
         </div>
         <button
           onClick={() => {
@@ -286,7 +286,7 @@ export default function EvidenceSuggestionsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <Brain className="h-6 w-6 text-primary-400" />
+              <Brain className="h-6 w-6 text-primary-600" />
             </div>
           </div>
           <p className="stat-value">{priorityLoading ? '-' : prioritySummary?.total || 0}</p>
@@ -296,7 +296,7 @@ export default function EvidenceSuggestionsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/10 p-3">
-              <AlertTriangle className="h-6 w-6 text-red-400" />
+              <AlertTriangle className="h-6 w-6 text-red-600" />
             </div>
             {(prioritySummary?.priority_summary?.critical || 0) > 0 && (
               <span className="flex h-2 w-2">
@@ -312,7 +312,7 @@ export default function EvidenceSuggestionsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
-              <Repeat className="h-6 w-6 text-blue-400" />
+              <Repeat className="h-6 w-6 text-blue-600" />
             </div>
           </div>
           <p className="stat-value">{reuseLoading ? '-' : `${reuseRate}%`}</p>
@@ -322,7 +322,7 @@ export default function EvidenceSuggestionsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/10 p-3">
-              <TrendingUp className="h-6 w-6 text-green-400" />
+              <TrendingUp className="h-6 w-6 text-green-600" />
             </div>
           </div>
           <p className="stat-value">{savingsLoading ? '-' : `${auditSavings?.savings_percent || 0}%`}</p>
@@ -340,7 +340,7 @@ export default function EvidenceSuggestionsPage() {
           </div>
           {priorityLoading ? (
             <div className="flex h-40 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+              <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
             </div>
           ) : (
             <div className="space-y-4">
@@ -354,7 +354,7 @@ export default function EvidenceSuggestionsPage() {
                     <div className="mb-1 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className={`h-3 w-3 rounded-full ${style.bar}`}></span>
-                        <span className="text-sm font-medium capitalize text-slate-800">{priority}</span>
+                        <span className="text-sm font-medium capitalize text-black">{priority}</span>
                       </div>
                       <span className={`text-sm font-medium ${style.text}`}>{count}</span>
                     </div>
@@ -381,7 +381,7 @@ export default function EvidenceSuggestionsPage() {
           {!evidenceTypes?.length ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <FileText className="mb-3 h-10 w-10 text-slate-600" />
-              <p className="text-sm text-slate-400">No evidence types yet</p>
+              <p className="text-sm text-slate-600">No evidence types yet</p>
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -391,7 +391,7 @@ export default function EvidenceSuggestionsPage() {
                   onClick={() => handleTypeClick(type.evidence_type)}
                   className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
                     typeFilter === type.evidence_type
-                      ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
                       : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400 hover:bg-slate-200'
                   }`}
                 >
@@ -417,46 +417,40 @@ export default function EvidenceSuggestionsPage() {
         
         {reuseLoading ? (
           <div className="flex h-40 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+            <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
           </div>
         ) : !reuseStats?.top_reused_evidence?.length ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Repeat className="mb-3 h-10 w-10 text-slate-600" />
-            <p className="text-sm text-slate-400">No reused evidence found</p>
+            <p className="text-sm text-slate-600">No reused evidence found</p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="rounded-lg border border-slate-200 bg-white/50 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-blue-500/20 p-2">
-                    <FileCheck className="h-5 w-5 text-blue-400" />
-                  </div>
+                                      <FileCheck className="h-5 w-5 text-blue-600" />
                   <div>
-                    <p className="text-lg font-semibold text-slate-800">{reuseStats.total_evidence}</p>
-                    <p className="text-xs text-slate-400">Total Evidence</p>
+                    <p className="text-lg font-semibold text-black">{reuseStats.total_evidence}</p>
+                    <p className="text-xs text-slate-600">Total Evidence</p>
                   </div>
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-white/50 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-primary-500/20 p-2">
-                    <Repeat className="h-5 w-5 text-primary-600" />
-                  </div>
+                                      <Repeat className="h-5 w-5 text-primary-600" />
                   <div>
-                    <p className="text-lg font-semibold text-slate-800">{reuseStats.multi_framework_evidence}</p>
-                    <p className="text-xs text-slate-400">Multi-Framework</p>
+                    <p className="text-lg font-semibold text-black">{reuseStats.multi_framework_evidence}</p>
+                    <p className="text-xs text-slate-600">Multi-Framework</p>
                   </div>
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-white/50 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-green-500/20 p-2">
-                    <BarChart3 className="h-5 w-5 text-green-400" />
-                  </div>
+                                      <BarChart3 className="h-5 w-5 text-green-600" />
                   <div>
-                    <p className="text-lg font-semibold text-slate-800">{reuseStats.average_controls_per_evidence}</p>
-                    <p className="text-xs text-slate-400">Avg Controls/Evidence</p>
+                    <p className="text-lg font-semibold text-black">{reuseStats.average_controls_per_evidence}</p>
+                    <p className="text-xs text-slate-600">Avg Controls/Evidence</p>
                   </div>
                 </div>
               </div>
@@ -466,19 +460,19 @@ export default function EvidenceSuggestionsPage() {
               <table className="w-full">
                 <thead className="bg-white/50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Evidence Name</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">Controls Linked</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-400">Frameworks Covered</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Evidence Name</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-600">Controls Linked</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-600">Frameworks Covered</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {reuseStats.top_reused_evidence.slice(0, 5).map((item) => (
                     <tr key={item.evidence_id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-slate-800 truncate max-w-xs">{item.evidence_name}</p>
+                        <p className="text-sm font-medium text-black truncate max-w-xs">{item.evidence_name}</p>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-sm text-blue-400">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-sm text-blue-600">
                           <Link2 size={12} />
                           {item.controls_linked}
                         </span>
@@ -493,16 +487,14 @@ export default function EvidenceSuggestionsPage() {
             </div>
 
             {auditSavings && (
-              <div className="mt-4 rounded-lg border border-green-500/30 bg-green-500/10 p-4">
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-green-500/20 p-2">
-                    <Percent className="h-5 w-5 text-green-400" />
-                  </div>
+                                      <Percent className="h-5 w-5 text-green-600" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-green-400">
+                    <p className="text-sm font-medium text-green-600">
                       Audit Effort Savings: {auditSavings.savings_percent}%
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-600">
                       Single-framework effort: {auditSavings.single_framework_effort} | 
                       Actual effort: {auditSavings.actual_effort} | 
                       Controls covered: {auditSavings.controls_covered}
@@ -523,19 +515,19 @@ export default function EvidenceSuggestionsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
               <input
                 type="text"
                 placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none sm:w-48"
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none sm:w-48"
               />
             </div>
             <select
               value={priorityFilter}
               onChange={(e) => { setPriorityFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Priorities</option>
               <option value="critical">Critical</option>
@@ -546,7 +538,7 @@ export default function EvidenceSuggestionsPage() {
             {typeFilter && (
               <button
                 onClick={() => setTypeFilter('')}
-                className="flex items-center gap-1 rounded-lg border border-primary-500 bg-primary-500/20 px-3 py-2 text-sm text-primary-400"
+                className="flex items-center gap-1 rounded-lg border border-primary-500 bg-primary-50 px-3 py-2 text-sm text-primary-600"
               >
                 {typeFilter}
                 <X size={14} />
@@ -557,21 +549,21 @@ export default function EvidenceSuggestionsPage() {
 
         {recsLoading ? (
           <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
           </div>
         ) : recsError ? (
-          <div className="flex h-64 flex-col items-center justify-center text-red-400">
+          <div className="flex h-64 flex-col items-center justify-center text-red-600">
             <AlertCircle className="mb-2 h-8 w-8" />
             <p>Failed to load recommendations</p>
-            <button onClick={() => refetchRecs()} className="mt-2 text-sm text-primary-400 hover:underline">
+            <button onClick={() => refetchRecs()} className="mt-2 text-sm text-primary-600 hover:underline">
               Try again
             </button>
           </div>
         ) : !filteredRecommendations?.length ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Sparkles className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-slate-800">No recommendations yet</h3>
-            <p className="mt-1 text-slate-400">Use Bulk Generate to create AI recommendations for your controls</p>
+            <h3 className="text-lg font-medium text-black">No recommendations yet</h3>
+            <p className="mt-1 text-slate-600">Use Bulk Generate to create AI recommendations for your controls</p>
           </div>
         ) : (
           <>
@@ -580,11 +572,11 @@ export default function EvidenceSuggestionsPage() {
                 <thead className="bg-white/50">
                   <tr>
                     <th className="w-8 px-2 py-3"></th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Control</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Evidence Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Priority</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Confidence</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Control</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Evidence Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Priority</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Confidence</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700 bg-white">
@@ -596,7 +588,7 @@ export default function EvidenceSuggestionsPage() {
                         onClick={() => toggleRowExpand(rec.id)}
                       >
                         <td className="px-2 py-3">
-                          <button className="text-slate-400 hover:text-slate-900">
+                          <button className="text-slate-600 hover:text-slate-900">
                             {expandedRows.has(rec.id) ? (
                               <ChevronDown size={16} />
                             ) : (
@@ -606,20 +598,20 @@ export default function EvidenceSuggestionsPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div>
-                            <p className="text-sm font-medium text-slate-800">
+                            <p className="text-sm font-medium text-black">
                               {rec.control_code && (
-                                <span className="mr-2 font-mono text-primary-400">{rec.control_code}</span>
+                                <span className="mr-2 font-mono text-primary-600">{rec.control_code}</span>
                               )}
                               {rec.control_name || rec.group_name || 'Unknown Control'}
                             </p>
                             {rec.framework_name && (
-                              <p className="text-xs text-slate-400">{rec.framework_name}</p>
+                              <p className="text-xs text-slate-600">{rec.framework_name}</p>
                             )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-slate-200 px-2 py-1 text-sm text-slate-800">
-                            <FileCheck size={14} className="text-slate-400" />
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-slate-200 px-2 py-1 text-sm text-black">
+                            <FileCheck size={14} className="text-slate-600" />
                             {rec.evidence_type}
                           </span>
                         </td>
@@ -684,24 +676,24 @@ export default function EvidenceSuggestionsPage() {
 
             {totalPages > 1 && (
               <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-slate-600">
                   Showing {page * pageSize + 1} - {Math.min((page + 1) * pageSize, recommendations.total)} of {recommendations.total}
                 </p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setPage(Math.max(0, page - 1))}
                     disabled={page === 0}
-                    className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-1 text-sm text-slate-800 disabled:opacity-50"
+                    className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-1 text-sm text-black disabled:opacity-50"
                   >
                     Previous
                   </button>
-                  <span className="text-sm text-slate-400">
+                  <span className="text-sm text-slate-600">
                     Page {page + 1} of {totalPages}
                   </span>
                   <button
                     onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
                     disabled={page >= totalPages - 1}
-                    className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-1 text-sm text-slate-800 disabled:opacity-50"
+                    className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-1 text-sm text-black disabled:opacity-50"
                   >
                     Next
                   </button>
@@ -716,10 +708,10 @@ export default function EvidenceSuggestionsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <h3 className="text-lg font-semibold text-slate-800">Bulk Generate Recommendations</h3>
+              <h3 className="text-lg font-semibold text-black">Bulk Generate Recommendations</h3>
               <button
                 onClick={() => setShowBulkModal(false)}
-                className="text-slate-400 hover:text-slate-900"
+                className="text-slate-600 hover:text-slate-900"
               >
                 <X size={20} />
               </button>
@@ -730,21 +722,21 @@ export default function EvidenceSuggestionsPage() {
                   <div className="flex items-center justify-center">
                     {bulkProgress.status === 'processing' ? (
                       <div className="flex flex-col items-center gap-3">
-                        <Loader2 className="h-12 w-12 animate-spin text-primary-400" />
+                        <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
                         <p className="text-slate-600">Generating recommendations...</p>
                       </div>
                     ) : bulkProgress.status === 'completed' ? (
                       <div className="flex flex-col items-center gap-3">
-                        <CheckCircle className="h-12 w-12 text-green-400" />
-                        <p className="text-slate-800 font-medium">Generation Complete!</p>
-                        <p className="text-slate-400">
+                        <CheckCircle className="h-12 w-12 text-green-600" />
+                        <p className="text-black font-medium">Generation Complete!</p>
+                        <p className="text-slate-600">
                           Generated {bulkProgress.generated} recommendations
                         </p>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-3">
-                        <AlertCircle className="h-12 w-12 text-red-400" />
-                        <p className="text-red-400">Generation failed</p>
+                        <AlertCircle className="h-12 w-12 text-red-600" />
+                        <p className="text-red-600">Generation failed</p>
                       </div>
                     )}
                   </div>
@@ -762,7 +754,7 @@ export default function EvidenceSuggestionsPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-slate-600">
                     Select controls to generate AI evidence recommendations. This will analyze each control and suggest appropriate evidence types.
                   </p>
                   
@@ -789,8 +781,8 @@ export default function EvidenceSuggestionsPage() {
                             className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
                           />
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-slate-800">{group.code}</p>
-                            <p className="text-xs text-slate-400 truncate">{group.name}</p>
+                            <p className="text-sm font-medium text-black">{group.code}</p>
+                            <p className="text-xs text-slate-600 truncate">{group.name}</p>
                           </div>
                         </label>
                       ))}
@@ -801,7 +793,7 @@ export default function EvidenceSuggestionsPage() {
                   </div>
 
                   <div className="flex items-center justify-between pt-2">
-                    <span className="text-sm text-slate-400">
+                    <span className="text-sm text-slate-600">
                       {bulkControlIds.length} item(s) selected
                     </span>
                     <div className="flex items-center gap-2">

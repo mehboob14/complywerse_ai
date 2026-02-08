@@ -24,14 +24,14 @@ import {
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 
 const DOC_TYPE_STYLES: Record<string, { label: string; color: string; bgColor: string }> = {
-  policy: { label: 'Policy', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  procedure: { label: 'Procedure', color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  standard: { label: 'Standard', color: 'text-primary-600', bgColor: 'bg-primary-500/20' },
-  guideline: { label: 'Guideline', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  template: { label: 'Template', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
-  charter: { label: 'Charter', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
-  framework: { label: 'Framework', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
-  other: { label: 'Other', color: 'text-slate-400', bgColor: 'bg-slate-500/20' },
+  policy: { label: 'Policy', color: 'text-blue-600', bgColor: 'bg-blue-50' },
+  procedure: { label: 'Procedure', color: 'text-green-600', bgColor: 'bg-green-50' },
+  standard: { label: 'Standard', color: 'text-primary-600', bgColor: 'bg-primary-50' },
+  guideline: { label: 'Guideline', color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
+  template: { label: 'Template', color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
+  charter: { label: 'Charter', color: 'text-amber-600', bgColor: 'bg-amber-50' },
+  framework: { label: 'Framework', color: 'text-rose-600', bgColor: 'bg-rose-50' },
+  other: { label: 'Other', color: 'text-slate-600', bgColor: 'bg-slate-50' },
 };
 
 const getDocTypeStyle = (docType: string) => {
@@ -87,8 +87,8 @@ function ActionModal({ isOpen, onClose, onConfirm, title, documentTitle, actionT
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h3 className="text-lg font-semibold text-black">{title}</h3>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -101,16 +101,16 @@ function ActionModal({ isOpen, onClose, onConfirm, title, documentTitle, actionT
 
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-slate-600">
-            Comments {actionType === 'reject' && <span className="text-red-400">*</span>}
+            Comments {actionType === 'reject' && <span className="text-red-600">*</span>}
           </label>
           <textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}
             placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
-            className="h-24 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="h-24 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
           {actionType === 'reject' && !comments.trim() && (
-            <p className="mt-1 text-xs text-red-400">Comments are required when rejecting</p>
+            <p className="mt-1 text-xs text-red-600">Comments are required when rejecting</p>
           )}
         </div>
 
@@ -125,7 +125,7 @@ function ActionModal({ isOpen, onClose, onConfirm, title, documentTitle, actionT
           <button
             onClick={handleSubmit}
             disabled={isLoading || (actionType === 'reject' && !comments.trim())}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-slate-800 disabled:opacity-50 ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-black disabled:opacity-50 ${
               actionType === 'approve'
                 ? 'bg-green-600 hover:bg-green-700'
                 : 'bg-red-600 hover:bg-red-700'
@@ -165,8 +165,8 @@ function DelegateModal({ isOpen, onClose, onConfirm, documentTitle, isLoading }:
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-800">Delegate Approval</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h3 className="text-lg font-semibold text-black">Delegate Approval</h3>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -177,14 +177,14 @@ function DelegateModal({ isOpen, onClose, onConfirm, documentTitle, isLoading }:
 
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-slate-600">
-            Delegate to User ID <span className="text-red-400">*</span>
+            Delegate to User ID <span className="text-red-600">*</span>
           </label>
           <input
             type="number"
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
             placeholder="Enter user ID..."
-            className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
         </div>
 
@@ -194,7 +194,7 @@ function DelegateModal({ isOpen, onClose, onConfirm, documentTitle, isLoading }:
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Optional reason for delegation..."
-            className="h-20 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="h-20 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
         </div>
 
@@ -239,44 +239,44 @@ function DocumentPreviewModal({ isOpen, onClose, item, onApprove, onReject, onDe
       <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 max-h-[90vh] overflow-y-auto">
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <h3 className="text-xl font-semibold text-slate-800">{item.document_title}</h3>
-            <p className="text-sm text-slate-400 mt-1">{item.document_code}</p>
+            <h3 className="text-xl font-semibold text-black">{item.document_title}</h3>
+            <p className="text-sm text-slate-600 mt-1">{item.document_code}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-            <p className="text-xs text-slate-400 mb-1">Document Type</p>
+            <p className="text-xs text-slate-600 mb-1">Document Type</p>
             <span className={`inline-flex items-center gap-1.5 rounded-full ${docTypeStyle.bgColor} px-2.5 py-1 text-xs font-medium ${docTypeStyle.color}`}>
               {docTypeStyle.label}
             </span>
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-            <p className="text-xs text-slate-400 mb-1">Owner</p>
+            <p className="text-xs text-slate-600 mb-1">Owner</p>
             <div className="flex items-center gap-2">
-              <User size={14} className="text-slate-400" />
-              <span className="text-sm text-slate-800">{item.owner_name || 'Unknown'}</span>
+              <User size={14} className="text-slate-600" />
+              <span className="text-sm text-black">{item.owner_name || 'Unknown'}</span>
             </div>
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-            <p className="text-xs text-slate-400 mb-1">Requested</p>
+            <p className="text-xs text-slate-600 mb-1">Requested</p>
             <div className="flex items-center gap-2">
-              <Calendar size={14} className="text-slate-400" />
-              <span className="text-sm text-slate-800">{formatDateTime(item.requested_at)}</span>
+              <Calendar size={14} className="text-slate-600" />
+              <span className="text-sm text-black">{formatDateTime(item.requested_at)}</span>
             </div>
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-            <p className="text-xs text-slate-400 mb-1">Due Date</p>
+            <p className="text-xs text-slate-600 mb-1">Due Date</p>
             <div className="flex items-center gap-2">
               {item.is_overdue ? (
-                <AlertTriangle size={14} className="text-red-400" />
+                <AlertTriangle size={14} className="text-red-600" />
               ) : (
-                <Clock size={14} className="text-slate-400" />
+                <Clock size={14} className="text-slate-600" />
               )}
-              <span className={`text-sm ${item.is_overdue ? 'text-red-400' : 'text-slate-800'}`}>
+              <span className={`text-sm ${item.is_overdue ? 'text-red-600' : 'text-black'}`}>
                 {formatDate(item.due_date)}
                 {item.is_overdue && ' (Overdue)'}
               </span>
@@ -285,9 +285,9 @@ function DocumentPreviewModal({ isOpen, onClose, item, onApprove, onReject, onDe
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 mb-6">
-          <p className="text-xs text-slate-400 mb-2">Approval Step</p>
-          <p className="text-sm text-slate-800">{item.step_name}</p>
-          <p className="text-xs text-slate-400 mt-1">Step {item.step_sequence}</p>
+          <p className="text-xs text-slate-600 mb-2">Approval Step</p>
+          <p className="text-sm text-black">{item.step_name}</p>
+          <p className="text-xs text-slate-600 mt-1">Step {item.step_sequence}</p>
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
@@ -416,9 +416,9 @@ export default function ApprovalsPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <AlertTriangle className="mx-auto h-12 w-12 text-red-400" />
-          <h3 className="mt-4 text-lg font-medium text-slate-800">Error loading approvals</h3>
-          <p className="mt-2 text-sm text-slate-400">Please try again later</p>
+          <AlertTriangle className="mx-auto h-12 w-12 text-red-600" />
+          <h3 className="mt-4 text-lg font-medium text-black">Error loading approvals</h3>
+          <p className="mt-2 text-sm text-slate-600">Please try again later</p>
         </div>
       </div>
     );
@@ -428,11 +428,11 @@ export default function ApprovalsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-800">My Approvals</h2>
-          <p className="text-sm text-slate-400">Documents waiting for your approval</p>
+          <h2 className="text-xl font-semibold text-black">My Approvals</h2>
+          <p className="text-sm text-slate-600">Documents waiting for your approval</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-3 py-1 text-sm font-medium text-amber-400">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-600">
             <Clock size={14} />
             {items.length} Pending
           </span>
@@ -441,21 +441,21 @@ export default function ApprovalsPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
           <input
             type="text"
             placeholder="Search documents..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Filter size={16} className="text-slate-400" />
+          <Filter size={16} className="text-slate-600" />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
           >
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
@@ -472,8 +472,8 @@ export default function ApprovalsPage() {
       ) : filteredItems.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white/50 p-12 text-center">
           <FileText className="mx-auto h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-slate-800">No pending approvals</h3>
-          <p className="mt-2 text-sm text-slate-400">
+          <h3 className="mt-4 text-lg font-medium text-black">No pending approvals</h3>
+          <p className="mt-2 text-sm text-slate-600">
             {searchQuery
               ? 'No documents match your search criteria'
               : 'You have no documents waiting for your approval'}
@@ -485,22 +485,22 @@ export default function ApprovalsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/50">
-                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-600">
                     Document
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-600">
                     Type
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-600">
                     Owner
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-600">
                     Requested
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-600">
                     Due Date
                   </th>
-                  <th className="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <th className="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-600">
                     Actions
                   </th>
                 </tr>
@@ -516,12 +516,10 @@ export default function ApprovalsPage() {
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-primary-500/20 p-2">
-                            <FileText className="h-5 w-5 text-primary-400" />
-                          </div>
+                                                      <FileText className="h-5 w-5 text-primary-600" />
                           <div>
-                            <p className="font-medium text-slate-800">{item.document_title}</p>
-                            <p className="text-xs text-slate-400">{item.document_code || `Step ${item.step_sequence}`}</p>
+                            <p className="font-medium text-black">{item.document_title}</p>
+                            <p className="text-xs text-slate-600">{item.document_code || `Step ${item.step_sequence}`}</p>
                           </div>
                         </div>
                       </td>
@@ -539,9 +537,9 @@ export default function ApprovalsPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           {item.is_overdue && (
-                            <AlertTriangle size={14} className="text-red-400" />
+                            <AlertTriangle size={14} className="text-red-600" />
                           )}
-                          <span className={`text-sm ${item.is_overdue ? 'text-red-400 font-medium' : 'text-slate-600'}`}>
+                          <span className={`text-sm ${item.is_overdue ? 'text-red-600 font-medium' : 'text-slate-600'}`}>
                             {formatDate(item.due_date)}
                           </span>
                         </div>
@@ -550,21 +548,21 @@ export default function ApprovalsPage() {
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => handleDelegate(item)}
-                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+                            className="rounded-lg p-2 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
                             title="Delegate"
                           >
                             <Forward size={16} />
                           </button>
                           <button
                             onClick={() => handleReject(item)}
-                            className="rounded-lg p-2 text-red-400 hover:bg-red-500/20 transition-colors"
+                            className="rounded-lg p-2 text-red-600 hover:bg-red-50 transition-colors"
                             title="Reject"
                           >
                             <XCircle size={16} />
                           </button>
                           <button
                             onClick={() => handleApprove(item)}
-                            className="rounded-lg p-2 text-green-400 hover:bg-green-500/20 transition-colors"
+                            className="rounded-lg p-2 text-green-600 hover:bg-green-50 transition-colors"
                             title="Approve"
                           >
                             <CheckCircle size={16} />

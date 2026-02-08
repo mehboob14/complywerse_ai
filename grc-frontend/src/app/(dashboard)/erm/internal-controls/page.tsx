@@ -84,18 +84,18 @@ const PRIORITIES = [
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Draft' },
-  pending_approval: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pending Approval' },
-  active: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Active' },
-  inactive: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Inactive' },
-  rejected: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rejected' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
+  pending_approval: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Pending Approval' },
+  active: { bg: 'bg-green-50', text: 'text-green-600', label: 'Active' },
+  inactive: { bg: 'bg-red-50', text: 'text-red-600', label: 'Inactive' },
+  rejected: { bg: 'bg-red-50', text: 'text-red-600', label: 'Rejected' },
 };
 
 const EFFECTIVENESS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  effective: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Effective' },
-  partially_effective: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Partially Effective' },
-  ineffective: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Ineffective' },
-  not_tested: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Not Tested' },
+  effective: { bg: 'bg-green-50', text: 'text-green-600', label: 'Effective' },
+  partially_effective: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Partially Effective' },
+  ineffective: { bg: 'bg-red-50', text: 'text-red-600', label: 'Ineffective' },
+  not_tested: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Not Tested' },
 };
 
 function getStatusStyle(status: string) {
@@ -215,7 +215,7 @@ export default function InternalControlsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -223,8 +223,8 @@ export default function InternalControlsPage() {
   if (error) {
     return (
       <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load internal controls</p>
+        <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
+        <p className="mt-2 text-red-600">Failed to load internal controls</p>
       </div>
     );
   }
@@ -234,45 +234,37 @@ export default function InternalControlsPage() {
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-500/20 p-2">
-              <Shield className="h-5 w-5 text-blue-400" />
-            </div>
+                          <Shield className="h-5 w-5 text-blue-600" />
             <div>
-              <p className="text-2xl font-bold text-slate-800">{dashboard?.total_controls || 0}</p>
-              <p className="text-sm text-slate-400">Total Controls</p>
+              <p className="text-2xl font-bold text-black">{dashboard?.total_controls || 0}</p>
+              <p className="text-sm text-slate-600">Total Controls</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary-500/20 p-2">
-              <Key className="h-5 w-5 text-primary-600" />
-            </div>
+                          <Key className="h-5 w-5 text-primary-600" />
             <div>
-              <p className="text-2xl font-bold text-slate-800">{dashboard?.key_controls || 0}</p>
-              <p className="text-sm text-slate-400">Key Controls</p>
+              <p className="text-2xl font-bold text-black">{dashboard?.key_controls || 0}</p>
+              <p className="text-sm text-slate-600">Key Controls</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-2">
-              <CheckCircle className="h-5 w-5 text-green-400" />
-            </div>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-2xl font-bold text-slate-800">{dashboard?.effective_controls || 0}</p>
-              <p className="text-sm text-slate-400">Effective</p>
+              <p className="text-2xl font-bold text-black">{dashboard?.effective_controls || 0}</p>
+              <p className="text-sm text-slate-600">Effective</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-yellow-700/50 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-yellow-500/20 p-2">
-              <Clock className="h-5 w-5 text-yellow-400" />
-            </div>
+                          <Clock className="h-5 w-5 text-yellow-600" />
             <div>
-              <p className="text-2xl font-bold text-yellow-400">{dashboard?.pending_approval || 0}</p>
-              <p className="text-sm text-slate-400">Pending Approval</p>
+              <p className="text-2xl font-bold text-yellow-600">{dashboard?.pending_approval || 0}</p>
+              <p className="text-sm text-slate-600">Pending Approval</p>
             </div>
           </div>
         </div>
@@ -281,19 +273,19 @@ export default function InternalControlsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
             <input
               type="text"
               placeholder="Search controls..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-sm text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Statuses</option>
             <option value="draft">Draft</option>
@@ -304,7 +296,7 @@ export default function InternalControlsPage() {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Categories</option>
             {CONTROL_CATEGORIES.map((cat) => (
@@ -316,7 +308,7 @@ export default function InternalControlsPage() {
           <select
             value={keyControlFilter}
             onChange={(e) => setKeyControlFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Controls</option>
             <option value="yes">Key Controls Only</option>
@@ -338,8 +330,8 @@ export default function InternalControlsPage() {
       {filteredControls.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
           <Shield className="mx-auto h-12 w-12 text-slate-500" />
-          <p className="mt-4 text-lg font-medium text-slate-800">No controls found</p>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-4 text-lg font-medium text-black">No controls found</p>
+          <p className="mt-1 text-sm text-slate-600">
             {searchTerm || statusFilter !== 'all' || categoryFilter !== 'all'
               ? 'Try adjusting your filters'
               : 'Create your first internal control to get started'}
@@ -350,13 +342,13 @@ export default function InternalControlsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Control ID</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Name</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Category</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Department</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Effectiveness</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-slate-400">Actions</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Control ID</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Name</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Category</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Department</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Effectiveness</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
@@ -370,7 +362,7 @@ export default function InternalControlsPage() {
                     <td className="px-4 py-3">
                       <Link
                         href={`/erm/internal-controls/${control.id}`}
-                        className="font-mono text-sm text-primary-400 hover:text-primary-300"
+                        className="font-mono text-sm text-primary-600 hover:text-primary-300"
                       >
                         {control.control_id}
                       </Link>
@@ -379,12 +371,12 @@ export default function InternalControlsPage() {
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/erm/internal-controls/${control.id}`}
-                          className="text-sm font-medium text-slate-800 hover:text-primary-400"
+                          className="text-sm font-medium text-black hover:text-primary-600"
                         >
                           {control.name}
                         </Link>
                         {control.is_key_control && (
-                          <span className="flex items-center gap-1 rounded bg-primary-500/20 px-1.5 py-0.5 text-xs text-primary-600">
+                          <span className="flex items-center gap-1 rounded bg-primary-50 px-1.5 py-0.5 text-xs text-primary-600">
                             <Key className="h-3 w-3" />
                             Key
                           </span>
@@ -416,14 +408,14 @@ export default function InternalControlsPage() {
                             setEditingControl(control);
                             setIsModalOpen(true);
                           }}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                          className="rounded p-1 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
                           title="Edit"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(control.id)}
-                          className="rounded p-1 text-slate-400 hover:bg-red-600/20 hover:text-red-400 transition-colors"
+                          className="rounded p-1 text-slate-600 hover:bg-red-600/20 hover:text-red-600 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -442,7 +434,7 @@ export default function InternalControlsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-6">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-800">
+              <h2 className="text-xl font-bold text-black">
                 {editingControl ? 'Edit Control' : 'Add New Control'}
               </h2>
               <button
@@ -450,7 +442,7 @@ export default function InternalControlsPage() {
                   setIsModalOpen(false);
                   setEditingControl(null);
                 }}
-                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -465,27 +457,27 @@ export default function InternalControlsPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-600">
-                    Control ID <span className="text-red-400">*</span>
+                    Control ID <span className="text-red-600">*</span>
                   </label>
                   <input
                     name="control_id"
                     type="text"
                     required
                     defaultValue={editingControl?.control_id || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                     placeholder="e.g., CTL-001"
                   />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-600">
-                    Name <span className="text-red-400">*</span>
+                    Name <span className="text-red-600">*</span>
                   </label>
                   <input
                     name="name"
                     type="text"
                     required
                     defaultValue={editingControl?.name || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                     placeholder="Control name"
                   />
                 </div>
@@ -496,7 +488,7 @@ export default function InternalControlsPage() {
                   name="description"
                   rows={3}
                   defaultValue={editingControl?.description || ''}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                   placeholder="Describe the control..."
                 />
               </div>
@@ -506,7 +498,7 @@ export default function InternalControlsPage() {
                   <select
                     name="category"
                     defaultValue={editingControl?.category || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select category</option>
                     {CONTROL_CATEGORIES.map((cat) => (
@@ -522,7 +514,7 @@ export default function InternalControlsPage() {
                     name="sub_category"
                     type="text"
                     defaultValue={editingControl?.sub_category || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                     placeholder="Sub-category"
                   />
                 </div>
@@ -533,7 +525,7 @@ export default function InternalControlsPage() {
                   <select
                     name="control_type"
                     defaultValue={editingControl?.control_type || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select type</option>
                     {CONTROL_TYPES.map((t) => (
@@ -548,7 +540,7 @@ export default function InternalControlsPage() {
                   <select
                     name="control_nature"
                     defaultValue={editingControl?.control_nature || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select nature</option>
                     {CONTROL_NATURES.map((n) => (
@@ -565,7 +557,7 @@ export default function InternalControlsPage() {
                   <select
                     name="frequency"
                     defaultValue={editingControl?.frequency || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select frequency</option>
                     {FREQUENCIES.map((f) => (
@@ -580,7 +572,7 @@ export default function InternalControlsPage() {
                   <select
                     name="priority"
                     defaultValue={editingControl?.priority || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select priority</option>
                     {PRIORITIES.map((p) => (
@@ -599,7 +591,7 @@ export default function InternalControlsPage() {
                   name="regulatory_source"
                   type="text"
                   defaultValue={editingControl?.regulatory_source || ''}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                   placeholder="e.g., SOX, PCI-DSS, ISO 27001"
                 />
               </div>
@@ -610,7 +602,7 @@ export default function InternalControlsPage() {
                     name="effective_date"
                     type="date"
                     defaultValue={editingControl?.effective_date?.split('T')[0] || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -619,7 +611,7 @@ export default function InternalControlsPage() {
                     name="review_date"
                     type="date"
                     defaultValue={editingControl?.review_date?.split('T')[0] || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -664,10 +656,10 @@ export default function InternalControlsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
             <div className="mb-4 flex items-center gap-3">
-              <div className="rounded-full bg-red-500/20 p-2">
-                <XCircle className="h-6 w-6 text-red-400" />
+              <div className="rounded-full bg-red-50 p-2">
+                <XCircle className="h-6 w-6 text-red-600" />
               </div>
-              <h3 className="text-lg font-bold text-slate-800">Delete Control</h3>
+              <h3 className="text-lg font-bold text-black">Delete Control</h3>
             </div>
             <p className="mb-6 text-slate-600">
               Are you sure you want to delete this control? This action cannot be undone.

@@ -44,33 +44,33 @@ interface RiskDetailData {
 
 const RISK_CATEGORIES: Record<string, { label: string; color: string }> = {
   strategic: { label: 'Strategic', color: 'bg-primary-50 text-primary-600 border-primary-200' },
-  operational: { label: 'Operational', color: 'bg-blue-900/50 text-blue-400 border-blue-700' },
-  financial: { label: 'Financial', color: 'bg-green-900/50 text-green-400 border-green-700' },
-  compliance: { label: 'Compliance', color: 'bg-yellow-900/50 text-yellow-400 border-yellow-700' },
-  technology: { label: 'Technology', color: 'bg-cyan-900/50 text-cyan-400 border-cyan-700' },
-  third_party: { label: 'Third-Party', color: 'bg-orange-900/50 text-orange-400 border-orange-700' },
+  operational: { label: 'Operational', color: 'bg-blue-900/50 text-blue-600 border-blue-700' },
+  financial: { label: 'Financial', color: 'bg-green-900/50 text-green-600 border-green-700' },
+  compliance: { label: 'Compliance', color: 'bg-yellow-900/50 text-yellow-600 border-yellow-700' },
+  technology: { label: 'Technology', color: 'bg-cyan-900/50 text-cyan-600 border-cyan-700' },
+  third_party: { label: 'Third-Party', color: 'bg-orange-900/50 text-orange-600 border-orange-700' },
 };
 
 const RISK_STATUSES: Record<string, { label: string; color: string }> = {
-  open: { label: 'Open', color: 'bg-red-900/50 text-red-400 border-red-700' },
-  in_treatment: { label: 'In Treatment', color: 'bg-yellow-900/50 text-yellow-400 border-yellow-700' },
-  mitigating: { label: 'Mitigating', color: 'bg-yellow-900/50 text-yellow-400 border-yellow-700' },
-  mitigated: { label: 'Mitigated', color: 'bg-green-900/50 text-green-400 border-green-700' },
-  accepted: { label: 'Accepted', color: 'bg-blue-900/50 text-blue-400 border-blue-700' },
+  open: { label: 'Open', color: 'bg-red-900/50 text-red-600 border-red-700' },
+  in_treatment: { label: 'In Treatment', color: 'bg-yellow-900/50 text-yellow-600 border-yellow-700' },
+  mitigating: { label: 'Mitigating', color: 'bg-yellow-900/50 text-yellow-600 border-yellow-700' },
+  mitigated: { label: 'Mitigated', color: 'bg-green-900/50 text-green-600 border-green-700' },
+  accepted: { label: 'Accepted', color: 'bg-blue-900/50 text-blue-600 border-blue-700' },
   closed: { label: 'Closed', color: 'bg-slate-200 text-slate-500 border-slate-300' },
 };
 
 const MITIGATION_EFFECTIVENESS = [
-  { value: 'full', label: 'Full', color: 'text-green-400' },
-  { value: 'partial', label: 'Partial', color: 'text-yellow-400' },
-  { value: 'minimal', label: 'Minimal', color: 'text-orange-400' },
-  { value: 'none', label: 'None', color: 'text-red-400' },
+  { value: 'full', label: 'Full', color: 'text-green-600' },
+  { value: 'partial', label: 'Partial', color: 'text-yellow-600' },
+  { value: 'minimal', label: 'Minimal', color: 'text-orange-600' },
+  { value: 'none', label: 'None', color: 'text-red-600' },
 ];
 
 const IMPACT_LEVELS = [
-  { value: 'high', label: 'High', color: 'text-red-400' },
-  { value: 'medium', label: 'Medium', color: 'text-yellow-400' },
-  { value: 'low', label: 'Low', color: 'text-green-400' },
+  { value: 'high', label: 'High', color: 'text-red-600' },
+  { value: 'medium', label: 'Medium', color: 'text-yellow-600' },
+  { value: 'low', label: 'Low', color: 'text-green-600' },
 ];
 
 type TabType = 'details' | 'treatment' | 'controls' | 'assets' | 'evidence' | 'governance';
@@ -234,11 +234,11 @@ export default function RiskDetailPage() {
   });
 
   const getScoreColor = (score: number | null | undefined) => {
-    if (!score) return 'text-slate-400';
-    if (score >= 20) return 'text-red-400';
-    if (score >= 12) return 'text-orange-400';
-    if (score >= 6) return 'text-yellow-400';
-    return 'text-green-400';
+    if (!score) return 'text-slate-600';
+    if (score >= 20) return 'text-red-600';
+    if (score >= 12) return 'text-orange-600';
+    if (score >= 6) return 'text-yellow-600';
+    return 'text-green-600';
   };
 
   const getScoreBgColor = (score: number | null | undefined) => {
@@ -273,30 +273,30 @@ export default function RiskDetailPage() {
   };
 
   const getTreatmentStatus = () => {
-    if (!risk) return { label: 'Not Set', color: 'text-slate-400' };
+    if (!risk) return { label: 'Not Set', color: 'text-slate-600' };
     if (risk.treatment_plan && risk.status === 'mitigated') {
-      return { label: 'Completed', color: 'text-green-400' };
+      return { label: 'Completed', color: 'text-green-600' };
     }
     if (risk.treatment_plan) {
-      return { label: 'In Progress', color: 'text-yellow-400' };
+      return { label: 'In Progress', color: 'text-yellow-600' };
     }
-    return { label: 'Not Started', color: 'text-red-400' };
+    return { label: 'Not Started', color: 'text-red-600' };
   };
 
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
 
   if (error || !risk) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center text-red-600">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load risk details</p>
-        <Link href="/risks" className="mt-4 text-primary-400 hover:underline">
+        <Link href="/risks" className="mt-4 text-primary-600 hover:underline">
           Back to Risks
         </Link>
       </div>
@@ -322,13 +322,13 @@ export default function RiskDetailPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/risks"
-          className="rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-900"
+          className="rounded-lg p-2 text-slate-600 hover:bg-white hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-800">{risk.title}</h1>
-          <p className="text-slate-400">{risk.description || 'No description'}</p>
+          <h1 className="text-2xl font-bold text-black">{risk.title}</h1>
+          <p className="text-slate-600">{risk.description || 'No description'}</p>
         </div>
         <div className="flex items-center gap-3">
           <span className={`rounded-full border px-3 py-1 text-sm ${categoryStyle.color}`}>
@@ -340,7 +340,7 @@ export default function RiskDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-slate-800 hover:bg-slate-600"
+            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-black hover:bg-slate-600"
           >
             <Edit className="h-4 w-4" />
             Edit
@@ -357,7 +357,7 @@ export default function RiskDetailPage() {
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center gap-2 rounded-lg bg-red-900/50 px-4 py-2 text-red-400 hover:bg-red-900/80"
+            className="flex items-center gap-2 rounded-lg bg-red-900/50 px-4 py-2 text-red-600 hover:bg-red-900/80"
           >
             <Trash2 className="h-4 w-4" />
             Delete
@@ -367,7 +367,7 @@ export default function RiskDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-400">
+          <div className="mb-3 flex items-center gap-2 text-slate-600">
             <AlertTriangle className="h-4 w-4" />
             <span className="text-sm font-medium">Inherent Risk Score</span>
           </div>
@@ -380,7 +380,7 @@ export default function RiskDetailPage() {
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-400">
+          <div className="mb-3 flex items-center gap-2 text-slate-600">
             <TrendingDown className="h-4 w-4" />
             <span className="text-sm font-medium">Residual Risk Score</span>
           </div>
@@ -393,7 +393,7 @@ export default function RiskDetailPage() {
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-400">
+          <div className="mb-3 flex items-center gap-2 text-slate-600">
             <Settings className="h-4 w-4" />
             <span className="text-sm font-medium">Treatment Status</span>
           </div>
@@ -406,11 +406,11 @@ export default function RiskDetailPage() {
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-400">
+          <div className="mb-3 flex items-center gap-2 text-slate-600">
             <User className="h-4 w-4" />
             <span className="text-sm font-medium">Owner / Due Date</span>
           </div>
-          <div className="text-lg font-medium text-slate-800">
+          <div className="text-lg font-medium text-black">
             {risk.owner_name || 'Unassigned'}
           </div>
           <p className="mt-2 flex items-center gap-1 text-sm text-slate-500">
@@ -421,11 +421,11 @@ export default function RiskDetailPage() {
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-6">
-        <h3 className="mb-4 text-lg font-semibold text-slate-800">Risk Score Comparison</h3>
+        <h3 className="mb-4 text-lg font-semibold text-black">Risk Score Comparison</h3>
         <div className="grid gap-6 md:grid-cols-2">
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm text-slate-400">Inherent Risk</span>
+              <span className="text-sm text-slate-600">Inherent Risk</span>
               <span className={`font-bold ${getScoreColor(risk.inherent_score)}`}>
                 {risk.inherent_score ?? 0}/25
               </span>
@@ -439,7 +439,7 @@ export default function RiskDetailPage() {
           </div>
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm text-slate-400">Residual Risk</span>
+              <span className="text-sm text-slate-600">Residual Risk</span>
               <span className={`font-bold ${getScoreColor(risk.residual_score)}`}>
                 {risk.residual_score ?? 0}/25
               </span>
@@ -454,9 +454,9 @@ export default function RiskDetailPage() {
         </div>
         {riskReduction !== null && (
           <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-slate-50 p-3">
-            <BarChart3 className="h-5 w-5 text-green-400" />
+            <BarChart3 className="h-5 w-5 text-green-600" />
             <span className="text-slate-600">Risk Reduction:</span>
-            <span className="text-xl font-bold text-green-400">{riskReduction}%</span>
+            <span className="text-xl font-bold text-green-600">{riskReduction}%</span>
           </div>
         )}
       </div>
@@ -471,8 +471,8 @@ export default function RiskDetailPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'border-primary-500 text-primary-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-900'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -607,41 +607,41 @@ function DetailsTab({ risk, formatDate }: { risk: RiskDetailData; formatDate: (d
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <ClipboardCheck className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
+          <ClipboardCheck className="h-5 w-5 text-primary-600" />
           Description
         </h3>
         <p className="text-slate-600">{risk.description || 'No description provided'}</p>
       </div>
 
       <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Calendar className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
+          <Calendar className="h-5 w-5 text-primary-600" />
           Important Dates
         </h3>
         <div className="space-y-3">
           <div>
-            <span className="text-sm text-slate-400">Created</span>
-            <p className="text-slate-800">{formatDate(risk.created_at)}</p>
+            <span className="text-sm text-slate-600">Created</span>
+            <p className="text-black">{formatDate(risk.created_at)}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Due Date</span>
-            <p className="text-slate-800">{formatDate(risk.due_date)}</p>
+            <span className="text-sm text-slate-600">Due Date</span>
+            <p className="text-black">{formatDate(risk.due_date)}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Review Date</span>
-            <p className="text-slate-800">{formatDate(risk.review_date)}</p>
+            <span className="text-sm text-slate-600">Review Date</span>
+            <p className="text-black">{formatDate(risk.review_date)}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Last Updated</span>
-            <p className="text-slate-800">{formatDate(risk.updated_at)}</p>
+            <span className="text-sm text-slate-600">Last Updated</span>
+            <p className="text-black">{formatDate(risk.updated_at)}</p>
           </div>
         </div>
       </div>
 
       <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Target className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
+          <Target className="h-5 w-5 text-primary-600" />
           Risk Appetite
         </h3>
         <p className="text-slate-600">{risk.risk_appetite || 'Not defined'}</p>
@@ -670,14 +670,14 @@ function TreatmentTab({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Activity className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
+          <Activity className="h-5 w-5 text-primary-600" />
           Treatment Plan
         </h3>
         {!isEditing && (
           <button
             onClick={() => setIsEditing(true)}
-            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-800 hover:bg-slate-600"
+            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm text-black hover:bg-slate-600"
           >
             <Edit className="h-4 w-4" />
             Edit Treatment
@@ -691,7 +691,7 @@ function TreatmentTab({
             value={treatmentPlan}
             onChange={(e) => setTreatmentPlan(e.target.value)}
             placeholder="Enter treatment plan details..."
-            className="h-48 w-full rounded-lg border border-slate-300 bg-slate-50 p-4 text-slate-800 placeholder-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="h-48 w-full rounded-lg border border-slate-300 bg-slate-50 p-4 text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
           <div className="flex justify-end gap-3">
             <button
@@ -699,7 +699,7 @@ function TreatmentTab({
                 setTreatmentPlan(risk.treatment_plan || '');
                 setIsEditing(false);
               }}
-              className="rounded-lg bg-slate-200 px-4 py-2 text-slate-800 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-black hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -743,20 +743,20 @@ function ControlsTab({
 }) {
   const getMitigationColor = (effectiveness?: string) => {
     const item = MITIGATION_EFFECTIVENESS.find(m => m.value === effectiveness);
-    return item?.color || 'text-slate-400';
+    return item?.color || 'text-slate-600';
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Shield className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
+          <Shield className="h-5 w-5 text-primary-600" />
           Linked Controls
         </h3>
         <div className="flex gap-2">
           <button
             onClick={onLinkControl}
-            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-800 hover:bg-slate-600"
+            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm text-black hover:bg-slate-600"
           >
             <Plus className="h-4 w-4" />
             Link Normalized Control
@@ -773,21 +773,21 @@ function ControlsTab({
 
       {risk.linked_controls && risk.linked_controls.length > 0 && (
         <div>
-          <h4 className="mb-3 text-sm font-medium text-slate-400">Normalized Controls</h4>
+          <h4 className="mb-3 text-sm font-medium text-slate-600">Normalized Controls</h4>
           <div className="space-y-2">
             {risk.linked_controls.map((control) => (
               <div key={control.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
                 <div className="flex items-center gap-3">
-                  <Shield className="h-5 w-5 text-primary-400" />
+                  <Shield className="h-5 w-5 text-primary-600" />
                   <div>
-                    <span className="text-sm font-medium text-primary-400">{control.code}</span>
-                    <p className="text-slate-800">{control.name}</p>
+                    <span className="text-sm font-medium text-primary-600">{control.code}</span>
+                    <p className="text-black">{control.name}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => onUnlinkControl(control.id)}
                   disabled={isUnlinking}
-                  className="rounded-lg p-2 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+                  className="rounded-lg p-2 text-red-600 hover:bg-red-900/30 disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -799,15 +799,15 @@ function ControlsTab({
 
       {risk.linked_framework_controls && risk.linked_framework_controls.length > 0 && (
         <div>
-          <h4 className="mb-3 text-sm font-medium text-slate-400">Framework Controls</h4>
+          <h4 className="mb-3 text-sm font-medium text-slate-600">Framework Controls</h4>
           <div className="space-y-2">
             {risk.linked_framework_controls.map((control) => (
               <div key={control.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
                 <div className="flex items-center gap-3">
-                  <Shield className="h-5 w-5 text-blue-400" />
+                  <Shield className="h-5 w-5 text-blue-600" />
                   <div>
-                    <span className="text-sm font-medium text-blue-400">{control.code}</span>
-                    <p className="text-slate-800">{control.name}</p>
+                    <span className="text-sm font-medium text-blue-600">{control.code}</span>
+                    <p className="text-black">{control.name}</p>
                     {control.mitigation_effectiveness && (
                       <span className={`text-xs ${getMitigationColor(control.mitigation_effectiveness)}`}>
                         Effectiveness: {control.mitigation_effectiveness}
@@ -818,7 +818,7 @@ function ControlsTab({
                 <button
                   onClick={() => onUnlinkFrameworkControl(control.id)}
                   disabled={isUnlinking}
-                  className="rounded-lg p-2 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+                  className="rounded-lg p-2 text-red-600 hover:bg-red-900/30 disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -832,7 +832,7 @@ function ControlsTab({
        (!risk.linked_framework_controls || risk.linked_framework_controls.length === 0) && (
         <div className="rounded-lg bg-slate-50 p-8 text-center">
           <Shield className="mx-auto mb-3 h-12 w-12 text-slate-600" />
-          <p className="text-slate-400">No controls linked to this risk</p>
+          <p className="text-slate-600">No controls linked to this risk</p>
           <p className="text-sm text-slate-500">Link controls to track mitigation measures</p>
         </div>
       )}
@@ -854,8 +854,8 @@ function AssetsTab({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Building2 className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
+          <Building2 className="h-5 w-5 text-primary-600" />
           Linked IT Assets ({risk.linked_assets?.length || 0})
         </h3>
         <button
@@ -872,16 +872,16 @@ function AssetsTab({
           {risk.linked_assets.map((asset) => (
             <div key={asset.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
               <div className="flex items-center gap-3">
-                <Building2 className="h-5 w-5 text-cyan-400" />
+                <Building2 className="h-5 w-5 text-cyan-600" />
                 <div>
-                  <p className="text-slate-800">{asset.name}</p>
-                  <span className="text-sm text-slate-400">{asset.asset_type}</span>
+                  <p className="text-black">{asset.name}</p>
+                  <span className="text-sm text-slate-600">{asset.asset_type}</span>
                 </div>
               </div>
               <button
                 onClick={() => onUnlinkAsset(asset.id)}
                 disabled={isUnlinking}
-                className="rounded-lg p-2 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+                className="rounded-lg p-2 text-red-600 hover:bg-red-900/30 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -891,7 +891,7 @@ function AssetsTab({
       ) : (
         <div className="rounded-lg bg-slate-50 p-8 text-center">
           <Building2 className="mx-auto mb-3 h-12 w-12 text-slate-600" />
-          <p className="text-slate-400">No assets linked to this risk</p>
+          <p className="text-slate-600">No assets linked to this risk</p>
           <p className="text-sm text-slate-500">Link IT assets that are affected by this risk</p>
         </div>
       )}
@@ -912,18 +912,18 @@ function EvidenceTab({
 }) {
   const getStatusColor = (status?: string) => {
     switch (status) {
-      case 'approved': return 'text-green-400 bg-green-900/30';
-      case 'pending': return 'text-yellow-400 bg-yellow-900/30';
-      case 'rejected': return 'text-red-400 bg-red-900/30';
-      default: return 'text-slate-400 bg-slate-200';
+      case 'approved': return 'text-green-600 bg-green-900/30';
+      case 'pending': return 'text-yellow-600 bg-yellow-900/30';
+      case 'rejected': return 'text-red-600 bg-red-900/30';
+      default: return 'text-slate-600 bg-slate-200';
     }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <FileText className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
+          <FileText className="h-5 w-5 text-primary-600" />
           Linked Evidence ({risk.linked_evidence?.length || 0})
         </h3>
         <button
@@ -942,7 +942,7 @@ function EvidenceTab({
               <div className="flex items-center gap-3">
                 <FileText className="h-5 w-5 text-primary-600" />
                 <div>
-                  <p className="text-slate-800">{evidence.name}</p>
+                  <p className="text-black">{evidence.name}</p>
                   <span className={`rounded px-2 py-0.5 text-xs ${getStatusColor(evidence.status)}`}>
                     {evidence.status}
                   </span>
@@ -951,7 +951,7 @@ function EvidenceTab({
               <button
                 onClick={() => onUnlinkEvidence(evidence.id)}
                 disabled={isUnlinking}
-                className="rounded-lg p-2 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+                className="rounded-lg p-2 text-red-600 hover:bg-red-900/30 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -961,7 +961,7 @@ function EvidenceTab({
       ) : (
         <div className="rounded-lg bg-slate-50 p-8 text-center">
           <FileText className="mx-auto mb-3 h-12 w-12 text-slate-600" />
-          <p className="text-slate-400">No evidence linked to this risk</p>
+          <p className="text-slate-600">No evidence linked to this risk</p>
           <p className="text-sm text-slate-500">Link evidence items to support risk assessment</p>
         </div>
       )}
@@ -982,14 +982,14 @@ function GovernanceTab({
 }) {
   const getImpactColor = (level?: string) => {
     const item = IMPACT_LEVELS.find(i => i.value === level);
-    return item?.color || 'text-slate-400';
+    return item?.color || 'text-slate-600';
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Target className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
+          <Target className="h-5 w-5 text-primary-600" />
           Linked Governance Objectives ({risk.linked_governance?.length || 0})
         </h3>
         <button
@@ -1006,9 +1006,9 @@ function GovernanceTab({
           {risk.linked_governance.map((objective) => (
             <div key={objective.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
               <div className="flex items-center gap-3">
-                <Target className="h-5 w-5 text-yellow-400" />
+                <Target className="h-5 w-5 text-yellow-600" />
                 <div>
-                  <p className="text-slate-800">{objective.name}</p>
+                  <p className="text-black">{objective.name}</p>
                   <span className={`text-sm ${getImpactColor(objective.impact_level)}`}>
                     Impact: {objective.impact_level}
                   </span>
@@ -1017,7 +1017,7 @@ function GovernanceTab({
               <button
                 onClick={() => onUnlinkGovernance(objective.id)}
                 disabled={isUnlinking}
-                className="rounded-lg p-2 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+                className="rounded-lg p-2 text-red-600 hover:bg-red-900/30 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -1027,7 +1027,7 @@ function GovernanceTab({
       ) : (
         <div className="rounded-lg bg-slate-50 p-8 text-center">
           <Target className="mx-auto mb-3 h-12 w-12 text-slate-600" />
-          <p className="text-slate-400">No governance objectives linked to this risk</p>
+          <p className="text-slate-600">No governance objectives linked to this risk</p>
           <p className="text-sm text-slate-500">Link governance objectives affected by this risk</p>
         </div>
       )}
@@ -1049,15 +1049,15 @@ function DeleteConfirmModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6">
-        <h3 className="mb-4 text-lg font-semibold text-slate-800">Delete Risk</h3>
+        <h3 className="mb-4 text-lg font-semibold text-black">Delete Risk</h3>
         <p className="mb-6 text-slate-600">
-          Are you sure you want to delete <span className="font-medium text-slate-800">&quot;{riskTitle}&quot;</span>? 
+          Are you sure you want to delete <span className="font-medium text-black">&quot;{riskTitle}&quot;</span>? 
           This action cannot be undone.
         </p>
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-lg bg-slate-200 px-4 py-2 text-slate-800 hover:bg-slate-600"
+            className="rounded-lg bg-slate-200 px-4 py-2 text-black hover:bg-slate-600"
           >
             Cancel
           </button>
@@ -1101,25 +1101,25 @@ function LinkControlModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-800">Link Normalized Control</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h3 className="text-lg font-semibold text-black">Link Normalized Control</h3>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="p-4">
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
             <input
               type="text"
               placeholder="Search controls..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-10 pr-4 text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none"
             />
           </div>
           <div className="max-h-64 space-y-2 overflow-y-auto">
             {filteredControls.length === 0 ? (
-              <p className="py-4 text-center text-slate-400">No controls found</p>
+              <p className="py-4 text-center text-slate-600">No controls found</p>
             ) : (
               filteredControls.map((control) => (
                 <button
@@ -1129,10 +1129,10 @@ function LinkControlModal({
                   className="flex w-full items-center justify-between rounded-lg bg-slate-50 p-3 text-left hover:bg-slate-200 disabled:opacity-50"
                 >
                   <div>
-                    <span className="text-sm font-medium text-primary-400">{control.internal_id}</span>
-                    <p className="text-slate-800">{control.name}</p>
+                    <span className="text-sm font-medium text-primary-600">{control.internal_id}</span>
+                    <p className="text-black">{control.name}</p>
                   </div>
-                  <Plus className="h-4 w-4 text-slate-400" />
+                  <Plus className="h-4 w-4 text-slate-600" />
                 </button>
               ))
             )}
@@ -1184,26 +1184,26 @@ function LinkFrameworkControlModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-800">Link Framework Control</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h3 className="text-lg font-semibold text-black">Link Framework Control</h3>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="p-4">
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
             <input
               type="text"
               placeholder="Search framework controls..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-10 pr-4 text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none"
             />
           </div>
           
           <div className="mb-4 max-h-48 space-y-2 overflow-y-auto">
             {filteredControls.length === 0 ? (
-              <p className="py-4 text-center text-slate-400">No controls found</p>
+              <p className="py-4 text-center text-slate-600">No controls found</p>
             ) : (
               filteredControls.map((control) => (
                 <button
@@ -1216,8 +1216,8 @@ function LinkFrameworkControlModal({
                   }`}
                 >
                   <div>
-                    <span className="text-sm font-medium text-blue-400">{control.reference_code}</span>
-                    <p className="text-slate-800">{control.name}</p>
+                    <span className="text-sm font-medium text-blue-600">{control.reference_code}</span>
+                    <p className="text-black">{control.name}</p>
                   </div>
                 </button>
               ))
@@ -1227,11 +1227,11 @@ function LinkFrameworkControlModal({
           {selectedControlId && (
             <>
               <div className="mb-4">
-                <label className="mb-2 block text-sm text-slate-400">Mitigation Effectiveness</label>
+                <label className="mb-2 block text-sm text-slate-600">Mitigation Effectiveness</label>
                 <select
                   value={effectiveness}
                   onChange={(e) => setEffectiveness(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                 >
                   {MITIGATION_EFFECTIVENESS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1241,12 +1241,12 @@ function LinkFrameworkControlModal({
                 </select>
               </div>
               <div className="mb-4">
-                <label className="mb-2 block text-sm text-slate-400">Notes (optional)</label>
+                <label className="mb-2 block text-sm text-slate-600">Notes (optional)</label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Add notes about this control..."
-                  className="h-20 w-full rounded-lg border border-slate-300 bg-slate-50 p-3 text-slate-800 placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+                  className="h-20 w-full rounded-lg border border-slate-300 bg-slate-50 p-3 text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none"
                 />
               </div>
             </>
@@ -1255,7 +1255,7 @@ function LinkFrameworkControlModal({
           <div className="flex justify-end gap-3">
             <button
               onClick={onClose}
-              className="rounded-lg bg-slate-200 px-4 py-2 text-slate-800 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-black hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -1300,25 +1300,25 @@ function LinkAssetModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-800">Link IT Asset</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h3 className="text-lg font-semibold text-black">Link IT Asset</h3>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="p-4">
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
             <input
               type="text"
               placeholder="Search assets..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-10 pr-4 text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none"
             />
           </div>
           <div className="max-h-64 space-y-2 overflow-y-auto">
             {filteredAssets.length === 0 ? (
-              <p className="py-4 text-center text-slate-400">No assets found</p>
+              <p className="py-4 text-center text-slate-600">No assets found</p>
             ) : (
               filteredAssets.map((asset) => (
                 <button
@@ -1328,10 +1328,10 @@ function LinkAssetModal({
                   className="flex w-full items-center justify-between rounded-lg bg-slate-50 p-3 text-left hover:bg-slate-200 disabled:opacity-50"
                 >
                   <div>
-                    <p className="text-slate-800">{asset.name}</p>
-                    <span className="text-sm text-slate-400">{asset.asset_type}</span>
+                    <p className="text-black">{asset.name}</p>
+                    <span className="text-sm text-slate-600">{asset.asset_type}</span>
                   </div>
-                  <Plus className="h-4 w-4 text-slate-400" />
+                  <Plus className="h-4 w-4 text-slate-600" />
                 </button>
               ))
             )}
@@ -1367,25 +1367,25 @@ function LinkEvidenceModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-800">Link Evidence</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h3 className="text-lg font-semibold text-black">Link Evidence</h3>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="p-4">
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
             <input
               type="text"
               placeholder="Search evidence..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-10 pr-4 text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none"
             />
           </div>
           <div className="max-h-64 space-y-2 overflow-y-auto">
             {filteredEvidence.length === 0 ? (
-              <p className="py-4 text-center text-slate-400">No evidence found</p>
+              <p className="py-4 text-center text-slate-600">No evidence found</p>
             ) : (
               filteredEvidence.map((evidence) => (
                 <button
@@ -1395,10 +1395,10 @@ function LinkEvidenceModal({
                   className="flex w-full items-center justify-between rounded-lg bg-slate-50 p-3 text-left hover:bg-slate-200 disabled:opacity-50"
                 >
                   <div>
-                    <p className="text-slate-800">{evidence.title}</p>
-                    <span className="text-sm text-slate-400">{evidence.evidence_type}</span>
+                    <p className="text-black">{evidence.title}</p>
+                    <span className="text-sm text-slate-600">{evidence.evidence_type}</span>
                   </div>
-                  <Plus className="h-4 w-4 text-slate-400" />
+                  <Plus className="h-4 w-4 text-slate-600" />
                 </button>
               ))
             )}
@@ -1442,26 +1442,26 @@ function LinkGovernanceModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-800">Link Governance Objective</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h3 className="text-lg font-semibold text-black">Link Governance Objective</h3>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="p-4">
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
             <input
               type="text"
               placeholder="Search governance objectives..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-300 bg-slate-50 py-2 pl-10 pr-4 text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none"
             />
           </div>
           
           <div className="mb-4 max-h-48 space-y-2 overflow-y-auto">
             {filteredGovernance.length === 0 ? (
-              <p className="py-4 text-center text-slate-400">No governance objectives found</p>
+              <p className="py-4 text-center text-slate-600">No governance objectives found</p>
             ) : (
               filteredGovernance.map((objective) => (
                 <button
@@ -1474,8 +1474,8 @@ function LinkGovernanceModal({
                   }`}
                 >
                   <div>
-                    <p className="text-slate-800">{objective.title}</p>
-                    <span className="text-sm text-slate-400">{objective.category}</span>
+                    <p className="text-black">{objective.title}</p>
+                    <span className="text-sm text-slate-600">{objective.category}</span>
                   </div>
                 </button>
               ))
@@ -1484,11 +1484,11 @@ function LinkGovernanceModal({
 
           {selectedObjectiveId && (
             <div className="mb-4">
-              <label className="mb-2 block text-sm text-slate-400">Impact Level</label>
+              <label className="mb-2 block text-sm text-slate-600">Impact Level</label>
               <select
                 value={impactLevel}
                 onChange={(e) => setImpactLevel(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
               >
                 {IMPACT_LEVELS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -1502,7 +1502,7 @@ function LinkGovernanceModal({
           <div className="flex justify-end gap-3">
             <button
               onClick={onClose}
-              className="rounded-lg bg-slate-200 px-4 py-2 text-slate-800 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-black hover:bg-slate-600"
             >
               Cancel
             </button>

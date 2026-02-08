@@ -289,7 +289,7 @@ export function DataTable<T extends { id: string | number }>({
                     setCurrentPage(1);
                   }}
                   placeholder={searchPlaceholder}
-                  className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors"
+                  className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors"
                   aria-label={searchPlaceholder}
                 />
                 {searchValue && (
@@ -449,7 +449,7 @@ export function DataTable<T extends { id: string | number }>({
                 >
                   <div className="flex flex-col items-center gap-3">
                     {EmptyIcon && (
-                      <EmptyIcon size={48} className="text-slate-400" />
+                      <EmptyIcon size={48} className="text-slate-600" />
                     )}
                     <p className="text-slate-500">{emptyMessage}</p>
                   </div>
@@ -507,7 +507,7 @@ export function DataTable<T extends { id: string | number }>({
                 setPageSize(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="rounded border border-slate-300 bg-white px-2 py-1 text-sm text-black focus:border-primary-500 focus:outline-none"
             >
               {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>

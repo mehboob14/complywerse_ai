@@ -36,16 +36,16 @@ interface Template {
 }
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string }> = {
-  system: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  custom: { bg: 'bg-primary-500/20', text: 'text-primary-600' },
+  system: { bg: 'bg-blue-50', text: 'text-blue-600' },
+  custom: { bg: 'bg-primary-50', text: 'text-primary-600' },
 };
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
-  'Cybersecurity': { bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
-  'Operational Risk': { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  'Compliance': { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  'Cybersecurity': { bg: 'bg-cyan-50', text: 'text-cyan-600' },
+  'Operational Risk': { bg: 'bg-amber-50', text: 'text-amber-600' },
+  'Compliance': { bg: 'bg-emerald-50', text: 'text-emerald-600' },
   'IT Risk': { bg: 'bg-violet-500/20', text: 'text-violet-400' },
-  'Financial Risk': { bg: 'bg-rose-500/20', text: 'text-rose-400' },
+  'Financial Risk': { bg: 'bg-rose-50', text: 'text-rose-600' },
 };
 
 export default function RCSATemplatesPage() {
@@ -163,8 +163,8 @@ export default function RCSATemplatesPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-800">RCSA Templates</h1>
-            <p className="text-slate-400 mt-1">Manage Risk & Control Self-Assessment templates</p>
+            <h1 className="text-2xl font-semibold text-black">RCSA Templates</h1>
+            <p className="text-slate-600 mt-1">Manage Risk & Control Self-Assessment templates</p>
           </div>
           <div className="flex items-center gap-3">
             <input
@@ -193,22 +193,22 @@ export default function RCSATemplatesPage() {
       </div>
 
       {uploadResult && (
-        <div className={`p-4 rounded-lg flex items-center gap-3 ${uploadResult.success ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-rose-500/20 border border-rose-500/30'}`}>
+        <div className={`p-4 rounded-lg flex items-center gap-3 ${uploadResult.success ? 'bg-emerald-50 border border-emerald-500/30' : 'bg-rose-50 border border-rose-500/30'}`}>
           {uploadResult.success ? (
-            <CheckCircle className="h-5 w-5 text-emerald-400" />
+            <CheckCircle className="h-5 w-5 text-emerald-600" />
           ) : (
-            <AlertCircle className="h-5 w-5 text-rose-400" />
+            <AlertCircle className="h-5 w-5 text-rose-600" />
           )}
-          <p className={uploadResult.success ? 'text-emerald-400' : 'text-rose-400'}>{uploadResult.message}</p>
+          <p className={uploadResult.success ? 'text-emerald-600' : 'text-rose-600'}>{uploadResult.message}</p>
           <button onClick={() => setUploadResult(null)} className="ml-auto">
-            <X className="h-4 w-4 text-slate-400 hover:text-slate-900" />
+            <X className="h-4 w-4 text-slate-600 hover:text-slate-900" />
           </button>
         </div>
       )}
 
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
           <input
             type="text"
             placeholder="Search templates..."
@@ -233,11 +233,11 @@ export default function RCSATemplatesPage() {
           <div key={template.id} className="card p-6 hover:border-primary-500/50 transition-all">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
-                  <FileText className="h-5 w-5 text-primary-400" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
+                  <FileText className="h-5 w-5 text-primary-600" />
                 </div>
                 <div>
-                  <h3 className="text-slate-800 font-medium">{template.name}</h3>
+                  <h3 className="text-black font-medium">{template.name}</h3>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${SOURCE_COLORS[template.source]?.bg} ${SOURCE_COLORS[template.source]?.text}`}>
                     {template.source}
                   </span>
@@ -245,21 +245,21 @@ export default function RCSATemplatesPage() {
               </div>
             </div>
             
-            <p className="text-slate-400 text-sm mb-4 line-clamp-2">{template.description}</p>
+            <p className="text-slate-600 text-sm mb-4 line-clamp-2">{template.description}</p>
             
             <div className="flex items-center gap-4 mb-4 text-sm">
-              <div className="flex items-center gap-1.5 text-slate-400">
+              <div className="flex items-center gap-1.5 text-slate-600">
                 <Building2 className="h-4 w-4" />
                 <span>{template.framework_type}</span>
               </div>
-              <div className="flex items-center gap-1.5 text-slate-400">
+              <div className="flex items-center gap-1.5 text-slate-600">
                 <HelpCircle className="h-4 w-4" />
                 <span>{template.question_count} questions</span>
               </div>
             </div>
 
             <div className="mb-4">
-              <span className={`text-xs px-2 py-1 rounded-full ${CATEGORY_COLORS[template.category]?.bg || 'bg-slate-500/20'} ${CATEGORY_COLORS[template.category]?.text || 'text-slate-400'}`}>
+              <span className={`text-xs px-2 py-1 rounded-full ${CATEGORY_COLORS[template.category]?.bg || 'bg-slate-50'} ${CATEGORY_COLORS[template.category]?.text || 'text-slate-600'}`}>
                 {template.category}
               </span>
             </div>
@@ -286,7 +286,7 @@ export default function RCSATemplatesPage() {
                 <>
                   <Link
                     href={`/risks/rcsa/templates/${template.id}?edit=true`}
-                    className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-200 rounded"
+                    className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded"
                   >
                     <Edit2 className="h-4 w-4" />
                   </Link>
@@ -296,7 +296,7 @@ export default function RCSATemplatesPage() {
                         deleteMutation.mutate(template.id);
                       }
                     }}
-                    className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 rounded"
+                    className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -304,7 +304,7 @@ export default function RCSATemplatesPage() {
               )}
               <button
                 onClick={() => handleDownload(template)}
-                className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/20 rounded"
+                className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded"
                 title="Download Template"
               >
                 <Download className="h-4 w-4" />
@@ -318,8 +318,8 @@ export default function RCSATemplatesPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-800">Clone Template</h3>
-              <button onClick={() => setIsCloneModalOpen(false)} className="text-slate-400 hover:text-slate-900">
+              <h3 className="text-lg font-medium text-black">Clone Template</h3>
+              <button onClick={() => setIsCloneModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -374,8 +374,8 @@ export default function RCSATemplatesPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-800">Create New Template</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900">
+              <h3 className="text-lg font-medium text-black">Create New Template</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>

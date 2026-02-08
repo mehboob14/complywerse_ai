@@ -70,7 +70,7 @@ export default function AdminPage() {
                 {section.icon}
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-800 group-hover:text-primary-700 transition-colors">
+                <h3 className="text-lg font-semibold text-black group-hover:text-primary-700 transition-colors">
                   {section.title}
                 </h3>
                 <p className="text-sm text-slate-500 mt-1">

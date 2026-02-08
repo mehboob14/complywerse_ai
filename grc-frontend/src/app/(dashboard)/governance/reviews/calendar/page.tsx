@@ -80,16 +80,16 @@ interface ReviewListResponse {
 }
 
 const DOCUMENT_TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; bgColor: string; label: string }> = {
-  policy: { icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-500/20', label: 'Policy' },
-  standard: { icon: FileCheck, color: 'text-blue-400', bgColor: 'bg-blue-500/20', label: 'Standard' },
-  procedure: { icon: ClipboardList, color: 'text-green-400', bgColor: 'bg-green-500/20', label: 'Procedure' },
-  guideline: { icon: Lightbulb, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20', label: 'Guideline' },
-  charter: { icon: Shield, color: 'text-cyan-400', bgColor: 'bg-cyan-500/20', label: 'Charter' },
-  framework: { icon: Layers, color: 'text-orange-400', bgColor: 'bg-orange-500/20', label: 'Framework' },
+  policy: { icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-50', label: 'Policy' },
+  standard: { icon: FileCheck, color: 'text-blue-600', bgColor: 'bg-blue-50', label: 'Standard' },
+  procedure: { icon: ClipboardList, color: 'text-green-600', bgColor: 'bg-green-50', label: 'Procedure' },
+  guideline: { icon: Lightbulb, color: 'text-yellow-600', bgColor: 'bg-yellow-50', label: 'Guideline' },
+  charter: { icon: Shield, color: 'text-cyan-600', bgColor: 'bg-cyan-50', label: 'Charter' },
+  framework: { icon: Layers, color: 'text-orange-600', bgColor: 'bg-orange-50', label: 'Framework' },
 };
 
 const getTypeConfig = (type: string) => {
-  return DOCUMENT_TYPE_CONFIG[type] || { icon: FileText, color: 'text-slate-400', bgColor: 'bg-slate-500/20', label: type };
+  return DOCUMENT_TYPE_CONFIG[type] || { icon: FileText, color: 'text-slate-600', bgColor: 'bg-slate-50', label: type };
 };
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -280,25 +280,25 @@ export default function ReviewCalendarPage() {
   };
 
   const getDaysUntilDisplay = (days: number | null, isOverdue: boolean) => {
-    if (days === null) return { text: '-', className: 'text-slate-400' };
+    if (days === null) return { text: '-', className: 'text-slate-600' };
     
     if (isOverdue || days < 0) {
       const absDays = Math.abs(days);
       return {
         text: `${absDays} day${absDays !== 1 ? 's' : ''} overdue`,
-        className: 'text-red-400 font-medium',
+        className: 'text-red-600 font-medium',
       };
     }
     
     if (days === 0) {
-      return { text: 'Due today', className: 'text-yellow-400 font-medium' };
+      return { text: 'Due today', className: 'text-yellow-600 font-medium' };
     }
     
     if (days <= 7) {
-      return { text: `${days} day${days !== 1 ? 's' : ''} left`, className: 'text-yellow-400' };
+      return { text: `${days} day${days !== 1 ? 's' : ''} left`, className: 'text-yellow-600' };
     }
     
-    return { text: `${days} days left`, className: 'text-green-400' };
+    return { text: `${days} days left`, className: 'text-green-600' };
   };
 
   const isLoading = calendarLoading || overdueLoading || upcomingLoading;
@@ -316,40 +316,36 @@ export default function ReviewCalendarPage() {
           <div className="flex items-center gap-3 mb-1">
             <Link
               href="/governance/reviews"
-              className="flex items-center gap-1 text-slate-400 hover:text-slate-900 transition-colors"
+              className="flex items-center gap-1 text-slate-600 hover:text-slate-900 transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="text-sm">Back to Reviews</span>
             </Link>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">Review Calendar</h1>
-          <p className="text-slate-400">Visual overview of upcoming document reviews</p>
+          <h1 className="text-2xl font-bold text-black">Review Calendar</h1>
+          <p className="text-slate-600">Visual overview of upcoming document reviews</p>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-red-500/30 bg-white p-4">
+        <div className="rounded-xl border border-red-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-500/20 p-2">
-              <AlertTriangle className="h-5 w-5 text-red-400" />
-            </div>
+                          <AlertTriangle className="h-5 w-5 text-red-600" />
             <div>
-              <p className="text-xs text-slate-400">Overdue</p>
-              <p className="text-2xl font-bold text-red-400">
+              <p className="text-xs text-slate-600">Overdue</p>
+              <p className="text-2xl font-bold text-red-600">
                 {overdueLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : overdueDocuments.length}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-yellow-500/30 bg-white p-4">
+        <div className="rounded-xl border border-yellow-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-yellow-500/20 p-2">
-              <Clock className="h-5 w-5 text-yellow-400" />
-            </div>
+                          <Clock className="h-5 w-5 text-yellow-600" />
             <div>
-              <p className="text-xs text-slate-400">Due This Week</p>
-              <p className="text-2xl font-bold text-yellow-400">
+              <p className="text-xs text-slate-600">Due This Week</p>
+              <p className="text-2xl font-bold text-yellow-600">
                 {upcomingLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
@@ -360,14 +356,12 @@ export default function ReviewCalendarPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-green-500/30 bg-white p-4">
+        <div className="rounded-xl border border-green-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-2">
-              <CheckCircle className="h-5 w-5 text-green-400" />
-            </div>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-xs text-slate-400">Upcoming (30 days)</p>
-              <p className="text-2xl font-bold text-green-400">
+              <p className="text-xs text-slate-600">Upcoming (30 days)</p>
+              <p className="text-2xl font-bold text-green-600">
                 {upcomingLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : upcomingDocuments.length}
               </p>
             </div>
@@ -392,7 +386,7 @@ export default function ReviewCalendarPage() {
                 <ChevronRight className="h-5 w-5" />
               </button>
             </div>
-            <h2 className="text-xl font-semibold text-slate-800">
+            <h2 className="text-xl font-semibold text-black">
               {MONTHS[currentMonth]} {currentYear}
             </h2>
           </div>
@@ -401,15 +395,15 @@ export default function ReviewCalendarPage() {
             <div className="flex items-center gap-3 text-xs">
               <div className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-full bg-red-500"></span>
-                <span className="text-slate-400">Overdue</span>
+                <span className="text-slate-600">Overdue</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-full bg-yellow-500"></span>
-                <span className="text-slate-400">Due Soon</span>
+                <span className="text-slate-600">Due Soon</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-full bg-green-500"></span>
-                <span className="text-slate-400">Upcoming</span>
+                <span className="text-slate-600">Upcoming</span>
               </div>
             </div>
             <button
@@ -423,13 +417,13 @@ export default function ReviewCalendarPage() {
 
         {calendarLoading ? (
           <div className="flex h-96 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
           </div>
         ) : (
           <div className="p-4">
             <div className="grid grid-cols-7 gap-px mb-2">
               {WEEKDAYS.map(day => (
-                <div key={day} className="p-2 text-center text-sm font-medium text-slate-400">
+                <div key={day} className="p-2 text-center text-sm font-medium text-slate-600">
                   {day}
                 </div>
               ))}
@@ -457,8 +451,8 @@ export default function ReviewCalendarPage() {
                     <div className={`text-sm font-medium mb-1 ${
                       day.isCurrentMonth 
                         ? day.isToday 
-                          ? 'text-primary-400' 
-                          : 'text-slate-800'
+                          ? 'text-primary-600' 
+                          : 'text-black'
                         : 'text-slate-600'
                     }`}>
                       {day.date.getDate()}
@@ -494,14 +488,14 @@ export default function ReviewCalendarPage() {
       </div>
 
       {selectedDate && selectedDateDocuments.length > 0 && (
-        <div className="rounded-xl border border-primary-500/30 bg-white p-4">
+        <div className="rounded-xl border border-primary-200 bg-white p-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-slate-800">
+            <h3 className="text-lg font-semibold text-black">
               Reviews for {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </h3>
             <button
               onClick={() => setSelectedDate(null)}
-              className="text-sm text-slate-400 hover:text-slate-900"
+              className="text-sm text-slate-600 hover:text-slate-900"
             >
               Clear selection
             </button>
@@ -523,13 +517,13 @@ export default function ReviewCalendarPage() {
                       <TypeIcon className={`h-4 w-4 ${typeConfig.color}`} />
                     </div>
                     <div>
-                      <p className="font-medium text-slate-800">{doc.title}</p>
-                      <p className="text-sm text-slate-400">
+                      <p className="font-medium text-black">{doc.title}</p>
+                      <p className="text-sm text-slate-600">
                         {typeConfig.label} {doc.owner_name && `• ${doc.owner_name}`}
                       </p>
                     </div>
                   </div>
-                  <ExternalLink className="h-4 w-4 text-slate-400" />
+                  <ExternalLink className="h-4 w-4 text-slate-600" />
                 </div>
               );
             })}
@@ -538,11 +532,11 @@ export default function ReviewCalendarPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-red-500/30 bg-white overflow-hidden">
+        <div className="rounded-xl border border-red-200 bg-white overflow-hidden">
           <div className="flex items-center gap-3 border-b border-slate-200 p-4">
-            <AlertTriangle className="h-5 w-5 text-red-400" />
-            <h3 className="text-lg font-semibold text-slate-800">Overdue Reviews</h3>
-            <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <h3 className="text-lg font-semibold text-black">Overdue Reviews</h3>
+            <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
               {overdueDocuments.length}
             </span>
           </div>
@@ -550,7 +544,7 @@ export default function ReviewCalendarPage() {
           <div className="p-4">
             {overdueLoading ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
               </div>
             ) : overdueDocuments.length === 0 ? (
               <div className="flex h-32 flex-col items-center justify-center text-slate-500">
@@ -568,22 +562,22 @@ export default function ReviewCalendarPage() {
                     <div
                       key={doc.id}
                       onClick={() => handleDocumentClick(doc.id)}
-                      className="flex items-center justify-between rounded-lg border border-red-500/30 bg-slate-50/50 p-3 cursor-pointer transition-colors hover:bg-slate-50"
+                      className="flex items-center justify-between rounded-lg border border-red-200 bg-slate-50/50 p-3 cursor-pointer transition-colors hover:bg-slate-50"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`rounded-lg p-2 ${typeConfig.bgColor} flex-shrink-0`}>
                           <TypeIcon className={`h-4 w-4 ${typeConfig.color}`} />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-slate-800 truncate">{doc.title}</p>
-                          <p className="text-xs text-slate-400">
+                          <p className="font-medium text-black truncate">{doc.title}</p>
+                          <p className="text-xs text-slate-600">
                             Due: {formatDate(doc.next_review_date || '')}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className={`text-xs ${daysDisplay.className}`}>{daysDisplay.text}</span>
-                        <ExternalLink className="h-4 w-4 text-slate-400" />
+                        <ExternalLink className="h-4 w-4 text-slate-600" />
                       </div>
                     </div>
                   );
@@ -593,11 +587,11 @@ export default function ReviewCalendarPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-green-500/30 bg-white overflow-hidden">
+        <div className="rounded-xl border border-green-200 bg-white overflow-hidden">
           <div className="flex items-center gap-3 border-b border-slate-200 p-4">
-            <CalendarIcon className="h-5 w-5 text-green-400" />
-            <h3 className="text-lg font-semibold text-slate-800">Upcoming Reviews</h3>
-            <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
+            <CalendarIcon className="h-5 w-5 text-green-600" />
+            <h3 className="text-lg font-semibold text-black">Upcoming Reviews</h3>
+            <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600">
               {upcomingDocuments.length}
             </span>
           </div>
@@ -605,7 +599,7 @@ export default function ReviewCalendarPage() {
           <div className="p-4">
             {upcomingLoading ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
               </div>
             ) : upcomingDocuments.length === 0 ? (
               <div className="flex h-32 flex-col items-center justify-center text-slate-500">
@@ -625,7 +619,7 @@ export default function ReviewCalendarPage() {
                       key={doc.id}
                       onClick={() => handleDocumentClick(doc.id)}
                       className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-colors hover:bg-slate-50 ${
-                        isDueSoon ? 'border-yellow-500/30' : 'border-green-500/30'
+                        isDueSoon ? 'border-yellow-200' : 'border-green-200'
                       } bg-slate-50/50`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -633,15 +627,15 @@ export default function ReviewCalendarPage() {
                           <TypeIcon className={`h-4 w-4 ${typeConfig.color}`} />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-slate-800 truncate">{doc.title}</p>
-                          <p className="text-xs text-slate-400">
+                          <p className="font-medium text-black truncate">{doc.title}</p>
+                          <p className="text-xs text-slate-600">
                             Due: {formatDate(doc.next_review_date || '')}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className={`text-xs ${daysDisplay.className}`}>{daysDisplay.text}</span>
-                        <ExternalLink className="h-4 w-4 text-slate-400" />
+                        <ExternalLink className="h-4 w-4 text-slate-600" />
                       </div>
                     </div>
                   );

@@ -136,9 +136,9 @@ export default function CompleteAttestationPage() {
   if (error || !attestation) {
     return (
       <div className="card p-8 text-center">
-        <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-slate-800 mb-2">Attestation Not Found</h3>
-        <p className="text-slate-400 mb-4">The requested attestation could not be loaded.</p>
+        <AlertCircle className="h-12 w-12 text-rose-600 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-black mb-2">Attestation Not Found</h3>
+        <p className="text-slate-600 mb-4">The requested attestation could not be loaded.</p>
         <Link href="/governance/attestations" className="btn-primary">
           Back to Attestations
         </Link>
@@ -149,9 +149,9 @@ export default function CompleteAttestationPage() {
   if (attestation.status === 'completed') {
     return (
       <div className="card p-8 text-center">
-        <CheckCircle className="h-12 w-12 text-emerald-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-slate-800 mb-2">Already Completed</h3>
-        <p className="text-slate-400 mb-4">This attestation has already been completed.</p>
+        <CheckCircle className="h-12 w-12 text-emerald-600 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-black mb-2">Already Completed</h3>
+        <p className="text-slate-600 mb-4">This attestation has already been completed.</p>
         <Link href="/governance/attestations" className="btn-primary">
           Back to Attestations
         </Link>
@@ -165,22 +165,22 @@ export default function CompleteAttestationPage() {
     <div className="space-y-8 max-w-3xl mx-auto">
       <div className="page-header">
         <div className="flex items-center gap-4 mb-4">
-          <Link href="/governance/attestations" className="text-slate-400 hover:text-slate-900">
+          <Link href="/governance/attestations" className="text-slate-600 hover:text-slate-900">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1">
-            <h1 className="text-2xl font-semibold text-slate-800">Complete Attestation</h1>
-            <p className="text-slate-400 mt-1">{attestation.campaign_name}</p>
+            <h1 className="text-2xl font-semibold text-black">Complete Attestation</h1>
+            <p className="text-slate-600 mt-1">{attestation.campaign_name}</p>
           </div>
         </div>
       </div>
 
       {isOverdue && (
-        <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-4 flex items-center gap-3">
-          <AlertCircle className="h-5 w-5 text-rose-400 flex-shrink-0" />
+        <div className="bg-rose-50 border border-rose-500/30 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-rose-600 flex-shrink-0" />
           <div>
-            <p className="text-rose-400 font-medium">This attestation is overdue</p>
-            <p className="text-rose-400/70 text-sm">
+            <p className="text-rose-600 font-medium">This attestation is overdue</p>
+            <p className="text-rose-600/70 text-sm">
               Due date was {new Date(attestation.due_date).toLocaleDateString()}. Please complete as soon as possible.
             </p>
           </div>
@@ -190,12 +190,12 @@ export default function CompleteAttestationPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="card p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
-              <ClipboardCheck className="h-5 w-5 text-primary-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
+              <ClipboardCheck className="h-5 w-5 text-primary-600" />
             </div>
             <div>
-              <h3 className="text-lg font-medium text-slate-800">Attestation Statement</h3>
-              <span className="text-sm text-slate-400 capitalize">{attestation.attestation_type.replace('_', ' ')}</span>
+              <h3 className="text-lg font-medium text-black">Attestation Statement</h3>
+              <span className="text-sm text-slate-600 capitalize">{attestation.attestation_type.replace('_', ' ')}</span>
             </div>
           </div>
 
@@ -203,7 +203,7 @@ export default function CompleteAttestationPage() {
             <p className="text-slate-600 whitespace-pre-line">{attestation.attestation_text}</p>
           </div>
 
-          <div className="flex items-center gap-3 text-sm text-slate-400 mb-4">
+          <div className="flex items-center gap-3 text-sm text-slate-600 mb-4">
             <Calendar className="h-4 w-4" />
             <span>Due: {new Date(attestation.due_date).toLocaleDateString()}</span>
           </div>
@@ -225,19 +225,19 @@ export default function CompleteAttestationPage() {
         {attestation.requires_evidence && (
           <div className="card p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/20">
-                <Upload className="h-5 w-5 text-amber-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50">
+                <Upload className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <h3 className="text-lg font-medium text-slate-800">Evidence Upload</h3>
-                <span className="text-sm text-amber-400">Required</span>
+                <h3 className="text-lg font-medium text-black">Evidence Upload</h3>
+                <span className="text-sm text-amber-600">Required</span>
               </div>
             </div>
 
             {attestation.evidence_description && (
               <div className="flex items-start gap-2 mb-4 p-3 bg-white/50 rounded-lg border border-slate-200">
-                <Info className="h-4 w-4 text-primary-400 mt-0.5 flex-shrink-0" />
-                <p className="text-slate-400 text-sm">{attestation.evidence_description}</p>
+                <Info className="h-4 w-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                <p className="text-slate-600 text-sm">{attestation.evidence_description}</p>
               </div>
             )}
 
@@ -252,16 +252,16 @@ export default function CompleteAttestationPage() {
             {evidenceFile ? (
               <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg border border-slate-200">
                 <div className="flex items-center gap-3">
-                  <FileText className="h-5 w-5 text-primary-400" />
+                  <FileText className="h-5 w-5 text-primary-600" />
                   <div>
-                    <p className="text-slate-800 text-sm">{evidenceFile.name}</p>
+                    <p className="text-black text-sm">{evidenceFile.name}</p>
                     <p className="text-xs text-slate-500">{(evidenceFile.size / 1024).toFixed(1)} KB</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={removeFile}
-                  className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 rounded"
+                  className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -272,8 +272,8 @@ export default function CompleteAttestationPage() {
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-primary-500/50 transition-colors text-center"
               >
-                <Upload className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-                <p className="text-slate-400">Click to upload evidence</p>
+                <Upload className="h-8 w-8 text-slate-600 mx-auto mb-2" />
+                <p className="text-slate-600">Click to upload evidence</p>
                 <p className="text-xs text-slate-500 mt-1">PDF, DOC, DOCX, PNG, JPG (max 10MB)</p>
               </button>
             )}
@@ -281,7 +281,7 @@ export default function CompleteAttestationPage() {
         )}
 
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-slate-800 mb-4">Comments (Optional)</h3>
+          <h3 className="text-lg font-medium text-black mb-4">Comments (Optional)</h3>
           <textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}
@@ -312,7 +312,7 @@ export default function CompleteAttestationPage() {
         </div>
 
         {completeMutation.isError && (
-          <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-4 text-rose-400 text-sm">
+          <div className="bg-rose-50 border border-rose-500/30 rounded-lg p-4 text-rose-600 text-sm">
             Failed to submit attestation. Please try again.
           </div>
         )}

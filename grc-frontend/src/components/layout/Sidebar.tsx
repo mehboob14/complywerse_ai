@@ -155,7 +155,7 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
         size={18} 
         className={clsx(
           'flex-shrink-0 transition-colors duration-150',
-          isActive ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-600'
+          isActive ? 'text-primary-600' : 'text-slate-600 group-hover:text-slate-600'
         )} 
       />
       {!collapsed && <span className="truncate">{item.name}</span>}
@@ -186,14 +186,14 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
             'hover:bg-slate-50',
             isAnyChildActive 
               ? 'text-primary-600 bg-primary-50' 
-              : 'text-slate-400 hover:text-slate-600'
+              : 'text-slate-600 hover:text-slate-600'
           )}
         >
           <group.icon size={18} />
         </button>
         <div className="absolute left-full top-0 ml-2 hidden group-hover/nav:block z-50">
           <div className="bg-white rounded-lg shadow-elevated border border-slate-200 py-2 min-w-[200px]">
-            <div className="px-3 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="px-3 py-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wider">
               {group.name}
             </div>
             {group.items.map(item => (
@@ -231,14 +231,14 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
           size={18} 
           className={clsx(
             'flex-shrink-0 transition-colors duration-150',
-            isAnyChildActive ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-500'
+            isAnyChildActive ? 'text-primary-600' : 'text-slate-600 group-hover:text-slate-500'
           )} 
         />
         <span className="flex-1 text-left truncate">{group.name}</span>
         <ChevronDown 
           size={16} 
           className={clsx(
-            'text-slate-400 transition-transform duration-200',
+            'text-slate-600 transition-transform duration-200',
             isOpen ? '' : '-rotate-90'
           )}
         />
@@ -262,7 +262,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                   'flex-shrink-0',
                   (pathname === item.href || pathname.startsWith(item.href + '/'))
                     ? 'text-primary-600' 
-                    : 'text-slate-400 group-hover:text-slate-500'
+                    : 'text-slate-600 group-hover:text-slate-500'
                 )} 
               />
               <span className="truncate">{item.name}</span>
@@ -314,7 +314,7 @@ export default function Sidebar() {
         <div className="flex items-center gap-2.5">
           <Shield size={22} className="text-primary-600 flex-shrink-0" />
           {!collapsed && (
-            <span className="text-lg font-semibold text-slate-800 whitespace-nowrap">ComplyVerse</span>
+            <span className="text-lg font-semibold text-black whitespace-nowrap">ComplyVerse</span>
           )}
         </div>
       </div>
@@ -345,7 +345,7 @@ export default function Sidebar() {
           onClick={() => setCollapsed(!collapsed)}
           className={clsx(
             'flex items-center gap-2 w-full px-3 py-2 rounded-lg',
-            'text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all duration-150',
+            'text-slate-600 hover:text-slate-600 hover:bg-slate-50 transition-all duration-150',
             collapsed && 'justify-center px-2'
           )}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}

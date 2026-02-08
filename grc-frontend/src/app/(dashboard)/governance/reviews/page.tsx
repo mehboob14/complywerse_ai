@@ -64,16 +64,16 @@ interface ReviewStatistics {
 
 const DOCUMENT_TYPES = [
   { value: '', label: 'All Types' },
-  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-500/20' },
-  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
-  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-50' },
+  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-blue-600', bgColor: 'bg-blue-50' },
+  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-green-600', bgColor: 'bg-green-50' },
+  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
+  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
+  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-orange-600', bgColor: 'bg-orange-50' },
 ];
 
 const getTypeStyle = (type: string) => {
-  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-slate-400', bgColor: 'bg-slate-500/20', icon: FileText };
+  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-slate-600', bgColor: 'bg-slate-50', icon: FileText };
 };
 
 type TabType = 'overdue' | 'upcoming' | 'completed' | 'all';
@@ -166,25 +166,25 @@ export default function GovernanceReviewsPage() {
   };
 
   const getDaysDisplay = (days: number | null, isOverdue: boolean) => {
-    if (days === null) return { text: '-', className: 'text-slate-400' };
+    if (days === null) return { text: '-', className: 'text-slate-600' };
     
     if (isOverdue || days < 0) {
       const absDays = Math.abs(days);
       return {
         text: `${absDays} day${absDays !== 1 ? 's' : ''} overdue`,
-        className: 'text-red-400 font-medium',
+        className: 'text-red-600 font-medium',
       };
     }
     
     if (days === 0) {
-      return { text: 'Due today', className: 'text-amber-400 font-medium' };
+      return { text: 'Due today', className: 'text-amber-600 font-medium' };
     }
     
     if (days <= 7) {
-      return { text: `${days} day${days !== 1 ? 's' : ''} left`, className: 'text-amber-400' };
+      return { text: `${days} day${days !== 1 ? 's' : ''} left`, className: 'text-amber-600' };
     }
     
-    return { text: `${days} days left`, className: 'text-green-400' };
+    return { text: `${days} days left`, className: 'text-green-600' };
   };
 
   const tabs: { key: TabType; label: string; count: number }[] = [
@@ -198,8 +198,8 @@ export default function GovernanceReviewsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Document Reviews</h1>
-          <p className="text-slate-400">Track and complete document review schedules</p>
+          <h1 className="text-2xl font-bold text-black">Document Reviews</h1>
+          <p className="text-slate-600">Track and complete document review schedules</p>
         </div>
         <a
           href="/governance/reviews/calendar"
@@ -213,26 +213,26 @@ export default function GovernanceReviewsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary-500/20 p-3">
-              <Calendar className="h-6 w-6 text-primary-400" />
+            <div className="rounded-lg bg-primary-50 p-3">
+              <Calendar className="h-6 w-6 text-primary-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-400">Upcoming (30 days)</p>
-              <p className="text-3xl font-bold text-slate-800">
+              <p className="text-sm text-slate-600">Upcoming (30 days)</p>
+              <p className="text-3xl font-bold text-black">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.due_next_30_days || 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-red-500/30 bg-white p-5">
+        <div className="rounded-xl border border-red-200 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-500/20 p-3">
-              <AlertTriangle className="h-6 w-6 text-red-400" />
+            <div className="rounded-lg bg-red-50 p-3">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-400">Overdue Reviews</p>
-              <p className="text-3xl font-bold text-red-400">
+              <p className="text-sm text-slate-600">Overdue Reviews</p>
+              <p className="text-3xl font-bold text-red-600">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.overdue || 0}
               </p>
             </div>
@@ -241,12 +241,12 @@ export default function GovernanceReviewsPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-3">
-              <CheckCircle className="h-6 w-6 text-green-400" />
+            <div className="rounded-lg bg-green-50 p-3">
+              <CheckCircle className="h-6 w-6 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-400">Completed This Month</p>
-              <p className="text-3xl font-bold text-slate-800">
+              <p className="text-sm text-slate-600">Completed This Month</p>
+              <p className="text-3xl font-bold text-black">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.by_status?.on_track || 0}
               </p>
             </div>
@@ -255,12 +255,12 @@ export default function GovernanceReviewsPage() {
 
         <div className="rounded-xl border border-amber-500/30 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-amber-500/20 p-3">
-              <Clock className="h-6 w-6 text-amber-400" />
+            <div className="rounded-lg bg-amber-50 p-3">
+              <Clock className="h-6 w-6 text-amber-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-400">Due This Week</p>
-              <p className="text-3xl font-bold text-amber-400">
+              <p className="text-sm text-slate-600">Due This Week</p>
+              <p className="text-3xl font-bold text-amber-600">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.due_this_week || 0}
               </p>
             </div>
@@ -285,7 +285,7 @@ export default function GovernanceReviewsPage() {
                 {tab.count > 0 && (
                   <span className={`rounded-full px-2 py-0.5 text-xs ${
                     activeTab === tab.key ? 'bg-primary-500' : 'bg-slate-600'
-                  } ${tab.key === 'overdue' && activeTab !== tab.key ? 'bg-red-500/30 text-red-400' : ''}`}>
+                  } ${tab.key === 'overdue' && activeTab !== tab.key ? 'bg-red-100 text-red-600' : ''}`}>
                     {tab.count}
                   </span>
                 )}
@@ -294,11 +294,11 @@ export default function GovernanceReviewsPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Filter className="h-4 w-4 text-slate-400" />
+            <Filter className="h-4 w-4 text-slate-600" />
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {DOCUMENT_TYPES.map(type => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -310,15 +310,15 @@ export default function GovernanceReviewsPage() {
         <div className="p-4">
           {isLoading ? (
             <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+              <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
             </div>
           ) : activeTab === 'completed' ? (
-            <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-400">
+            <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-600">
               <CheckCircle className="h-12 w-12" />
               <p>Completed reviews will appear here</p>
             </div>
           ) : getDisplayedDocuments().length === 0 ? (
-            <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-400">
+            <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-600">
               <CalendarDays className="h-12 w-12" />
               <p>No documents found for this filter</p>
             </div>
@@ -346,15 +346,15 @@ export default function GovernanceReviewsPage() {
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-medium text-slate-800 truncate">{doc.title}</h3>
+                            <h3 className="font-medium text-black truncate">{doc.title}</h3>
                             {doc.is_overdue && (
-                              <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400">
+                              <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
                                 Overdue
                               </span>
                             )}
                           </div>
                           
-                          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-400">
+                          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
                             <span className={`inline-flex items-center gap-1 ${typeStyle.color}`}>
                               <TypeIcon className="h-3.5 w-3.5" />
                               {typeStyle.label}
@@ -417,7 +417,7 @@ export default function GovernanceReviewsPage() {
 
       {statistics && Object.keys(statistics.by_doc_type).length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-4 text-lg font-semibold text-slate-800">Reviews by Document Type</h3>
+          <h3 className="mb-4 text-lg font-semibold text-black">Reviews by Document Type</h3>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Object.entries(statistics.by_doc_type).map(([docType, data]) => {
               const typeStyle = getTypeStyle(docType);
@@ -432,23 +432,23 @@ export default function GovernanceReviewsPage() {
                     <div className={`rounded-lg p-2 ${typeStyle.bgColor}`}>
                       <TypeIcon className={`h-4 w-4 ${typeStyle.color}`} />
                     </div>
-                    <span className="font-medium text-slate-800">{typeStyle.label}</span>
+                    <span className="font-medium text-black">{typeStyle.label}</span>
                   </div>
                   
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-400">Total</span>
-                      <span className="text-sm font-medium text-slate-800">{data.total}</span>
+                      <span className="text-sm text-slate-600">Total</span>
+                      <span className="text-sm font-medium text-black">{data.total}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-400">Overdue</span>
-                      <span className={`text-sm font-medium ${data.overdue > 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                      <span className="text-sm text-slate-600">Overdue</span>
+                      <span className={`text-sm font-medium ${data.overdue > 0 ? 'text-red-600' : 'text-slate-600'}`}>
                         {data.overdue}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-400">Due Soon</span>
-                      <span className={`text-sm font-medium ${data.due_soon > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
+                      <span className="text-sm text-slate-600">Due Soon</span>
+                      <span className={`text-sm font-medium ${data.due_soon > 0 ? 'text-amber-600' : 'text-slate-600'}`}>
                         {data.due_soon}
                       </span>
                     </div>

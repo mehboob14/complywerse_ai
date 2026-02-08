@@ -24,25 +24,25 @@ type ActionStatus = 'open' | 'in_progress' | 'completed' | 'overdue' | 'cancelle
 type ActionPriority = 'critical' | 'high' | 'medium' | 'low';
 
 const ACTION_TYPES: { value: ActionType; label: string; color: string }[] = [
-  { value: 'mitigate', label: 'Mitigate', color: 'bg-blue-500/20 text-blue-400' },
-  { value: 'transfer', label: 'Transfer', color: 'bg-primary-500/20 text-primary-600' },
-  { value: 'avoid', label: 'Avoid', color: 'bg-orange-500/20 text-orange-400' },
-  { value: 'accept', label: 'Accept', color: 'bg-slate-500/20 text-slate-400' },
+  { value: 'mitigate', label: 'Mitigate', color: 'bg-blue-50 text-blue-700' },
+  { value: 'transfer', label: 'Transfer', color: 'bg-primary-50 text-primary-700' },
+  { value: 'avoid', label: 'Avoid', color: 'bg-orange-50 text-orange-700' },
+  { value: 'accept', label: 'Accept', color: 'bg-slate-50 text-slate-700' },
 ];
 
 const ACTION_STATUSES: { value: ActionStatus; label: string; color: string }[] = [
-  { value: 'open', label: 'Open', color: 'bg-blue-500/20 text-blue-400' },
-  { value: 'in_progress', label: 'In Progress', color: 'bg-yellow-500/20 text-yellow-400' },
-  { value: 'completed', label: 'Completed', color: 'bg-green-500/20 text-green-400' },
-  { value: 'overdue', label: 'Overdue', color: 'bg-red-500/20 text-red-400' },
-  { value: 'cancelled', label: 'Cancelled', color: 'bg-slate-500/20 text-slate-400' },
+  { value: 'open', label: 'Open', color: 'bg-blue-50 text-blue-700' },
+  { value: 'in_progress', label: 'In Progress', color: 'bg-yellow-50 text-yellow-700' },
+  { value: 'completed', label: 'Completed', color: 'bg-green-50 text-green-700' },
+  { value: 'overdue', label: 'Overdue', color: 'bg-red-50 text-red-700' },
+  { value: 'cancelled', label: 'Cancelled', color: 'bg-slate-50 text-slate-700' },
 ];
 
 const ACTION_PRIORITIES: { value: ActionPriority; label: string; color: string }[] = [
-  { value: 'critical', label: 'Critical', color: 'bg-red-500/20 text-red-400' },
-  { value: 'high', label: 'High', color: 'bg-orange-500/20 text-orange-400' },
-  { value: 'medium', label: 'Medium', color: 'bg-yellow-500/20 text-yellow-400' },
-  { value: 'low', label: 'Low', color: 'bg-green-500/20 text-green-400' },
+  { value: 'critical', label: 'Critical', color: 'bg-red-50 text-red-700' },
+  { value: 'high', label: 'High', color: 'bg-orange-50 text-orange-700' },
+  { value: 'medium', label: 'Medium', color: 'bg-yellow-50 text-yellow-700' },
+  { value: 'low', label: 'Low', color: 'bg-green-50 text-green-700' },
 ];
 
 interface MitigationActionFormData {
@@ -146,7 +146,7 @@ export default function MitigationActionsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -156,45 +156,37 @@ export default function MitigationActionsPage() {
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-500/20 p-2">
-              <ListTodo className="h-5 w-5 text-blue-400" />
-            </div>
+                          <ListTodo className="h-5 w-5 text-blue-600" />
             <div>
-              <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
-              <p className="text-sm text-slate-400">Total Actions</p>
+              <p className="text-2xl font-bold text-black">{stats.total}</p>
+              <p className="text-sm text-slate-600">Total Actions</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-yellow-500/20 p-2">
-              <Clock className="h-5 w-5 text-yellow-400" />
-            </div>
+                          <Clock className="h-5 w-5 text-yellow-600" />
             <div>
-              <p className="text-2xl font-bold text-slate-800">{stats.open}</p>
-              <p className="text-sm text-slate-400">Open Actions</p>
+              <p className="text-2xl font-bold text-black">{stats.open}</p>
+              <p className="text-sm text-slate-600">Open Actions</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-red-700/50 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-500/20 p-2">
-              <AlertTriangle className="h-5 w-5 text-red-400" />
-            </div>
+                          <AlertTriangle className="h-5 w-5 text-red-600" />
             <div>
-              <p className="text-2xl font-bold text-red-400">{stats.overdue}</p>
-              <p className="text-sm text-slate-400">Overdue Actions</p>
+              <p className="text-2xl font-bold text-red-600">{stats.overdue}</p>
+              <p className="text-sm text-slate-600">Overdue Actions</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-2">
-              <CheckCircle className="h-5 w-5 text-green-400" />
-            </div>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-2xl font-bold text-slate-800">{stats.completedThisMonth}</p>
-              <p className="text-sm text-slate-400">Completed (Month)</p>
+              <p className="text-2xl font-bold text-black">{stats.completedThisMonth}</p>
+              <p className="text-sm text-slate-600">Completed (Month)</p>
             </div>
           </div>
         </div>
@@ -203,19 +195,19 @@ export default function MitigationActionsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
             <input
               type="text"
               placeholder="Search actions..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-sm text-slate-800 placeholder:text-slate-400"
+              className="rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-sm text-black placeholder:text-slate-600"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black"
           >
             <option value="all">All Statuses</option>
             {ACTION_STATUSES.map((s) => (
@@ -225,7 +217,7 @@ export default function MitigationActionsPage() {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black"
           >
             <option value="all">All Priorities</option>
             {ACTION_PRIORITIES.map((p) => (
@@ -235,7 +227,7 @@ export default function MitigationActionsPage() {
           <select
             value={actionTypeFilter}
             onChange={(e) => setActionTypeFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black"
           >
             <option value="all">All Types</option>
             {ACTION_TYPES.map((t) => (
@@ -257,15 +249,15 @@ export default function MitigationActionsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Title</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Risk</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Type</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Priority</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Owner</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Due Date</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Expected Reduction</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-slate-400">Actions</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Title</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Risk</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Type</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Priority</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Owner</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Due Date</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Expected Reduction</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -279,12 +271,12 @@ export default function MitigationActionsPage() {
                 return (
                   <tr key={action.id} className="border-b border-slate-200 hover:bg-slate-200/30">
                     <td className="px-4 py-3">
-                      <span className="font-medium text-slate-800">{action.title}</span>
+                      <span className="font-medium text-black">{action.title}</span>
                     </td>
                     <td className="px-4 py-3">
                       <Link 
                         href={`/erm/risks`}
-                        className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300"
+                        className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-300"
                       >
                         <LinkIcon className="h-3 w-3" />
                         {action.riskTitle || `Risk #${action.risk_id}`}
@@ -310,7 +302,7 @@ export default function MitigationActionsPage() {
                     </td>
                     <td className="px-4 py-3">
                       {action.due_date ? (
-                        <span className={`text-sm ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-600'}`}>
+                        <span className={`text-sm ${isOverdue ? 'text-red-600 font-medium' : 'text-slate-600'}`}>
                           {new Date(action.due_date).toLocaleDateString()}
                           {isOverdue && ' (Overdue)'}
                         </span>
@@ -328,7 +320,7 @@ export default function MitigationActionsPage() {
                         {action.status !== 'completed' && action.status !== 'cancelled' && (
                           <button
                             onClick={() => setCompletingAction(action)}
-                            className="rounded p-1.5 text-slate-400 hover:bg-green-500/20 hover:text-green-400"
+                            className="rounded p-1.5 text-slate-600 hover:bg-green-50 hover:text-green-600"
                             title="Complete Action"
                           >
                             <CheckCircle className="h-4 w-4" />
@@ -336,7 +328,7 @@ export default function MitigationActionsPage() {
                         )}
                         <button
                           onClick={() => setEditingAction(action)}
-                          className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                          className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                           title="Edit"
                         >
                           <Edit2 className="h-4 w-4" />
@@ -347,7 +339,7 @@ export default function MitigationActionsPage() {
                               deleteMutation.mutate(action.id);
                             }
                           }}
-                          className="rounded p-1.5 text-slate-400 hover:bg-red-500/20 hover:text-red-400"
+                          className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -363,8 +355,8 @@ export default function MitigationActionsPage() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <ListTodo className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-slate-800">No mitigation actions found</h3>
-          <p className="mt-1 text-slate-400">Create mitigation actions to track risk treatment progress</p>
+          <h3 className="mt-4 text-lg font-medium text-black">No mitigation actions found</h3>
+          <p className="mt-1 text-slate-600">Create mitigation actions to track risk treatment progress</p>
         </div>
       )}
 
@@ -453,42 +445,42 @@ function ActionModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">
+          <h2 className="text-lg font-semibold text-black">
             {action ? 'Edit Mitigation Action' : 'Create Mitigation Action'}
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
-            <label className="block text-sm text-slate-400">Title *</label>
+            <label className="block text-sm text-slate-600">Title *</label>
             <input
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Description</label>
+            <label className="block text-sm text-slate-600">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               rows={2}
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Risk *</label>
+            <label className="block text-sm text-slate-600">Risk *</label>
             <select
               value={formData.risk_id}
               onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               required
               disabled={!!action}
             >
@@ -502,11 +494,11 @@ function ActionModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400">Action Type</label>
+              <label className="block text-sm text-slate-600">Action Type</label>
               <select
                 value={formData.action_type}
                 onChange={(e) => setFormData({ ...formData, action_type: e.target.value as ActionType })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               >
                 {ACTION_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -514,11 +506,11 @@ function ActionModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400">Priority</label>
+              <label className="block text-sm text-slate-600">Priority</label>
               <select
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value as ActionPriority })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               >
                 {ACTION_PRIORITIES.map((p) => (
                   <option key={p.value} value={p.value}>{p.label}</option>
@@ -529,11 +521,11 @@ function ActionModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400">Status</label>
+              <label className="block text-sm text-slate-600">Status</label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as ActionStatus })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               >
                 {ACTION_STATUSES.filter(s => s.value !== 'overdue').map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -541,18 +533,18 @@ function ActionModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400">Due Date</label>
+              <label className="block text-sm text-slate-600">Due Date</label>
               <input
                 type="date"
                 value={formData.due_date}
                 onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Expected Residual Reduction (%)</label>
+            <label className="block text-sm text-slate-600">Expected Residual Reduction (%)</label>
             <input
               type="number"
               min="0"
@@ -562,17 +554,17 @@ function ActionModal({
                 ...formData, 
                 expected_residual_reduction: e.target.value ? Number(e.target.value) : undefined 
               })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               placeholder="e.g., 25"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Notes</label>
+            <label className="block text-sm text-slate-600">Notes</label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
               rows={2}
             />
           </div>
@@ -627,17 +619,17 @@ function CompleteActionModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">Complete Action</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-black">Complete Action</h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <p className="mt-2 text-slate-400">{action.title}</p>
+        <p className="mt-2 text-slate-600">{action.title}</p>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
-            <label className="block text-sm text-slate-400">Actual Residual Reduction Achieved (%)</label>
+            <label className="block text-sm text-slate-600">Actual Residual Reduction Achieved (%)</label>
             <div className="mt-2 text-xs text-slate-500">
               Expected: {action.expected_residual_reduction ?? '—'}%
             </div>
@@ -647,7 +639,7 @@ function CompleteActionModal({
               max="100"
               value={actualReduction}
               onChange={(e) => setActualReduction(Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
             />
           </div>
 

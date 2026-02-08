@@ -117,18 +117,18 @@ const CONTROL_PRIORITY_OPTIONS = [
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  compliant: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Compliant' },
-  partially_compliant: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Partially Compliant' },
-  non_compliant: { bg: 'bg-rose-500/20', text: 'text-rose-400', label: 'Non-Compliant' },
-  not_assessed: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Not Assessed' },
+  compliant: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Compliant' },
+  partially_compliant: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Partially Compliant' },
+  non_compliant: { bg: 'bg-rose-50', text: 'text-rose-600', label: 'Non-Compliant' },
+  not_assessed: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Not Assessed' },
   not_applicable: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Not Applicable' },
 };
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
-  critical: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  high: { bg: 'bg-orange-500/20', text: 'text-orange-400' },
-  medium: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  low: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  critical: { bg: 'bg-rose-50', text: 'text-rose-600' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-600' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-600' },
+  low: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
 };
 
 export default function PolicyStatementsPage() {
@@ -316,8 +316,8 @@ export default function PolicyStatementsPage() {
     return (
       <div className="card">
         <div className="flex flex-col items-center justify-center py-12">
-          <AlertCircle className="h-12 w-12 text-rose-400 mb-4" />
-          <p className="text-slate-400">Failed to load policy statements</p>
+          <AlertCircle className="h-12 w-12 text-rose-600 mb-4" />
+          <p className="text-slate-600">Failed to load policy statements</p>
         </div>
       </div>
     );
@@ -326,12 +326,12 @@ export default function PolicyStatementsPage() {
   return (
     <div className="space-y-6">
       {successMessage && (
-        <div className="bg-emerald-500/20 border border-emerald-500/30 rounded-lg p-4 flex items-center gap-3">
-          <CheckCircle className="h-5 w-5 text-emerald-400" />
+        <div className="bg-emerald-50 border border-emerald-500/30 rounded-lg p-4 flex items-center gap-3">
+          <CheckCircle className="h-5 w-5 text-emerald-600" />
           <p className="text-emerald-300">{successMessage}</p>
           <button
             onClick={() => setSuccessMessage(null)}
-            className="ml-auto text-emerald-400 hover:text-emerald-300"
+            className="ml-auto text-emerald-600 hover:text-emerald-300"
           >
             <X className="h-4 w-4" />
           </button>
@@ -340,7 +340,7 @@ export default function PolicyStatementsPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-600" />
           <input
             type="text"
             placeholder="Search statements..."
@@ -417,14 +417,14 @@ export default function PolicyStatementsPage() {
             {isLoading ? (
               <tr>
                 <td colSpan={8} className="text-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-400" />
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-600" />
                 </td>
               </tr>
             ) : filteredStatements.length === 0 ? (
               <tr>
                 <td colSpan={8} className="text-center py-8">
                   <FileText className="h-12 w-12 text-slate-500 mx-auto mb-3" />
-                  <p className="text-slate-400">No policy statements found</p>
+                  <p className="text-slate-600">No policy statements found</p>
                 </td>
               </tr>
             ) : (
@@ -433,7 +433,7 @@ export default function PolicyStatementsPage() {
                 const priorityStyle = PRIORITY_STYLES[stmt.priority || 'medium'] || PRIORITY_STYLES.medium;
                 const isSelected = selectedStatementIds.includes(stmt.id);
                 return (
-                  <tr key={stmt.id} className={isSelected ? 'bg-primary-500/10' : ''}>
+                  <tr key={stmt.id} className={isSelected ? 'bg-primary-50' : ''}>
                     <td>
                       <input
                         type="checkbox"
@@ -449,7 +449,7 @@ export default function PolicyStatementsPage() {
                       </p>
                     </td>
                     <td>
-                      <span className="text-sm text-slate-400">{stmt.document_title || '-'}</span>
+                      <span className="text-sm text-slate-600">{stmt.document_title || '-'}</span>
                     </td>
                     <td>
                       <span className="text-sm capitalize">{stmt.category?.replace(/_/g, ' ') || '-'}</span>
@@ -483,7 +483,7 @@ export default function PolicyStatementsPage() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-600">
             Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, total)} of {total} statements
           </p>
           <div className="flex items-center gap-2">
@@ -494,7 +494,7 @@ export default function PolicyStatementsPage() {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-sm text-slate-400">
+            <span className="text-sm text-slate-600">
               Page {page + 1} of {totalPages}
             </span>
             <button
@@ -513,8 +513,8 @@ export default function PolicyStatementsPage() {
           <div className="bg-white rounded-xl w-full max-w-md">
             <div className="flex items-center justify-between p-6 border-b border-slate-200">
               <div>
-                <h2 className="text-lg font-semibold text-slate-800">Convert to Internal Controls</h2>
-                <p className="text-sm text-slate-400">Create controls from {selectedStatementIds.length} selected statement(s)</p>
+                <h2 className="text-lg font-semibold text-black">Convert to Internal Controls</h2>
+                <p className="text-sm text-slate-600">Create controls from {selectedStatementIds.length} selected statement(s)</p>
               </div>
               <button onClick={() => setIsConvertModalOpen(false)} className="btn-ghost btn-sm">
                 <X className="h-5 w-5" />
@@ -524,7 +524,7 @@ export default function PolicyStatementsPage() {
             <div className="p-6 space-y-6">
               <div className="bg-slate-50 rounded-lg p-4">
                 <p className="text-sm text-slate-600">
-                  <span className="font-semibold text-slate-800">{selectedStatementIds.length}</span> statement(s) will be converted to internal controls.
+                  <span className="font-semibold text-black">{selectedStatementIds.length}</span> statement(s) will be converted to internal controls.
                 </p>
               </div>
 
@@ -581,8 +581,8 @@ export default function PolicyStatementsPage() {
           <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-slate-200">
               <div>
-                <h2 className="text-lg font-semibold text-slate-800">Statement Details</h2>
-                <p className="text-sm text-slate-400">{selectedStatement.statement_code}</p>
+                <h2 className="text-lg font-semibold text-black">Statement Details</h2>
+                <p className="text-sm text-slate-600">{selectedStatement.statement_code}</p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="btn-ghost btn-sm">
                 <X className="h-5 w-5" />
@@ -686,7 +686,7 @@ export default function PolicyStatementsPage() {
                   <div className="space-y-2">
                     {selectedStatement.evidence.map((ev) => (
                       <div key={ev.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg">
-                        <CheckCircle className="h-4 w-4 text-emerald-400" />
+                        <CheckCircle className="h-4 w-4 text-emerald-600" />
                         <span className="text-sm text-slate-600">{ev.name}</span>
                       </div>
                     ))}

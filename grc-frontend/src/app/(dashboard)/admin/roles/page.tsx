@@ -201,16 +201,16 @@ export default function RolesManagementPage() {
       header: 'Role',
       accessor: (role: AdminRole) => (
         <div>
-          <div className="font-medium text-slate-800 flex items-center gap-2">
+          <div className="font-medium text-black flex items-center gap-2">
             {role.name}
             {role.is_system_role && (
-              <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs">
+              <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">
                 System
               </span>
             )}
           </div>
           {role.description && (
-            <div className="text-sm text-slate-400">{role.description}</div>
+            <div className="text-sm text-slate-600">{role.description}</div>
           )}
         </div>
       ),
@@ -233,14 +233,14 @@ export default function RolesManagementPage() {
         <div className="flex space-x-2">
           <button
             onClick={() => handleEdit(role)}
-            className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-slate-800 rounded text-sm"
+            className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-black rounded text-sm"
           >
             {role.is_system_role ? 'View' : 'Edit'}
           </button>
           {!role.is_system_role && (
             <button
               onClick={() => handleDelete(role)}
-              className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded text-sm"
+              className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-600 rounded text-sm"
             >
               Delete
             </button>
@@ -266,7 +266,7 @@ export default function RolesManagementPage() {
       />
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-red-400">
+        <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-red-600">
           {error}
           <button onClick={() => setError(null)} className="ml-4 underline">
             Dismiss
@@ -291,14 +291,14 @@ export default function RolesManagementPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-lg w-full max-w-4xl my-8">
             <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800">
+              <h2 className="text-lg font-semibold text-black">
                 {editingRole ? (editingRole.is_system_role ? 'View Role' : 'Edit Role') : 'Create Role'}
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                  <label className="block text-sm font-medium text-slate-600 mb-2">
                     Role Name
                   </label>
                   <input
@@ -307,13 +307,13 @@ export default function RolesManagementPage() {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, name: e.target.value }))
                     }
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
                     required
                     disabled={editingRole?.is_system_role}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                  <label className="block text-sm font-medium text-slate-600 mb-2">
                     Description
                   </label>
                   <input
@@ -322,14 +322,14 @@ export default function RolesManagementPage() {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, description: e.target.value }))
                     }
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
                     disabled={editingRole?.is_system_role}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-4">
+                <label className="block text-sm font-medium text-slate-600 mb-4">
                   Permissions Matrix
                 </label>
                 <div className="border border-slate-200 rounded-lg overflow-hidden max-h-96 overflow-y-auto">
@@ -353,10 +353,10 @@ export default function RolesManagementPage() {
                             className="w-4 h-4 rounded border-slate-300 bg-slate-50 text-primary-600 focus:ring-primary-500"
                             disabled={editingRole?.is_system_role}
                           />
-                          <span className="font-medium text-slate-800">{module.display_name}</span>
+                          <span className="font-medium text-black">{module.display_name}</span>
                         </div>
                         <svg
-                          className={`w-5 h-5 text-slate-400 transition-transform ${
+                          className={`w-5 h-5 text-slate-600 transition-transform ${
                             expandedModules.has(module.module) ? 'rotate-180' : ''
                           }`}
                           fill="none"
@@ -415,14 +415,14 @@ export default function RolesManagementPage() {
               </div>
 
               <div className="flex justify-between items-center pt-4 border-t border-slate-200">
-                <div className="text-sm text-slate-400">
+                <div className="text-sm text-slate-600">
                   {formData.permission_names.length} permission(s) selected
                 </div>
                 <div className="flex space-x-3">
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-slate-800 rounded-lg text-sm"
+                    className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-black rounded-lg text-sm"
                   >
                     {editingRole?.is_system_role ? 'Close' : 'Cancel'}
                   </button>

@@ -15,7 +15,7 @@ export function ChartEmptyState({ title, description, icon }: EmptyStateProps) {
       <div className="rounded-xl bg-white p-4 mb-4">
         {icon || <BarChart3 className="h-8 w-8 text-slate-500" />}
       </div>
-      <p className="text-sm font-medium text-slate-400">{title}</p>
+      <p className="text-sm font-medium text-slate-600">{title}</p>
       {description && (
         <p className="text-xs text-slate-500 mt-1 max-w-[200px]">{description}</p>
       )}
@@ -104,19 +104,19 @@ export function RiskHeatmap({ data, onCellClick }: RiskHeatmapProps) {
       <div className="flex justify-center gap-4 mt-4 text-xs">
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded bg-green-500" />
-          <span className="text-slate-400">Low</span>
+          <span className="text-slate-600">Low</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded bg-yellow-500" />
-          <span className="text-slate-400">Medium</span>
+          <span className="text-slate-600">Medium</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded bg-orange-500" />
-          <span className="text-slate-400">High</span>
+          <span className="text-slate-600">High</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded bg-red-500" />
-          <span className="text-slate-400">Critical</span>
+          <span className="text-slate-600">Critical</span>
         </div>
       </div>
       <div className="text-center mt-2">
@@ -370,7 +370,7 @@ export function DonutChart({ data, size = 120, thickness = 20, centerLabel, cent
               <span className="text-xl font-bold text-white">{centerValue}</span>
             )}
             {centerLabel && (
-              <span className="text-xs text-slate-400">{centerLabel}</span>
+              <span className="text-xs text-slate-600">{centerLabel}</span>
             )}
           </div>
         )}
@@ -379,7 +379,7 @@ export function DonutChart({ data, size = 120, thickness = 20, centerLabel, cent
         {data.filter(d => d.value > 0).map((d, i) => (
           <div key={i} className="flex items-center gap-1.5 text-xs">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-            <span className="text-slate-400">{d.label}</span>
+            <span className="text-slate-600">{d.label}</span>
             <span className="text-slate-300 font-medium">{d.value}</span>
           </div>
         ))}
@@ -418,7 +418,7 @@ export function ProgressBar({ value, max = 100, label, color = 'primary', showPe
       {(label || showPercentage) && (
         <div className="flex justify-between items-center mb-1.5">
           {label && <span className="text-sm text-slate-300">{label}</span>}
-          {showPercentage && <span className="text-sm font-medium text-slate-400">{Math.round(percentage)}%</span>}
+          {showPercentage && <span className="text-sm font-medium text-slate-600">{Math.round(percentage)}%</span>}
         </div>
       )}
       <div className={`w-full rounded-full bg-slate-700 ${heightClasses[size]} overflow-hidden`}>
@@ -444,18 +444,18 @@ interface KPICardProps {
 
 export function KPICard({ title, value, subtitle, trend, trendValue, icon, color = 'blue', onClick }: KPICardProps) {
   const colorConfig = {
-    blue: { gradient: 'from-blue-500/20 to-blue-600/10', text: 'text-blue-400', hover: 'hover:border-blue-500/50' },
-    green: { gradient: 'from-emerald-500/20 to-emerald-600/10', text: 'text-emerald-400', hover: 'hover:border-emerald-500/50' },
-    amber: { gradient: 'from-amber-500/20 to-amber-600/10', text: 'text-amber-400', hover: 'hover:border-amber-500/50' },
-    red: { gradient: 'from-red-500/20 to-red-600/10', text: 'text-red-400', hover: 'hover:border-red-500/50' },
+    blue: { gradient: 'from-blue-500/20 to-blue-600/10', text: 'text-blue-600', hover: 'hover:border-blue-500/50' },
+    green: { gradient: 'from-emerald-500/20 to-emerald-600/10', text: 'text-emerald-600', hover: 'hover:border-emerald-500/50' },
+    amber: { gradient: 'from-amber-500/20 to-amber-600/10', text: 'text-amber-600', hover: 'hover:border-amber-500/50' },
+    red: { gradient: 'from-red-500/20 to-red-600/10', text: 'text-red-600', hover: 'hover:border-red-500/50' },
     purple: { gradient: 'from-purple-500/20 to-purple-600/10', text: 'text-primary-600', hover: 'hover:border-primary-500/50' },
-    cyan: { gradient: 'from-cyan-500/20 to-cyan-600/10', text: 'text-cyan-400', hover: 'hover:border-cyan-500/50' },
+    cyan: { gradient: 'from-cyan-500/20 to-cyan-600/10', text: 'text-cyan-600', hover: 'hover:border-cyan-500/50' },
   };
 
   const trendColors = {
-    up: 'text-emerald-400',
-    down: 'text-red-400',
-    stable: 'text-slate-400',
+    up: 'text-emerald-600',
+    down: 'text-red-600',
+    stable: 'text-slate-600',
   };
 
   const trendIcons = {
@@ -477,7 +477,7 @@ export function KPICard({ title, value, subtitle, trend, trendValue, icon, color
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-sm text-slate-400 mb-1">{title}</p>
+          <p className="text-sm text-slate-600 mb-1">{title}</p>
           <p className="text-3xl font-bold text-white">{value}</p>
           {subtitle && <p className="text-xs text-slate-500 mt-1">{subtitle}</p>}
           {trend && trendValue && (
@@ -544,7 +544,7 @@ export function StatusDistribution({ data, colorMap }: StatusDistributionProps) 
           <div key={key}>
             <div className="flex justify-between items-center text-sm mb-1">
               <span className="text-slate-300 capitalize">{key.replace(/_/g, ' ')}</span>
-              <span className="text-slate-400">{value} ({Math.round(percentage)}%)</span>
+              <span className="text-slate-600">{value} ({Math.round(percentage)}%)</span>
             </div>
             <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
               <div

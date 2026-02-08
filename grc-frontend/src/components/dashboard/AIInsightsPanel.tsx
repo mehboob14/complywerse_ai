@@ -39,15 +39,15 @@ interface AIInsightsData {
 function getSeverityStyles(severity: string) {
   switch (severity) {
     case 'critical':
-      return 'bg-red-500/20 text-red-400 border-red-500/30';
+      return 'bg-red-50 text-red-700 border-red-200';
     case 'high':
-      return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+      return 'bg-orange-50 text-orange-700 border-orange-500/30';
     case 'medium':
-      return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      return 'bg-yellow-50 text-yellow-700 border-yellow-200';
     case 'low':
-      return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      return 'bg-blue-50 text-blue-700 border-blue-200';
     default:
-      return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+      return 'bg-slate-50 text-slate-700 border-slate-500/30';
   }
 }
 
@@ -69,15 +69,15 @@ function getCategoryIcon(category: string) {
 function getCategoryStyles(category: string) {
   switch (category) {
     case 'compliance':
-      return 'text-blue-400 bg-blue-500/20';
+      return 'text-blue-600 bg-blue-50';
     case 'risk':
-      return 'text-amber-400 bg-amber-500/20';
+      return 'text-amber-600 bg-amber-50';
     case 'evidence':
-      return 'text-emerald-400 bg-emerald-500/20';
+      return 'text-emerald-600 bg-emerald-50';
     case 'governance':
-      return 'text-primary-600 bg-primary-500/20';
+      return 'text-primary-600 bg-primary-50';
     default:
-      return 'text-slate-400 bg-slate-500/20';
+      return 'text-slate-600 bg-slate-50';
   }
 }
 
@@ -102,7 +102,7 @@ export default function AIInsightsPanel() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white">AI Insights</h3>
-              <p className="text-xs text-slate-400">Loading recommendations...</p>
+              <p className="text-xs text-slate-600">Loading recommendations...</p>
             </div>
           </div>
         </div>
@@ -139,7 +139,7 @@ export default function AIInsightsPanel() {
         </div>
         <div className="p-8 text-center">
           <AlertCircle className="h-10 w-10 text-slate-500 mx-auto mb-3" />
-          <p className="text-sm text-slate-400 mb-4">Unable to load AI insights</p>
+          <p className="text-sm text-slate-600 mb-4">Unable to load AI insights</p>
           <button
             onClick={() => refetch()}
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-700 text-sm text-slate-300 hover:bg-slate-600 transition-colors"
@@ -168,7 +168,7 @@ export default function AIInsightsPanel() {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">AI Insights</h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {totalSignals > 0 ? `${totalSignals} issues detected` : 'Analyzing your GRC posture'}
             </p>
           </div>
@@ -176,7 +176,7 @@ export default function AIInsightsPanel() {
         <button
           onClick={() => refetch()}
           disabled={isFetching}
-          className="p-2 rounded-lg text-slate-400 hover:text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50"
+          className="p-2 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50"
           title="Refresh insights"
         >
           <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
@@ -210,10 +210,10 @@ export default function AIInsightsPanel() {
                           {rec.severity}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 line-clamp-2 mb-3">{rec.rationale}</p>
+                      <p className="text-xs text-slate-600 line-clamp-2 mb-3">{rec.rationale}</p>
                       <Link
                         href={rec.action_link}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-primary-400 hover:text-primary-300 transition-colors"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-300 transition-colors"
                       >
                         {rec.action_text}
                         <ChevronRight className="h-3 w-3" />

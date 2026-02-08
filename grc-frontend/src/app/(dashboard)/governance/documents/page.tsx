@@ -98,22 +98,22 @@ interface DocumentListResponse {
 
 const DOCUMENT_TYPES = [
   { value: '', label: 'All Types' },
-  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-500/20' },
-  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
-  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-50' },
+  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-blue-600', bgColor: 'bg-blue-50' },
+  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-green-600', bgColor: 'bg-green-50' },
+  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
+  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
+  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-orange-600', bgColor: 'bg-orange-50' },
 ];
 
 const DOCUMENT_STATUSES = [
   { value: '', label: 'All Statuses' },
-  { value: 'draft', label: 'Draft', color: 'text-slate-400', bgColor: 'bg-slate-500/20' },
-  { value: 'pending_review', label: 'Pending Review', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  { value: 'pending_approval', label: 'Pending Approval', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
-  { value: 'approved', label: 'Approved', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  { value: 'published', label: 'Published', color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  { value: 'expired', label: 'Expired', color: 'text-red-400', bgColor: 'bg-red-500/20' },
+  { value: 'draft', label: 'Draft', color: 'text-slate-600', bgColor: 'bg-slate-50' },
+  { value: 'pending_review', label: 'Pending Review', color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
+  { value: 'pending_approval', label: 'Pending Approval', color: 'text-amber-600', bgColor: 'bg-amber-50' },
+  { value: 'approved', label: 'Approved', color: 'text-blue-600', bgColor: 'bg-blue-50' },
+  { value: 'published', label: 'Published', color: 'text-green-600', bgColor: 'bg-green-50' },
+  { value: 'expired', label: 'Expired', color: 'text-red-600', bgColor: 'bg-red-50' },
   { value: 'archived', label: 'Archived', color: 'text-gray-400', bgColor: 'bg-gray-500/20' },
 ];
 
@@ -134,11 +134,11 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 const getTypeStyle = (type: string) => {
-  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-slate-400', bgColor: 'bg-slate-500/20', icon: FileText };
+  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-slate-600', bgColor: 'bg-slate-50', icon: FileText };
 };
 
 const getStatusStyle = (status: string) => {
-  return DOCUMENT_STATUSES.find(s => s.value === status) || { label: status, color: 'text-slate-400', bgColor: 'bg-slate-500/20' };
+  return DOCUMENT_STATUSES.find(s => s.value === status) || { label: status, color: 'text-slate-600', bgColor: 'bg-slate-50' };
 };
 
 const formatFileSize = (bytes: number | null): string => {
@@ -158,12 +158,12 @@ const getFileIcon = (fileType: string | null) => {
 };
 
 const getFileTypeColor = (fileType: string | null): string => {
-  if (!fileType) return 'text-slate-400';
+  if (!fileType) return 'text-slate-600';
   const type = fileType.toLowerCase();
-  if (type === 'pdf') return 'text-red-400';
-  if (['doc', 'docx'].includes(type)) return 'text-blue-400';
-  if (['xls', 'xlsx'].includes(type)) return 'text-green-400';
-  return 'text-slate-400';
+  if (type === 'pdf') return 'text-red-600';
+  if (['doc', 'docx'].includes(type)) return 'text-blue-600';
+  if (['xls', 'xlsx'].includes(type)) return 'text-green-600';
+  return 'text-slate-600';
 };
 
 type SortField = 'document_code' | 'title' | 'doc_type' | 'status' | 'owner_name' | 'current_version' | 'next_review_date' | 'created_at';
@@ -434,19 +434,19 @@ export default function GovernanceDocumentsPage() {
 
   const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
     <th
-      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400 cursor-pointer hover:text-slate-900 transition-colors"
+      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600 cursor-pointer hover:text-slate-900 transition-colors"
       onClick={() => handleSort(field)}
     >
       <div className="flex items-center gap-1">
         {children}
-        <ArrowUpDown className={`h-3 w-3 ${sortField === field ? 'text-primary-400' : ''}`} />
+        <ArrowUpDown className={`h-3 w-3 ${sortField === field ? 'text-primary-600' : ''}`} />
       </div>
     </th>
   );
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-600">
         <AlertCircle className="h-12 w-12" />
         <p>Failed to load documents</p>
       </div>
@@ -457,8 +457,8 @@ export default function GovernanceDocumentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Document Library</h1>
-          <p className="text-slate-400">Manage governance documents, policies, and procedures</p>
+          <h1 className="text-2xl font-bold text-black">Document Library</h1>
+          <p className="text-slate-600">Manage governance documents, policies, and procedures</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -470,7 +470,7 @@ export default function GovernanceDocumentsPage() {
           </button>
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-primary-600 bg-primary-600/10 px-4 py-2 font-medium text-primary-400 hover:bg-primary-600/20 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-primary-600 bg-primary-50 px-4 py-2 font-medium text-primary-600 hover:bg-primary-600/20 transition-colors"
           >
             <Upload size={18} />
             New Document with File
@@ -486,16 +486,14 @@ export default function GovernanceDocumentsPage() {
       </div>
 
       {parseResult && (
-        <div className="flex items-center justify-between rounded-xl border border-green-500/30 bg-green-500/10 p-4">
+        <div className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-2">
-              <CheckCircle className="h-5 w-5 text-green-400" />
-            </div>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
             <div>
-              <p className="font-medium text-green-400">
+              <p className="font-medium text-green-600">
                 {parseResult.count} policy statement{parseResult.count !== 1 ? 's' : ''} extracted successfully
               </p>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-slate-600">
                 View and manage compliance in the Compliance module
               </p>
             </div>
@@ -510,7 +508,7 @@ export default function GovernanceDocumentsPage() {
             </a>
             <button
               onClick={() => setParseResult(null)}
-              className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+              className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
@@ -521,13 +519,13 @@ export default function GovernanceDocumentsPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
             <input
               type="text"
               placeholder="Search documents..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
           </div>
           
@@ -535,7 +533,7 @@ export default function GovernanceDocumentsPage() {
             <select
               value={typeFilter}
               onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {DOCUMENT_TYPES.map(type => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -545,7 +543,7 @@ export default function GovernanceDocumentsPage() {
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {DOCUMENT_STATUSES.map(status => (
                 <option key={status.value} value={status.value}>{status.label}</option>
@@ -555,7 +553,7 @@ export default function GovernanceDocumentsPage() {
             <select
               value={ownerFilter}
               onChange={(e) => { setOwnerFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               <option value="">All Owners</option>
               {uniqueOwners.map(owner => (
@@ -569,10 +567,10 @@ export default function GovernanceDocumentsPage() {
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         {isLoading ? (
           <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
           </div>
         ) : filteredDocuments.length === 0 ? (
-          <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-400">
+          <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-600">
             <FileText className="h-12 w-12" />
             <p>No documents found</p>
             <button
@@ -592,11 +590,11 @@ export default function GovernanceDocumentsPage() {
                     <SortableHeader field="document_code">Code</SortableHeader>
                     <SortableHeader field="title">Title</SortableHeader>
                     <SortableHeader field="doc_type">Type</SortableHeader>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">File</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">File</th>
                     <SortableHeader field="status">Status</SortableHeader>
                     <SortableHeader field="owner_name">Owner</SortableHeader>
                     <SortableHeader field="current_version">Version</SortableHeader>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
@@ -613,9 +611,9 @@ export default function GovernanceDocumentsPage() {
                         </td>
                         <td className="px-4 py-4">
                           <div className="max-w-xs">
-                            <p className="font-medium text-slate-800 truncate">{doc.title}</p>
+                            <p className="font-medium text-black truncate">{doc.title}</p>
                             {doc.description && (
-                              <p className="text-sm text-slate-400 truncate">{doc.description}</p>
+                              <p className="text-sm text-slate-600 truncate">{doc.description}</p>
                             )}
                           </div>
                         </td>
@@ -653,14 +651,14 @@ export default function GovernanceDocumentsPage() {
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => setViewingDocument(doc)}
-                              className="rounded p-1.5 text-slate-400 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                              className="rounded p-1.5 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
                               title="View"
                             >
                               <Eye className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleEdit(doc)}
-                              className="rounded p-1.5 text-slate-400 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                              className="rounded p-1.5 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
                               title="Edit"
                             >
                               <Edit2 className="h-4 w-4" />
@@ -669,7 +667,7 @@ export default function GovernanceDocumentsPage() {
                               <>
                                 <button
                                   onClick={() => handleDownload(doc)}
-                                  className="rounded p-1.5 text-slate-400 hover:bg-green-500/20 hover:text-green-400 transition-colors"
+                                  className="rounded p-1.5 text-slate-600 hover:bg-green-50 hover:text-green-600 transition-colors"
                                   title="Download File"
                                 >
                                   <Download className="h-4 w-4" />
@@ -678,8 +676,8 @@ export default function GovernanceDocumentsPage() {
                                   onClick={() => parsePolicyMutation.mutate(doc.id)}
                                   className={`rounded p-1.5 transition-colors ${
                                     doc.policy_statement_count && doc.policy_statement_count > 0
-                                      ? 'text-green-400 hover:bg-green-500/20'
-                                      : 'text-primary-600 hover:bg-primary-500/20 hover:text-primary-500'
+                                      ? 'text-green-600 hover:bg-green-50'
+                                      : 'text-primary-600 hover:bg-primary-50 hover:text-primary-500'
                                   }`}
                                   title={doc.policy_statement_count && doc.policy_statement_count > 0 
                                     ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
@@ -697,7 +695,7 @@ export default function GovernanceDocumentsPage() {
                             ) : (
                               <button
                                 onClick={() => setUploadingToDocumentId(doc.id)}
-                                className="rounded p-1.5 text-slate-400 hover:bg-blue-500/20 hover:text-blue-400 transition-colors"
+                                className="rounded p-1.5 text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                                 title="Upload File"
                               >
                                 <Upload className="h-4 w-4" />
@@ -706,7 +704,7 @@ export default function GovernanceDocumentsPage() {
                             {doc.status === 'approved' && (
                               <button
                                 onClick={() => publishMutation.mutate(doc.id)}
-                                className="rounded p-1.5 text-slate-400 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors"
+                                className="rounded p-1.5 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
                                 title="Publish Document"
                                 disabled={publishMutation.isPending}
                               >
@@ -720,7 +718,7 @@ export default function GovernanceDocumentsPage() {
                             {doc.status === 'published' && (
                               <button
                                 onClick={() => setAttestationTargetDocument(doc)}
-                                className="rounded p-1.5 text-slate-400 hover:bg-cyan-500/20 hover:text-cyan-400 transition-colors"
+                                className="rounded p-1.5 text-slate-600 hover:bg-cyan-50 hover:text-cyan-600 transition-colors"
                                 title="Request Attestation"
                               >
                                 <Send className="h-4 w-4" />
@@ -728,7 +726,7 @@ export default function GovernanceDocumentsPage() {
                             )}
                             <button
                               onClick={() => handleDelete(doc)}
-                              className="rounded p-1.5 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                              className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
                               title="Delete"
                               disabled={deleteMutation.isPending}
                             >
@@ -744,24 +742,24 @@ export default function GovernanceDocumentsPage() {
             </div>
 
             <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-slate-600">
                 Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalItems)} of {totalItems} documents
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage(p => Math.max(0, p - 1))}
                   disabled={page === 0}
-                  className="rounded-lg border border-slate-300 bg-slate-200 p-2 text-slate-400 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="rounded-lg border border-slate-300 bg-slate-200 p-2 text-slate-600 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
-                <span className="text-sm text-slate-400">
+                <span className="text-sm text-slate-600">
                   Page {page + 1} of {totalPages || 1}
                 </span>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
-                  className="rounded-lg border border-slate-300 bg-slate-200 p-2 text-slate-400 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="rounded-lg border border-slate-300 bg-slate-200 p-2 text-slate-600 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
@@ -940,10 +938,10 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h2 className="text-xl font-semibold text-slate-800">New Document with File</h2>
+          <h2 className="text-xl font-semibold text-black">New Document with File</h2>
           <button
             onClick={onClose}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -953,11 +951,11 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
           <div
             className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
               dragActive
-                ? 'border-primary-500 bg-primary-500/10'
+                ? 'border-primary-500 bg-primary-50'
                 : file
-                ? 'border-green-500 bg-green-500/10'
+                ? 'border-green-500 bg-green-50'
                 : fileError
-                ? 'border-red-500 bg-red-500/10'
+                ? 'border-red-500 bg-red-50'
                 : 'border-slate-300 hover:border-slate-400'
             }`}
             onDragEnter={handleDrag}
@@ -976,21 +974,21 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
             {file ? (
               <div className="flex flex-col items-center gap-2">
                 <FileIcon className={`h-12 w-12 ${getFileTypeColor(file.name.split('.').pop() || null)}`} />
-                <p className="text-slate-800 font-medium">{file.name}</p>
-                <p className="text-sm text-slate-400">{formatFileSize(file.size)}</p>
+                <p className="text-black font-medium">{file.name}</p>
+                <p className="text-sm text-slate-600">{formatFileSize(file.size)}</p>
                 <button
                   type="button"
                   onClick={() => setFile(null)}
-                  className="mt-2 text-sm text-red-400 hover:text-red-300"
+                  className="mt-2 text-sm text-red-600 hover:text-red-300"
                 >
                   Remove file
                 </button>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2">
-                <Upload className="h-12 w-12 text-slate-400" />
-                <p className="text-slate-800 font-medium">Drag and drop your file here</p>
-                <p className="text-sm text-slate-400">or</p>
+                <Upload className="h-12 w-12 text-slate-600" />
+                <p className="text-black font-medium">Drag and drop your file here</p>
+                <p className="text-sm text-slate-600">or</p>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -1006,7 +1004,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
           </div>
           
           {fileError && (
-            <div className="flex items-center gap-2 text-red-400 text-sm">
+            <div className="flex items-center gap-2 text-red-600 text-sm">
               <AlertCircle className="h-4 w-4" />
               {fileError}
             </div>
@@ -1019,7 +1017,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
               required
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Enter document title"
             />
           </div>
@@ -1030,7 +1028,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={2}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Brief description of the document"
             />
           </div>
@@ -1042,7 +1040,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
                 required
                 value={formData.doc_type}
                 onChange={(e) => setFormData(prev => ({ ...prev, doc_type: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 {DOCUMENT_TYPES.filter(t => t.value).map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
@@ -1056,7 +1054,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
                 required
                 value={formData.classification}
                 onChange={(e) => setFormData(prev => ({ ...prev, classification: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 {CLASSIFICATIONS.map(cls => (
                   <option key={cls.value} value={cls.value}>{cls.label}</option>
@@ -1179,10 +1177,10 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h2 className="text-xl font-semibold text-slate-800">Upload File to Document</h2>
+          <h2 className="text-xl font-semibold text-black">Upload File to Document</h2>
           <button
             onClick={onClose}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1192,11 +1190,11 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
           <div
             className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
               dragActive
-                ? 'border-primary-500 bg-primary-500/10'
+                ? 'border-primary-500 bg-primary-50'
                 : file
-                ? 'border-green-500 bg-green-500/10'
+                ? 'border-green-500 bg-green-50'
                 : fileError
-                ? 'border-red-500 bg-red-500/10'
+                ? 'border-red-500 bg-red-50'
                 : 'border-slate-300 hover:border-slate-400'
             }`}
             onDragEnter={handleDrag}
@@ -1215,21 +1213,21 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
             {file ? (
               <div className="flex flex-col items-center gap-2">
                 <FileIcon className={`h-12 w-12 ${getFileTypeColor(file.name.split('.').pop() || null)}`} />
-                <p className="text-slate-800 font-medium">{file.name}</p>
-                <p className="text-sm text-slate-400">{formatFileSize(file.size)}</p>
+                <p className="text-black font-medium">{file.name}</p>
+                <p className="text-sm text-slate-600">{formatFileSize(file.size)}</p>
                 <button
                   type="button"
                   onClick={() => setFile(null)}
-                  className="mt-2 text-sm text-red-400 hover:text-red-300"
+                  className="mt-2 text-sm text-red-600 hover:text-red-300"
                 >
                   Remove file
                 </button>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2">
-                <Upload className="h-12 w-12 text-slate-400" />
-                <p className="text-slate-800 font-medium">Drag and drop your file here</p>
-                <p className="text-sm text-slate-400">or</p>
+                <Upload className="h-12 w-12 text-slate-600" />
+                <p className="text-black font-medium">Drag and drop your file here</p>
+                <p className="text-sm text-slate-600">or</p>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -1245,7 +1243,7 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
           </div>
           
           {fileError && (
-            <div className="flex items-center gap-2 text-red-400 text-sm">
+            <div className="flex items-center gap-2 text-red-600 text-sm">
               <AlertCircle className="h-4 w-4" />
               {fileError}
             </div>
@@ -1257,7 +1255,7 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
               value={changeSummary}
               onChange={(e) => setChangeSummary(e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Describe what changed..."
             />
           </div>
@@ -1327,12 +1325,12 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h2 className="text-xl font-semibold text-slate-800">
+          <h2 className="text-xl font-semibold text-black">
             {document ? 'Edit Document' : 'New Document'}
           </h2>
           <button
             onClick={onClose}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1346,7 +1344,7 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
               required
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Enter document title"
             />
           </div>
@@ -1357,7 +1355,7 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={2}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Brief description of the document"
             />
           </div>
@@ -1369,7 +1367,7 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
                 required
                 value={formData.doc_type}
                 onChange={(e) => setFormData(prev => ({ ...prev, doc_type: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 {DOCUMENT_TYPES.filter(t => t.value).map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
@@ -1382,7 +1380,7 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
               <select
                 value={formData.classification}
                 onChange={(e) => setFormData(prev => ({ ...prev, classification: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 {CLASSIFICATIONS.map(cls => (
                   <option key={cls.value} value={cls.value}>{cls.label}</option>
@@ -1397,7 +1395,7 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
               value={formData.content}
               onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
               rows={6}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Document content..."
             />
           </div>
@@ -1410,7 +1408,7 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
                 min={1}
                 value={formData.review_cycle_months}
                 onChange={(e) => setFormData(prev => ({ ...prev, review_cycle_months: parseInt(e.target.value) || 12 }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
             
@@ -1420,7 +1418,7 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
                 type="date"
                 value={formData.effective_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, effective_date: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
             
@@ -1430,7 +1428,7 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
                 type="date"
                 value={formData.expiry_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, expiry_date: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
           </div>
@@ -1486,15 +1484,15 @@ function ViewDocumentModal({ document, onClose, onEdit, onDownload }: ViewDocume
               <TypeIcon className={`h-5 w-5 ${typeStyle.color}`} />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-slate-800">{document.title}</h2>
+              <h2 className="text-xl font-semibold text-black">{document.title}</h2>
               {document.document_code && (
-                <p className="text-sm text-slate-400 font-mono">{document.document_code}</p>
+                <p className="text-sm text-slate-600 font-mono">{document.document_code}</p>
               )}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1509,27 +1507,27 @@ function ViewDocumentModal({ document, onClose, onEdit, onDownload }: ViewDocume
             <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
               {statusStyle.label}
             </span>
-            <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-slate-500/20 text-slate-400">
+            <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-slate-50 text-slate-700">
               v{document.current_version}
             </span>
           </div>
 
           {document.description && (
             <div>
-              <h3 className="text-sm font-medium text-slate-400 mb-1">Description</h3>
+              <h3 className="text-sm font-medium text-slate-600 mb-1">Description</h3>
               <p className="text-slate-600">{document.description}</p>
             </div>
           )}
 
           {document.file_name && (
             <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-              <h3 className="text-sm font-medium text-slate-400 mb-3">Attached File</h3>
+              <h3 className="text-sm font-medium text-slate-600 mb-3">Attached File</h3>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <FileIcon className={`h-8 w-8 ${getFileTypeColor(document.file_type)}`} />
                   <div>
-                    <p className="text-slate-800 font-medium">{document.file_name}</p>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-black font-medium">{document.file_name}</p>
+                    <p className="text-sm text-slate-600">
                       {document.file_type?.toUpperCase()} • {formatFileSize(document.file_size)}
                     </p>
                   </div>
@@ -1547,21 +1545,21 @@ function ViewDocumentModal({ document, onClose, onEdit, onDownload }: ViewDocume
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <h3 className="text-sm font-medium text-slate-400 mb-1">Owner</h3>
+              <h3 className="text-sm font-medium text-slate-600 mb-1">Owner</h3>
               <p className="text-slate-600">{document.owner_name || '-'}</p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-slate-400 mb-1">Classification</h3>
+              <h3 className="text-sm font-medium text-slate-600 mb-1">Classification</h3>
               <p className="text-slate-600 capitalize">{document.classification}</p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-slate-400 mb-1">Effective Date</h3>
+              <h3 className="text-sm font-medium text-slate-600 mb-1">Effective Date</h3>
               <p className="text-slate-600">
                 {document.effective_date ? new Date(document.effective_date).toLocaleDateString() : '-'}
               </p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-slate-400 mb-1">Next Review</h3>
+              <h3 className="text-sm font-medium text-slate-600 mb-1">Next Review</h3>
               <p className="text-slate-600">
                 {document.next_review_date ? new Date(document.next_review_date).toLocaleDateString() : '-'}
               </p>
@@ -1570,7 +1568,7 @@ function ViewDocumentModal({ document, onClose, onEdit, onDownload }: ViewDocume
 
           {document.content && (
             <div>
-              <h3 className="text-sm font-medium text-slate-400 mb-1">Content</h3>
+              <h3 className="text-sm font-medium text-slate-600 mb-1">Content</h3>
               <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 max-h-64 overflow-y-auto">
                 <p className="text-slate-600 whitespace-pre-wrap">{document.content}</p>
               </div>
@@ -1656,12 +1654,12 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
       <div className="w-full max-w-lg max-h-[90vh] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-800">Request Attestation</h2>
-            <p className="text-sm text-slate-400 mt-0.5">{document.title}</p>
+            <h2 className="text-lg font-semibold text-black">Request Attestation</h2>
+            <p className="text-sm text-slate-600 mt-0.5">{document.title}</p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded-lg p-2 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1689,14 +1687,14 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
               <button
                 type="button"
                 onClick={handleSelectAll}
-                className="text-xs text-primary-400 hover:text-primary-300"
+                className="text-xs text-primary-600 hover:text-primary-300"
               >
                 {selectedUserIds.length === filteredUsers.length ? 'Deselect All' : 'Select All'}
               </button>
             </div>
             
             <div className="relative mb-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
               <input
                 type="text"
                 placeholder="Search users..."
@@ -1709,10 +1707,10 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
             <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-300 bg-slate-50/50">
               {usersLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+                  <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
                 </div>
               ) : filteredUsers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                <div className="flex flex-col items-center justify-center py-8 text-slate-600">
                   <Users className="h-8 w-8 mb-2" />
                   <p className="text-sm">No users found</p>
                 </div>
@@ -1732,7 +1730,7 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
                       <p className="text-sm font-medium text-slate-200 truncate">
                         {tenantUser.user?.display_name || 'Unknown User'}
                       </p>
-                      <p className="text-xs text-slate-400 truncate">
+                      <p className="text-xs text-slate-600 truncate">
                         {tenantUser.user?.email || 'No email'}
                       </p>
                     </div>
@@ -1835,17 +1833,15 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
       <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl flex flex-col">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-2">
-              <Wand2 className="h-5 w-5 text-primary-600" />
-            </div>
+                          <Wand2 className="h-5 w-5 text-primary-600" />
             <div>
-              <h2 className="text-lg font-semibold text-slate-800">AI Draft Policy</h2>
-              <p className="text-sm text-slate-400">Generate professional policy documents with AI</p>
+              <h2 className="text-lg font-semibold text-black">AI Draft Policy</h2>
+              <p className="text-sm text-slate-600">Generate professional policy documents with AI</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded-lg p-2 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1860,7 +1856,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                   <select
                     value={formData.doc_type}
                     onChange={(e) => setFormData(prev => ({ ...prev, doc_type: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   >
                     <option value="policy">Policy</option>
                     <option value="standard">Standard</option>
@@ -1875,7 +1871,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                     placeholder="e.g., SAMA CSF, ISO 27001, PCI DSS"
                     value={formData.regulatory_scope}
                     onChange={(e) => setFormData(prev => ({ ...prev, regulatory_scope: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
               </div>
@@ -1888,7 +1884,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                   placeholder="e.g., Information Security Policy"
                   value={formData.title}
                   onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
 
@@ -1899,7 +1895,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                   placeholder="Describe what this policy should cover, any specific requirements, or areas of focus..."
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
 
@@ -1914,7 +1910,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                 <button
                   type="submit"
                   disabled={isLoading || !formData.title.trim()}
-                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-slate-800 hover:from-purple-700 hover:to-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-black hover:from-purple-700 hover:to-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <>
@@ -1934,11 +1930,11 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
                     <FileText className="h-4 w-4" />
                     <span>{result.word_count} words</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
                     <Loader2 className="h-4 w-4" />
                     <span>~{result.estimated_review_time} to review</span>
                   </div>
@@ -1959,7 +1955,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                   {result.framework_alignment.map((alignment, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-2 rounded-full bg-primary-500/20 px-3 py-1"
+                      className="flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1"
                     >
                       <Shield className="h-3.5 w-3.5 text-primary-600" />
                       <span className="text-sm font-medium text-primary-500">{alignment.framework}</span>
@@ -1971,7 +1967,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
 
               <div className="rounded-xl border border-slate-300 bg-slate-50/50 overflow-hidden">
                 <div className="border-b border-slate-300 px-4 py-2 bg-white/50">
-                  <h3 className="font-medium text-slate-800">{result.suggested_title}</h3>
+                  <h3 className="font-medium text-black">{result.suggested_title}</h3>
                 </div>
                 <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
                   {result.suggested_sections.map((section, idx) => (
@@ -2001,7 +1997,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                 </button>
                 <button
                   onClick={() => onUseContent(result.generated_content, result.suggested_title)}
-                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-slate-800 hover:from-purple-700 hover:to-blue-700 transition-colors"
+                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-black hover:from-purple-700 hover:to-blue-700 transition-colors"
                 >
                   <CheckCircle className="h-4 w-4" />
                   Use This Content

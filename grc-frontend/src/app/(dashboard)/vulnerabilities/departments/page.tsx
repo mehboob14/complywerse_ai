@@ -171,23 +171,23 @@ export default function DepartmentsManagementPage() {
   );
 
   const severityStyles: Record<string, string> = {
-    critical: 'bg-red-500/20 text-red-400',
-    high: 'bg-orange-500/20 text-orange-400',
-    medium: 'bg-yellow-500/20 text-yellow-400',
-    low: 'bg-blue-500/20 text-blue-400',
-    info: 'bg-slate-500/20 text-slate-400',
+    critical: 'bg-red-50 text-red-700',
+    high: 'bg-orange-50 text-orange-700',
+    medium: 'bg-yellow-50 text-yellow-700',
+    low: 'bg-blue-50 text-blue-700',
+    info: 'bg-slate-50 text-slate-700',
   };
 
   const priorityStyles: Record<string, string> = {
-    high: 'bg-red-500/20 text-red-400',
-    medium: 'bg-yellow-500/20 text-yellow-400',
-    low: 'bg-green-500/20 text-green-400',
+    high: 'bg-red-50 text-red-700',
+    medium: 'bg-yellow-50 text-yellow-700',
+    low: 'bg-green-50 text-green-700',
   };
 
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -196,8 +196,8 @@ export default function DepartmentsManagementPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Vulnerability Departments</h1>
-          <p className="text-slate-400 mt-1">Manage departments responsible for vulnerability remediation</p>
+          <h1 className="text-2xl font-bold text-black">Vulnerability Departments</h1>
+          <p className="text-slate-600 mt-1">Manage departments responsible for vulnerability remediation</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -225,8 +225,8 @@ export default function DepartmentsManagementPage() {
         {(!filteredDepartments || filteredDepartments.length === 0) ? (
           <div className="col-span-full rounded-xl border border-slate-200 bg-white p-12 text-center">
             <Building2 className="h-12 w-12 mx-auto text-slate-600 mb-4" />
-            <h3 className="text-lg font-medium text-slate-800 mb-2">No departments found</h3>
-            <p className="text-slate-400 mb-4">Create your first department to start assigning vulnerabilities</p>
+            <h3 className="text-lg font-medium text-black mb-2">No departments found</h3>
+            <p className="text-slate-600 mb-4">Create your first department to start assigning vulnerabilities</p>
             <button
               onClick={() => setShowCreateModal(true)}
               className="btn-primary inline-flex items-center gap-2"
@@ -243,12 +243,12 @@ export default function DepartmentsManagementPage() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
-                    <Building2 className="h-5 w-5 text-primary-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
+                    <Building2 className="h-5 w-5 text-primary-600" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-slate-800">{dept.name}</h3>
+                      <h3 className="font-semibold text-black">{dept.name}</h3>
                       {dept.code && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-500 font-mono">
                           {dept.code}
@@ -256,14 +256,14 @@ export default function DepartmentsManagementPage() {
                       )}
                     </div>
                     {dept.description && (
-                      <p className="text-sm text-slate-400 line-clamp-1">{dept.description}</p>
+                      <p className="text-sm text-slate-600 line-clamp-1">{dept.description}</p>
                     )}
                   </div>
                 </div>
                 <div className="relative">
                   <button
                     onClick={() => setActiveMenuId(activeMenuId === dept.id ? null : dept.id)}
-                    className="p-1 text-slate-400 hover:text-slate-900 rounded"
+                    className="p-1 text-slate-600 hover:text-slate-900 rounded"
                   >
                     <MoreVertical size={16} />
                   </button>
@@ -308,7 +308,7 @@ export default function DepartmentsManagementPage() {
                             deleteDepartmentMutation.mutate(dept.id);
                           }
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-slate-200"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-slate-200"
                       >
                         <Trash2 size={14} />
                         Delete
@@ -319,11 +319,11 @@ export default function DepartmentsManagementPage() {
               </div>
 
               <div className="flex items-center gap-4 text-sm mb-4">
-                <div className="flex items-center gap-1.5 text-slate-400">
+                <div className="flex items-center gap-1.5 text-slate-600">
                   <Users size={14} />
                   <span>{dept.member_count || 0} members</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-slate-400">
+                <div className="flex items-center gap-1.5 text-slate-600">
                   <Bug size={14} />
                   <span>{dept.vulnerability_count || 0} vulnerabilities</span>
                 </div>
@@ -331,7 +331,7 @@ export default function DepartmentsManagementPage() {
 
               <button
                 onClick={() => setSelectedDepartment(selectedDepartment?.id === dept.id ? null : dept)}
-                className="w-full text-left text-sm text-primary-400 hover:text-primary-300 flex items-center gap-1"
+                className="w-full text-left text-sm text-primary-600 hover:text-primary-300 flex items-center gap-1"
               >
                 View assigned vulnerabilities
                 <ChevronRight size={14} className={selectedDepartment?.id === dept.id ? 'rotate-90' : ''} />
@@ -352,9 +352,9 @@ export default function DepartmentsManagementPage() {
                           <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${severityStyles[vuln.severity] || severityStyles.info}`}>
                             {vuln.severity}
                           </span>
-                          <span className="text-sm text-slate-800 truncate max-w-[150px]">{vuln.title}</span>
+                          <span className="text-sm text-black truncate max-w-[150px]">{vuln.title}</span>
                         </div>
-                        <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${priorityStyles[vuln.priority] || 'bg-slate-500/20 text-slate-400'}`}>
+                        <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${priorityStyles[vuln.priority] || 'bg-slate-50 text-slate-700'}`}>
                           {vuln.priority}
                         </span>
                       </Link>
@@ -376,8 +376,8 @@ export default function DepartmentsManagementPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-slate-800">Create Department</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-xl font-bold text-black">Create Department</h2>
+              <button onClick={() => setShowCreateModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
@@ -420,8 +420,8 @@ export default function DepartmentsManagementPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-slate-800">Edit Department</h2>
-              <button onClick={() => { setShowEditModal(false); setSelectedDepartment(null); }} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-xl font-bold text-black">Edit Department</h2>
+              <button onClick={() => { setShowEditModal(false); setSelectedDepartment(null); }} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
@@ -467,8 +467,8 @@ export default function DepartmentsManagementPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-slate-800">Department Members - {selectedDepartment.name}</h2>
-              <button onClick={() => { setShowMemberModal(false); setSelectedDepartment(null); }} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-xl font-bold text-black">Department Members - {selectedDepartment.name}</h2>
+              <button onClick={() => { setShowMemberModal(false); setSelectedDepartment(null); }} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
@@ -527,20 +527,20 @@ export default function DepartmentsManagementPage() {
                 departmentMembers.map((member) => (
                   <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-200/50">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-500/20 text-primary-400 text-sm font-medium">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-700 text-sm font-medium">
                         {(member.user_name || 'U')[0].toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-slate-800">{member.user_name || `User #${member.user_id}`}</p>
-                        <p className="text-xs text-slate-400">{member.user_email || ''}</p>
+                        <p className="text-sm font-medium text-black">{member.user_name || `User #${member.user_id}`}</p>
+                        <p className="text-xs text-slate-600">{member.user_email || ''}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
-                          member.role === 'head' ? 'bg-primary-500/20 text-primary-600' :
-                          member.role === 'lead' ? 'bg-blue-500/20 text-blue-400' :
-                          'bg-slate-500/20 text-slate-400'
+                          member.role === 'head' ? 'bg-primary-50 text-primary-700' :
+                          member.role === 'lead' ? 'bg-blue-50 text-blue-700' :
+                          'bg-slate-50 text-slate-700'
                         }`}>
                           {member.role}
                         </span>
@@ -550,7 +550,7 @@ export default function DepartmentsManagementPage() {
                       </div>
                       <button
                         onClick={() => removeMemberMutation.mutate({ deptId: selectedDepartment.id, memberId: member.id })}
-                        className="text-slate-400 hover:text-red-400"
+                        className="text-slate-600 hover:text-red-600"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -573,8 +573,8 @@ export default function DepartmentsManagementPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-slate-800">Escalation Paths - {selectedDepartment.name}</h2>
-              <button onClick={() => { setShowEscalationModal(false); setSelectedDepartment(null); }} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-xl font-bold text-black">Escalation Paths - {selectedDepartment.name}</h2>
+              <button onClick={() => { setShowEscalationModal(false); setSelectedDepartment(null); }} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
@@ -644,12 +644,12 @@ export default function DepartmentsManagementPage() {
                 escalationPaths.map((path) => (
                   <div key={path.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-200/50">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500/20 text-orange-400 text-sm font-medium">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-700 text-sm font-medium">
                         {path.escalation_order}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-slate-800">{path.name}</p>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-sm font-medium text-black">{path.name}</p>
+                        <p className="text-xs text-slate-600">
                           {path.target_role && `To: ${path.target_role}`}
                           {path.time_threshold_hours && ` | After ${path.time_threshold_hours}h`}
                         </p>

@@ -25,8 +25,8 @@ export default function ComplianceLayout({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Compliance</h1>
-        <p className="text-slate-400">Policy statement tracking and compliance assessment</p>
+        <h1 className="text-2xl font-bold text-black">Compliance</h1>
+        <p className="text-slate-600">Policy statement tracking and compliance assessment</p>
       </div>
 
       <div className="flex flex-wrap gap-1 rounded-xl bg-white p-1">
@@ -41,7 +41,7 @@ export default function ComplianceLayout({
                 'flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-primary-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-200 hover:text-slate-900'
+                  : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
               )}
             >
               <item.icon className="h-4 w-4" />

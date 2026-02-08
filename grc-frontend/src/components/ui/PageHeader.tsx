@@ -46,18 +46,18 @@ export function PageHeader({
         <div className="flex items-start gap-4">
           {Icon && (
             <div className={clsx(
-              'flex items-center justify-center w-12 h-12 rounded-xl flex-shrink-0',
+              'flex-shrink-0',
               iconColorClasses[iconColor]
             )}>
               <Icon size={24} />
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-2xl font-bold text-black tracking-tight">
               {title}
             </h1>
             {subtitle && (
-              <p className="mt-1 text-slate-500 text-sm leading-relaxed max-w-2xl">
+              <p className="mt-1 text-slate-600 text-sm leading-relaxed max-w-2xl">
                 {subtitle}
               </p>
             )}

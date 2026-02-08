@@ -32,7 +32,7 @@ export function TrendIndicator({
   const sizeStyle = sizeStyles[size];
 
   const getColor = () => {
-    if (direction === 'neutral') return 'text-slate-400';
+    if (direction === 'neutral') return 'text-slate-600';
     const isPositive = inverted ? direction === 'down' : direction === 'up';
     return isPositive ? 'text-success-500' : 'text-danger-500';
   };

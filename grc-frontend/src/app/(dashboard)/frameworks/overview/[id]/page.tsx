@@ -99,17 +99,17 @@ export default function FrameworkOverviewPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
 
   if (error || !framework) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center text-red-600">
         <AlertTriangle className="mb-2 h-8 w-8" />
         <p>Failed to load framework overview</p>
-        <Link href="/frameworks" className="mt-4 text-primary-400 hover:underline">
+        <Link href="/frameworks" className="mt-4 text-primary-600 hover:underline">
           Return to Frameworks
         </Link>
       </div>
@@ -124,7 +124,7 @@ export default function FrameworkOverviewPage() {
       <div className="flex items-center gap-3">
         <Link 
           href="/frameworks"
-          className="flex items-center gap-1 rounded-lg bg-white px-3 py-2 text-sm text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+          className="flex items-center gap-1 rounded-lg bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Frameworks
@@ -135,22 +135,22 @@ export default function FrameworkOverviewPage() {
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className={`rounded-xl p-3 ${
-              isCertification ? 'bg-emerald-500/20' : 'bg-blue-500/20'
+              isCertification ? 'bg-emerald-50' : 'bg-blue-50'
             }`}>
               {isCertification ? (
-                <Award className="h-8 w-8 text-emerald-400" />
+                <Award className="h-8 w-8 text-emerald-600" />
               ) : (
-                <FileText className="h-8 w-8 text-blue-400" />
+                <FileText className="h-8 w-8 text-blue-600" />
               )}
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">{framework.name}</h1>
-              <p className="text-slate-400">Version {framework.version}</p>
+              <h1 className="text-2xl font-bold text-black">{framework.name}</h1>
+              <p className="text-slate-600">Version {framework.version}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${
                   isCertification 
-                    ? 'bg-emerald-500/20 text-emerald-400' 
-                    : 'bg-blue-500/20 text-blue-400'
+                    ? 'bg-emerald-50 text-emerald-700' 
+                    : 'bg-blue-50 text-blue-700'
                 }`}>
                   {isCertification ? '🏆 Certification Framework' : '📋 Compliance Framework'}
                 </span>
@@ -194,9 +194,9 @@ export default function FrameworkOverviewPage() {
 
         {(isCertification && framework.certification_body) || (isCompliance && framework.regulatory_authority) ? (
           <div className="mt-4 pt-4 border-t border-slate-200">
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-600">
               {isCertification ? 'Certification Body:' : 'Regulatory Authority:'}
-              <span className="ml-2 text-slate-800 font-medium">
+              <span className="ml-2 text-black font-medium">
                 {isCertification ? framework.certification_body : framework.regulatory_authority}
               </span>
             </p>
@@ -210,11 +210,11 @@ export default function FrameworkOverviewPage() {
             onClick={() => setShowReasoning(!showReasoning)}
             className="flex w-full items-center justify-between text-left"
           >
-            <span className="font-medium text-slate-800">Classification Reasoning</span>
+            <span className="font-medium text-black">Classification Reasoning</span>
             {showReasoning ? (
-              <ChevronUp className="h-5 w-5 text-slate-400" />
+              <ChevronUp className="h-5 w-5 text-slate-600" />
             ) : (
-              <ChevronDown className="h-5 w-5 text-slate-400" />
+              <ChevronDown className="h-5 w-5 text-slate-600" />
             )}
           </button>
           {showReasoning && (
@@ -230,8 +230,8 @@ export default function FrameworkOverviewPage() {
       {isCertification && (
         <>
           <div className="card border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-              <RefreshCw className="h-5 w-5 text-emerald-400" />
+            <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-emerald-600" />
               Certification Lifecycle
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -240,11 +240,11 @@ export default function FrameworkOverviewPage() {
                 return (
                   <div key={phase.name} className="relative">
                     <div className="flex flex-col items-center text-center p-4 rounded-lg bg-white/50 border border-slate-200 hover:border-emerald-500/50 transition-colors">
-                      <div className="rounded-full bg-emerald-500/20 p-3 mb-3">
-                        <PhaseIcon className="h-6 w-6 text-emerald-400" />
+                      <div className="rounded-full bg-emerald-50 p-3 mb-3">
+                        <PhaseIcon className="h-6 w-6 text-emerald-600" />
                       </div>
-                      <h3 className="font-medium text-slate-800 text-sm">{phase.name}</h3>
-                      <p className="text-xs text-slate-400 mt-1">{phase.description}</p>
+                      <h3 className="font-medium text-black text-sm">{phase.name}</h3>
+                      <p className="text-xs text-slate-600 mt-1">{phase.description}</p>
                     </div>
                     {index < lifecyclePhases.length - 1 && (
                       <div className="hidden md:block absolute top-1/2 -right-2 transform -translate-y-1/2 text-slate-600">
@@ -259,8 +259,8 @@ export default function FrameworkOverviewPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="card border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                <ClipboardCheck className="h-5 w-5 text-emerald-400" />
+              <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-emerald-600" />
                 Required Artifacts
               </h2>
               <div className="space-y-3">
@@ -272,11 +272,11 @@ export default function FrameworkOverviewPage() {
                   : defaultArtifacts
                 ).map((artifact: any, index: number) => (
                   <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-white/50 border border-slate-200">
-                    <CheckCircle className="h-5 w-5 text-emerald-400 flex-shrink-0" />
+                    <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0" />
                     <div>
-                      <span className="text-slate-800 font-medium">{artifact.name}</span>
+                      <span className="text-black font-medium">{artifact.name}</span>
                       {artifact.description && artifact.description !== artifact.name && (
-                        <p className="text-sm text-slate-400">{artifact.description}</p>
+                        <p className="text-sm text-slate-600">{artifact.description}</p>
                       )}
                     </div>
                   </div>
@@ -285,23 +285,23 @@ export default function FrameworkOverviewPage() {
             </div>
 
             <div className="card border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                <Clock className="h-5 w-5 text-emerald-400" />
+              <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+                <Clock className="h-5 w-5 text-emerald-600" />
                 Certification Details
               </h2>
               <div className="space-y-4">
                 {framework.certification_validity_period && (
                   <div className="p-3 rounded-lg bg-white/50 border border-slate-200">
-                    <p className="text-sm text-slate-400">Validity Period</p>
-                    <p className="text-slate-800 font-medium">{framework.certification_validity_period}</p>
+                    <p className="text-sm text-slate-600">Validity Period</p>
+                    <p className="text-black font-medium">{framework.certification_validity_period}</p>
                   </div>
                 )}
                 {framework.certification_levels && framework.certification_levels.length > 0 && (
                   <div className="p-3 rounded-lg bg-white/50 border border-slate-200">
-                    <p className="text-sm text-slate-400 mb-2">Certification Levels</p>
+                    <p className="text-sm text-slate-600 mb-2">Certification Levels</p>
                     <div className="flex flex-wrap gap-2">
                       {framework.certification_levels.map((level: any, index: number) => (
-                        <span key={index} className="rounded-full bg-emerald-500/20 px-3 py-1 text-sm text-emerald-400">
+                        <span key={index} className="rounded-full bg-emerald-50 px-3 py-1 text-sm text-emerald-600">
                           {typeof level === 'string' ? level : level.name || `Level ${index + 1}`}
                         </span>
                       ))}
@@ -309,8 +309,8 @@ export default function FrameworkOverviewPage() {
                   </div>
                 )}
                 <div className="p-3 rounded-lg bg-white/50 border border-slate-200">
-                  <p className="text-sm text-slate-400">Total Controls</p>
-                  <p className="text-slate-800 font-medium">{framework.controls_count} controls to implement</p>
+                  <p className="text-sm text-slate-600">Total Controls</p>
+                  <p className="text-black font-medium">{framework.controls_count} controls to implement</p>
                 </div>
               </div>
             </div>
@@ -322,8 +322,8 @@ export default function FrameworkOverviewPage() {
         <>
           {framework.framework_purpose && (
             <div className="card border-slate-200 bg-gradient-to-br from-slate-800 to-blue-900/20">
-              <h2 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
-                <Target className="h-5 w-5 text-blue-400" />
+              <h2 className="text-lg font-semibold text-black mb-3 flex items-center gap-2">
+                <Target className="h-5 w-5 text-blue-600" />
                 Framework Purpose
               </h2>
               <p className="text-slate-600 leading-relaxed">{framework.framework_purpose}</p>
@@ -332,43 +332,43 @@ export default function FrameworkOverviewPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="card border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-blue-400" />
+              <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-blue-600" />
                 Scope & Audience
               </h2>
               <div className="space-y-4">
                 {framework.framework_scope && (
                   <div className="p-3 rounded-lg bg-white/50 border border-slate-200">
-                    <p className="text-sm text-slate-400">Scope</p>
-                    <p className="text-slate-800">{framework.framework_scope}</p>
+                    <p className="text-sm text-slate-600">Scope</p>
+                    <p className="text-black">{framework.framework_scope}</p>
                   </div>
                 )}
                 {framework.target_audience && (
                   <div className="p-3 rounded-lg bg-white/50 border border-slate-200">
-                    <p className="text-sm text-slate-400">Target Audience</p>
-                    <p className="text-slate-800 flex items-center gap-2">
-                      <Users className="h-4 w-4 text-blue-400" />
+                    <p className="text-sm text-slate-600">Target Audience</p>
+                    <p className="text-black flex items-center gap-2">
+                      <Users className="h-4 w-4 text-blue-600" />
                       {framework.target_audience}
                     </p>
                   </div>
                 )}
                 <div className="p-3 rounded-lg bg-white/50 border border-slate-200">
-                  <p className="text-sm text-slate-400">Total Controls</p>
-                  <p className="text-slate-800 font-medium">{framework.controls_count} controls to implement</p>
+                  <p className="text-sm text-slate-600">Total Controls</p>
+                  <p className="text-black font-medium">{framework.controls_count} controls to implement</p>
                 </div>
               </div>
             </div>
 
             {framework.framework_objectives && framework.framework_objectives.length > 0 && (
               <div className="card border-slate-200">
-                <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-blue-400" />
+                <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-blue-600" />
                   Framework Objectives
                 </h2>
                 <ul className="space-y-2">
                   {framework.framework_objectives.map((objective: string, index: number) => (
                     <li key={index} className="flex items-start gap-2 text-slate-600">
-                      <CheckCircle className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                      <CheckCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
                       <span>{objective}</span>
                     </li>
                   ))}
@@ -379,8 +379,8 @@ export default function FrameworkOverviewPage() {
 
           {framework.adoption_approach && (
             <div className="card border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                <RefreshCw className="h-5 w-5 text-blue-400" />
+              <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+                <RefreshCw className="h-5 w-5 text-blue-600" />
                 Adoption Approach
               </h2>
               <div className="space-y-3">
@@ -391,7 +391,7 @@ export default function FrameworkOverviewPage() {
                     : [String(framework.adoption_approach)]
                 ).map((step: any, index: number) => (
                   <div key={index} className="flex items-start gap-4 p-4 rounded-lg bg-white/50 border border-slate-200">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 font-bold flex-shrink-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-700 font-bold flex-shrink-0">
                       {index + 1}
                     </div>
                     <p className="text-slate-600 pt-1">{typeof step === 'string' ? step : JSON.stringify(step)}</p>
@@ -402,13 +402,13 @@ export default function FrameworkOverviewPage() {
           )}
 
           {framework.penalty_for_non_compliance && (
-            <div className="card border-red-500/30 bg-gradient-to-br from-slate-800 to-red-900/20">
+            <div className="card border-red-200 bg-gradient-to-br from-slate-800 to-red-900/20">
               <div className="flex items-start gap-4">
-                <div className="rounded-full bg-red-500/20 p-3">
-                  <AlertTriangle className="h-6 w-6 text-red-400" />
+                <div className="rounded-full bg-red-50 p-3">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-800 mb-2">Penalty for Non-Compliance</h2>
+                  <h2 className="text-lg font-semibold text-black mb-2">Penalty for Non-Compliance</h2>
                   <p className="text-red-300">{framework.penalty_for_non_compliance}</p>
                 </div>
               </div>
@@ -420,8 +420,8 @@ export default function FrameworkOverviewPage() {
       {!isCertification && !isCompliance && (
         <div className="card border-slate-200 text-center py-12">
           <FileStack className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-          <h2 className="text-lg font-medium text-slate-800">Framework Not Yet Classified</h2>
-          <p className="text-slate-400 mt-2">
+          <h2 className="text-lg font-medium text-black">Framework Not Yet Classified</h2>
+          <p className="text-slate-600 mt-2">
             This framework has not been classified. Return to the frameworks page to classify it.
           </p>
           <Link

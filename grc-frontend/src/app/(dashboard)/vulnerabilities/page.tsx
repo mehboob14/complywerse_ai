@@ -58,21 +58,21 @@ interface DashboardData {
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  critical: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Critical' },
-  high: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'High' },
-  medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Medium' },
-  low: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Low' },
-  info: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Info' },
+  critical: { bg: 'bg-red-50', text: 'text-red-600', label: 'Critical' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'High' },
+  medium: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Medium' },
+  low: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'Low' },
+  info: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Info' },
 };
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  open: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Open' },
-  in_progress: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'In Progress' },
-  remediated: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Remediated' },
-  verified: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Verified' },
-  closed: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Closed' },
-  accepted: { bg: 'bg-primary-500/20', text: 'text-primary-600', label: 'Risk Accepted' },
-  false_positive: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'False Positive' },
+  open: { bg: 'bg-red-50', text: 'text-red-600', label: 'Open' },
+  in_progress: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'In Progress' },
+  remediated: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'Remediated' },
+  verified: { bg: 'bg-green-50', text: 'text-green-600', label: 'Verified' },
+  closed: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Closed' },
+  accepted: { bg: 'bg-primary-50', text: 'text-primary-600', label: 'Risk Accepted' },
+  false_positive: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'False Positive' },
 };
 
 function getSeverityStyle(severity: string) {
@@ -187,7 +187,7 @@ export default function VulnerabilitiesPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -195,8 +195,8 @@ export default function VulnerabilitiesPage() {
   if (error) {
     return (
       <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load vulnerabilities</p>
+        <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
+        <p className="mt-2 text-red-600">Failed to load vulnerabilities</p>
       </div>
     );
   }
@@ -206,56 +206,46 @@ export default function VulnerabilitiesPage() {
       <div className="grid gap-4 sm:grid-cols-5">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-500/20 p-2">
-              <Bug className="h-5 w-5 text-blue-400" />
-            </div>
+                          <Bug className="h-5 w-5 text-blue-600" />
             <div>
-              <p className="text-sm text-slate-400">Total</p>
-              <p className="text-2xl font-bold text-slate-800">{dashboard?.total || 0}</p>
+              <p className="text-sm text-slate-600">Total</p>
+              <p className="text-2xl font-bold text-black">{dashboard?.total || 0}</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-500/20 p-2">
-              <AlertCircle className="h-5 w-5 text-red-400" />
-            </div>
+                          <AlertCircle className="h-5 w-5 text-red-600" />
             <div>
-              <p className="text-sm text-slate-400">Critical</p>
-              <p className="text-2xl font-bold text-red-400">{dashboard?.by_severity?.critical || 0}</p>
+              <p className="text-sm text-slate-600">Critical</p>
+              <p className="text-2xl font-bold text-red-600">{dashboard?.by_severity?.critical || 0}</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-orange-500/20 p-2">
-              <AlertCircle className="h-5 w-5 text-orange-400" />
-            </div>
+                          <AlertCircle className="h-5 w-5 text-orange-600" />
             <div>
-              <p className="text-sm text-slate-400">High</p>
-              <p className="text-2xl font-bold text-orange-400">{dashboard?.by_severity?.high || 0}</p>
+              <p className="text-sm text-slate-600">High</p>
+              <p className="text-2xl font-bold text-orange-600">{dashboard?.by_severity?.high || 0}</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-yellow-500/20 p-2">
-              <AlertCircle className="h-5 w-5 text-yellow-400" />
-            </div>
+                          <AlertCircle className="h-5 w-5 text-yellow-600" />
             <div>
-              <p className="text-sm text-slate-400">Medium</p>
-              <p className="text-2xl font-bold text-yellow-400">{dashboard?.by_severity?.medium || 0}</p>
+              <p className="text-sm text-slate-600">Medium</p>
+              <p className="text-2xl font-bold text-yellow-600">{dashboard?.by_severity?.medium || 0}</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-2">
-              <Bug className="h-5 w-5 text-green-400" />
-            </div>
+                          <Bug className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-sm text-slate-400">SLA Compliance</p>
-              <p className="text-2xl font-bold text-green-400">{dashboard?.sla_compliance_percent || 0}%</p>
+              <p className="text-sm text-slate-600">SLA Compliance</p>
+              <p className="text-2xl font-bold text-green-600">{dashboard?.sla_compliance_percent || 0}%</p>
             </div>
           </div>
         </div>
@@ -263,8 +253,8 @@ export default function VulnerabilitiesPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Vulnerability Register</h1>
-          <p className="mt-1 text-slate-400">Track and manage security vulnerabilities</p>
+          <h1 className="text-2xl font-bold text-black">Vulnerability Register</h1>
+          <p className="mt-1 text-slate-600">Track and manage security vulnerabilities</p>
         </div>
         <div className="flex items-center gap-3">
           {selectedVulnIds.size > 0 && (
@@ -288,7 +278,7 @@ export default function VulnerabilitiesPage() {
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 min-w-64">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
           <input
             type="text"
             placeholder="Search by title, CVE, CWE..."
@@ -336,20 +326,20 @@ export default function VulnerabilitiesPage() {
                   className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
                 />
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">ID</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Title</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Severity</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">CVE/CWE</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Due Date</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Assigned To</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"></th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">ID</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Title</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Severity</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Status</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">CVE/CWE</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Due Date</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Assigned To</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700">
             {filteredVulnerabilities.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-slate-400">
+                <td colSpan={9} className="px-4 py-12 text-center text-slate-600">
                   No vulnerabilities found
                 </td>
               </tr>
@@ -358,7 +348,7 @@ export default function VulnerabilitiesPage() {
                 const severityStyle = getSeverityStyle(vuln.severity);
                 const statusStyle = getStatusStyle(vuln.status);
                 return (
-                  <tr key={vuln.id} className={`hover:bg-slate-50 transition-colors ${selectedVulnIds.has(vuln.id) ? 'bg-primary-500/10' : ''}`}>
+                  <tr key={vuln.id} className={`hover:bg-slate-50 transition-colors ${selectedVulnIds.has(vuln.id) ? 'bg-primary-50' : ''}`}>
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
@@ -369,11 +359,11 @@ export default function VulnerabilitiesPage() {
                     </td>
                     <td className="px-4 py-3 text-sm font-mono text-slate-600">VULN-{vuln.id}</td>
                     <td className="px-4 py-3">
-                      <Link href={`/vulnerabilities/${vuln.id}`} className="text-slate-800 hover:text-primary-400 font-medium">
+                      <Link href={`/vulnerabilities/${vuln.id}`} className="text-black hover:text-primary-600 font-medium">
                         {vuln.title}
                       </Link>
                       {vuln.affected_component && (
-                        <p className="text-xs text-slate-400 mt-0.5">{vuln.affected_component}</p>
+                        <p className="text-xs text-slate-600 mt-0.5">{vuln.affected_component}</p>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -391,14 +381,14 @@ export default function VulnerabilitiesPage() {
                       <div className="text-sm">
                         {vuln.cve_id && <span className="text-slate-600">{vuln.cve_id}</span>}
                         {vuln.cve_id && vuln.cwe_id && <span className="text-slate-500"> / </span>}
-                        {vuln.cwe_id && <span className="text-slate-400">{vuln.cwe_id}</span>}
+                        {vuln.cwe_id && <span className="text-slate-600">{vuln.cwe_id}</span>}
                         {!vuln.cve_id && !vuln.cwe_id && <span className="text-slate-500">-</span>}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {vuln.due_date ? (
                         <div className="flex items-center gap-1.5 text-slate-600">
-                          <Calendar size={14} className="text-slate-400" />
+                          <Calendar size={14} className="text-slate-600" />
                           {new Date(vuln.due_date).toLocaleDateString()}
                         </div>
                       ) : (
@@ -408,7 +398,7 @@ export default function VulnerabilitiesPage() {
                     <td className="px-4 py-3 text-sm">
                       {vuln.assigned_user_name ? (
                         <div className="flex items-center gap-1.5 text-slate-600">
-                          <User size={14} className="text-slate-400" />
+                          <User size={14} className="text-slate-600" />
                           {vuln.assigned_user_name}
                         </div>
                       ) : (
@@ -416,7 +406,7 @@ export default function VulnerabilitiesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <Link href={`/vulnerabilities/${vuln.id}`} className="text-slate-400 hover:text-primary-400">
+                      <Link href={`/vulnerabilities/${vuln.id}`} className="text-slate-600 hover:text-primary-600">
                         <ExternalLink size={16} />
                       </Link>
                     </td>
@@ -432,8 +422,8 @@ export default function VulnerabilitiesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-slate-800">Add Vulnerability</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-xl font-bold text-black">Add Vulnerability</h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
@@ -509,12 +499,12 @@ export default function VulnerabilitiesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-slate-800">Bulk Assign to Department</h2>
-              <button onClick={() => setShowBulkAssignModal(false)} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-xl font-bold text-black">Bulk Assign to Department</h2>
+              <button onClick={() => setShowBulkAssignModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
-            <p className="text-sm text-slate-400 mb-4">
+            <p className="text-sm text-slate-600 mb-4">
               Assign {selectedVulnIds.size} selected vulnerabilities to a department
             </p>
             <form

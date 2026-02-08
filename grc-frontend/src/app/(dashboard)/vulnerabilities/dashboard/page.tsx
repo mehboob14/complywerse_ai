@@ -159,11 +159,11 @@ const SEVERITY_COLORS: Record<string, string> = {
 };
 
 const SEVERITY_BG: Record<string, string> = {
-  critical: 'bg-red-500/20',
-  high: 'bg-orange-500/20',
-  medium: 'bg-yellow-500/20',
-  low: 'bg-blue-500/20',
-  info: 'bg-slate-500/20',
+  critical: 'bg-red-50',
+  high: 'bg-orange-50',
+  medium: 'bg-yellow-50',
+  low: 'bg-blue-50',
+  info: 'bg-slate-50',
 };
 
 const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { percentage: number } }> }) => {
@@ -298,7 +298,7 @@ export default function VulnerabilityDashboardPage() {
     return (
       <div className="flex h-[70vh] items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary-400 mx-auto mb-4" />
+          <Loader2 className="h-12 w-12 animate-spin text-primary-600 mx-auto mb-4" />
           <p className="text-slate-400">Loading vulnerability data...</p>
         </div>
       </div>
@@ -579,7 +579,7 @@ export default function VulnerabilityDashboardPage() {
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-xs font-medium text-slate-500 w-5">#{index + 1}</span>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate group-hover:text-primary-400 transition-colors">
+                    <p className="text-sm font-medium text-slate-800 truncate group-hover:text-primary-600 transition-colors">
                       {asset.asset_name}
                     </p>
                     <p className="text-xs text-slate-500 truncate">{asset.asset_type}</p>
@@ -587,17 +587,17 @@ export default function VulnerabilityDashboardPage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {asset.critical_count > 0 && (
-                    <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-red-500/20 text-red-400">
+                    <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-red-50 text-red-700">
                       {asset.critical_count}C
                     </span>
                   )}
                   {asset.high_count > 0 && (
-                    <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-orange-500/20 text-orange-400">
+                    <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-orange-50 text-orange-700">
                       {asset.high_count}H
                     </span>
                   )}
                   <span className="text-xs text-slate-400">{asset.vulnerability_count} total</span>
-                  <ChevronRight className="h-4 w-4 text-slate-500 group-hover:text-primary-400 transition-colors" />
+                  <ChevronRight className="h-4 w-4 text-slate-500 group-hover:text-primary-600 transition-colors" />
                 </div>
               </Link>
             ))}
@@ -620,13 +620,13 @@ export default function VulnerabilityDashboardPage() {
               <Link
                 key={vuln.id}
                 href={`/vulnerabilities/${vuln.id}`}
-                className="block p-3 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors group"
+                className="block p-3 rounded-lg bg-red-50 border border-red-500/20 hover:bg-red-50 transition-colors group"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <SeverityBadge severity={vuln.severity as 'critical' | 'high' | 'medium' | 'low' | 'info'} size="sm" />
-                      <span className="text-xs text-red-400 font-medium">
+                      <span className="text-xs text-red-600 font-medium">
                         {vuln.days_overdue}d overdue
                       </span>
                     </div>
@@ -644,7 +644,7 @@ export default function VulnerabilityDashboardPage() {
                       e.preventDefault();
                       window.location.href = `/vulnerabilities/${vuln.id}`;
                     }}
-                    className="shrink-0 p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                    className="shrink-0 p-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
                     title="View Details"
                   >
                     <ExternalLink className="h-4 w-4" />
@@ -676,7 +676,7 @@ export default function VulnerabilityDashboardPage() {
                     <span className="text-sm font-medium text-slate-800 capitalize">{severity}</span>
                     <span
                       className={`text-sm font-bold ${
-                        rate >= 80 ? 'text-green-400' : rate >= 60 ? 'text-yellow-400' : 'text-red-400'
+                        rate >= 80 ? 'text-green-600' : rate >= 60 ? 'text-yellow-600' : 'text-red-600'
                       }`}
                     >
                       {rate}%
@@ -902,12 +902,12 @@ export default function VulnerabilityDashboardPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {(departmentMetrics as { departments: DepartmentMetrics[] }).departments.map((dept) => {
               const compliance = dept.sla_compliance_percent;
-              const complianceColor = compliance >= 90 ? 'bg-green-500/20 border-green-500/30' : 
-                                      compliance >= 70 ? 'bg-yellow-500/20 border-yellow-500/30' : 
-                                      'bg-red-500/20 border-red-500/30';
-              const textColor = compliance >= 90 ? 'text-green-400' : 
-                               compliance >= 70 ? 'text-yellow-400' : 
-                               'text-red-400';
+              const complianceColor = compliance >= 90 ? 'bg-green-50 border-green-200' : 
+                                      compliance >= 70 ? 'bg-yellow-50 border-yellow-200' : 
+                                      'bg-red-50 border-red-200';
+              const textColor = compliance >= 90 ? 'text-green-600' : 
+                               compliance >= 70 ? 'text-yellow-600' : 
+                               'text-red-600';
               
               return (
                 <div
@@ -937,7 +937,7 @@ export default function VulnerabilityDashboardPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Overdue:</span>
-                      <span className={`font-medium ${dept.overdue_count > 0 ? 'text-red-400' : 'text-slate-600'}`}>
+                      <span className={`font-medium ${dept.overdue_count > 0 ? 'text-red-600' : 'text-slate-600'}`}>
                         {dept.overdue_count}
                       </span>
                     </div>
@@ -949,22 +949,22 @@ export default function VulnerabilityDashboardPage() {
                   <div className="mt-3 pt-3 border-t border-slate-200">
                     <div className="flex gap-1.5 flex-wrap">
                       {dept.by_severity.critical > 0 && (
-                        <span className="px-1.5 py-0.5 text-xs rounded bg-red-500/20 text-red-400">
+                        <span className="px-1.5 py-0.5 text-xs rounded bg-red-50 text-red-700">
                           {dept.by_severity.critical}C
                         </span>
                       )}
                       {dept.by_severity.high > 0 && (
-                        <span className="px-1.5 py-0.5 text-xs rounded bg-orange-500/20 text-orange-400">
+                        <span className="px-1.5 py-0.5 text-xs rounded bg-orange-50 text-orange-700">
                           {dept.by_severity.high}H
                         </span>
                       )}
                       {dept.by_severity.medium > 0 && (
-                        <span className="px-1.5 py-0.5 text-xs rounded bg-yellow-500/20 text-yellow-400">
+                        <span className="px-1.5 py-0.5 text-xs rounded bg-yellow-50 text-yellow-700">
                           {dept.by_severity.medium}M
                         </span>
                       )}
                       {dept.by_severity.low > 0 && (
-                        <span className="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400">
+                        <span className="px-1.5 py-0.5 text-xs rounded bg-blue-50 text-blue-700">
                           {dept.by_severity.low}L
                         </span>
                       )}
@@ -1090,10 +1090,10 @@ export default function VulnerabilityDashboardPage() {
                 <thead>
                   <tr className="border-b border-slate-200">
                     <th className="text-left py-2 px-2 text-slate-400 font-medium">Department</th>
-                    <th className="text-center py-2 px-2 text-green-400 font-medium">0-7d</th>
-                    <th className="text-center py-2 px-2 text-yellow-400 font-medium">8-30d</th>
-                    <th className="text-center py-2 px-2 text-orange-400 font-medium">31-90d</th>
-                    <th className="text-center py-2 px-2 text-red-400 font-medium">90+d</th>
+                    <th className="text-center py-2 px-2 text-green-600 font-medium">0-7d</th>
+                    <th className="text-center py-2 px-2 text-yellow-600 font-medium">8-30d</th>
+                    <th className="text-center py-2 px-2 text-orange-600 font-medium">31-90d</th>
+                    <th className="text-center py-2 px-2 text-red-600 font-medium">90+d</th>
                     <th className="text-center py-2 px-2 text-slate-400 font-medium">Total</th>
                   </tr>
                 </thead>
@@ -1102,22 +1102,22 @@ export default function VulnerabilityDashboardPage() {
                     <tr key={dept.department_id} className="border-b border-slate-200 hover:bg-white/50">
                       <td className="py-2.5 px-2 text-slate-800 font-medium truncate max-w-[150px]">{dept.department_name}</td>
                       <td className="py-2.5 px-2 text-center">
-                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_0_7 > 0 ? 'bg-green-500/20 text-green-400' : 'text-slate-500'}`}>
+                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_0_7 > 0 ? 'bg-green-50 text-green-700' : 'text-slate-500'}`}>
                           {dept.bucket_0_7}
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-center">
-                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_8_30 > 0 ? 'bg-yellow-500/20 text-yellow-400' : 'text-slate-500'}`}>
+                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_8_30 > 0 ? 'bg-yellow-50 text-yellow-700' : 'text-slate-500'}`}>
                           {dept.bucket_8_30}
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-center">
-                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_31_90 > 0 ? 'bg-orange-500/20 text-orange-400' : 'text-slate-500'}`}>
+                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_31_90 > 0 ? 'bg-orange-50 text-orange-700' : 'text-slate-500'}`}>
                           {dept.bucket_31_90}
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-center">
-                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_90_plus > 0 ? 'bg-red-500/20 text-red-400' : 'text-slate-500'}`}>
+                        <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_90_plus > 0 ? 'bg-red-50 text-red-700' : 'text-slate-500'}`}>
                           {dept.bucket_90_plus}
                         </span>
                       </td>
@@ -1142,16 +1142,16 @@ export default function VulnerabilityDashboardPage() {
               <p className="text-2xl font-bold text-slate-800">{escalationMetrics.summary?.total_escalations || 0}</p>
               <p className="text-sm text-slate-400">Total Escalations</p>
             </div>
-            <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-              <p className="text-2xl font-bold text-yellow-400">{escalationMetrics.summary?.level_1_count || 0}</p>
+            <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
+              <p className="text-2xl font-bold text-yellow-600">{escalationMetrics.summary?.level_1_count || 0}</p>
               <p className="text-sm text-slate-400">Level 1</p>
             </div>
-            <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
-              <p className="text-2xl font-bold text-orange-400">{escalationMetrics.summary?.level_2_count || 0}</p>
+            <div className="p-4 rounded-lg bg-orange-50 border border-orange-500/30">
+              <p className="text-2xl font-bold text-orange-600">{escalationMetrics.summary?.level_2_count || 0}</p>
               <p className="text-sm text-slate-400">Level 2</p>
             </div>
-            <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
-              <p className="text-2xl font-bold text-red-400">{escalationMetrics.summary?.level_3_count || 0}</p>
+            <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+              <p className="text-2xl font-bold text-red-600">{escalationMetrics.summary?.level_3_count || 0}</p>
               <p className="text-sm text-slate-400">Level 3</p>
             </div>
           </div>
@@ -1161,9 +1161,9 @@ export default function VulnerabilityDashboardPage() {
                 <tr className="border-b border-slate-200">
                   <th className="text-left py-2 px-2 text-slate-400 font-medium">Department</th>
                   <th className="text-center py-2 px-2 text-slate-400 font-medium">Total</th>
-                  <th className="text-center py-2 px-2 text-yellow-400 font-medium">L1</th>
-                  <th className="text-center py-2 px-2 text-orange-400 font-medium">L2</th>
-                  <th className="text-center py-2 px-2 text-red-400 font-medium">L3</th>
+                  <th className="text-center py-2 px-2 text-yellow-600 font-medium">L1</th>
+                  <th className="text-center py-2 px-2 text-orange-600 font-medium">L2</th>
+                  <th className="text-center py-2 px-2 text-red-600 font-medium">L3</th>
                   <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg Resolution</th>
                 </tr>
               </thead>
@@ -1173,17 +1173,17 @@ export default function VulnerabilityDashboardPage() {
                     <td className="py-2.5 px-2 text-slate-800 font-medium">{dept.department_name}</td>
                     <td className="py-2.5 px-2 text-center text-slate-800">{dept.total_escalations}</td>
                     <td className="py-2.5 px-2 text-center">
-                      <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded ${dept.level_1_count > 0 ? 'bg-yellow-500/20 text-yellow-400' : 'text-slate-500'}`}>
+                      <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded ${dept.level_1_count > 0 ? 'bg-yellow-50 text-yellow-700' : 'text-slate-500'}`}>
                         {dept.level_1_count}
                       </span>
                     </td>
                     <td className="py-2.5 px-2 text-center">
-                      <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded ${dept.level_2_count > 0 ? 'bg-orange-500/20 text-orange-400' : 'text-slate-500'}`}>
+                      <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded ${dept.level_2_count > 0 ? 'bg-orange-50 text-orange-700' : 'text-slate-500'}`}>
                         {dept.level_2_count}
                       </span>
                     </td>
                     <td className="py-2.5 px-2 text-center">
-                      <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded ${dept.level_3_count > 0 ? 'bg-red-500/20 text-red-400' : 'text-slate-500'}`}>
+                      <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded ${dept.level_3_count > 0 ? 'bg-red-50 text-red-700' : 'text-slate-500'}`}>
                         {dept.level_3_count}
                       </span>
                     </td>

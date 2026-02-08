@@ -17,7 +17,7 @@ export interface ProgressRingProps {
 }
 
 const colorStyles: Record<ProgressRingColor, { stroke: string; text: string }> = {
-  primary: { stroke: 'stroke-primary-500', text: 'text-primary-400' },
+  primary: { stroke: 'stroke-primary-500', text: 'text-primary-600' },
   success: { stroke: 'stroke-success-500', text: 'text-success-400' },
   warning: { stroke: 'stroke-warning-500', text: 'text-warning-400' },
   danger: { stroke: 'stroke-danger-500', text: 'text-danger-400' },
@@ -99,7 +99,7 @@ export function ProgressRing({
           </span>
         )}
         {label && (
-          <span className="text-xs text-slate-400 mt-0.5 text-center px-1 truncate max-w-full">
+          <span className="text-xs text-slate-600 mt-0.5 text-center px-1 truncate max-w-full">
             {label}
           </span>
         )}

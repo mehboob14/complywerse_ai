@@ -16,7 +16,7 @@ export interface MetricBadgeProps {
 const variantStyles: Record<MetricBadgeVariant, { bg: string; text: string; border: string }> = {
   default: {
     bg: 'bg-slate-500/10',
-    text: 'text-slate-300',
+    text: 'text-slate-600',
     border: 'border-slate-300',
   },
   success: {
@@ -40,24 +40,24 @@ const variantStyles: Record<MetricBadgeVariant, { bg: string; text: string; bord
     border: 'border-info-500/30',
   },
   critical: {
-    bg: 'bg-red-500/10',
-    text: 'text-red-400',
-    border: 'border-red-500/30',
+    bg: 'bg-red-50',
+    text: 'text-red-600',
+    border: 'border-red-200',
   },
   high: {
-    bg: 'bg-orange-500/10',
-    text: 'text-orange-400',
+    bg: 'bg-orange-50',
+    text: 'text-orange-600',
     border: 'border-orange-500/30',
   },
   medium: {
-    bg: 'bg-yellow-500/10',
-    text: 'text-yellow-400',
-    border: 'border-yellow-500/30',
+    bg: 'bg-yellow-50',
+    text: 'text-yellow-600',
+    border: 'border-yellow-200',
   },
   low: {
-    bg: 'bg-blue-500/10',
-    text: 'text-blue-400',
-    border: 'border-blue-500/30',
+    bg: 'bg-blue-50',
+    text: 'text-blue-600',
+    border: 'border-blue-200',
   },
 };
 
@@ -81,7 +81,7 @@ export function MetricBadge({
       )}
     >
       {Icon && <Icon size={12} aria-hidden="true" />}
-      <span className="text-slate-400">{label}:</span>
+      <span className="text-slate-600">{label}:</span>
       <span className="font-semibold">{value}</span>
     </span>
   );

@@ -184,7 +184,7 @@ export default function FrameworksPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -215,70 +215,70 @@ export default function FrameworksPage() {
       case 'draft':
         return { 
           label: 'Uploaded', 
-          color: 'bg-slate-500/20 text-slate-400',
+          color: 'bg-slate-50 text-slate-700',
           icon: FileText,
           description: 'File uploaded, waiting for text extraction'
         };
       case 'text_extracted':
         return { 
           label: 'Text Extracted', 
-          color: 'bg-blue-500/20 text-blue-400',
+          color: 'bg-blue-50 text-blue-700',
           icon: FileText,
           description: 'Text extracted, waiting for AI parsing'
         };
       case 'parsing':
         return { 
           label: 'Parsing Controls', 
-          color: 'bg-primary-500/20 text-primary-600',
+          color: 'bg-purple-50 text-purple-700',
           icon: Sparkles,
           description: 'AI is extracting controls and requirements'
         };
       case 'completed':
         return { 
           label: 'Ready', 
-          color: 'bg-green-500/20 text-green-400',
+          color: 'bg-green-50 text-green-700',
           icon: CheckCircle,
           description: 'Framework ready to use'
         };
       case 'parsed':
         return { 
           label: 'Parsed', 
-          color: 'bg-blue-500/20 text-blue-400',
+          color: 'bg-blue-50 text-blue-700',
           icon: CheckCircle,
           description: 'Framework parsed, ready to publish or start certification'
         };
       case 'published':
         return { 
           label: 'Published', 
-          color: 'bg-green-500/20 text-green-400',
+          color: 'bg-green-50 text-green-700',
           icon: CheckCircle,
           description: 'Framework published and active'
         };
       case 'error':
         return { 
           label: 'Error', 
-          color: 'bg-red-500/20 text-red-400',
+          color: 'bg-red-50 text-red-700',
           icon: AlertCircle,
           description: 'An error occurred during processing'
         };
       case 'classifying':
         return { 
           label: 'Classifying Framework', 
-          color: 'bg-yellow-500/20 text-yellow-400',
+          color: 'bg-yellow-50 text-yellow-700',
           icon: Sparkles,
           description: 'AI is analyzing framework type'
         };
       case 'classified':
         return { 
           label: 'Classified', 
-          color: 'bg-cyan-500/20 text-cyan-400',
+          color: 'bg-cyan-50 text-cyan-700',
           icon: Tag,
           description: 'Framework classified, ready to view overview'
         };
       default:
         return { 
           label: status, 
-          color: 'bg-slate-500/20 text-slate-400',
+          color: 'bg-slate-50 text-slate-700',
           icon: FileStack,
           description: 'Processing'
         };
@@ -291,10 +291,10 @@ export default function FrameworksPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-green-500/20 text-green-400';
-      case 'in_progress': return 'bg-blue-500/20 text-blue-400';
-      case 'on_hold': return 'bg-yellow-500/20 text-yellow-400';
-      default: return 'bg-slate-500/20 text-slate-400';
+      case 'completed': return 'bg-green-50 text-green-700';
+      case 'in_progress': return 'bg-blue-50 text-blue-700';
+      case 'on_hold': return 'bg-yellow-50 text-yellow-700';
+      default: return 'bg-slate-50 text-slate-700';
     }
   };
 
@@ -335,8 +335,8 @@ export default function FrameworksPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Compliance Frameworks</h1>
-          <p className="text-slate-400">Manage frameworks and track certification journeys</p>
+          <h1 className="text-2xl font-bold text-black">Compliance Frameworks</h1>
+          <p className="text-slate-600">Manage frameworks and track certification journeys</p>
         </div>
         <div className="flex items-center gap-3">
           <Link 
@@ -351,23 +351,23 @@ export default function FrameworksPage() {
 
       {processingFrameworks.length > 0 && (
         <section>
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-black">
             <RefreshCw className={`h-5 w-5 text-primary-600 ${isFetching ? 'animate-spin' : ''}`} />
             Processing Frameworks
-            <span className="ml-2 text-sm font-normal text-slate-400">
+            <span className="ml-2 text-sm font-normal text-slate-500">
               Auto-refreshing every 3s
             </span>
           </h2>
           
           {retryError && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/20 p-3 text-sm text-red-400">
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
               <AlertCircle className="h-4 w-4" />
               {retryError}
             </div>
           )}
           
           {retrySuccess && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg bg-green-500/20 p-3 text-sm text-green-400">
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-700">
               <CheckCircle className="h-4 w-4" />
               {retrySuccess}
             </div>
@@ -380,15 +380,13 @@ export default function FrameworksPage() {
               return (
                 <div 
                   key={framework.id} 
-                  className="card border-primary-500/30 bg-gradient-to-br from-slate-800 to-slate-800/50"
+                  className="card overflow-hidden flex flex-col border-primary-200"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-primary-500/20 p-2">
-                      <Sparkles className="h-6 w-6 text-primary-600 animate-pulse" />
-                    </div>
+                    <Sparkles className="h-6 w-6 text-primary-600 animate-pulse mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-slate-800 truncate">{framework.name}</h3>
-                      <p className="text-sm text-slate-400">v{framework.version}</p>
+                      <h3 className="font-semibold text-black truncate">{framework.name}</h3>
+                      <p className="text-sm text-slate-600">v{framework.version}</p>
                     </div>
                   </div>
 
@@ -403,11 +401,11 @@ export default function FrameworksPage() {
                         {statusInfo.label}
                       </span>
                     </div>
-                    <p className="text-sm text-slate-400">{statusInfo.description}</p>
+                    <p className="text-sm text-slate-600">{statusInfo.description}</p>
 
                     {framework.upload_status === 'parsing' && (
                       <div className="space-y-2">
-                        <div className="flex justify-between text-xs text-slate-400">
+                        <div className="flex justify-between text-xs text-slate-600">
                           <span>AI parsing in progress...</span>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
@@ -417,7 +415,7 @@ export default function FrameworksPage() {
                     )}
 
                     {framework.controls_count > 0 && (
-                      <div className="flex items-center gap-1 text-xs text-slate-400">
+                      <div className="flex items-center gap-1 text-xs text-slate-600">
                         <Shield className="h-3 w-3" />
                         {framework.controls_count} controls extracted so far
                       </div>
@@ -435,7 +433,7 @@ export default function FrameworksPage() {
                         retryParseMutation.mutate(framework.id);
                       }}
                       disabled={retryParseMutation.isPending}
-                      className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-orange-400 hover:bg-orange-500/20 transition-colors disabled:opacity-50"
+                      className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-50"
                       title="Retry parsing if stuck"
                     >
                       <RefreshCw className={`h-3 w-3 ${retryParseMutation.isPending ? 'animate-spin' : ''}`} />
@@ -451,8 +449,8 @@ export default function FrameworksPage() {
 
       {activeCertifications.length > 0 && (
         <section>
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
-            <Target className="h-5 w-5 text-primary-400" />
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-black">
+            <Target className="h-5 w-5 text-primary-600" />
             Active Certification Journeys
           </h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -461,17 +459,15 @@ export default function FrameworksPage() {
               return (
                 <div 
                   key={cert.id} 
-                  className="card group cursor-pointer transition-all hover:border-primary-500/50 hover:shadow-lg hover:shadow-primary-500/10"
+                  className="card group cursor-pointer overflow-hidden flex flex-col transition-all hover:border-primary-500/50 hover:shadow-lg hover:shadow-primary-500/10"
                   onClick={() => router.push(`/frameworks/${cert.id}`)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-primary-500/20 p-2">
-                        <Shield className="h-5 w-5 text-primary-400" />
-                      </div>
+                      <Shield className="h-5 w-5 text-primary-600 mt-0.5" />
                       <div>
-                        <h3 className="font-semibold text-slate-800">{cert.name}</h3>
-                        <p className="text-sm text-slate-400">
+                        <h3 className="font-semibold text-black">{cert.name}</h3>
+                        <p className="text-sm text-slate-600">
                           {cert.framework?.name || 'Framework'}
                         </p>
                       </div>
@@ -486,7 +482,7 @@ export default function FrameworksPage() {
                           setJourneyDeleteConfirm(cert);
                           setJourneyDeleteError(null);
                         }}
-                        className="rounded-lg bg-red-500/20 p-1.5 text-red-400 hover:bg-red-500/30 transition-colors opacity-0 group-hover:opacity-100"
+                        className="rounded-lg p-1.5 text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
                         title="Delete Certification Journey"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -496,8 +492,8 @@ export default function FrameworksPage() {
 
                   <div className="mt-4">
                     <div className="mb-2 flex items-center justify-between text-sm">
-                      <span className="text-slate-400">Progress</span>
-                      <span className="font-medium text-slate-800">{progress}%</span>
+                      <span className="text-slate-600">Progress</span>
+                      <span className="font-medium text-black">{progress}%</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-slate-200">
                       <div
@@ -508,7 +504,7 @@ export default function FrameworksPage() {
                   </div>
 
                   <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-4">
-                    <div className="flex items-center gap-4 text-xs text-slate-400">
+                    <div className="flex items-center gap-4 text-xs text-slate-600">
                       <span className="flex items-center gap-1">
                         <CheckCircle2 className="h-3 w-3" />
                         {cert.progress?.implemented || 0} implemented
@@ -518,7 +514,7 @@ export default function FrameworksPage() {
                         {cert.progress?.in_progress || 0} in progress
                       </span>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-primary-400" />
+                    <ArrowRight className="h-4 w-4 text-primary-600" />
                   </div>
 
                   {cert.target_date && (
@@ -535,8 +531,8 @@ export default function FrameworksPage() {
       )}
 
       <section>
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <FileStack className="h-5 w-5 text-slate-400" />
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-black">
+          <FileStack className="h-5 w-5 text-slate-600" />
           Available Frameworks
         </h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -544,22 +540,20 @@ export default function FrameworksPage() {
             return (
               <div 
                 key={framework.id} 
-                className="card group transition-all hover:border-slate-300"
+                className="card group overflow-hidden flex flex-col transition-all hover:border-slate-300"
               >
                 <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-slate-200 p-2 transition-colors group-hover:bg-slate-600">
-                    <FileStack className="h-6 w-6 text-primary-400" />
-                  </div>
+                  <FileStack className="h-5 w-5 text-primary-600 mt-0.5 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-slate-800 truncate">{framework.name}</h3>
-                    <p className="text-sm text-slate-400">v{framework.version}</p>
+                    <h3 className="font-semibold text-black truncate">{framework.name}</h3>
+                    <p className="text-sm text-slate-600">v{framework.version}</p>
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Link
                     href={`/controls?framework=${framework.id}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700 hover:bg-slate-200 transition-colors"
                   >
                     <Shield className="h-3 w-3" />
                     {framework.controls_count} controls
@@ -567,7 +561,7 @@ export default function FrameworksPage() {
                   </Link>
                 </div>
 
-                <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
+                <div className="mt-2 flex items-center gap-1 text-xs text-slate-500">
                   <Tag className="h-3 w-3" />
                   {getFrameworkTypeLabel(framework.framework_type)}
                 </div>
@@ -576,12 +570,12 @@ export default function FrameworksPage() {
                   <div className="mt-2">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
                       framework.classification === 'certification' 
-                        ? 'bg-emerald-500/20 text-emerald-400' 
-                        : 'bg-blue-500/20 text-blue-400'
+                        ? 'bg-emerald-50 text-emerald-700' 
+                        : 'bg-blue-50 text-blue-700'
                     }`}>
                       {framework.classification === 'certification' ? '🏆 Certification' : '📋 Compliance'}
                       {framework.classification_confidence && (
-                        <span className="text-slate-400 ml-1">
+                        <span className="text-slate-500 ml-1">
                           ({Math.round(framework.classification_confidence * 100)}%)
                         </span>
                       )}
@@ -589,13 +583,13 @@ export default function FrameworksPage() {
                   </div>
                 )}
 
-                <div className="mt-4 border-t border-slate-200 pt-4 flex flex-col gap-2">
+                <div className="mt-auto border-t border-slate-200 pt-3 mt-4 flex flex-col gap-1.5">
                   {(framework.classification === 'certification' || framework.classification === 'compliance') && (
                     <Link
                       href={`/frameworks/overview/${framework.id}`}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500/20 px-3 py-2 text-cyan-400 hover:bg-cyan-500/30 transition-colors"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-cyan-50 px-3 py-1.5 text-sm text-cyan-700 hover:bg-cyan-100 transition-colors"
                     >
-                      <Eye className="h-4 w-4" />
+                      <Eye className="h-3.5 w-3.5" />
                       View Overview
                     </Link>
                   )}
@@ -608,36 +602,36 @@ export default function FrameworksPage() {
                         classifyMutation.mutate(framework.id);
                       }}
                       disabled={classifyMutation.isPending && classifyingFrameworkId === framework.id}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-yellow-500/20 px-3 py-2 text-yellow-400 hover:bg-yellow-500/30 transition-colors disabled:opacity-50"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-yellow-50 px-3 py-1.5 text-sm text-yellow-700 hover:bg-yellow-100 transition-colors disabled:opacity-50"
                       title="Classify framework as certification or compliance"
                     >
                       {classifyMutation.isPending && classifyingFrameworkId === framework.id ? (
                         <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           Classifying...
                         </>
                       ) : (
                         <>
-                          <Sparkles className="h-4 w-4" />
+                          <Sparkles className="h-3.5 w-3.5" />
                           Classify Framework
                         </>
                       )}
                     </button>
                   )}
                   
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <Link
                       href={`/controls?framework=${framework.id}`}
-                      className="btn-secondary flex flex-1 items-center justify-center gap-2"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                     >
-                      <Shield className="h-4 w-4" />
+                      <Shield className="h-3.5 w-3.5" />
                       View Controls
                     </Link>
                     <button
                       onClick={() => handleStartCertification(framework)}
-                      className="btn-primary flex flex-1 items-center justify-center gap-2"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700 transition-colors"
                     >
-                      <Play className="h-4 w-4" />
+                      <Play className="h-3.5 w-3.5" />
                       Start Journey
                     </button>
                     <button
@@ -646,10 +640,10 @@ export default function FrameworksPage() {
                         setDeleteConfirm(framework);
                         setDeleteError(null);
                       }}
-                      className="rounded-lg bg-red-500/20 px-3 py-2 text-red-400 hover:bg-red-500/30 transition-colors"
+                      className="rounded-lg border border-red-200 p-1.5 text-red-500 hover:bg-red-50 transition-colors"
                       title="Delete Framework"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                   <button
@@ -659,18 +653,18 @@ export default function FrameworksPage() {
                       enhanceMutation.mutate(framework.id);
                     }}
                     disabled={enhanceMutation.isPending && enhancingFrameworkId === framework.id}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-500/20 px-3 py-2 text-primary-600 hover:bg-primary-500/30 transition-colors disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
                     title="Generate AI evidence recommendations for all controls"
                   >
                     {enhanceMutation.isPending && enhancingFrameworkId === framework.id ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         Enhancing...
                       </>
                     ) : (
                       <>
-                        <Sparkles className="h-4 w-4" />
-                        Generate Evidence Recommendations
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Generate Recommendations
                       </>
                     )}
                   </button>
@@ -683,8 +677,8 @@ export default function FrameworksPage() {
         {(!completedFrameworks || completedFrameworks.length === 0) && (
           <div className="card flex flex-col items-center justify-center py-12 text-center">
             <FileStack className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-slate-800">No frameworks available</h3>
-            <p className="mt-1 text-slate-400">Upload a compliance framework to get started with certification</p>
+            <h3 className="text-lg font-medium text-black">No frameworks available</h3>
+            <p className="mt-1 text-slate-600">Upload a compliance framework to get started with certification</p>
             <Link 
               href="/framework-upload"
               className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 transition-colors"
@@ -700,8 +694,8 @@ export default function FrameworksPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl border border-slate-200">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-red-400" />
+              <h3 className="text-lg font-semibold text-black flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-500" />
                 Delete Framework
               </h3>
               <button
@@ -709,21 +703,21 @@ export default function FrameworksPage() {
                   setDeleteConfirm(null);
                   setDeleteError(null);
                 }}
-                className="text-slate-400 hover:text-slate-900"
+                className="text-slate-600 hover:text-black"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             
             <p className="text-slate-600 mb-2">
-              Are you sure you want to delete <span className="font-semibold text-slate-800">{deleteConfirm.name}</span>?
+              Are you sure you want to delete <span className="font-semibold text-black">{deleteConfirm.name}</span>?
             </p>
-            <p className="text-sm text-slate-400 mb-4">
+            <p className="text-sm text-slate-500 mb-4">
               This will permanently remove the framework and all associated controls. This action cannot be undone.
             </p>
 
             {deleteError && (
-              <div className="mb-4 rounded-lg bg-red-500/20 border border-red-500/30 p-3 text-sm text-red-400">
+              <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
                 {deleteError}
               </div>
             )}
@@ -734,7 +728,7 @@ export default function FrameworksPage() {
                   setDeleteConfirm(null);
                   setDeleteError(null);
                 }}
-                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-600"
+                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-black hover:bg-slate-200"
               >
                 Cancel
               </button>
@@ -764,8 +758,8 @@ export default function FrameworksPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl border border-slate-200">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-red-400" />
+              <h3 className="text-lg font-semibold text-black flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-500" />
                 Delete Certification Journey
               </h3>
               <button
@@ -773,21 +767,21 @@ export default function FrameworksPage() {
                   setJourneyDeleteConfirm(null);
                   setJourneyDeleteError(null);
                 }}
-                className="text-slate-400 hover:text-slate-900"
+                className="text-slate-600 hover:text-black"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             
             <p className="text-slate-600 mb-2">
-              Are you sure you want to delete <span className="font-semibold text-slate-800">{journeyDeleteConfirm.name}</span>?
+              Are you sure you want to delete <span className="font-semibold text-black">{journeyDeleteConfirm.name}</span>?
             </p>
-            <p className="text-sm text-slate-400 mb-4">
+            <p className="text-sm text-slate-500 mb-4">
               This will permanently remove the certification journey and all associated progress data, control implementations, and evidence attachments. This action cannot be undone.
             </p>
 
             {journeyDeleteError && (
-              <div className="mb-4 rounded-lg bg-red-500/20 border border-red-500/30 p-3 text-sm text-red-400">
+              <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
                 {journeyDeleteError}
               </div>
             )}
@@ -798,7 +792,7 @@ export default function FrameworksPage() {
                   setJourneyDeleteConfirm(null);
                   setJourneyDeleteError(null);
                 }}
-                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-600"
+                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-black hover:bg-slate-200"
               >
                 Cancel
               </button>

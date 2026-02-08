@@ -69,12 +69,12 @@ interface StepApprover {
 }
 
 const DOC_TYPE_STYLES: Record<string, { label: string; color: string; bgColor: string }> = {
-  policy: { label: 'Policy', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  procedure: { label: 'Procedure', color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  standard: { label: 'Standard', color: 'text-primary-600', bgColor: 'bg-primary-500/20' },
-  guideline: { label: 'Guideline', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  template: { label: 'Template', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
-  other: { label: 'Other', color: 'text-slate-400', bgColor: 'bg-slate-500/20' },
+  policy: { label: 'Policy', color: 'text-blue-600', bgColor: 'bg-blue-50' },
+  procedure: { label: 'Procedure', color: 'text-green-600', bgColor: 'bg-green-50' },
+  standard: { label: 'Standard', color: 'text-primary-600', bgColor: 'bg-primary-50' },
+  guideline: { label: 'Guideline', color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
+  template: { label: 'Template', color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
+  other: { label: 'Other', color: 'text-slate-600', bgColor: 'bg-slate-50' },
 };
 
 const STEP_TYPES = [
@@ -149,10 +149,10 @@ function ApprovalModal({ isOpen, onClose, onConfirm, title, actionType, isLoadin
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-800">
+          <h3 className="text-lg font-semibold text-black">
             {actionType === 'approve' ? 'Approve Document' : 'Reject Document'}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -165,16 +165,16 @@ function ApprovalModal({ isOpen, onClose, onConfirm, title, actionType, isLoadin
 
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-slate-600">
-            Comments {actionType === 'reject' && <span className="text-red-400">*</span>}
+            Comments {actionType === 'reject' && <span className="text-red-600">*</span>}
           </label>
           <textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}
             placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
-            className="h-24 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="h-24 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
           {actionType === 'reject' && !comments.trim() && (
-            <p className="mt-1 text-xs text-red-400">Comments are required when rejecting</p>
+            <p className="mt-1 text-xs text-red-600">Comments are required when rejecting</p>
           )}
         </div>
 
@@ -189,7 +189,7 @@ function ApprovalModal({ isOpen, onClose, onConfirm, title, actionType, isLoadin
           <button
             onClick={handleSubmit}
             disabled={isLoading || (actionType === 'reject' && !comments.trim())}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-slate-800 disabled:opacity-50 ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-black disabled:opacity-50 ${
               actionType === 'approve'
                 ? 'bg-green-600 hover:bg-green-700'
                 : 'bg-red-600 hover:bg-red-700'
@@ -251,10 +251,10 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 max-h-[90vh] overflow-y-auto">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-800">
+          <h3 className="text-lg font-semibold text-black">
             {template ? 'Edit Template' : 'New Workflow Template'}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -262,14 +262,14 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-600">
-              Name <span className="text-red-400">*</span>
+              Name <span className="text-red-600">*</span>
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               required
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="e.g., Policy Approval Workflow"
             />
           </div>
@@ -279,7 +279,7 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
             <textarea
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="h-20 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="h-20 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Describe the workflow template..."
             />
           </div>
@@ -292,7 +292,7 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
                   key={option.value}
                   className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
                     formData.doc_types.includes(option.value)
-                      ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
                       : 'border-slate-300 bg-slate-200 text-slate-600 hover:bg-slate-600'
                   }`}
                 >
@@ -407,10 +407,10 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-800">
+          <h3 className="text-lg font-semibold text-black">
             {step ? 'Edit Step' : 'Add Workflow Step'}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -418,14 +418,14 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-600">
-              Step Name <span className="text-red-400">*</span>
+              Step Name <span className="text-red-600">*</span>
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               required
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="e.g., Manager Review"
             />
           </div>
@@ -435,7 +435,7 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
             <select
               value={formData.step_type}
               onChange={(e) => setFormData(prev => ({ ...prev, step_type: e.target.value }))}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {STEP_TYPES.map(type => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -448,7 +448,7 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
             <select
               value={formData.approval_mode}
               onChange={(e) => setFormData(prev => ({ ...prev, approval_mode: e.target.value }))}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {APPROVAL_MODES.map(mode => (
                 <option key={mode.value} value={mode.value}>{mode.label}</option>
@@ -466,7 +466,7 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
                 timeout_days: e.target.value ? parseInt(e.target.value) : null 
               }))}
               min="1"
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Optional timeout in days"
             />
           </div>
@@ -765,7 +765,7 @@ export default function GovernanceWorkflowsPage() {
   if (isLoading && mainTab === 'approvals') {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -774,8 +774,8 @@ export default function GovernanceWorkflowsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Approval Workflows</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-black">Approval Workflows</h1>
+          <p className="mt-1 text-sm text-slate-600">
             Manage document approvals, workflow templates, and review pending requests
           </p>
         </div>
@@ -787,7 +787,7 @@ export default function GovernanceWorkflowsPage() {
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
             mainTab === 'approvals'
               ? 'bg-primary-600 text-white'
-              : 'text-slate-400 hover:bg-slate-200 hover:text-slate-900'
+              : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
           }`}
         >
           <FileCheck size={18} />
@@ -798,7 +798,7 @@ export default function GovernanceWorkflowsPage() {
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
             mainTab === 'templates'
               ? 'bg-primary-600 text-white'
-              : 'text-slate-400 hover:bg-slate-200 hover:text-slate-900'
+              : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
           }`}
         >
           <Settings size={18} />
@@ -811,48 +811,40 @@ export default function GovernanceWorkflowsPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-yellow-500/20 p-2">
-                  <Clock className="h-5 w-5 text-yellow-400" />
-                </div>
+                                  <Clock className="h-5 w-5 text-yellow-600" />
                 <div>
-                  <p className="text-sm text-slate-400">Pending Approvals</p>
-                  <p className="text-2xl font-bold text-slate-800">{dashboard?.pending_my_approval || 0}</p>
+                  <p className="text-sm text-slate-600">Pending Approvals</p>
+                  <p className="text-2xl font-bold text-black">{dashboard?.pending_my_approval || 0}</p>
                 </div>
               </div>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-green-500/20 p-2">
-                  <CheckCircle className="h-5 w-5 text-green-400" />
-                </div>
+                                  <CheckCircle className="h-5 w-5 text-green-600" />
                 <div>
-                  <p className="text-sm text-slate-400">Approved Today</p>
-                  <p className="text-2xl font-bold text-slate-800">{dashboard?.approved_today || 0}</p>
+                  <p className="text-sm text-slate-600">Approved Today</p>
+                  <p className="text-2xl font-bold text-black">{dashboard?.approved_today || 0}</p>
                 </div>
               </div>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-red-500/20 p-2">
-                  <XCircle className="h-5 w-5 text-red-400" />
-                </div>
+                                  <XCircle className="h-5 w-5 text-red-600" />
                 <div>
-                  <p className="text-sm text-slate-400">Rejected Today</p>
-                  <p className="text-2xl font-bold text-slate-800">{dashboard?.rejected_today || 0}</p>
+                  <p className="text-sm text-slate-600">Rejected Today</p>
+                  <p className="text-2xl font-bold text-black">{dashboard?.rejected_today || 0}</p>
                 </div>
               </div>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-orange-500/20 p-2">
-                  <AlertTriangle className="h-5 w-5 text-orange-400" />
-                </div>
+                                  <AlertTriangle className="h-5 w-5 text-orange-600" />
                 <div>
-                  <p className="text-sm text-slate-400">Overdue</p>
-                  <p className="text-2xl font-bold text-slate-800">{dashboard?.overdue || 0}</p>
+                  <p className="text-sm text-slate-600">Overdue</p>
+                  <p className="text-2xl font-bold text-black">{dashboard?.overdue || 0}</p>
                 </div>
               </div>
             </div>
@@ -868,12 +860,12 @@ export default function GovernanceWorkflowsPage() {
                     className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                       activeTab === tab
                         ? 'bg-primary-600 text-white'
-                        : 'text-slate-400 hover:bg-slate-200 hover:text-slate-900'
+                        : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
                     }`}
                   >
                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
                     {tab === 'pending' && pendingApprovals.length > 0 && (
-                      <span className="ml-2 rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-400">
+                      <span className="ml-2 rounded-full bg-yellow-50 px-2 py-0.5 text-xs text-yellow-600">
                         {pendingApprovals.length}
                       </span>
                     )}
@@ -884,7 +876,7 @@ export default function GovernanceWorkflowsPage() {
 
             <div className="p-4">
               {activeTab === 'approved' || activeTab === 'rejected' ? (
-                <div className="flex h-48 flex-col items-center justify-center text-slate-400">
+                <div className="flex h-48 flex-col items-center justify-center text-slate-600">
                   <FileCheck className="mb-2 h-12 w-12 opacity-50" />
                   <p className="text-lg font-medium">No {activeTab} items to display</p>
                   <p className="text-sm">Historical {activeTab} approvals will appear here</p>
@@ -893,7 +885,7 @@ export default function GovernanceWorkflowsPage() {
                 <>
                   {activeTab === 'pending' && overdueApprovals.length > 0 && (
                     <div className="mb-4">
-                      <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-red-400">
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-red-600">
                         <AlertTriangle size={16} />
                         Overdue Approvals ({overdueApprovals.length})
                       </h3>
@@ -914,7 +906,7 @@ export default function GovernanceWorkflowsPage() {
                   {(activeTab === 'pending' ? filteredApprovals : pendingApprovals).length > 0 ? (
                     <div className="space-y-3">
                       {activeTab === 'pending' && overdueApprovals.length > 0 && filteredApprovals.length > 0 && (
-                        <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-400">
+                        <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-600">
                           <Clock size={16} />
                           Pending Approvals ({filteredApprovals.length})
                         </h3>
@@ -930,7 +922,7 @@ export default function GovernanceWorkflowsPage() {
                     </div>
                   ) : (
                     activeTab !== 'pending' || (filteredApprovals.length === 0 && overdueApprovals.length === 0) ? (
-                      <div className="flex h-48 flex-col items-center justify-center text-slate-400">
+                      <div className="flex h-48 flex-col items-center justify-center text-slate-600">
                         <FileCheck className="mb-2 h-12 w-12 opacity-50" />
                         <p className="text-lg font-medium">No pending approvals</p>
                         <p className="text-sm">All caught up! No documents awaiting your approval.</p>
@@ -947,12 +939,12 @@ export default function GovernanceWorkflowsPage() {
       {mainTab === 'templates' && !selectedTemplate && (
         <div className="rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-200 p-4">
-            <h2 className="text-lg font-semibold text-slate-800">Workflow Templates</h2>
+            <h2 className="text-lg font-semibold text-black">Workflow Templates</h2>
             <div className="flex gap-2">
               <button
                 onClick={() => seedDefaultsMutation.mutate()}
                 disabled={seedDefaultsMutation.isPending}
-                className="flex items-center gap-2 rounded-lg border border-primary-500/50 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-500/10 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg border border-primary-500/50 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-50 disabled:opacity-50"
               >
                 {seedDefaultsMutation.isPending ? (
                   <Loader2 size={16} className="animate-spin" />
@@ -974,7 +966,7 @@ export default function GovernanceWorkflowsPage() {
           <div className="p-4">
             {templatesLoading ? (
               <div className="flex h-48 items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
               </div>
             ) : templates && templates.length > 0 ? (
               <div className="space-y-3">
@@ -985,11 +977,11 @@ export default function GovernanceWorkflowsPage() {
                   >
                     <div className="flex-1 cursor-pointer" onClick={() => setSelectedTemplate(template)}>
                       <div className="flex items-center gap-3">
-                        <Layers className="h-5 w-5 text-primary-400" />
+                        <Layers className="h-5 w-5 text-primary-600" />
                         <div>
-                          <h3 className="font-medium text-slate-800">{template.name}</h3>
+                          <h3 className="font-medium text-black">{template.name}</h3>
                           {template.description && (
-                            <p className="text-sm text-slate-400">{template.description}</p>
+                            <p className="text-sm text-slate-600">{template.description}</p>
                           )}
                         </div>
                       </div>
@@ -1006,12 +998,12 @@ export default function GovernanceWorkflowsPage() {
                           );
                         })}
                         {template.is_default && (
-                          <span className="rounded bg-green-500/20 px-2 py-0.5 text-xs text-green-400">
+                          <span className="rounded bg-green-50 px-2 py-0.5 text-xs text-green-600">
                             Default
                           </span>
                         )}
                         {!template.is_active && (
-                          <span className="rounded bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
+                          <span className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-600">
                             Inactive
                           </span>
                         )}
@@ -1020,7 +1012,7 @@ export default function GovernanceWorkflowsPage() {
                     <div className="flex items-center gap-2 ml-4">
                       <button
                         onClick={(e) => { e.stopPropagation(); setEditingTemplate(template); setTemplateModalOpen(true); }}
-                        className="rounded p-2 text-slate-400 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                        className="rounded p-2 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
                         title="Edit"
                       >
                         <Edit2 size={16} />
@@ -1032,7 +1024,7 @@ export default function GovernanceWorkflowsPage() {
                             deleteTemplateMutation.mutate(template.id);
                           }
                         }}
-                        className="rounded p-2 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                        className="rounded p-2 text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
                         title="Delete"
                       >
                         <Trash2 size={16} />
@@ -1042,7 +1034,7 @@ export default function GovernanceWorkflowsPage() {
                 ))}
               </div>
             ) : (
-              <div className="flex h-48 flex-col items-center justify-center text-slate-400">
+              <div className="flex h-48 flex-col items-center justify-center text-slate-600">
                 <Layers className="mb-2 h-12 w-12 opacity-50" />
                 <p className="text-lg font-medium">No workflow templates</p>
                 <p className="text-sm">Create a template or seed defaults to get started</p>
@@ -1058,14 +1050,14 @@ export default function GovernanceWorkflowsPage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setSelectedTemplate(null)}
-                className="rounded p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+                className="rounded p-2 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
               >
                 <ArrowLeft size={20} />
               </button>
               <div>
-                <h2 className="text-lg font-semibold text-slate-800">{selectedTemplate.name}</h2>
+                <h2 className="text-lg font-semibold text-black">{selectedTemplate.name}</h2>
                 {selectedTemplate.description && (
-                  <p className="text-sm text-slate-400">{selectedTemplate.description}</p>
+                  <p className="text-sm text-slate-600">{selectedTemplate.description}</p>
                 )}
               </div>
             </div>
@@ -1093,15 +1085,15 @@ export default function GovernanceWorkflowsPage() {
               })}
             </div>
 
-            <div className="mb-4 flex flex-wrap gap-4 text-sm text-slate-400">
+            <div className="mb-4 flex flex-wrap gap-4 text-sm text-slate-600">
               {selectedTemplate.allow_skip && (
                 <span className="flex items-center gap-1">
-                  <CheckCircle size={14} className="text-green-400" /> Allow Skip
+                  <CheckCircle size={14} className="text-green-600" /> Allow Skip
                 </span>
               )}
               {selectedTemplate.require_all_approvers && (
                 <span className="flex items-center gap-1">
-                  <Users size={14} className="text-blue-400" /> Require All Approvers
+                  <Users size={14} className="text-blue-600" /> Require All Approvers
                 </span>
               )}
               {selectedTemplate.auto_publish_on_complete && (
@@ -1115,7 +1107,7 @@ export default function GovernanceWorkflowsPage() {
 
             {templateDetailLoading ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
               </div>
             ) : templateDetail?.steps && templateDetail.steps.length > 0 ? (
               <div className="space-y-2">
@@ -1130,30 +1122,30 @@ export default function GovernanceWorkflowsPage() {
                         <button
                           onClick={() => handleMoveStep(step, 'up')}
                           disabled={idx === 0 || reorderStepsMutation.isPending}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-30 transition-colors"
+                          className="rounded p-1 text-slate-600 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-30 transition-colors"
                         >
                           <ChevronUp size={14} />
                         </button>
                         <button
                           onClick={() => handleMoveStep(step, 'down')}
                           disabled={idx === arr.length - 1 || reorderStepsMutation.isPending}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-30 transition-colors"
+                          className="rounded p-1 text-slate-600 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-30 transition-colors"
                         >
                           <ChevronDown size={14} />
                         </button>
                       </div>
                       
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-500/20 text-sm font-medium text-primary-400">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-sm font-medium text-primary-600">
                         {step.sequence}
                       </div>
                       
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-800">{step.name}</span>
+                          <span className="font-medium text-black">{step.name}</span>
                           <span className={`rounded px-2 py-0.5 text-xs ${
-                            step.step_type === 'approval' ? 'bg-green-500/20 text-green-400' :
-                            step.step_type === 'review' ? 'bg-blue-500/20 text-blue-400' :
-                            'bg-yellow-500/20 text-yellow-400'
+                            step.step_type === 'approval' ? 'bg-green-50 text-green-700' :
+                            step.step_type === 'review' ? 'bg-blue-50 text-blue-700' :
+                            'bg-yellow-50 text-yellow-700'
                           }`}>
                             {STEP_TYPES.find(t => t.value === step.step_type)?.label || step.step_type}
                           </span>
@@ -1161,13 +1153,13 @@ export default function GovernanceWorkflowsPage() {
                             {APPROVAL_MODES.find(m => m.value === step.approval_mode)?.label || step.approval_mode}
                           </span>
                           {step.timeout_days && (
-                            <span className="text-xs text-slate-400">
+                            <span className="text-xs text-slate-600">
                               {step.timeout_days} day timeout
                             </span>
                           )}
                         </div>
                         {step.approvers && step.approvers.length > 0 && (
-                          <div className="mt-1 flex items-center gap-1 text-xs text-slate-400">
+                          <div className="mt-1 flex items-center gap-1 text-xs text-slate-600">
                             <Users size={12} />
                             {step.approvers.length} approver{step.approvers.length !== 1 ? 's' : ''}
                           </div>
@@ -1177,7 +1169,7 @@ export default function GovernanceWorkflowsPage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => { setEditingStep(step); setStepModalOpen(true); }}
-                          className="rounded p-2 text-slate-400 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                          className="rounded p-2 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
                         >
                           <Edit2 size={14} />
                         </button>
@@ -1187,7 +1179,7 @@ export default function GovernanceWorkflowsPage() {
                               deleteStepMutation.mutate({ templateId: selectedTemplate.id, stepId: step.id });
                             }
                           }}
-                          className="rounded p-2 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                          className="rounded p-2 text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1196,7 +1188,7 @@ export default function GovernanceWorkflowsPage() {
                   ))}
               </div>
             ) : (
-              <div className="flex h-32 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 text-slate-400">
+              <div className="flex h-32 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 text-slate-600">
                 <p className="text-sm">No steps configured</p>
                 <p className="text-xs">Click "Add Step" to create workflow steps</p>
               </div>
@@ -1255,20 +1247,20 @@ function ApprovalCard({ item, onApprove, onReject, isOverdue }: ApprovalCardProp
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-slate-400" />
-            <h4 className="font-medium text-slate-800">{item.document_title}</h4>
+            <FileText className="h-4 w-4 text-slate-600" />
+            <h4 className="font-medium text-black">{item.document_title}</h4>
             {item.document_code && (
-              <span className="text-sm text-slate-400">({item.document_code})</span>
+              <span className="text-sm text-slate-600">({item.document_code})</span>
             )}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
             <span className={`rounded px-2 py-0.5 ${docTypeStyle.bgColor} ${docTypeStyle.color}`}>
               {docTypeStyle.label}
             </span>
-            <span className="text-slate-400">
+            <span className="text-slate-600">
               Requested: {formatDateTime(item.requested_at)}
             </span>
-            <span className={isOverdue || item.is_overdue ? 'text-red-400' : 'text-slate-400'}>
+            <span className={isOverdue || item.is_overdue ? 'text-red-600' : 'text-slate-600'}>
               Due: {formatDate(item.due_date)}
               {(isOverdue || item.is_overdue) && item.days_overdue && (
                 <span className="ml-1 font-medium">
@@ -1277,7 +1269,7 @@ function ApprovalCard({ item, onApprove, onReject, isOverdue }: ApprovalCardProp
               )}
             </span>
           </div>
-          <div className="mt-2 flex items-center gap-3 text-sm text-slate-400">
+          <div className="mt-2 flex items-center gap-3 text-sm text-slate-600">
             <span>Requester: {item.owner_name || 'Unknown'}</span>
             <span>•</span>
             <span>Step: {item.step_name}</span>
@@ -1287,7 +1279,7 @@ function ApprovalCard({ item, onApprove, onReject, isOverdue }: ApprovalCardProp
         <div className="flex gap-2">
           <button
             onClick={() => onReject(item.step_id, item.document_title)}
-            className="rounded-lg border border-red-500/50 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10"
+            className="rounded-lg border border-red-500/50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
           >
             Reject
           </button>

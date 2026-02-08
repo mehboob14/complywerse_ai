@@ -123,16 +123,16 @@ interface SimilarityItem {
 }
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
-  critical: { bg: 'bg-red-500/20', text: 'text-red-400' },
-  high: { bg: 'bg-orange-500/20', text: 'text-orange-400' },
-  medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
-  low: { bg: 'bg-green-500/20', text: 'text-green-400' },
+  critical: { bg: 'bg-red-50', text: 'text-red-600' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-600' },
+  medium: { bg: 'bg-yellow-50', text: 'text-yellow-600' },
+  low: { bg: 'bg-green-50', text: 'text-green-600' },
 };
 
 const SOURCE_STYLES: Record<string, { bg: string; text: string }> = {
-  manual: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  ai: { bg: 'bg-primary-500/20', text: 'text-primary-600' },
-  import: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  manual: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  ai: { bg: 'bg-primary-50', text: 'text-primary-600' },
+  import: { bg: 'bg-blue-50', text: 'text-blue-600' },
 };
 
 export default function ControlGroupDetailPage() {
@@ -235,9 +235,9 @@ export default function ControlGroupDetailPage() {
   const getConfidenceBadge = (confidence: number | null) => {
     if (confidence === null) return null;
     const percent = Math.round(confidence * 100);
-    let color = 'text-green-400';
-    if (percent < 60) color = 'text-red-400';
-    else if (percent < 80) color = 'text-yellow-400';
+    let color = 'text-green-600';
+    if (percent < 60) color = 'text-red-600';
+    else if (percent < 80) color = 'text-yellow-600';
     return (
       <span className={`text-xs ${color}`}>
         {percent}%
@@ -270,17 +270,17 @@ export default function ControlGroupDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
 
   if (error || !group) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center text-red-600">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load control group details</p>
-        <Link href="/control-library" className="mt-4 text-primary-400 hover:underline">
+        <Link href="/control-library" className="mt-4 text-primary-600 hover:underline">
           Back to Control Library
         </Link>
       </div>
@@ -302,32 +302,32 @@ export default function ControlGroupDetailPage() {
       <div className="flex items-start gap-4">
         <Link
           href="/control-library"
-          className="mt-1 rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-900"
+          className="mt-1 rounded-lg p-2 text-slate-600 hover:bg-white hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-900/50 text-primary-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-900/50 text-primary-600">
               <Layers className="h-6 w-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-medium text-primary-400">{group.code}</span>
-                <h1 className="text-2xl font-bold text-slate-800">{group.name}</h1>
+                <span className="font-mono text-sm font-medium text-primary-600">{group.code}</span>
+                <h1 className="text-2xl font-bold text-black">{group.name}</h1>
               </div>
-              <p className="text-slate-400">{group.description || 'No description'}</p>
+              <p className="text-slate-600">{group.description || 'No description'}</p>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {group.category && (
-            <span className="rounded-full bg-blue-500/20 px-3 py-1 text-sm text-blue-400">
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-600">
               {group.category}
             </span>
           )}
           {group.domain && (
-            <span className="rounded-full bg-primary-500/20 px-3 py-1 text-sm text-primary-600">
+            <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-600">
               {group.domain}
             </span>
           )}
@@ -335,7 +335,7 @@ export default function ControlGroupDetailPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowEditModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-slate-800 hover:bg-slate-600"
+            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-black hover:bg-slate-600"
           >
             <Edit2 className="h-4 w-4" />
             Edit
@@ -369,7 +369,7 @@ export default function ControlGroupDetailPage() {
 
           {group.keywords && group.keywords.length > 0 && (
             <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="mb-3 flex items-center gap-2 text-slate-400">
+              <div className="mb-3 flex items-center gap-2 text-slate-600">
                 <Tag className="h-4 w-4" />
                 <span className="text-sm font-medium">Keywords</span>
               </div>
@@ -389,22 +389,22 @@ export default function ControlGroupDetailPage() {
 
         <div className="space-y-4">
           <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <div className="mb-3 flex items-center gap-2 text-slate-400">
+            <div className="mb-3 flex items-center gap-2 text-slate-600">
               <Calendar className="h-4 w-4" />
               <span className="text-sm font-medium">Details</span>
             </div>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">Created</span>
-                <span className="text-slate-800">{formatDate(group.created_at)}</span>
+                <span className="text-black">{formatDate(group.created_at)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Updated</span>
-                <span className="text-slate-800">{formatDate(group.updated_at)}</span>
+                <span className="text-black">{formatDate(group.updated_at)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Total Controls</span>
-                <span className="text-slate-800">{group.total_control_count}</span>
+                <span className="text-black">{group.total_control_count}</span>
               </div>
             </div>
           </div>
@@ -416,15 +416,15 @@ export default function ControlGroupDetailPage() {
           onClick={() => setFrameworkFilter(null)}
           className={`rounded-lg border p-4 text-center transition-colors ${
             frameworkFilter === null
-              ? 'border-primary-500 bg-primary-500/10'
+              ? 'border-primary-500 bg-primary-50'
               : 'border-slate-200 bg-white hover:bg-slate-200'
           }`}
         >
-          <Shield className="mx-auto mb-2 h-6 w-6 text-green-400" />
-          <div className="text-lg font-bold text-slate-800">
+          <Shield className="mx-auto mb-2 h-6 w-6 text-green-600" />
+          <div className="text-lg font-bold text-black">
             {frameworksData?.normalized_control_count || 0}
           </div>
-          <div className="text-xs text-slate-400">Normalized</div>
+          <div className="text-xs text-slate-600">Normalized</div>
         </button>
         {frameworksData?.frameworks.map((fw) => (
           <button
@@ -432,13 +432,13 @@ export default function ControlGroupDetailPage() {
             onClick={() => setFrameworkFilter(fw.framework_id === frameworkFilter ? null : fw.framework_id)}
             className={`rounded-lg border p-4 text-center transition-colors ${
               frameworkFilter === fw.framework_id
-                ? 'border-primary-500 bg-primary-500/10'
+                ? 'border-primary-500 bg-primary-50'
                 : 'border-slate-200 bg-white hover:bg-slate-200'
             }`}
           >
-            <Layers className="mx-auto mb-2 h-6 w-6 text-orange-400" />
-            <div className="text-lg font-bold text-slate-800">{fw.control_count}</div>
-            <div className="truncate text-xs text-slate-400">{fw.framework_code || fw.framework_name}</div>
+            <Layers className="mx-auto mb-2 h-6 w-6 text-orange-600" />
+            <div className="text-lg font-bold text-black">{fw.control_count}</div>
+            <div className="truncate text-xs text-slate-600">{fw.framework_code || fw.framework_name}</div>
           </button>
         ))}
       </div>
@@ -453,8 +453,8 @@ export default function ControlGroupDetailPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'border-primary-500 text-primary-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-900'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -556,12 +556,12 @@ function MappedControlsTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-800">
+        <h3 className="text-lg font-semibold text-black">
           Mapped Controls ({allControls.length})
         </h3>
         <div className="flex items-center gap-3">
           {frameworkFilter === null && (
-            <label className="flex items-center gap-2 text-sm text-slate-400">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
               <input
                 type="checkbox"
                 checked={groupByFramework}
@@ -584,8 +584,8 @@ function MappedControlsTab({
       {allControls.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Shield className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-slate-800">No controls mapped</h3>
-          <p className="mt-1 text-slate-400">Add controls to this group to get started</p>
+          <h3 className="text-lg font-medium text-black">No controls mapped</h3>
+          <p className="mt-1 text-slate-600">Add controls to this group to get started</p>
           <button
             onClick={onAddControls}
             className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700"
@@ -598,7 +598,7 @@ function MappedControlsTab({
         <div className="space-y-6">
           {normalizedControls.length > 0 && (
             <div>
-              <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-green-400">
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-green-600">
                 <Shield className="h-4 w-4" />
                 Normalized Controls ({normalizedControls.length})
               </h4>
@@ -613,7 +613,7 @@ function MappedControlsTab({
           )}
           {Object.entries(groupedControls).map(([frameworkName, controls]) => (
             <div key={frameworkName}>
-              <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-orange-400">
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-orange-600">
                 <Layers className="h-4 w-4" />
                 {frameworkName} ({controls.length})
               </h4>
@@ -661,12 +661,12 @@ function ControlsTable({
       <table className="w-full">
         <thead className="bg-slate-200/50">
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Code</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Name</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Framework</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Confidence</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Source</th>
-            <th className="w-16 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Actions</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Code</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Name</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Framework</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Confidence</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Source</th>
+            <th className="w-16 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-600">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-700">
@@ -675,16 +675,16 @@ function ControlsTable({
             return (
               <tr key={`${control.type}-${control.mapping_id}`} className="hover:bg-slate-200/30">
                 <td className="px-4 py-3">
-                  <span className="font-mono text-sm text-primary-400">{control.code}</span>
+                  <span className="font-mono text-sm text-primary-600">{control.code}</span>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="max-w-xs truncate text-sm text-slate-800">{control.name}</p>
+                  <p className="max-w-xs truncate text-sm text-black">{control.name}</p>
                 </td>
                 <td className="px-4 py-3">
                   {control.type === 'normalized' ? (
-                    <span className="rounded bg-green-500/20 px-2 py-1 text-xs text-green-400">Normalized</span>
+                    <span className="rounded bg-green-50 px-2 py-1 text-xs text-green-600">Normalized</span>
                   ) : (
-                    <span className="rounded bg-orange-500/20 px-2 py-1 text-xs text-orange-400">
+                    <span className="rounded bg-orange-50 px-2 py-1 text-xs text-orange-600">
                       {control.framework_code || control.framework_name || 'Framework'}
                     </span>
                   )}
@@ -701,7 +701,7 @@ function ControlsTable({
                   <button
                     onClick={() => onRemove(control.mapping_id)}
                     disabled={isRemoving}
-                    className="rounded p-1.5 text-slate-400 hover:bg-red-900/50 hover:text-red-400 disabled:opacity-50"
+                    className="rounded p-1.5 text-slate-600 hover:bg-red-900/50 hover:text-red-600 disabled:opacity-50"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -720,43 +720,43 @@ function SimilarityTab({ similarities }: { similarities: SimilarityItem[] }) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <GitMerge className="mb-4 h-12 w-12 text-slate-600" />
-        <h3 className="text-lg font-medium text-slate-800">No similarity data</h3>
-        <p className="mt-1 text-slate-400">Run AI Analysis from the Control Library to generate similarities</p>
+        <h3 className="text-lg font-medium text-black">No similarity data</h3>
+        <p className="mt-1 text-slate-600">Run AI Analysis from the Control Library to generate similarities</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-slate-800">Control Similarities</h3>
+      <h3 className="text-lg font-semibold text-black">Control Similarities</h3>
       <div className="space-y-3">
         {similarities.map((sim) => (
           <div key={sim.id} className="rounded-lg border border-slate-200 bg-slate-200/30 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="text-center">
-                  <p className="font-mono text-sm text-primary-400">{sim.control1_code}</p>
-                  <p className="max-w-[200px] truncate text-xs text-slate-400">{sim.control1_name}</p>
+                  <p className="font-mono text-sm text-primary-600">{sim.control1_code}</p>
+                  <p className="max-w-[200px] truncate text-xs text-slate-600">{sim.control1_name}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="h-px w-8 bg-slate-600" />
                   <div className={`rounded-full px-3 py-1 text-sm font-medium ${
-                    sim.similarity_score >= 0.8 ? 'bg-green-500/20 text-green-400' :
-                    sim.similarity_score >= 0.6 ? 'bg-yellow-500/20 text-yellow-400' :
-                    'bg-orange-500/20 text-orange-400'
+                    sim.similarity_score >= 0.8 ? 'bg-green-50 text-green-700' :
+                    sim.similarity_score >= 0.6 ? 'bg-yellow-50 text-yellow-700' :
+                    'bg-orange-50 text-orange-700'
                   }`}>
                     {Math.round(sim.similarity_score * 100)}%
                   </div>
                   <div className="h-px w-8 bg-slate-600" />
                 </div>
                 <div className="text-center">
-                  <p className="font-mono text-sm text-primary-400">{sim.control2_code}</p>
-                  <p className="max-w-[200px] truncate text-xs text-slate-400">{sim.control2_name}</p>
+                  <p className="font-mono text-sm text-primary-600">{sim.control2_code}</p>
+                  <p className="max-w-[200px] truncate text-xs text-slate-600">{sim.control2_name}</p>
                 </div>
               </div>
             </div>
             {sim.ai_reasoning && (
-              <p className="mt-3 text-sm text-slate-400">{sim.ai_reasoning}</p>
+              <p className="mt-3 text-sm text-slate-600">{sim.ai_reasoning}</p>
             )}
           </div>
         ))}
@@ -779,7 +779,7 @@ function EvidenceRecommendationsTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-800">
+        <h3 className="text-lg font-semibold text-black">
           Evidence Recommendations ({recommendations.length})
         </h3>
         <button
@@ -799,8 +799,8 @@ function EvidenceRecommendationsTab({
       {recommendations.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <FileCheck className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-slate-800">No recommendations yet</h3>
-          <p className="mt-1 text-slate-400">Generate AI-powered evidence recommendations for this control group</p>
+          <h3 className="text-lg font-medium text-black">No recommendations yet</h3>
+          <p className="mt-1 text-slate-600">Generate AI-powered evidence recommendations for this control group</p>
           <button
             onClick={onGenerateRecs}
             disabled={isGenerating}
@@ -819,7 +819,7 @@ function EvidenceRecommendationsTab({
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-slate-800">{rec.evidence_type}</h4>
+                      <h4 className="font-medium text-black">{rec.evidence_type}</h4>
                       <span className={`rounded-full px-2 py-0.5 text-xs ${priorityStyle.bg} ${priorityStyle.text}`}>
                         {rec.priority}
                       </span>
@@ -830,7 +830,7 @@ function EvidenceRecommendationsTab({
                       )}
                     </div>
                     {rec.evidence_description && (
-                      <p className="mt-2 text-sm text-slate-400">{rec.evidence_description}</p>
+                      <p className="mt-2 text-sm text-slate-600">{rec.evidence_description}</p>
                     )}
                     {rec.ai_reasoning && (
                       <p className="mt-2 text-xs text-slate-500">{rec.ai_reasoning}</p>
@@ -849,7 +849,7 @@ function EvidenceRecommendationsTab({
                 )}
                 {rec.control_code && (
                   <div className="mt-2 text-xs text-slate-500">
-                    From: <span className="font-mono text-primary-400">{rec.control_code}</span>
+                    From: <span className="font-mono text-primary-600">{rec.control_code}</span>
                     {rec.framework_name && <span> ({rec.framework_name})</span>}
                   </div>
                 )}
@@ -887,14 +887,14 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-slate-800">Control Inheritance</h3>
-      <p className="text-sm text-slate-400">
+      <h3 className="text-lg font-semibold text-black">Control Inheritance</h3>
+      <p className="text-sm text-slate-600">
         Select a control from this group to view its inheritance relationships
       </p>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
-          <h4 className="mb-3 text-sm font-medium text-slate-400">Controls in this group</h4>
+          <h4 className="mb-3 text-sm font-medium text-slate-600">Controls in this group</h4>
           <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200">
             {controls.map((control) => (
               <button
@@ -902,11 +902,11 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
                 onClick={() => setSelectedControl({ type: control.type, id: control.control_id })}
                 className={`w-full border-b border-slate-200 px-4 py-3 text-left last:border-0 ${
                   selectedControl?.type === control.type && selectedControl?.id === control.control_id
-                    ? 'bg-primary-500/20'
+                    ? 'bg-primary-50'
                     : 'hover:bg-slate-50'
                 }`}
               >
-                <span className="font-mono text-sm text-primary-400">{control.code}</span>
+                <span className="font-mono text-sm text-primary-600">{control.code}</span>
                 <p className="truncate text-sm text-slate-600">{control.name}</p>
               </button>
             ))}
@@ -920,23 +920,23 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
           {selectedControl ? (
             <>
               <div className="rounded-lg border border-slate-200 bg-slate-200/30 p-4">
-                <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-green-400">
+                <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-green-600">
                   <ChevronDown className="h-4 w-4" />
                   Controls Inherited FROM this control ({inheritedData?.inherited_controls?.length || 0})
                 </h4>
                 {loadingInherited ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                  <Loader2 className="h-5 w-5 animate-spin text-slate-600" />
                 ) : inheritedData?.inherited_controls?.length > 0 ? (
                   <div className="space-y-2">
                     {inheritedData.inherited_controls.map((item: InheritanceItem) => (
                       <div key={item.inheritance_id} className="flex items-center justify-between rounded bg-white p-2">
                         <div>
-                          <span className="font-mono text-xs text-primary-400">{item.control.code}</span>
+                          <span className="font-mono text-xs text-primary-600">{item.control.code}</span>
                           <p className="text-sm text-slate-600">{item.control.name}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">{item.coverage_percentage}%</span>
-                          <span className="rounded bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                          <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
                             {item.inheritance_type}
                           </span>
                         </div>
@@ -949,23 +949,23 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
               </div>
 
               <div className="rounded-lg border border-slate-200 bg-slate-200/30 p-4">
-                <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-orange-400">
+                <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-orange-600">
                   <ChevronRight className="h-4 w-4" />
                   Controls that SATISFY this control ({satisfyingData?.satisfying_controls?.length || 0})
                 </h4>
                 {loadingSatisfying ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                  <Loader2 className="h-5 w-5 animate-spin text-slate-600" />
                 ) : satisfyingData?.satisfying_controls?.length > 0 ? (
                   <div className="space-y-2">
                     {satisfyingData.satisfying_controls.map((item: InheritanceItem) => (
                       <div key={item.inheritance_id} className="flex items-center justify-between rounded bg-white p-2">
                         <div>
-                          <span className="font-mono text-xs text-primary-400">{item.control.code}</span>
+                          <span className="font-mono text-xs text-primary-600">{item.control.code}</span>
                           <p className="text-sm text-slate-600">{item.control.name}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">{item.coverage_percentage}%</span>
-                          <span className="rounded bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                          <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
                             {item.inheritance_type}
                           </span>
                         </div>
@@ -980,7 +980,7 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
           ) : (
             <div className="flex h-64 flex-col items-center justify-center text-center">
               <Link2 className="mb-4 h-12 w-12 text-slate-600" />
-              <p className="text-slate-400">Select a control to view inheritance</p>
+              <p className="text-slate-600">Select a control to view inheritance</p>
             </div>
           )}
         </div>
@@ -1079,8 +1079,8 @@ function AddControlsModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="mx-4 w-full max-w-3xl rounded-lg border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-800">Add Controls to Group</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-black">Add Controls to Group</h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1088,19 +1088,19 @@ function AddControlsModal({
         <div className="space-y-4 p-6">
           <div className="flex gap-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
               <input
                 type="text"
                 placeholder="Search controls..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
               />
             </div>
             <select
               value={frameworkFilter || ''}
               onChange={(e) => setFrameworkFilter(e.target.value ? Number(e.target.value) : null)}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Frameworks</option>
               {frameworks?.map((fw: { id: number; name: string }) => (
@@ -1112,7 +1112,7 @@ function AddControlsModal({
           <div className="max-h-80 overflow-y-auto rounded-lg border border-slate-200">
             {frameworkFilter === null && filteredNormalized.length > 0 && (
               <>
-                <div className="sticky top-0 bg-slate-200 px-4 py-2 text-sm font-medium text-green-400">
+                <div className="sticky top-0 bg-slate-200 px-4 py-2 text-sm font-medium text-green-600">
                   Normalized Controls
                 </div>
                 {filteredNormalized.map((control: { id: number; code: string; name: string }) => (
@@ -1127,7 +1127,7 @@ function AddControlsModal({
                       className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
-                      <span className="font-mono text-sm text-primary-400">{control.code}</span>
+                      <span className="font-mono text-sm text-primary-600">{control.code}</span>
                       <p className="text-sm text-slate-600">{control.name}</p>
                     </div>
                   </label>
@@ -1137,7 +1137,7 @@ function AddControlsModal({
 
             {frameworkFilter !== null && filteredFramework.length > 0 && (
               <>
-                <div className="sticky top-0 bg-slate-200 px-4 py-2 text-sm font-medium text-orange-400">
+                <div className="sticky top-0 bg-slate-200 px-4 py-2 text-sm font-medium text-orange-600">
                   Framework Controls
                 </div>
                 {filteredFramework.map((control: { id: number; code: string; name: string }) => (
@@ -1152,7 +1152,7 @@ function AddControlsModal({
                       className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
-                      <span className="font-mono text-sm text-primary-400">{control.code}</span>
+                      <span className="font-mono text-sm text-primary-600">{control.code}</span>
                       <p className="text-sm text-slate-600">{control.name}</p>
                     </div>
                   </label>
@@ -1161,13 +1161,13 @@ function AddControlsModal({
             )}
 
             {frameworkFilter === null && filteredNormalized.length === 0 && (
-              <div className="p-8 text-center text-slate-400">
+              <div className="p-8 text-center text-slate-600">
                 {searchTerm ? 'No matching controls found' : 'Select a framework to view controls'}
               </div>
             )}
 
             {frameworkFilter !== null && filteredFramework.length === 0 && (
-              <div className="p-8 text-center text-slate-400">
+              <div className="p-8 text-center text-slate-600">
                 {searchTerm ? 'No matching controls found' : 'No available controls in this framework'}
               </div>
             )}
@@ -1175,13 +1175,13 @@ function AddControlsModal({
         </div>
 
         <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-slate-600">
             {totalSelected} control{totalSelected !== 1 ? 's' : ''} selected
           </span>
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-slate-800 hover:bg-slate-200"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-black hover:bg-slate-200"
             >
               Cancel
             </button>
@@ -1240,8 +1240,8 @@ function EditGroupModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="mx-4 w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-800">Edit Control Group</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-black">Edit Control Group</h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1254,7 +1254,7 @@ function EditGroupModal({
               value={formData.code}
               onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))}
               required
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
             />
           </div>
 
@@ -1265,7 +1265,7 @@ function EditGroupModal({
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               required
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
             />
           </div>
 
@@ -1275,7 +1275,7 @@ function EditGroupModal({
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
             />
           </div>
 
@@ -1286,7 +1286,7 @@ function EditGroupModal({
                 type="text"
                 value={formData.category}
                 onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
               />
             </div>
             <div>
@@ -1295,7 +1295,7 @@ function EditGroupModal({
                 type="text"
                 value={formData.domain}
                 onChange={(e) => setFormData(prev => ({ ...prev, domain: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
               />
             </div>
           </div>
@@ -1307,7 +1307,7 @@ function EditGroupModal({
               value={formData.keywords}
               onChange={(e) => setFormData(prev => ({ ...prev, keywords: e.target.value }))}
               placeholder="keyword1, keyword2, keyword3"
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
             />
           </div>
 
@@ -1315,7 +1315,7 @@ function EditGroupModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-slate-800 hover:bg-slate-200"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-black hover:bg-slate-200"
             >
               Cancel
             </button>

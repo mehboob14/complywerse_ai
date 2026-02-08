@@ -80,10 +80,10 @@ interface AutoGroupResult {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: typeof CheckCircle }> = {
-  completed: { bg: 'bg-green-500/20', text: 'text-green-400', icon: CheckCircle },
-  processing: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: RefreshCw },
-  failed: { bg: 'bg-red-500/20', text: 'text-red-400', icon: XCircle },
-  pending: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: Clock },
+  completed: { bg: 'bg-green-50', text: 'text-green-600', icon: CheckCircle },
+  processing: { bg: 'bg-blue-50', text: 'text-blue-600', icon: RefreshCw },
+  failed: { bg: 'bg-red-50', text: 'text-red-600', icon: XCircle },
+  pending: { bg: 'bg-yellow-50', text: 'text-yellow-600', icon: Clock },
 };
 
 export default function ControlLibraryPage() {
@@ -301,8 +301,8 @@ export default function ControlLibraryPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Unified Control Library</h1>
-          <p className="text-slate-400">AI-powered control mapping across frameworks</p>
+          <h1 className="text-2xl font-bold text-black">Unified Control Library</h1>
+          <p className="text-slate-600">AI-powered control mapping across frameworks</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -317,7 +317,7 @@ export default function ControlLibraryPage() {
               setAutoGroupResult(null);
               setShowAutoGroupModal(true);
             }}
-            className="flex items-center gap-2 rounded-lg border border-primary-500 bg-primary-500/10 px-4 py-2 font-medium text-primary-400 hover:bg-primary-500/20"
+            className="flex items-center gap-2 rounded-lg border border-primary-500 bg-primary-50 px-4 py-2 font-medium text-primary-600 hover:bg-primary-50"
           >
             <Sparkles size={18} />
             Auto-Group with AI
@@ -327,7 +327,7 @@ export default function ControlLibraryPage() {
               setAnalysisResult(null);
               setShowAnalysisModal(true);
             }}
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 font-medium text-slate-800 hover:bg-slate-600"
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 font-medium text-black hover:bg-slate-600"
           >
             <Brain size={18} />
             Run AI Analysis
@@ -378,22 +378,22 @@ export default function ControlLibraryPage() {
         <Link href="/control-library/coverage" className="card hover:border-primary-500/50 transition-colors group">
           <div className="flex items-center gap-4">
             <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
-              <Grid3X3 className="h-6 w-6 text-blue-400" />
+              <Grid3X3 className="h-6 w-6 text-blue-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-slate-800 group-hover:text-primary-400 transition-colors">Coverage Matrix</h3>
-              <p className="text-sm text-slate-400">View evidence coverage heatmap</p>
+              <h3 className="font-semibold text-black group-hover:text-primary-600 transition-colors">Coverage Matrix</h3>
+              <p className="text-sm text-slate-600">View evidence coverage heatmap</p>
             </div>
           </div>
         </Link>
         <Link href="/control-library/gaps" className="card hover:border-primary-500/50 transition-colors group">
           <div className="flex items-center gap-4">
             <div className="rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 p-3">
-              <AlertCircle className="h-6 w-6 text-orange-400" />
+              <AlertCircle className="h-6 w-6 text-orange-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-slate-800 group-hover:text-primary-400 transition-colors">Gap Analysis</h3>
-              <p className="text-sm text-slate-400">Identify and address control gaps</p>
+              <h3 className="font-semibold text-black group-hover:text-primary-600 transition-colors">Gap Analysis</h3>
+              <p className="text-sm text-slate-600">Identify and address control gaps</p>
             </div>
           </div>
         </Link>
@@ -403,8 +403,8 @@ export default function ControlLibraryPage() {
               <BarChart3 className="h-6 w-6 text-primary-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-slate-800 group-hover:text-primary-400 transition-colors">Compare Controls</h3>
-              <p className="text-sm text-slate-400">Side-by-side control comparison</p>
+              <h3 className="font-semibold text-black group-hover:text-primary-600 transition-colors">Compare Controls</h3>
+              <p className="text-sm text-slate-600">Side-by-side control comparison</p>
             </div>
           </div>
         </Link>
@@ -414,20 +414,20 @@ export default function ControlLibraryPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1 sm:max-w-xs">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
               <input
                 type="text"
                 placeholder="Search by name or code..."
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
               />
             </div>
 
             <select
               value={categoryFilter}
               onChange={(e) => { setCategoryFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Categories</option>
               {categories?.map(cat => (
@@ -438,7 +438,7 @@ export default function ControlLibraryPage() {
             <select
               value={domainFilter}
               onChange={(e) => { setDomainFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Domains</option>
               {domains?.map(dom => (
@@ -448,7 +448,7 @@ export default function ControlLibraryPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-400">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
               <input
                 type="checkbox"
                 checked={showEmptyGroups}
@@ -463,7 +463,7 @@ export default function ControlLibraryPage() {
                 className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                   viewMode === 'cards' 
                     ? 'bg-primary-600 text-white' 
-                    : 'bg-white text-slate-400 hover:text-slate-900'
+                    : 'bg-white text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Grid3X3 className="h-4 w-4" />
@@ -473,7 +473,7 @@ export default function ControlLibraryPage() {
                 className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                   viewMode === 'table' 
                     ? 'bg-primary-600 text-white' 
-                    : 'bg-white text-slate-400 hover:text-slate-900'
+                    : 'bg-white text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <FileText className="h-4 w-4" />
@@ -485,21 +485,21 @@ export default function ControlLibraryPage() {
 
       {groupsLoading ? (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
         </div>
       ) : groupsError ? (
-        <div className="flex h-64 flex-col items-center justify-center text-red-400">
+        <div className="flex h-64 flex-col items-center justify-center text-red-600">
           <AlertCircle className="mb-2 h-8 w-8" />
           <p>Failed to load control groups</p>
-          <button onClick={() => refetchGroups()} className="mt-2 text-sm text-primary-400 hover:underline">
+          <button onClick={() => refetchGroups()} className="mt-2 text-sm text-primary-600 hover:underline">
             Try again
           </button>
         </div>
       ) : !filteredGroups || filteredGroups.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-12 text-center">
           <Library className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-slate-800">No control groups found</h3>
-          <p className="mt-1 text-slate-400">Create your first control group or use AI auto-grouping</p>
+          <h3 className="text-lg font-medium text-black">No control groups found</h3>
+          <p className="mt-1 text-slate-600">Create your first control group or use AI auto-grouping</p>
           <div className="mt-4 flex gap-3">
             <button
               onClick={() => setShowCreateModal(true)}
@@ -510,7 +510,7 @@ export default function ControlLibraryPage() {
             </button>
             <button
               onClick={() => setShowAutoGroupModal(true)}
-              className="flex items-center gap-2 rounded-lg border border-primary-500 px-4 py-2 font-medium text-primary-400 hover:bg-primary-500/10"
+              className="flex items-center gap-2 rounded-lg border border-primary-500 px-4 py-2 font-medium text-primary-600 hover:bg-primary-50"
             >
               <Sparkles size={16} />
               Auto-Group
@@ -529,12 +529,10 @@ export default function ControlLibraryPage() {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-primary-500/20 p-2">
-                        <Shield className="h-5 w-5 text-primary-400" />
-                      </div>
+                                              <Shield className="h-5 w-5 text-primary-600" />
                       <div>
-                        <span className="font-mono text-xs text-primary-400">{group.code}</span>
-                        <h3 className="font-medium text-slate-800 line-clamp-1">{group.name}</h3>
+                        <span className="font-mono text-xs text-primary-600">{group.code}</span>
+                        <h3 className="font-medium text-black line-clamp-1">{group.name}</h3>
                       </div>
                     </div>
                     <ProgressRing
@@ -547,17 +545,17 @@ export default function ControlLibraryPage() {
                   </div>
 
                   {group.description && (
-                    <p className="text-sm text-slate-400 line-clamp-2 mb-3">{group.description}</p>
+                    <p className="text-sm text-slate-600 line-clamp-2 mb-3">{group.description}</p>
                   )}
 
                   <div className="flex flex-wrap gap-2 mb-4">
                     {group.category && (
-                      <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
                         {group.category}
                       </span>
                     )}
                     {group.domain && (
-                      <span className="rounded-full bg-primary-500/20 px-2 py-0.5 text-xs text-primary-600">
+                      <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs text-primary-600">
                         {group.domain}
                       </span>
                     )}
@@ -566,12 +564,12 @@ export default function ControlLibraryPage() {
                   <div className="flex items-center justify-between border-t border-slate-200 pt-3">
                     <div className="flex items-center gap-4 text-sm">
                       <div className="flex items-center gap-1">
-                        <Shield className="h-4 w-4 text-slate-400" />
-                        <span className="text-slate-800 font-medium">{group.total_control_count}</span>
+                        <Shield className="h-4 w-4 text-slate-600" />
+                        <span className="text-black font-medium">{group.total_control_count}</span>
                         <span className="text-slate-500">controls</span>
                       </div>
                       {group.normalized_control_count > 0 && (
-                        <span className="text-xs text-green-400">
+                        <span className="text-xs text-green-600">
                           {group.normalized_control_count} normalized
                         </span>
                       )}
@@ -580,14 +578,14 @@ export default function ControlLibraryPage() {
                       <Link
                         href={`/control-library/${group.id}`}
                         title="View Details"
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                        className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                       >
                         <Eye size={14} />
                       </Link>
                       <button
                         title="Edit"
                         onClick={() => setEditingGroup(group)}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                        className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                       >
                         <Edit2 size={14} />
                       </button>
@@ -595,14 +593,14 @@ export default function ControlLibraryPage() {
                         title="Generate AI Summary"
                         onClick={() => generateSummaryMutation.mutate(group.id)}
                         disabled={generateSummaryMutation.isPending}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-primary-400"
+                        className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-primary-600"
                       >
                         <Sparkles size={14} />
                       </button>
                       <button
                         title="Delete"
                         onClick={() => handleDeleteGroup(group)}
-                        className="rounded p-1.5 text-slate-400 hover:bg-red-900/50 hover:text-red-400"
+                        className="rounded p-1.5 text-slate-600 hover:bg-red-900/50 hover:text-red-600"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -618,13 +616,13 @@ export default function ControlLibraryPage() {
           <table className="w-full">
             <thead className="bg-white/50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Code</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Category</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Domain</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Controls</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Completion</th>
-                <th className="w-32 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Code</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Category</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Domain</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Controls</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Completion</th>
+                <th className="w-32 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-600">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700 bg-white">
@@ -633,19 +631,19 @@ export default function ControlLibraryPage() {
                 return (
                   <tr key={group.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <span className="font-mono text-sm font-medium text-primary-400">{group.code}</span>
+                      <span className="font-mono text-sm font-medium text-primary-600">{group.code}</span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="max-w-xs">
-                        <p className="truncate text-sm font-medium text-slate-800">{group.name}</p>
+                        <p className="truncate text-sm font-medium text-black">{group.name}</p>
                         {group.description && (
-                          <p className="truncate text-xs text-slate-400">{group.description}</p>
+                          <p className="truncate text-xs text-slate-600">{group.description}</p>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       {group.category ? (
-                        <span className="rounded-full bg-blue-500/20 px-2 py-1 text-xs text-blue-400">
+                        <span className="rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-600">
                           {group.category}
                         </span>
                       ) : (
@@ -654,7 +652,7 @@ export default function ControlLibraryPage() {
                     </td>
                     <td className="px-4 py-3">
                       {group.domain ? (
-                        <span className="rounded-full bg-primary-500/20 px-2 py-1 text-xs text-primary-600">
+                        <span className="rounded-full bg-primary-50 px-2 py-1 text-xs text-primary-600">
                           {group.domain}
                         </span>
                       ) : (
@@ -663,8 +661,8 @@ export default function ControlLibraryPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-slate-400" />
-                        <span className="text-sm font-medium text-slate-800">{group.total_control_count}</span>
+                        <Shield className="h-4 w-4 text-slate-600" />
+                        <span className="text-sm font-medium text-black">{group.total_control_count}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -677,7 +675,7 @@ export default function ControlLibraryPage() {
                             style={{ width: `${completion}%` }}
                           />
                         </div>
-                        <span className="text-xs text-slate-400">{completion}%</span>
+                        <span className="text-xs text-slate-600">{completion}%</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -685,14 +683,14 @@ export default function ControlLibraryPage() {
                         <Link
                           href={`/control-library/${group.id}`}
                           title="View Details"
-                          className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                          className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                         >
                           <Eye size={14} />
                         </Link>
                         <button
                           title="Edit"
                           onClick={() => setEditingGroup(group)}
-                          className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
+                          className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                         >
                           <Edit2 size={14} />
                         </button>
@@ -700,14 +698,14 @@ export default function ControlLibraryPage() {
                           title="Generate AI Summary"
                           onClick={() => generateSummaryMutation.mutate(group.id)}
                           disabled={generateSummaryMutation.isPending}
-                          className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-primary-400"
+                          className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-primary-600"
                         >
                           <Sparkles size={14} />
                         </button>
                         <button
                           title="Delete"
                           onClick={() => handleDeleteGroup(group)}
-                          className="rounded p-1.5 text-slate-400 hover:bg-red-900/50 hover:text-red-400"
+                          className="rounded p-1.5 text-slate-600 hover:bg-red-900/50 hover:text-red-600"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -723,24 +721,24 @@ export default function ControlLibraryPage() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-          <div className="text-sm text-slate-400">
+          <div className="text-sm text-slate-600">
             Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, groupsData?.total || 0)} of {groupsData?.total || 0} results
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-200 disabled:opacity-50"
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-black hover:bg-slate-200 disabled:opacity-50"
             >
               Previous
             </button>
-            <span className="px-3 text-sm text-slate-400">
+            <span className="px-3 text-sm text-slate-600">
               Page {page + 1} of {totalPages}
             </span>
             <button
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-200 disabled:opacity-50"
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-black hover:bg-slate-200 disabled:opacity-50"
             >
               Next
             </button>
@@ -752,8 +750,8 @@ export default function ControlLibraryPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-800">Create Control Group</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-lg font-semibold text-black">Create Control Group</h2>
+              <button onClick={() => setShowCreateModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
@@ -772,7 +770,7 @@ export default function ControlLibraryPage() {
                   placeholder="e.g., CCG-001"
                   value={newGroup.code}
                   onChange={(e) => setNewGroup({ ...newGroup, code: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -783,7 +781,7 @@ export default function ControlLibraryPage() {
                   placeholder="e.g., Access Control Management"
                   value={newGroup.name}
                   onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -793,7 +791,7 @@ export default function ControlLibraryPage() {
                   value={newGroup.description}
                   onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -805,7 +803,7 @@ export default function ControlLibraryPage() {
                     value={newGroup.category}
                     onChange={(e) => setNewGroup({ ...newGroup, category: e.target.value })}
                     list="categories-list"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                   />
                   <datalist id="categories-list">
                     {categories?.map(cat => <option key={cat} value={cat} />)}
@@ -819,7 +817,7 @@ export default function ControlLibraryPage() {
                     value={newGroup.domain}
                     onChange={(e) => setNewGroup({ ...newGroup, domain: e.target.value })}
                     list="domains-list"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                   />
                   <datalist id="domains-list">
                     {domains?.map(dom => <option key={dom} value={dom} />)}
@@ -852,8 +850,8 @@ export default function ControlLibraryPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-800">Edit Control Group</h2>
-              <button onClick={() => setEditingGroup(null)} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-lg font-semibold text-black">Edit Control Group</h2>
+              <button onClick={() => setEditingGroup(null)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
@@ -880,7 +878,7 @@ export default function ControlLibraryPage() {
                   required
                   value={editingGroup.code}
                   onChange={(e) => setEditingGroup({ ...editingGroup, code: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -890,7 +888,7 @@ export default function ControlLibraryPage() {
                   required
                   value={editingGroup.name}
                   onChange={(e) => setEditingGroup({ ...editingGroup, name: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -899,7 +897,7 @@ export default function ControlLibraryPage() {
                   value={editingGroup.description || ''}
                   onChange={(e) => setEditingGroup({ ...editingGroup, description: e.target.value })}
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -910,7 +908,7 @@ export default function ControlLibraryPage() {
                     value={editingGroup.category || ''}
                     onChange={(e) => setEditingGroup({ ...editingGroup, category: e.target.value })}
                     list="edit-categories-list"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   />
                   <datalist id="edit-categories-list">
                     {categories?.map(cat => <option key={cat} value={cat} />)}
@@ -923,7 +921,7 @@ export default function ControlLibraryPage() {
                     value={editingGroup.domain || ''}
                     onChange={(e) => setEditingGroup({ ...editingGroup, domain: e.target.value })}
                     list="edit-domains-list"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
                   />
                   <datalist id="edit-domains-list">
                     {domains?.map(dom => <option key={dom} value={dom} />)}
@@ -957,20 +955,18 @@ export default function ControlLibraryPage() {
           <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-primary-500/20 p-2">
-                  <Sparkles className="h-5 w-5 text-primary-400" />
-                </div>
-                <h2 className="text-lg font-semibold text-slate-800">AI Auto-Grouping</h2>
+                                  <Sparkles className="h-5 w-5 text-primary-600" />
+                <h2 className="text-lg font-semibold text-black">AI Auto-Grouping</h2>
               </div>
-              <button onClick={() => setShowAutoGroupModal(false)} className="text-slate-400 hover:text-slate-900">
+              <button onClick={() => setShowAutoGroupModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
 
             {autoGroupError ? (
               <div className="space-y-4">
-                <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
-                  <div className="flex items-center gap-2 text-red-400">
+                <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+                  <div className="flex items-center gap-2 text-red-600">
                     <XCircle size={20} />
                     <span className="font-medium">Auto-grouping failed</span>
                   </div>
@@ -1000,7 +996,7 @@ export default function ControlLibraryPage() {
               </div>
             ) : !autoGroupResult && !autoGroupLoading ? (
               <div className="space-y-4">
-                <p className="text-slate-400">
+                <p className="text-slate-600">
                   Use AI to automatically analyze and group related controls across your frameworks.
                 </p>
                 <div>
@@ -1048,29 +1044,29 @@ export default function ControlLibraryPage() {
               </div>
             ) : autoGroupLoading ? (
               <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="mb-4 h-12 w-12 animate-spin text-primary-400" />
-                <p className="text-slate-800">Analyzing controls with AI...</p>
-                <p className="mt-1 text-sm text-slate-400">This may take a moment</p>
+                <Loader2 className="mb-4 h-12 w-12 animate-spin text-primary-600" />
+                <p className="text-black">Analyzing controls with AI...</p>
+                <p className="mt-1 text-sm text-slate-600">This may take a moment</p>
               </div>
             ) : autoGroupResult ? (
               <div className="space-y-4">
-                <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-4">
-                  <div className="flex items-center gap-2 text-green-400">
+                <div className="rounded-lg bg-green-50 border border-green-200 p-4">
+                  <div className="flex items-center gap-2 text-green-600">
                     <CheckCircle size={20} />
                     <span className="font-medium">Auto-grouping complete!</span>
                   </div>
                   <p className="mt-2 text-slate-600">{autoGroupResult.message}</p>
                 </div>
                 <div className="rounded-lg border border-slate-300 bg-slate-200 p-4">
-                  <h4 className="mb-2 font-medium text-slate-800">Results</h4>
+                  <h4 className="mb-2 font-medium text-black">Results</h4>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-slate-400">Groups Created</p>
-                      <p className="text-2xl font-semibold text-slate-800">{autoGroupResult.groups_created}</p>
+                      <p className="text-slate-600">Groups Created</p>
+                      <p className="text-2xl font-semibold text-black">{autoGroupResult.groups_created}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400">Total Controls Grouped</p>
-                      <p className="text-2xl font-semibold text-slate-800">
+                      <p className="text-slate-600">Total Controls Grouped</p>
+                      <p className="text-2xl font-semibold text-black">
                         {autoGroupResult.groups?.reduce((sum, g) => sum + (g.total_control_count || 0), 0) || 0}
                       </p>
                     </div>
@@ -1098,20 +1094,18 @@ export default function ControlLibraryPage() {
           <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-primary-500/20 p-2">
-                  <Brain className="h-5 w-5 text-primary-600" />
-                </div>
-                <h2 className="text-lg font-semibold text-slate-800">AI Similarity Analysis</h2>
+                                  <Brain className="h-5 w-5 text-primary-600" />
+                <h2 className="text-lg font-semibold text-black">AI Similarity Analysis</h2>
               </div>
-              <button onClick={() => setShowAnalysisModal(false)} className="text-slate-400 hover:text-slate-900">
+              <button onClick={() => setShowAnalysisModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
 
             {analysisError ? (
               <div className="space-y-4">
-                <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
-                  <div className="flex items-center gap-2 text-red-400">
+                <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+                  <div className="flex items-center gap-2 text-red-600">
                     <XCircle size={20} />
                     <span className="font-medium">Analysis failed</span>
                   </div>
@@ -1141,7 +1135,7 @@ export default function ControlLibraryPage() {
               </div>
             ) : !analysisResult && !analysisLoading ? (
               <div className="space-y-4">
-                <p className="text-slate-400">
+                <p className="text-slate-600">
                   Run AI analysis to identify similar and related controls across your frameworks.
                   This will create similarity mappings that help with control harmonization.
                 </p>
@@ -1191,35 +1185,35 @@ export default function ControlLibraryPage() {
             ) : analysisLoading ? (
               <div className="flex flex-col items-center justify-center py-8">
                 <Loader2 className="mb-4 h-12 w-12 animate-spin text-primary-600" />
-                <p className="text-slate-800">Running AI similarity analysis...</p>
-                <p className="mt-1 text-sm text-slate-400">This may take a moment</p>
+                <p className="text-black">Running AI similarity analysis...</p>
+                <p className="mt-1 text-sm text-slate-600">This may take a moment</p>
               </div>
             ) : analysisResult ? (
               <div className="space-y-4">
-                <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-4">
-                  <div className="flex items-center gap-2 text-green-400">
+                <div className="rounded-lg bg-green-50 border border-green-200 p-4">
+                  <div className="flex items-center gap-2 text-green-600">
                     <CheckCircle size={20} />
                     <span className="font-medium">Analysis complete!</span>
                   </div>
                 </div>
                 <div className="rounded-lg border border-slate-300 bg-slate-200 p-4">
-                  <h4 className="mb-2 font-medium text-slate-800">Results</h4>
+                  <h4 className="mb-2 font-medium text-black">Results</h4>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-slate-400">Controls Analyzed</p>
-                      <p className="text-2xl font-semibold text-slate-800">{analysisResult.total_controls_analyzed}</p>
+                      <p className="text-slate-600">Controls Analyzed</p>
+                      <p className="text-2xl font-semibold text-black">{analysisResult.total_controls_analyzed}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400">Mappings Created</p>
-                      <p className="text-2xl font-semibold text-slate-800">{analysisResult.mappings_created}</p>
+                      <p className="text-slate-600">Mappings Created</p>
+                      <p className="text-2xl font-semibold text-black">{analysisResult.mappings_created}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400">Groups Created</p>
-                      <p className="text-2xl font-semibold text-slate-800">{analysisResult.groups_created}</p>
+                      <p className="text-slate-600">Groups Created</p>
+                      <p className="text-2xl font-semibold text-black">{analysisResult.groups_created}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400">Status</p>
-                      <p className="text-lg font-semibold text-green-400 capitalize">{analysisResult.status}</p>
+                      <p className="text-slate-600">Status</p>
+                      <p className="text-lg font-semibold text-green-600 capitalize">{analysisResult.status}</p>
                     </div>
                   </div>
                 </div>

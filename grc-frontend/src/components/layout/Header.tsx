@@ -156,18 +156,18 @@ export default function Header() {
     <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-6">
       <div className="flex items-center gap-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search frameworks, controls, risks..."
-            className="w-72 lg:w-96 rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:bg-white transition-all duration-150"
+            className="w-72 lg:w-96 rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:bg-white transition-all duration-150"
           />
           {searchQuery && (
             <button 
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-600"
             >
               ×
             </button>
@@ -182,7 +182,7 @@ export default function Header() {
             className={clsx(
               'relative rounded-lg p-2 transition-all duration-150',
               showNotifications 
-                ? 'bg-slate-100 text-slate-800' 
+                ? 'bg-slate-100 text-black' 
                 : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
             )}
             aria-label="Notifications"
@@ -198,7 +198,7 @@ export default function Header() {
           {showNotifications && (
             <div className="absolute right-0 mt-2 w-96 rounded-xl border border-slate-200 bg-white shadow-elevated animate-fade-in z-50">
               <div className="border-b border-slate-100 px-4 py-3 flex items-center justify-between">
-                <h3 className="font-semibold text-slate-800 text-sm">Notifications</h3>
+                <h3 className="font-semibold text-black text-sm">Notifications</h3>
                 <div className="flex items-center gap-2">
                   {unreadCount > 0 && (
                     <>
@@ -219,7 +219,7 @@ export default function Header() {
               </div>
               <div className="max-h-96 overflow-y-auto scrollbar-thin">
                 {notifications.length === 0 ? (
-                  <div className="py-8 text-center text-slate-400 text-sm">
+                  <div className="py-8 text-center text-slate-600 text-sm">
                     <Bell className="h-8 w-8 mx-auto mb-2 text-slate-300" />
                     No notifications yet
                   </div>
@@ -238,14 +238,14 @@ export default function Header() {
                       <div className="flex-1 min-w-0">
                         <p className={clsx(
                           'text-sm font-medium',
-                          notif.is_read ? 'text-slate-500' : 'text-slate-800'
+                          notif.is_read ? 'text-slate-500' : 'text-black'
                         )}>
                           {notif.title}
                         </p>
                         {notif.message && (
                           <p className={clsx(
                             'text-xs mt-0.5',
-                            notif.is_read ? 'text-slate-400' : 'text-slate-500'
+                            notif.is_read ? 'text-slate-600' : 'text-slate-500'
                           )}>
                             {notif.message}
                           </p>
@@ -256,7 +256,7 @@ export default function Header() {
                             {notif.vulnerability_title}
                           </p>
                         )}
-                        <p className="text-xs text-slate-400 mt-0.5">{formatTimeAgo(notif.created_at)}</p>
+                        <p className="text-xs text-slate-600 mt-0.5">{formatTimeAgo(notif.created_at)}</p>
                       </div>
                       {!notif.is_read && (
                         <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0 mt-1.5" />
@@ -296,12 +296,12 @@ export default function Header() {
             </div>
             <div className="hidden lg:block text-left">
               <p className="text-sm font-medium text-slate-700">{currentUser?.display_name || 'User'}</p>
-              <p className="text-xs text-slate-400">{currentUser?.primary_tenant_name || tenantName || 'No Company'}</p>
+              <p className="text-xs text-slate-600">{currentUser?.primary_tenant_name || tenantName || 'No Company'}</p>
             </div>
             <ChevronDown 
               size={14} 
               className={clsx(
-                'text-slate-400 hidden lg:block transition-transform duration-200',
+                'text-slate-600 hidden lg:block transition-transform duration-200',
                 showUserMenu && 'rotate-180'
               )} 
             />
@@ -315,8 +315,8 @@ export default function Header() {
                     <User size={20} />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">{currentUser?.display_name || 'User'}</p>
-                    <p className="text-xs text-slate-400">{currentUser?.email || ''}</p>
+                    <p className="text-sm font-semibold text-black">{currentUser?.display_name || 'User'}</p>
+                    <p className="text-xs text-slate-600">{currentUser?.email || ''}</p>
                   </div>
                 </div>
               </div>
@@ -325,14 +325,14 @@ export default function Header() {
                   href="/profile" 
                   className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
                 >
-                  <UserCircle size={16} className="text-slate-400" />
+                  <UserCircle size={16} className="text-slate-600" />
                   Profile
                 </Link>
                 <Link 
                   href="/settings" 
                   className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
                 >
-                  <Settings size={16} className="text-slate-400" />
+                  <Settings size={16} className="text-slate-600" />
                   Settings
                 </Link>
               </div>

@@ -69,7 +69,7 @@ export function DataCard({
             </div>
           )}
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-slate-900 truncate">{title}</h3>
+            <h3 className="text-sm font-semibold text-black truncate">{title}</h3>
             {subtitle && (
               <p className="text-xs text-slate-500 truncate">{subtitle}</p>
             )}
@@ -78,7 +78,7 @@ export function DataCard({
         {onAction && (
           <button
             onClick={onAction}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors shrink-0"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-black transition-colors shrink-0"
             aria-label={actionLabel}
           >
             {ActionIcon && <ActionIcon size={14} aria-hidden="true" />}

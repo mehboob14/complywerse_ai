@@ -80,12 +80,12 @@ interface Assessment {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  not_started: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Not Started' },
-  in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },
-  submitted: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Submitted' },
-  under_review: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Under Review' },
-  approved: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Approved' },
-  rejected: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rejected' },
+  not_started: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Not Started' },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Progress' },
+  submitted: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Submitted' },
+  under_review: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'Under Review' },
+  approved: { bg: 'bg-green-50', text: 'text-green-600', label: 'Approved' },
+  rejected: { bg: 'bg-red-50', text: 'text-red-600', label: 'Rejected' },
 };
 
 const LIKELIHOOD_OPTIONS = [
@@ -406,7 +406,7 @@ export default function AssessmentDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -414,8 +414,8 @@ export default function AssessmentDetailPage() {
   if (error || !assessment) {
     return (
       <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load assessment</p>
+        <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
+        <p className="mt-2 text-red-600">Failed to load assessment</p>
       </div>
     );
   }
@@ -430,13 +430,13 @@ export default function AssessmentDetailPage() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-slate-800">{assessment.campaign_name}</h1>
+          <h1 className="text-2xl font-semibold text-black">{assessment.campaign_name}</h1>
           <div className="flex items-center gap-4 mt-1">
-            <span className="flex items-center gap-1.5 text-slate-400">
+            <span className="flex items-center gap-1.5 text-slate-600">
               <Building2 className="h-4 w-4" />
               {assessment.business_unit}
             </span>
-            <span className="flex items-center gap-1.5 text-slate-400">
+            <span className="flex items-center gap-1.5 text-slate-600">
               <Calendar className="h-4 w-4" />
               Due: {new Date(assessment.due_date).toLocaleDateString()}
             </span>
@@ -491,13 +491,13 @@ export default function AssessmentDetailPage() {
       {showRejectModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 border border-slate-200">
-            <h3 className="text-lg font-medium text-slate-800 mb-4">Reject Assessment</h3>
-            <p className="text-slate-400 text-sm mb-4">Please provide a reason for rejecting this assessment. This will be shared with the assessor.</p>
+            <h3 className="text-lg font-medium text-black mb-4">Reject Assessment</h3>
+            <p className="text-slate-600 text-sm mb-4">Please provide a reason for rejecting this assessment. This will be shared with the assessor.</p>
             <textarea
               value={reviewComments}
               onChange={(e) => setReviewComments(e.target.value)}
               placeholder="Enter rejection reason..."
-              className="w-full h-32 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+              className="w-full h-32 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none"
             />
             <div className="flex justify-end gap-3 mt-4">
               <button
@@ -526,8 +526,8 @@ export default function AssessmentDetailPage() {
       <div className="card p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-400">Progress</span>
-            <span className="text-sm font-medium text-slate-800">{answeredCount} of {totalQuestions} questions answered ({Math.round((answeredCount / Math.max(totalQuestions, 1)) * 100)}%)</span>
+            <span className="text-sm text-slate-600">Progress</span>
+            <span className="text-sm font-medium text-black">{answeredCount} of {totalQuestions} questions answered ({Math.round((answeredCount / Math.max(totalQuestions, 1)) * 100)}%)</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -552,7 +552,7 @@ export default function AssessmentDetailPage() {
         </div>
         {viewMode === 'step' && totalQuestions > 0 && (
           <div className="mt-3 flex items-center justify-between">
-            <span className="text-sm text-slate-400">Question {currentQuestionIndex + 1} of {totalQuestions}</span>
+            <span className="text-sm text-slate-600">Question {currentQuestionIndex + 1} of {totalQuestions}</span>
             <div className="flex items-center gap-2">
               <button
                 onClick={goToPrevQuestion}
@@ -575,8 +575,8 @@ export default function AssessmentDetailPage() {
 
       {validationErrors.size > 0 && (
         <div className="rounded-xl border border-red-700 bg-red-900/20 p-4 flex items-center gap-3">
-          <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
-          <p className="text-red-400">Please complete all required fields before submitting.</p>
+          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
+          <p className="text-red-600">Please complete all required fields before submitting.</p>
         </div>
       )}
 
@@ -591,12 +591,12 @@ export default function AssessmentDetailPage() {
                 </span>
                 <span className="text-xs text-slate-500">Question {currentQuestionIndex + 1}</span>
               </div>
-              <p className="text-xl text-slate-800 font-medium">
+              <p className="text-xl text-black font-medium">
                 {currentQuestion.question_text}
-                {currentQuestion.is_required && <span className="text-red-400 ml-1">*</span>}
+                {currentQuestion.is_required && <span className="text-red-600 ml-1">*</span>}
               </p>
               {currentQuestion.guidance && (
-                <p className="text-sm text-slate-400 mt-3 flex items-start gap-1.5 bg-slate-200/30 p-3 rounded-lg">
+                <p className="text-sm text-slate-600 mt-3 flex items-start gap-1.5 bg-slate-200/30 p-3 rounded-lg">
                   <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                   {currentQuestion.guidance}
                 </p>
@@ -607,17 +607,17 @@ export default function AssessmentDetailPage() {
           <div className="space-y-6">
             {currentQuestion.question_type === 'control_rating' && (
               <div className="space-y-4">
-                <p className="text-sm text-slate-400">Select Control Effectiveness:</p>
+                <p className="text-sm text-slate-600">Select Control Effectiveness:</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {EFFECTIVENESS_OPTIONS.map(opt => {
                     const isSelected = (responses[currentQuestion.id] || {}).effectiveness === opt.value;
                     const colorClass = opt.value === 'effective' 
-                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' 
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
                       : opt.value === 'partially_effective'
-                      ? 'border-amber-500 bg-amber-500/20 text-amber-400'
+                      ? 'border-amber-500 bg-amber-50 text-amber-700'
                       : opt.value === 'ineffective'
-                      ? 'border-rose-500 bg-rose-500/20 text-rose-400'
-                      : 'border-slate-500 bg-slate-500/20 text-slate-400';
+                      ? 'border-rose-500 bg-rose-50 text-rose-700'
+                      : 'border-slate-500 bg-slate-50 text-slate-700';
                     return (
                       <button
                         key={opt.value}
@@ -644,7 +644,7 @@ export default function AssessmentDetailPage() {
             {currentQuestion.question_type === 'risk_rating' && (
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">Likelihood</label>
+                  <label className="block text-sm text-slate-600 mb-2">Likelihood</label>
                   <div className="space-y-2">
                     {LIKELIHOOD_OPTIONS.map(opt => (
                       <button
@@ -653,7 +653,7 @@ export default function AssessmentDetailPage() {
                         onClick={() => isEditable && updateResponse(currentQuestion.id, 'likelihood', opt.value)}
                         className={`w-full p-3 rounded-lg text-left border-2 transition-all ${
                           (responses[currentQuestion.id] || {}).likelihood === opt.value
-                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700'
                             : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
                         }`}
                       >
@@ -663,7 +663,7 @@ export default function AssessmentDetailPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">Impact</label>
+                  <label className="block text-sm text-slate-600 mb-2">Impact</label>
                   <div className="space-y-2">
                     {IMPACT_OPTIONS.map(opt => (
                       <button
@@ -672,7 +672,7 @@ export default function AssessmentDetailPage() {
                         onClick={() => isEditable && updateResponse(currentQuestion.id, 'impact', opt.value)}
                         className={`w-full p-3 rounded-lg text-left border-2 transition-all ${
                           (responses[currentQuestion.id] || {}).impact === opt.value
-                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700'
                             : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
                         }`}
                       >
@@ -691,7 +691,7 @@ export default function AssessmentDetailPage() {
                   onClick={() => isEditable && updateResponse(currentQuestion.id, 'yes_no_value', true)}
                   className={`flex-1 p-4 rounded-xl border-2 font-medium transition-all ${
                     (responses[currentQuestion.id] || {}).yes_no_value === true
-                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                       : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
                   }`}
                 >
@@ -703,7 +703,7 @@ export default function AssessmentDetailPage() {
                   onClick={() => isEditable && updateResponse(currentQuestion.id, 'yes_no_value', false)}
                   className={`flex-1 p-4 rounded-xl border-2 font-medium transition-all ${
                     (responses[currentQuestion.id] || {}).yes_no_value === false
-                      ? 'border-rose-500 bg-rose-500/20 text-rose-400'
+                      ? 'border-rose-500 bg-rose-50 text-rose-700'
                       : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
                   }`}
                 >
@@ -726,7 +726,7 @@ export default function AssessmentDetailPage() {
             {/* Evidence Upload in Step View */}
             <div className="mt-6 pt-6 border-t border-slate-200">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-slate-400 flex items-center gap-2">
+                <p className="text-sm text-slate-600 flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   Supporting Evidence
                 </p>
@@ -745,7 +745,7 @@ export default function AssessmentDetailPage() {
               </div>
               
               {uploadingQuestion === currentQuestion.id && (
-                <div className="flex items-center gap-2 text-sm text-primary-400">
+                <div className="flex items-center gap-2 text-sm text-primary-600">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Uploading...
                 </div>
@@ -756,14 +756,14 @@ export default function AssessmentDetailPage() {
                   {evidenceFiles[currentQuestion.id].map(file => (
                     <div key={file.id} className="flex items-center justify-between p-2 bg-slate-200/50 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-primary-400" />
-                        <span className="text-sm text-slate-800">{file.filename}</span>
+                        <FileText className="h-4 w-4 text-primary-600" />
+                        <span className="text-sm text-black">{file.filename}</span>
                         <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
                       </div>
                       {isEditable && (
                         <button
                           onClick={() => handleRemoveEvidence(currentQuestion.id, file.id)}
-                          className="p-1 text-slate-400 hover:text-rose-400"
+                          className="p-1 text-slate-600 hover:text-rose-600"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -820,11 +820,11 @@ export default function AssessmentDetailPage() {
               onClick={() => toggleSection(section)}
               className="w-full flex items-center justify-between p-4 bg-white/50 hover:bg-white"
             >
-              <h3 className="text-lg font-medium text-slate-800">{section}</h3>
+              <h3 className="text-lg font-medium text-black">{section}</h3>
               {expandedSections.has(section) ? (
-                <ChevronUp className="h-5 w-5 text-slate-400" />
+                <ChevronUp className="h-5 w-5 text-slate-600" />
               ) : (
-                <ChevronDown className="h-5 w-5 text-slate-400" />
+                <ChevronDown className="h-5 w-5 text-slate-600" />
               )}
             </button>
 
@@ -839,12 +839,12 @@ export default function AssessmentDetailPage() {
                     <div key={question.id} className={`p-4 ${hasError ? 'bg-red-900/10' : ''}`}>
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div className="flex-1">
-                          <p className="text-slate-800 font-medium">
+                          <p className="text-black font-medium">
                             {question.question_text}
-                            {question.is_required && <span className="text-red-400 ml-1">*</span>}
+                            {question.is_required && <span className="text-red-600 ml-1">*</span>}
                           </p>
                           {question.guidance && (
-                            <p className="text-sm text-slate-400 mt-1 flex items-start gap-1.5">
+                            <p className="text-sm text-slate-600 mt-1 flex items-start gap-1.5">
                               <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                               {question.guidance}
                             </p>
@@ -854,7 +854,7 @@ export default function AssessmentDetailPage() {
                           <div className="relative">
                             <button
                               onClick={() => setShowAISuggestions(prev => ({ ...prev, [question.id]: !prev[question.id] }))}
-                              className="p-2 rounded-lg bg-primary-500/20 text-primary-600 hover:bg-primary-500/30"
+                              className="p-2 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100"
                               title="AI Suggestion"
                             >
                               <Sparkles className="h-4 w-4" />
@@ -863,8 +863,8 @@ export default function AssessmentDetailPage() {
                               <div className="absolute right-0 top-10 z-10 w-80 p-4 rounded-lg bg-slate-200 border border-slate-300 shadow-xl">
                                 <div className="flex items-center gap-2 mb-2">
                                   <Sparkles className="h-4 w-4 text-primary-600" />
-                                  <span className="text-sm font-medium text-slate-800">AI Suggestion</span>
-                                  <span className="text-xs text-slate-400">({Math.round(aiSuggestion.confidence * 100)}% confidence)</span>
+                                  <span className="text-sm font-medium text-black">AI Suggestion</span>
+                                  <span className="text-xs text-slate-600">({Math.round(aiSuggestion.confidence * 100)}% confidence)</span>
                                 </div>
                                 <p className="text-sm text-slate-600 mb-3">{aiSuggestion.reasoning}</p>
                                 <button
@@ -883,7 +883,7 @@ export default function AssessmentDetailPage() {
                         {question.question_type === 'risk_rating' && (
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-sm text-slate-400 mb-1">Likelihood</label>
+                              <label className="block text-sm text-slate-600 mb-1">Likelihood</label>
                               <select
                                 value={response.likelihood || ''}
                                 onChange={(e) => updateResponse(question.id, 'likelihood', Number(e.target.value))}
@@ -897,7 +897,7 @@ export default function AssessmentDetailPage() {
                               </select>
                             </div>
                             <div>
-                              <label className="block text-sm text-slate-400 mb-1">Impact</label>
+                              <label className="block text-sm text-slate-600 mb-1">Impact</label>
                               <select
                                 value={response.impact || ''}
                                 onChange={(e) => updateResponse(question.id, 'impact', Number(e.target.value))}
@@ -915,17 +915,17 @@ export default function AssessmentDetailPage() {
 
                         {question.question_type === 'control_rating' && (
                           <div className="space-y-3">
-                            <p className="text-sm text-slate-400">Select Control Effectiveness:</p>
+                            <p className="text-sm text-slate-600">Select Control Effectiveness:</p>
                             <div className="flex flex-wrap gap-2">
                               {EFFECTIVENESS_OPTIONS.map(opt => {
                                 const isSelected = response.effectiveness === opt.value;
                                 const colorClass = opt.value === 'effective' 
-                                  ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' 
+                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
                                   : opt.value === 'partially_effective'
-                                  ? 'border-amber-500 bg-amber-500/20 text-amber-400'
+                                  ? 'border-amber-500 bg-amber-50 text-amber-700'
                                   : opt.value === 'ineffective'
-                                  ? 'border-rose-500 bg-rose-500/20 text-rose-400'
-                                  : 'border-slate-500 bg-slate-500/20 text-slate-400';
+                                  ? 'border-rose-500 bg-rose-50 text-rose-700'
+                                  : 'border-slate-500 bg-slate-50 text-slate-700';
                                 return (
                                   <button
                                     key={opt.value}
@@ -947,7 +947,7 @@ export default function AssessmentDetailPage() {
                               })}
                             </div>
                             {response.effectiveness && (
-                              <p className="text-sm text-emerald-400 flex items-center gap-1.5">
+                              <p className="text-sm text-emerald-600 flex items-center gap-1.5">
                                 <CheckCircle className="h-4 w-4" />
                                 Selection saved
                               </p>
@@ -966,7 +966,7 @@ export default function AssessmentDetailPage() {
                                 disabled={!isEditable}
                                 className="w-4 h-4 text-primary-500"
                               />
-                              <span className="text-slate-800">Yes</span>
+                              <span className="text-black">Yes</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input
@@ -977,7 +977,7 @@ export default function AssessmentDetailPage() {
                                 disabled={!isEditable}
                                 className="w-4 h-4 text-primary-500"
                               />
-                              <span className="text-slate-800">No</span>
+                              <span className="text-black">No</span>
                             </label>
                           </div>
                         )}
@@ -996,7 +996,7 @@ export default function AssessmentDetailPage() {
                       {/* Evidence Upload Section */}
                       <div className="mt-4 pt-4 border-t border-slate-200">
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-sm text-slate-400 flex items-center gap-2">
+                          <p className="text-sm text-slate-600 flex items-center gap-2">
                             <FileText className="h-4 w-4" />
                             Supporting Evidence
                           </p>
@@ -1015,7 +1015,7 @@ export default function AssessmentDetailPage() {
                         </div>
                         
                         {uploadingQuestion === question.id && (
-                          <div className="flex items-center gap-2 text-sm text-primary-400">
+                          <div className="flex items-center gap-2 text-sm text-primary-600">
                             <Loader2 className="h-4 w-4 animate-spin" />
                             Uploading...
                           </div>
@@ -1026,14 +1026,14 @@ export default function AssessmentDetailPage() {
                             {evidenceFiles[question.id].map(file => (
                               <div key={file.id} className="flex items-center justify-between p-2 bg-slate-200/50 rounded-lg">
                                 <div className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-primary-400" />
-                                  <span className="text-sm text-slate-800">{file.filename}</span>
+                                  <FileText className="h-4 w-4 text-primary-600" />
+                                  <span className="text-sm text-black">{file.filename}</span>
                                   <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
                                 </div>
                                 {isEditable && (
                                   <button
                                     onClick={() => handleRemoveEvidence(question.id, file.id)}
-                                    className="p-1 text-slate-400 hover:text-rose-400"
+                                    className="p-1 text-slate-600 hover:text-rose-600"
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </button>
@@ -1048,12 +1048,12 @@ export default function AssessmentDetailPage() {
 
                       {/* AI Suggestion Toggle */}
                       {question.ai_suggestion_enabled && isEditable && (
-                        <div className="mt-4 p-3 bg-primary-500/10 border border-primary-500/30 rounded-lg">
+                        <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded-lg">
                           <div className="flex items-center gap-2 text-primary-600">
                             <Lightbulb className="h-4 w-4" />
                             <span className="text-sm font-medium">AI Assistance Available</span>
                           </div>
-                          <p className="text-xs text-slate-400 mt-1">Click the AI button to get suggestions based on your organization&apos;s data.</p>
+                          <p className="text-xs text-slate-600 mt-1">Click the AI button to get suggestions based on your organization&apos;s data.</p>
                         </div>
                       )}
                     </div>

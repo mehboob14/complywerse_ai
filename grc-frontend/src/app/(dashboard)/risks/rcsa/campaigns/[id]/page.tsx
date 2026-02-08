@@ -71,17 +71,17 @@ interface BusinessUnit {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  closed: { bg: 'bg-blue-50', text: 'text-blue-600' },
 };
 
 const ASSESSMENT_STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  not_started: { bg: 'bg-slate-500/20', text: 'text-slate-400', icon: Clock },
-  in_progress: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
-  submitted: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: FileText },
-  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
-  rejected: { bg: 'bg-rose-500/20', text: 'text-rose-400', icon: XCircle },
+  not_started: { bg: 'bg-slate-50', text: 'text-slate-600', icon: Clock },
+  in_progress: { bg: 'bg-amber-50', text: 'text-amber-600', icon: Clock },
+  submitted: { bg: 'bg-blue-50', text: 'text-blue-600', icon: FileText },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: CheckCircle },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-600', icon: XCircle },
 };
 
 export default function CampaignDetailPage() {
@@ -213,9 +213,9 @@ export default function CampaignDetailPage() {
   if (error || !campaign) {
     return (
       <div className="card p-8 text-center">
-        <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-slate-800 mb-2">Campaign Not Found</h3>
-        <p className="text-slate-400 mb-4">The requested campaign could not be loaded.</p>
+        <AlertCircle className="h-12 w-12 text-rose-600 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-black mb-2">Campaign Not Found</h3>
+        <p className="text-slate-600 mb-4">The requested campaign could not be loaded.</p>
         <Link href="/risks/rcsa/campaigns" className="btn-primary">
           Back to Campaigns
         </Link>
@@ -230,17 +230,17 @@ export default function CampaignDetailPage() {
     <div className="space-y-8">
       <div className="page-header">
         <div className="flex items-center gap-4 mb-4">
-          <Link href="/risks/rcsa/campaigns" className="text-slate-400 hover:text-slate-900">
+          <Link href="/risks/rcsa/campaigns" className="text-slate-600 hover:text-slate-900">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-slate-800">{campaign.name}</h1>
+              <h1 className="text-2xl font-semibold text-black">{campaign.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
                 {campaign.status}
               </span>
             </div>
-            <p className="text-slate-400 mt-1">{campaign.description || `Using ${campaign.template_name} template`}</p>
+            <p className="text-slate-600 mt-1">{campaign.description || `Using ${campaign.template_name} template`}</p>
           </div>
           <div className="flex items-center gap-3">
             {campaign.status === 'draft' && (
@@ -294,21 +294,21 @@ export default function CampaignDetailPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Template</p>
-            <p className="text-slate-800 font-medium">{campaign.template_name}</p>
+            <p className="text-slate-600 text-sm">Template</p>
+            <p className="text-black font-medium">{campaign.template_name}</p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Period</p>
-            <p className="text-slate-800 font-medium">{campaign.period}</p>
+            <p className="text-slate-600 text-sm">Period</p>
+            <p className="text-black font-medium">{campaign.period}</p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Duration</p>
-            <p className="text-slate-800 font-medium text-sm">
+            <p className="text-slate-600 text-sm">Duration</p>
+            <p className="text-black font-medium text-sm">
               {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
             </p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Progress</p>
+            <p className="text-slate-600 text-sm">Progress</p>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                 <div
@@ -316,24 +316,24 @@ export default function CampaignDetailPage() {
                   style={{ width: `${campaign.progress}%` }}
                 />
               </div>
-              <span className="text-slate-800 font-medium text-sm">{campaign.progress}%</span>
+              <span className="text-black font-medium text-sm">{campaign.progress}%</span>
             </div>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Avg Risk Score</p>
-            <p className="text-slate-800 font-medium">{campaign.avg_risk_score?.toFixed(1) || 'N/A'}</p>
+            <p className="text-slate-600 text-sm">Avg Risk Score</p>
+            <p className="text-black font-medium">{campaign.avg_risk_score?.toFixed(1) || 'N/A'}</p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Total Findings</p>
-            <p className="text-slate-800 font-medium">{campaign.total_findings}</p>
+            <p className="text-slate-600 text-sm">Total Findings</p>
+            <p className="text-black font-medium">{campaign.total_findings}</p>
           </div>
         </div>
       </div>
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary-400" />
+          <h3 className="text-lg font-medium text-black flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary-600" />
             Assessment Progress ({(campaign.assessments || []).length} Business Units)
           </h3>
           <div className="flex items-center gap-3">
@@ -368,14 +368,14 @@ export default function CampaignDetailPage() {
                     className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
                   />
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Business Unit</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Assessor</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Progress</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Risk Score</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Control Score</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Findings</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Submitted</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Business Unit</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Assessor</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Status</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Progress</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Risk Score</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Control Score</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Findings</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Submitted</th>
               </tr>
             </thead>
             <tbody>
@@ -395,8 +395,8 @@ export default function CampaignDetailPage() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-slate-400" />
-                        <span className="text-slate-800 font-medium">{assessment.business_unit_name}</span>
+                        <Building2 className="h-4 w-4 text-slate-600" />
+                        <span className="text-black font-medium">{assessment.business_unit_name}</span>
                       </div>
                     </td>
                     <td className="py-3 px-4">
@@ -425,15 +425,15 @@ export default function CampaignDetailPage() {
                             style={{ width: `${assessment.progress}%` }}
                           />
                         </div>
-                        <span className="text-sm text-slate-400">{assessment.progress}%</span>
+                        <span className="text-sm text-slate-600">{assessment.progress}%</span>
                       </div>
                     </td>
                     <td className="py-3 px-4">
                       {assessment.risk_score !== undefined ? (
                         <span className={`font-medium ${
-                          assessment.risk_score >= 4 ? 'text-rose-400' :
-                          assessment.risk_score >= 3 ? 'text-amber-400' :
-                          'text-emerald-400'
+                          assessment.risk_score >= 4 ? 'text-rose-600' :
+                          assessment.risk_score >= 3 ? 'text-amber-600' :
+                          'text-emerald-600'
                         }`}>
                           {assessment.risk_score.toFixed(1)}
                         </span>
@@ -444,9 +444,9 @@ export default function CampaignDetailPage() {
                     <td className="py-3 px-4">
                       {assessment.control_score !== undefined ? (
                         <span className={`font-medium ${
-                          assessment.control_score >= 4 ? 'text-emerald-400' :
-                          assessment.control_score >= 3 ? 'text-amber-400' :
-                          'text-rose-400'
+                          assessment.control_score >= 4 ? 'text-emerald-600' :
+                          assessment.control_score >= 3 ? 'text-amber-600' :
+                          'text-rose-600'
                         }`}>
                           {assessment.control_score.toFixed(1)}
                         </span>
@@ -456,12 +456,12 @@ export default function CampaignDetailPage() {
                     </td>
                     <td className="py-3 px-4">
                       {assessment.findings_count > 0 ? (
-                        <span className="text-amber-400 font-medium">{assessment.findings_count}</span>
+                        <span className="text-amber-600 font-medium">{assessment.findings_count}</span>
                       ) : (
                         <span className="text-slate-500">0</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-sm text-slate-400">
+                    <td className="py-3 px-4 text-sm text-slate-600">
                       {assessment.submitted_at ? new Date(assessment.submitted_at).toLocaleDateString() : '-'}
                     </td>
                   </tr>
@@ -474,8 +474,8 @@ export default function CampaignDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-slate-800 mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary-400" />
+          <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary-600" />
             Status Summary
           </h3>
           <div className="space-y-3">
@@ -496,8 +496,8 @@ export default function CampaignDetailPage() {
         </div>
 
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-slate-800 mb-4 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-amber-400" />
+          <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-amber-600" />
             Pending Actions
           </h3>
           {pendingAssessments.length > 0 ? (
@@ -505,9 +505,9 @@ export default function CampaignDetailPage() {
               {pendingAssessments.slice(0, 5).map((assessment) => (
                 <div key={assessment.id} className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <Building2 className="h-4 w-4 text-slate-400" />
+                    <Building2 className="h-4 w-4 text-slate-600" />
                     <div>
-                      <p className="text-slate-800 text-sm">{assessment.business_unit_name}</p>
+                      <p className="text-black text-sm">{assessment.business_unit_name}</p>
                       <p className="text-xs text-slate-500">{assessment.assessor_name || 'No assessor assigned'}</p>
                     </div>
                   </div>
@@ -518,7 +518,7 @@ export default function CampaignDetailPage() {
               ))}
             </div>
           ) : (
-            <p className="text-slate-400 text-center py-4">All assessments are complete or submitted</p>
+            <p className="text-slate-600 text-center py-4">All assessments are complete or submitted</p>
           )}
         </div>
       </div>
@@ -527,8 +527,8 @@ export default function CampaignDetailPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200 mx-4">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-800">Assign Business Unit</h3>
-              <button onClick={() => setIsAssignModalOpen(false)} className="text-slate-400 hover:text-slate-900">
+              <h3 className="text-lg font-medium text-black">Assign Business Unit</h3>
+              <button onClick={() => setIsAssignModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>

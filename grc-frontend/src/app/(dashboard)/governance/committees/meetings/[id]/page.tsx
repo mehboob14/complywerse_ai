@@ -95,30 +95,30 @@ interface Action {
 }
 
 const MEETING_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  regular: { label: 'Regular', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  special: { label: 'Special', bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  emergency: { label: 'Emergency', bg: 'bg-rose-500/20', text: 'text-rose-400' },
+  regular: { label: 'Regular', bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  special: { label: 'Special', bg: 'bg-amber-50', text: 'text-amber-600' },
+  emergency: { label: 'Emergency', bg: 'bg-rose-50', text: 'text-rose-600' },
 };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  scheduled: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  in_progress: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  cancelled: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  open: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  pending: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  discussed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  deferred: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  scheduled: { bg: 'bg-blue-50', text: 'text-blue-600' },
+  in_progress: { bg: 'bg-amber-50', text: 'text-amber-600' },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  cancelled: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  open: { bg: 'bg-amber-50', text: 'text-amber-600' },
+  overdue: { bg: 'bg-rose-50', text: 'text-rose-600' },
+  pending: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  discussed: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  deferred: { bg: 'bg-amber-50', text: 'text-amber-600' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
 };
 
 const SOURCE_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; text: string }> = {
-  document: { label: 'Document', icon: FileCheck, bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  exception: { label: 'Exception', icon: Shield, bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  regulatory_change: { label: 'Regulatory Change', icon: Scale, bg: 'bg-primary-500/20', text: 'text-primary-600' },
-  manual: { label: 'Manual', icon: FileText, bg: 'bg-slate-500/20', text: 'text-slate-400' },
+  document: { label: 'Document', icon: FileCheck, bg: 'bg-blue-50', text: 'text-blue-600' },
+  exception: { label: 'Exception', icon: Shield, bg: 'bg-amber-50', text: 'text-amber-600' },
+  regulatory_change: { label: 'Regulatory Change', icon: Scale, bg: 'bg-primary-50', text: 'text-primary-600' },
+  manual: { label: 'Manual', icon: FileText, bg: 'bg-slate-50', text: 'text-slate-600' },
 };
 
 const ACTION_TYPES = [
@@ -332,18 +332,18 @@ export default function MeetingDetailPage() {
   return (
     <div className="space-y-8">
       <div>
-        <Link href={`/governance/committees/${meeting?.committee_id}`} className="flex items-center gap-2 text-slate-400 hover:text-slate-900 mb-4">
+        <Link href={`/governance/committees/${meeting?.committee_id}`} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4">
           <ArrowLeft className="h-4 w-4" />
           Back to {meeting?.committee_name}
         </Link>
 
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-cyan-500/20">
-              <Calendar className="h-7 w-7 text-cyan-400" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-cyan-50">
+              <Calendar className="h-7 w-7 text-cyan-600" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-slate-800">{meeting?.title}</h1>
+              <h1 className="text-2xl font-semibold text-black">{meeting?.title}</h1>
               <div className="flex items-center gap-3 mt-1">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${meetingTypeStyle?.bg} ${meetingTypeStyle?.text}`}>
                   {meetingTypeStyle?.label}
@@ -356,7 +356,7 @@ export default function MeetingDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-slate-400">
+        <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-slate-600">
           <span className="flex items-center gap-1.5">
             <Calendar className="h-4 w-4" />
             {new Date(meeting?.scheduled_date || '').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -384,8 +384,8 @@ export default function MeetingDetailPage() {
         <div className="lg:col-span-2 space-y-6">
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-                <Lightbulb className="h-5 w-5 text-amber-400" />
+              <h3 className="text-lg font-medium text-black flex items-center gap-2">
+                <Lightbulb className="h-5 w-5 text-amber-600" />
                 Suggested Agenda Items
               </h3>
               <button
@@ -415,15 +415,15 @@ export default function MeetingDetailPage() {
                             <TypeIcon className={`h-4 w-4 ${typeConfig.text}`} />
                           </div>
                           <div>
-                            <h4 className="text-slate-800 font-medium">{item.title}</h4>
-                            {item.description && <p className="text-slate-400 text-sm mt-1">{item.description}</p>}
+                            <h4 className="text-black font-medium">{item.title}</h4>
+                            {item.description && <p className="text-slate-600 text-sm mt-1">{item.description}</p>}
                             <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
                               <span className={`px-2 py-0.5 rounded-full ${typeConfig.bg} ${typeConfig.text}`}>
                                 {typeConfig.label}
                               </span>
                               <span>Source: {item.source_title}</span>
                               {item.priority && (
-                                <span className={`capitalize ${item.priority === 'critical' ? 'text-rose-400' : item.priority === 'high' ? 'text-amber-400' : 'text-slate-400'}`}>
+                                <span className={`capitalize ${item.priority === 'critical' ? 'text-rose-600' : item.priority === 'high' ? 'text-amber-600' : 'text-slate-600'}`}>
                                   {item.priority} priority
                                 </span>
                               )}
@@ -439,7 +439,7 @@ export default function MeetingDetailPage() {
             ) : (
               <div className="text-center py-8">
                 <Lightbulb className="h-10 w-10 text-slate-500 mx-auto mb-3" />
-                <p className="text-slate-400">No suggested items at this time</p>
+                <p className="text-slate-600">No suggested items at this time</p>
                 <p className="text-slate-500 text-sm mt-1">Items will appear when there are pending documents, exceptions, or regulatory changes</p>
               </div>
             )}
@@ -447,8 +447,8 @@ export default function MeetingDetailPage() {
 
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-                <ListOrdered className="h-5 w-5 text-primary-400" />
+              <h3 className="text-lg font-medium text-black flex items-center gap-2">
+                <ListOrdered className="h-5 w-5 text-primary-600" />
                 Agenda
               </h3>
               <button
@@ -468,12 +468,12 @@ export default function MeetingDetailPage() {
                   <div key={item.id} className="p-4 rounded-lg bg-white/50 border border-slate-200">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-500/20 text-primary-400 text-sm font-medium">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-700 text-sm font-medium">
                           {item.sequence}
                         </div>
                         <div className="flex-1">
-                          <h4 className="text-slate-800 font-medium">{item.title}</h4>
-                          {item.description && <p className="text-slate-400 text-sm mt-1">{item.description}</p>}
+                          <h4 className="text-black font-medium">{item.title}</h4>
+                          {item.description && <p className="text-slate-600 text-sm mt-1">{item.description}</p>}
                           <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-slate-500">
                             {item.presenter && <span>Presenter: {item.presenter}</span>}
                             {item.duration_minutes && <span>{item.duration_minutes} min</span>}
@@ -490,7 +490,7 @@ export default function MeetingDetailPage() {
                               {linkedItems.map((link, idx) => {
                                 const Icon = link.icon;
                                 return (
-                                  <span key={idx} className="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-200/50 px-2 py-1 rounded">
+                                  <span key={idx} className="inline-flex items-center gap-1 text-xs text-slate-600 bg-slate-200/50 px-2 py-1 rounded">
                                     <Icon className="h-3 w-3" />
                                     <span className="text-slate-500">{link.type}:</span> {link.title}
                                   </span>
@@ -511,8 +511,8 @@ export default function MeetingDetailPage() {
               {(agenda || []).length === 0 && (
                 <div className="text-center py-8">
                   <ListOrdered className="h-10 w-10 text-slate-500 mx-auto mb-3" />
-                  <p className="text-slate-400">No agenda items yet</p>
-                  <button onClick={() => setIsAddAgendaModalOpen(true)} className="text-primary-400 hover:text-primary-300 text-sm mt-2">
+                  <p className="text-slate-600">No agenda items yet</p>
+                  <button onClick={() => setIsAddAgendaModalOpen(true)} className="text-primary-600 hover:text-primary-300 text-sm mt-2">
                     Add first item
                   </button>
                 </div>
@@ -522,8 +522,8 @@ export default function MeetingDetailPage() {
 
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-                <FileText className="h-5 w-5 text-emerald-400" />
+              <h3 className="text-lg font-medium text-black flex items-center gap-2">
+                <FileText className="h-5 w-5 text-emerald-600" />
                 Minutes
               </h3>
               {!minutes && (
@@ -541,7 +541,7 @@ export default function MeetingDetailPage() {
                     {minutes.status}
                   </span>
                   {minutes.approved_by && (
-                    <span className="text-sm text-slate-400">Approved by {minutes.approved_by}</span>
+                    <span className="text-sm text-slate-600">Approved by {minutes.approved_by}</span>
                   )}
                 </div>
                 <div className="p-4 rounded-lg bg-white/50 border border-slate-200">
@@ -571,7 +571,7 @@ export default function MeetingDetailPage() {
             ) : (
               <div className="text-center py-8">
                 <FileText className="h-10 w-10 text-slate-500 mx-auto mb-3" />
-                <p className="text-slate-400">No minutes recorded yet</p>
+                <p className="text-slate-600">No minutes recorded yet</p>
               </div>
             )}
           </div>
@@ -580,11 +580,11 @@ export default function MeetingDetailPage() {
         <div className="space-y-6">
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-                <CheckSquare className="h-5 w-5 text-amber-400" />
+              <h3 className="text-lg font-medium text-black flex items-center gap-2">
+                <CheckSquare className="h-5 w-5 text-amber-600" />
                 Actions
               </h3>
-              <button onClick={() => setIsAddActionModalOpen(true)} className="text-primary-400 hover:text-primary-300 text-sm">
+              <button onClick={() => setIsAddActionModalOpen(true)} className="text-primary-600 hover:text-primary-300 text-sm">
                 <Plus className="h-4 w-4" />
               </button>
             </div>
@@ -593,7 +593,7 @@ export default function MeetingDetailPage() {
               {(actions || []).map((action) => (
                 <div key={action.id} className="p-3 rounded-lg bg-white/50 border border-slate-200">
                   <div className="flex items-start justify-between">
-                    <h4 className="text-slate-800 font-medium text-sm">{action.title}</h4>
+                    <h4 className="text-black font-medium text-sm">{action.title}</h4>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[action.status]?.bg} ${STATUS_COLORS[action.status]?.text}`}>
                       {action.status.replace('_', ' ')}
                     </span>
@@ -608,7 +608,7 @@ export default function MeetingDetailPage() {
               {(actions || []).length === 0 && (
                 <div className="text-center py-6">
                   <CheckSquare className="h-8 w-8 text-slate-500 mx-auto mb-2" />
-                  <p className="text-slate-400 text-sm">No actions from this meeting</p>
+                  <p className="text-slate-600 text-sm">No actions from this meeting</p>
                 </div>
               )}
             </div>
@@ -620,16 +620,16 @@ export default function MeetingDetailPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-amber-400" />
+              <h2 className="text-xl font-semibold text-black flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-600" />
                 Auto-Populate Agenda
               </h2>
-              <button onClick={() => setIsAutoPopulateModalOpen(false)} className="text-slate-400 hover:text-slate-900">
+              <button onClick={() => setIsAutoPopulateModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <p className="text-slate-400 mb-6">
+            <p className="text-slate-600 mb-6">
               Select which types of items to include in the agenda. The system will automatically add relevant pending items.
             </p>
 
@@ -641,10 +641,10 @@ export default function MeetingDetailPage() {
                   onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_documents: e.target.checked })}
                   className="w-4 h-4 rounded border-slate-500 bg-slate-200 text-primary-500 focus:ring-primary-500"
                 />
-                <FileCheck className="h-5 w-5 text-blue-400" />
+                <FileCheck className="h-5 w-5 text-blue-600" />
                 <div>
-                  <span className="text-slate-800 font-medium">Documents</span>
-                  <p className="text-sm text-slate-400">Pending document approvals and reviews</p>
+                  <span className="text-black font-medium">Documents</span>
+                  <p className="text-sm text-slate-600">Pending document approvals and reviews</p>
                 </div>
               </label>
 
@@ -655,10 +655,10 @@ export default function MeetingDetailPage() {
                   onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_exceptions: e.target.checked })}
                   className="w-4 h-4 rounded border-slate-500 bg-slate-200 text-primary-500 focus:ring-primary-500"
                 />
-                <Shield className="h-5 w-5 text-amber-400" />
+                <Shield className="h-5 w-5 text-amber-600" />
                 <div>
-                  <span className="text-slate-800 font-medium">Exceptions</span>
-                  <p className="text-sm text-slate-400">Risk and control exceptions requiring approval</p>
+                  <span className="text-black font-medium">Exceptions</span>
+                  <p className="text-sm text-slate-600">Risk and control exceptions requiring approval</p>
                 </div>
               </label>
 
@@ -671,8 +671,8 @@ export default function MeetingDetailPage() {
                 />
                 <Scale className="h-5 w-5 text-primary-600" />
                 <div>
-                  <span className="text-slate-800 font-medium">Regulatory Changes</span>
-                  <p className="text-sm text-slate-400">Pending regulatory updates and impact assessments</p>
+                  <span className="text-black font-medium">Regulatory Changes</span>
+                  <p className="text-sm text-slate-600">Pending regulatory updates and impact assessments</p>
                 </div>
               </label>
             </div>
@@ -698,8 +698,8 @@ export default function MeetingDetailPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-slate-800">Add Agenda Item</h2>
-              <button onClick={() => setIsAddAgendaModalOpen(false)} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-xl font-semibold text-black">Add Agenda Item</h2>
+              <button onClick={() => setIsAddAgendaModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -746,8 +746,8 @@ export default function MeetingDetailPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-slate-800">Create Action</h2>
-              <button onClick={() => setIsAddActionModalOpen(false)} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-xl font-semibold text-black">Create Action</h2>
+              <button onClick={() => setIsAddActionModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>

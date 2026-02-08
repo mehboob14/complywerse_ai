@@ -88,29 +88,29 @@ interface Action {
 }
 
 const COMMITTEE_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  board: { label: 'Board', bg: 'bg-primary-500/20', text: 'text-primary-600' },
-  risk_committee: { label: 'Risk Committee', bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  audit_committee: { label: 'Audit Committee', bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  compliance_committee: { label: 'Compliance Committee', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  it_steering: { label: 'IT Steering', bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
-  custom: { label: 'Custom', bg: 'bg-slate-500/20', text: 'text-slate-400' },
+  board: { label: 'Board', bg: 'bg-primary-50', text: 'text-primary-600' },
+  risk_committee: { label: 'Risk Committee', bg: 'bg-rose-50', text: 'text-rose-600' },
+  audit_committee: { label: 'Audit Committee', bg: 'bg-blue-50', text: 'text-blue-600' },
+  compliance_committee: { label: 'Compliance Committee', bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  it_steering: { label: 'IT Steering', bg: 'bg-cyan-50', text: 'text-cyan-600' },
+  custom: { label: 'Custom', bg: 'bg-slate-50', text: 'text-slate-600' },
 };
 
 const MEETING_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  regular: { label: 'Regular', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  special: { label: 'Special', bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  emergency: { label: 'Emergency', bg: 'bg-rose-500/20', text: 'text-rose-400' },
+  regular: { label: 'Regular', bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  special: { label: 'Special', bg: 'bg-amber-50', text: 'text-amber-600' },
+  emergency: { label: 'Emergency', bg: 'bg-rose-50', text: 'text-rose-600' },
 };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  scheduled: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  in_progress: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  cancelled: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  open: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  scheduled: { bg: 'bg-blue-50', text: 'text-blue-600' },
+  in_progress: { bg: 'bg-amber-50', text: 'text-amber-600' },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  cancelled: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  open: { bg: 'bg-amber-50', text: 'text-amber-600' },
+  overdue: { bg: 'bg-rose-50', text: 'text-rose-600' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
   superseded: { bg: 'bg-gray-500/20', text: 'text-gray-400' },
 };
 
@@ -264,14 +264,14 @@ export default function CommitteeDetailPage() {
   if (committeeError || !committee) {
     return (
       <div className="space-y-8">
-        <Link href="/governance/committees" className="inline-flex items-center gap-2 text-slate-400 hover:text-slate-900 transition-colors">
+        <Link href="/governance/committees" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors">
           <ArrowLeft className="h-4 w-4" />
           Back to Committees
         </Link>
         <div className="card p-12 text-center">
-          <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-slate-800 mb-2">Committee Not Found</h2>
-          <p className="text-slate-400 mb-6">The committee you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.</p>
+          <AlertCircle className="h-12 w-12 text-rose-600 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-black mb-2">Committee Not Found</h2>
+          <p className="text-slate-600 mb-6">The committee you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.</p>
           <Link href="/governance/committees" className="btn-primary inline-flex items-center gap-2">
             <ArrowLeft className="h-4 w-4" />
             Go Back
@@ -287,25 +287,25 @@ export default function CommitteeDetailPage() {
   return (
     <div className="space-y-8">
       <div>
-        <Link href="/governance/committees" className="flex items-center gap-2 text-slate-400 hover:text-slate-900 mb-4">
+        <Link href="/governance/committees" className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4">
           <ArrowLeft className="h-4 w-4" />
           Back to Committees
         </Link>
 
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary-500/20">
-              <Users className="h-7 w-7 text-primary-400" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary-50">
+              <Users className="h-7 w-7 text-primary-600" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-slate-800">{committee?.name}</h1>
+              <h1 className="text-2xl font-semibold text-black">{committee?.name}</h1>
               <div className="flex items-center gap-3 mt-1">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${typeStyle.bg} ${typeStyle.text}`}>
                   {typeStyle.label}
                 </span>
-                <span className="text-slate-400">{committee?.member_count} members</span>
+                <span className="text-slate-600">{committee?.member_count} members</span>
                 {committee?.meeting_frequency && (
-                  <span className="text-slate-400 capitalize">• {committee.meeting_frequency.replace('_', ' ')} meetings</span>
+                  <span className="text-slate-600 capitalize">• {committee.meeting_frequency.replace('_', ' ')} meetings</span>
                 )}
               </div>
             </div>
@@ -321,7 +321,7 @@ export default function CommitteeDetailPage() {
             className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-primary-600 text-white'
-                : 'text-slate-400 hover:bg-slate-200 hover:text-slate-900'
+                : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
             }`}
           >
             <tab.icon className="h-4 w-4" />
@@ -333,7 +333,7 @@ export default function CommitteeDetailPage() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="card p-6">
-            <h3 className="text-lg font-medium text-slate-800 mb-4">Committee Details</h3>
+            <h3 className="text-lg font-medium text-black mb-4">Committee Details</h3>
             <div className="space-y-3">
               <div>
                 <span className="text-slate-500 text-sm">Description</span>
@@ -360,8 +360,8 @@ export default function CommitteeDetailPage() {
 
           {activeCharter && (
             <div className="card p-6">
-              <h3 className="text-lg font-medium text-slate-800 mb-4 flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary-400" />
+              <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary-600" />
                 Active Charter
               </h3>
               <div className="space-y-3">
@@ -386,11 +386,11 @@ export default function CommitteeDetailPage() {
 
           <div className="card p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-cyan-400" />
+              <h3 className="text-lg font-medium text-black flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-cyan-600" />
                 Upcoming Meetings
               </h3>
-              <button onClick={() => setIsScheduleMeetingModalOpen(true)} className="text-primary-400 hover:text-primary-300 text-sm">
+              <button onClick={() => setIsScheduleMeetingModalOpen(true)} className="text-primary-600 hover:text-primary-300 text-sm">
                 Schedule New
               </button>
             </div>
@@ -398,12 +398,12 @@ export default function CommitteeDetailPage() {
               {(meetings || []).filter(m => m.status === 'scheduled').slice(0, 3).map((meeting) => (
                 <Link key={meeting.id} href={`/governance/committees/meetings/${meeting.id}`} className="block p-3 rounded-lg bg-white/50 hover:bg-slate-50">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-800 font-medium">{meeting.title}</span>
+                    <span className="text-black font-medium">{meeting.title}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${MEETING_TYPE_LABELS[meeting.meeting_type]?.bg} ${MEETING_TYPE_LABELS[meeting.meeting_type]?.text}`}>
                       {MEETING_TYPE_LABELS[meeting.meeting_type]?.label}
                     </span>
                   </div>
-                  <div className="text-sm text-slate-400 mt-1">
+                  <div className="text-sm text-slate-600 mt-1">
                     {new Date(meeting.scheduled_date).toLocaleDateString()} {meeting.start_time && `at ${meeting.start_time}`}
                   </div>
                 </Link>
@@ -416,11 +416,11 @@ export default function CommitteeDetailPage() {
 
           <div className="card p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
-                <CheckSquare className="h-5 w-5 text-amber-400" />
+              <h3 className="text-lg font-medium text-black flex items-center gap-2">
+                <CheckSquare className="h-5 w-5 text-amber-600" />
                 Open Actions
               </h3>
-              <Link href="/governance/committees/actions" className="text-primary-400 hover:text-primary-300 text-sm">
+              <Link href="/governance/committees/actions" className="text-primary-600 hover:text-primary-300 text-sm">
                 View All
               </Link>
             </div>
@@ -428,12 +428,12 @@ export default function CommitteeDetailPage() {
               {(actions || []).filter(a => a.status !== 'completed').slice(0, 3).map((action) => (
                 <div key={action.id} className="p-3 rounded-lg bg-white/50">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-800 font-medium">{action.title}</span>
+                    <span className="text-black font-medium">{action.title}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[action.status]?.bg} ${STATUS_COLORS[action.status]?.text}`}>
                       {action.status.replace('_', ' ')}
                     </span>
                   </div>
-                  <div className="text-sm text-slate-400 mt-1">
+                  <div className="text-sm text-slate-600 mt-1">
                     Due: {new Date(action.due_date).toLocaleDateString()}
                     {action.assigned_to_name && ` • ${action.assigned_to_name}`}
                   </div>
@@ -450,7 +450,7 @@ export default function CommitteeDetailPage() {
       {activeTab === 'members' && (
         <div className="card p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-slate-800">Committee Members</h3>
+            <h3 className="text-lg font-medium text-black">Committee Members</h3>
             <button onClick={() => setIsAddMemberModalOpen(true)} className="btn-primary flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
               Add Member
@@ -461,26 +461,26 @@ export default function CommitteeDetailPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Name</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Email</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Role</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Joined</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Actions</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Name</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Email</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Role</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Joined</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {(members || []).map((member) => (
                   <tr key={member.id} className="border-b border-slate-200 hover:bg-white/50">
-                    <td className="py-3 px-4 text-slate-800">{member.user_name}</td>
-                    <td className="py-3 px-4 text-slate-400">{member.user_email}</td>
+                    <td className="py-3 px-4 text-black">{member.user_name}</td>
+                    <td className="py-3 px-4 text-slate-600">{member.user_email}</td>
                     <td className="py-3 px-4">
                       <span className="capitalize text-slate-600">{member.role}</span>
                     </td>
-                    <td className="py-3 px-4 text-slate-400">{new Date(member.joined_at).toLocaleDateString()}</td>
+                    <td className="py-3 px-4 text-slate-600">{new Date(member.joined_at).toLocaleDateString()}</td>
                     <td className="py-3 px-4">
                       <button
                         onClick={() => removeMemberMutation.mutate(member.user_id)}
-                        className="text-rose-400 hover:text-rose-300"
+                        className="text-rose-600 hover:text-rose-300"
                         title="Remove member"
                       >
                         <UserMinus className="h-4 w-4" />
@@ -501,18 +501,18 @@ export default function CommitteeDetailPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-medium text-slate-800">{charter.title}</h3>
+                    <h3 className="text-lg font-medium text-black">{charter.title}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[charter.status]?.bg} ${STATUS_COLORS[charter.status]?.text}`}>
                       {charter.status}
                     </span>
                   </div>
-                  <p className="text-slate-400 text-sm mt-1">Version {charter.version}</p>
+                  <p className="text-slate-600 text-sm mt-1">Version {charter.version}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {charter.file_name ? (
                     <button
                       onClick={() => handleDownloadFile(charter.id, charter.file_name!)}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors text-sm"
+                      className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-500/30 transition-colors text-sm"
                     >
                       <Download className="h-4 w-4" />
                       Download
@@ -531,13 +531,13 @@ export default function CommitteeDetailPage() {
                   </label>
                 </div>
               </div>
-              <p className="text-slate-400 mt-4 line-clamp-2">{charter.content}</p>
+              <p className="text-slate-600 mt-4 line-clamp-2">{charter.content}</p>
               
               {charter.file_name && (
                 <div className="flex items-center gap-3 mt-4 p-3 bg-white/50 rounded-lg">
-                  <Paperclip className="h-4 w-4 text-primary-400" />
+                  <Paperclip className="h-4 w-4 text-primary-600" />
                   <div className="flex-1">
-                    <p className="text-sm text-slate-800">{charter.file_name}</p>
+                    <p className="text-sm text-black">{charter.file_name}</p>
                     <p className="text-xs text-slate-500">
                       {charter.file_type?.toUpperCase()} {charter.file_size ? `• ${formatFileSize(charter.file_size)}` : ''}
                     </p>
@@ -567,7 +567,7 @@ export default function CommitteeDetailPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-medium text-slate-800">{meeting.title}</h3>
+                    <h3 className="text-lg font-medium text-black">{meeting.title}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${MEETING_TYPE_LABELS[meeting.meeting_type]?.bg} ${MEETING_TYPE_LABELS[meeting.meeting_type]?.text}`}>
                       {MEETING_TYPE_LABELS[meeting.meeting_type]?.label}
                     </span>
@@ -576,9 +576,9 @@ export default function CommitteeDetailPage() {
                     </span>
                   </div>
                 </div>
-                <Eye className="h-5 w-5 text-slate-400" />
+                <Eye className="h-5 w-5 text-slate-600" />
               </div>
-              <div className="flex items-center gap-6 mt-3 text-sm text-slate-400">
+              <div className="flex items-center gap-6 mt-3 text-sm text-slate-600">
                 <span className="flex items-center gap-1.5">
                   <Calendar className="h-4 w-4" />
                   {new Date(meeting.scheduled_date).toLocaleDateString()}
@@ -607,15 +607,15 @@ export default function CommitteeDetailPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-medium text-slate-800">{action.title}</h3>
+                    <h3 className="text-lg font-medium text-black">{action.title}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[action.status]?.bg} ${STATUS_COLORS[action.status]?.text}`}>
                       {action.status.replace('_', ' ')}
                     </span>
                   </div>
-                  {action.description && <p className="text-slate-400 text-sm mt-1">{action.description}</p>}
+                  {action.description && <p className="text-slate-600 text-sm mt-1">{action.description}</p>}
                 </div>
               </div>
-              <div className="flex items-center gap-6 mt-3 text-sm text-slate-400">
+              <div className="flex items-center gap-6 mt-3 text-sm text-slate-600">
                 <span>Due: {new Date(action.due_date).toLocaleDateString()}</span>
                 {action.assigned_to_name && <span>Assigned to: {action.assigned_to_name}</span>}
                 <span className="capitalize">{action.action_type.replace('_', ' ')}</span>
@@ -629,8 +629,8 @@ export default function CommitteeDetailPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-slate-800">Add Member</h2>
-              <button onClick={() => setIsAddMemberModalOpen(false)} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-xl font-semibold text-black">Add Member</h2>
+              <button onClick={() => setIsAddMemberModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -668,8 +668,8 @@ export default function CommitteeDetailPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-slate-800">Schedule Meeting</h2>
-              <button onClick={() => setIsScheduleMeetingModalOpen(false)} className="text-slate-400 hover:text-slate-900">
+              <h2 className="text-xl font-semibold text-black">Schedule Meeting</h2>
+              <button onClick={() => setIsScheduleMeetingModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
