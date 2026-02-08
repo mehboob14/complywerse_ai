@@ -457,27 +457,51 @@ def get_me(
             if tenant_user:
                 tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
                 
-                from ..tenant_models import Role, UserRole
+                from ..tenant_models import Role, UserRole, Permission, RolePermission
                 roles = tenant_db.query(Role).join(UserRole).filter(
                     UserRole.user_id == tenant_user.id
                 ).all()
+                
+                role_ids = [r.id for r in roles]
+                role_names = [r.name for r in roles]
+                
+                permissions = []
+                allowed_modules = []
+                is_admin = False
+                if role_ids:
+                    perms = tenant_db.query(Permission).join(RolePermission).filter(
+                        RolePermission.role_id.in_(role_ids)
+                    ).all()
+                    permissions = list(set(p.name for p in perms))
+                    allowed_modules = list(set(p.module for p in perms))
+                    is_admin = "admin" in allowed_modules
+                
+                user_id = tenant_user.id
+                user_username = tenant_user.username
+                user_email = tenant_user.email
+                user_display_name = tenant_user.display_name
+                user_is_active = tenant_user.is_active
+                user_created_at = tenant_user.created_at.isoformat() if hasattr(tenant_user, 'created_at') and tenant_user.created_at else None
                 
                 tenant_db.close()
                 
                 return {
                     "authenticated": True,
                     "user": {
-                        "id": tenant_user.id,
-                        "username": tenant_user.username,
-                        "email": tenant_user.email,
-                        "display_name": tenant_user.display_name,
-                        "is_active": tenant_user.is_active,
-                        "created_at": tenant_user.created_at.isoformat() if hasattr(tenant_user, 'created_at') and tenant_user.created_at else None,
+                        "id": user_id,
+                        "username": user_username,
+                        "email": user_email,
+                        "display_name": user_display_name,
+                        "is_active": user_is_active,
+                        "created_at": user_created_at,
                         "last_login": None,
                         "tenant_ids": [tenant_id],
                         "primary_tenant_id": tenant_id,
                         "primary_tenant_name": tenant.name if tenant else None,
-                        "roles": [{"id": r.id, "name": r.name} for r in roles]
+                        "roles": [{"id": r_id, "name": r_name} for r_id, r_name in zip(role_ids, role_names)],
+                        "is_admin": is_admin,
+                        "permissions": permissions,
+                        "allowed_modules": allowed_modules
                     },
                     "tenant": {
                         "id": tenant_id,
@@ -515,7 +539,10 @@ def get_me(
             "last_login": user.last_login.isoformat() if user.last_login else None,
             "tenant_ids": tenants,
             "primary_tenant_id": primary_tenant,
-            "primary_tenant_name": primary_tenant_name
+            "primary_tenant_name": primary_tenant_name,
+            "is_admin": True,
+            "permissions": [],
+            "allowed_modules": ["dashboard", "risks", "erm", "controls", "compliance", "evidence", "governance", "vulnerabilities", "assets", "frameworks", "reports", "admin"]
         }
     }
     

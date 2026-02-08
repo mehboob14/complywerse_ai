@@ -43,16 +43,19 @@ interface NavGroup {
   icon: LucideIcon;
   items: NavItem[];
   defaultOpen?: boolean;
+  requiredModules?: string[];
+  adminOnly?: boolean;
 }
 
-type NavEntry = NavItem | NavGroup;
+type NavEntry = (NavItem & { requiredModules?: string[]; adminOnly?: boolean }) | NavGroup;
 
 const navigation: NavEntry[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiredModules: ['dashboard'] },
   {
     name: 'Governance',
     icon: Scale,
     defaultOpen: true,
+    requiredModules: ['governance'],
     items: [
       { name: 'Policies', href: '/governance', icon: BookOpen },
       { name: 'Documents', href: '/governance/documents', icon: FileText },
@@ -67,6 +70,7 @@ const navigation: NavEntry[] = [
   {
     name: 'Risk Management',
     icon: AlertTriangle,
+    requiredModules: ['risks', 'erm'],
     items: [
       { name: 'ERM Overview', href: '/erm', icon: BarChart3 },
       { name: 'Risk Register', href: '/risks', icon: AlertTriangle },
@@ -79,6 +83,7 @@ const navigation: NavEntry[] = [
   {
     name: 'Compliance',
     icon: Shield,
+    requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
       { name: 'Frameworks', href: '/frameworks', icon: Layers },
       { name: 'Controls', href: '/controls', icon: Shield },
@@ -93,6 +98,7 @@ const navigation: NavEntry[] = [
   {
     name: 'Vulnerability Management',
     icon: Bug,
+    requiredModules: ['vulnerabilities'],
     items: [
       { name: 'Dashboard', href: '/vulnerabilities/dashboard', icon: BarChart3 },
       { name: 'Vulnerabilities', href: '/vulnerabilities', icon: Bug },
@@ -104,6 +110,7 @@ const navigation: NavEntry[] = [
   {
     name: 'Assets',
     icon: Server,
+    requiredModules: ['assets'],
     items: [
       { name: 'IT Assets', href: '/assets', icon: Server },
     ],
@@ -111,6 +118,8 @@ const navigation: NavEntry[] = [
   {
     name: 'Administration',
     icon: Settings,
+    adminOnly: true,
+    requiredModules: ['admin'],
     items: [
       { name: 'Overview', href: '/admin', icon: Settings },
       { name: 'Organization', href: '/admin/organization', icon: Server },
@@ -146,13 +155,11 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
       <item.icon 
         size={18} 
         className={clsx(
-          'flex-shrink-0 transition-transform duration-200',
-          'group-hover:scale-110'
+          'flex-shrink-0 transition-colors duration-200',
+          isActive ? 'text-primary-400' : 'text-slate-500 group-hover:text-slate-400'
         )} 
       />
-      {!collapsed && (
-        <span className="truncate transition-colors duration-200">{item.name}</span>
-      )}
+      {!collapsed && <span className="truncate">{item.name}</span>}
     </Link>
   );
 }
@@ -182,35 +189,29 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
               ? 'text-primary-400 bg-primary-600/10' 
               : 'text-slate-400 hover:text-white'
           )}
-          title={group.name}
         >
           <group.icon size={18} />
         </button>
         <div className="absolute left-full top-0 ml-2 hidden group-hover/nav:block z-50">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 min-w-52 animate-fade-in">
-            <div className="px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-700/50 mb-1">
+          <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 py-2 min-w-[200px]">
+            <div className="px-3 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">
               {group.name}
             </div>
-            {group.items.map((item) => {
-              const isActive = pathname === item.href || 
-                (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={clsx(
-                    'flex items-center gap-3 px-4 py-2.5 text-sm transition-all duration-150',
-                    'hover:bg-slate-700/50 hover:text-white',
-                    isActive 
-                      ? 'text-primary-400 bg-primary-600/10 border-l-2 border-primary-500' 
-                      : 'text-slate-300 border-l-2 border-transparent'
-                  )}
-                >
-                  <item.icon size={16} className="flex-shrink-0" />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
+            {group.items.map(item => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={clsx(
+                  'flex items-center gap-2 px-3 py-2 text-sm transition-colors',
+                  pathname === item.href || pathname.startsWith(item.href + '/')
+                    ? 'text-primary-400 bg-primary-600/10'
+                    : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                )}
+              >
+                <item.icon size={14} />
+                {item.name}
+              </Link>
+            ))}
           </div>
         </div>
       </div>
@@ -239,51 +240,67 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
           size={16} 
           className={clsx(
             'text-slate-500 transition-transform duration-200',
-            !isOpen && '-rotate-90'
-          )} 
+            isOpen ? '' : '-rotate-90'
+          )}
         />
       </button>
-      <div
-        className={clsx(
-          'overflow-hidden transition-all duration-300 ease-out',
-          isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
-        )}
-      >
-        <div className="ml-3 pl-3 border-l border-slate-700/50 space-y-0.5 py-1">
-          {group.items.map((item) => {
-            const isActive = pathname === item.href || 
-              (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
+      {isOpen && (
+        <div className="ml-3 space-y-0.5 border-l border-slate-800 pl-3">
+          {group.items.map(item => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={clsx(
+                'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+                'hover:bg-slate-800/60 hover:text-white',
+                (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')))
+                  ? 'text-primary-400 bg-primary-600/10'
+                  : 'text-slate-400'
+              )}
+            >
+              <item.icon 
+                size={16} 
                 className={clsx(
-                  'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                  'hover:bg-slate-800/50 hover:text-white',
-                  isActive 
-                    ? 'text-primary-400 bg-primary-600/10 border-l-2 border-primary-500 -ml-[1px]' 
-                    : 'text-slate-400 border-l-2 border-transparent -ml-[1px]'
-                )}
-              >
-                <item.icon 
-                  size={16} 
-                  className={clsx(
-                    'flex-shrink-0 transition-transform duration-200',
-                    'group-hover:scale-105'
-                  )} 
-                />
-                <span className="truncate">{item.name}</span>
-              </Link>
-            );
-          })}
+                  'flex-shrink-0',
+                  (pathname === item.href || pathname.startsWith(item.href + '/'))
+                    ? 'text-primary-400' 
+                    : 'text-slate-500 group-hover:text-slate-400'
+                )} 
+              />
+              <span className="truncate">{item.name}</span>
+            </Link>
+          ))}
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [allowedModules, setAllowedModules] = useState<string[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.authenticated && data.user) {
+          setAllowedModules(data.user.allowed_modules || []);
+          setIsAdmin(data.user.is_admin || false);
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  const filteredNavigation = loaded ? navigation.filter((item) => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (!item.requiredModules || item.requiredModules.length === 0) return true;
+    if (isAdmin) return true;
+    return item.requiredModules.some(mod => allowedModules.includes(mod));
+  }) : [];
 
   return (
     <aside
@@ -309,7 +326,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
-        {navigation.map((item) => {
+        {filteredNavigation.map((item) => {
           if (isGroup(item)) {
             return (
               <NavGroupSection
