@@ -96,7 +96,7 @@ const navigation: NavEntry[] = [
     ],
   },
   {
-    name: 'Vulnerability Management',
+    name: 'Vulnerability Mgmt',
     icon: Bug,
     requiredModules: ['vulnerabilities'],
     items: [
@@ -122,7 +122,7 @@ const navigation: NavEntry[] = [
     requiredModules: ['admin'],
     items: [
       { name: 'Overview', href: '/admin', icon: Settings },
-      { name: 'Organization', href: '/admin/organization', icon: Server },
+      { name: 'Company', href: '/admin/organization', icon: Server },
       { name: 'User Management', href: '/admin/users', icon: Users },
       { name: 'Role Management', href: '/admin/roles', icon: Shield },
       { name: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },
@@ -143,11 +143,10 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
     <Link
       href={item.href}
       className={clsx(
-        'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
-        'hover:bg-slate-800/80 hover:text-white',
+        'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
         isActive 
-          ? 'bg-primary-600/15 text-primary-400 border-l-[3px] border-primary-500 ml-0 pl-[calc(0.75rem-3px)]' 
-          : 'text-slate-400 border-l-[3px] border-transparent',
+          ? 'bg-primary-50 text-primary-700' 
+          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
         collapsed && 'justify-center px-2'
       )}
       title={collapsed ? item.name : undefined}
@@ -155,8 +154,8 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
       <item.icon 
         size={18} 
         className={clsx(
-          'flex-shrink-0 transition-colors duration-200',
-          isActive ? 'text-primary-400' : 'text-slate-500 group-hover:text-slate-400'
+          'flex-shrink-0 transition-colors duration-150',
+          isActive ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-600'
         )} 
       />
       {!collapsed && <span className="truncate">{item.name}</span>}
@@ -183,17 +182,17 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
       <div className="relative group/nav">
         <button
           className={clsx(
-            'flex items-center justify-center w-full rounded-lg p-2.5 transition-all duration-200',
-            'hover:bg-slate-800/80',
+            'flex items-center justify-center w-full rounded-lg p-2.5 transition-all duration-150',
+            'hover:bg-slate-50',
             isAnyChildActive 
-              ? 'text-primary-400 bg-primary-600/10' 
-              : 'text-slate-400 hover:text-white'
+              ? 'text-primary-600 bg-primary-50' 
+              : 'text-slate-400 hover:text-slate-600'
           )}
         >
           <group.icon size={18} />
         </button>
         <div className="absolute left-full top-0 ml-2 hidden group-hover/nav:block z-50">
-          <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 py-2 min-w-[200px]">
+          <div className="bg-white rounded-lg shadow-elevated border border-slate-200 py-2 min-w-[200px]">
             <div className="px-3 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">
               {group.name}
             </div>
@@ -204,8 +203,8 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                 className={clsx(
                   'flex items-center gap-2 px-3 py-2 text-sm transition-colors',
                   pathname === item.href || pathname.startsWith(item.href + '/')
-                    ? 'text-primary-400 bg-primary-600/10'
-                    : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    ? 'text-primary-700 bg-primary-50'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 )}
               >
                 <item.icon size={14} />
@@ -219,52 +218,51 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={clsx(
-          'group flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-200',
-          'hover:bg-slate-800/60',
-          isAnyChildActive ? 'text-white' : 'text-slate-300 hover:text-white'
+          'group flex items-center gap-3 w-full rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-150',
+          'hover:bg-slate-50',
+          isAnyChildActive ? 'text-slate-900' : 'text-slate-600 hover:text-slate-900'
         )}
       >
         <group.icon 
           size={18} 
           className={clsx(
-            'flex-shrink-0 transition-colors duration-200',
-            isAnyChildActive ? 'text-primary-400' : 'text-slate-500 group-hover:text-slate-400'
+            'flex-shrink-0 transition-colors duration-150',
+            isAnyChildActive ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-500'
           )} 
         />
         <span className="flex-1 text-left truncate">{group.name}</span>
         <ChevronDown 
           size={16} 
           className={clsx(
-            'text-slate-500 transition-transform duration-200',
+            'text-slate-400 transition-transform duration-200',
             isOpen ? '' : '-rotate-90'
           )}
         />
       </button>
       {isOpen && (
-        <div className="ml-3 space-y-0.5 border-l border-slate-800 pl-3">
+        <div className="ml-4 space-y-0.5 border-l border-slate-200 pl-3">
           {group.items.map(item => (
             <Link
               key={item.href}
               href={item.href}
               className={clsx(
-                'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                'hover:bg-slate-800/60 hover:text-white',
+                'group flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-all duration-150',
                 (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')))
-                  ? 'text-primary-400 bg-primary-600/10'
-                  : 'text-slate-400'
+                  ? 'text-primary-700 bg-primary-50 font-medium'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
               )}
             >
               <item.icon 
-                size={16} 
+                size={15} 
                 className={clsx(
                   'flex-shrink-0',
                   (pathname === item.href || pathname.startsWith(item.href + '/'))
-                    ? 'text-primary-400' 
-                    : 'text-slate-500 group-hover:text-slate-400'
+                    ? 'text-primary-600' 
+                    : 'text-slate-400 group-hover:text-slate-500'
                 )} 
               />
               <span className="truncate">{item.name}</span>
@@ -305,27 +303,23 @@ export default function Sidebar() {
   return (
     <aside
       className={clsx(
-        'flex flex-col bg-slate-900 border-r border-slate-800 transition-all duration-300 ease-out',
-        collapsed ? 'w-[68px]' : 'w-64'
+        'flex flex-col bg-white border-r border-slate-200 transition-all duration-300 ease-out shadow-sidebar',
+        collapsed ? 'w-[68px]' : 'w-60'
       )}
     >
       <div className={clsx(
-        'h-16 flex items-center border-b border-slate-800 transition-all duration-300',
+        'h-14 flex items-center border-b border-slate-200 transition-all duration-300',
         collapsed ? 'px-3 justify-center' : 'px-4'
       )}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-lg shadow-primary-600/20">
-            <Shield size={18} className="text-white" />
-          </div>
+        <div className="flex items-center gap-2.5">
+          <Shield size={22} className="text-primary-600 flex-shrink-0" />
           {!collapsed && (
-            <div className="overflow-hidden">
-              <span className="text-lg font-bold text-white whitespace-nowrap">ComplyVerse</span>
-            </div>
+            <span className="text-lg font-semibold text-slate-800 whitespace-nowrap">ComplyVerse</span>
           )}
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
+      <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-0.5">
         {filteredNavigation.map((item) => {
           if (isGroup(item)) {
             return (
@@ -346,12 +340,12 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="p-3 border-t border-slate-800">
+      <div className="p-3 border-t border-slate-200">
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={clsx(
-            'flex items-center gap-2 w-full px-3 py-2.5 rounded-lg',
-            'text-slate-400 hover:text-white hover:bg-slate-800 transition-all duration-200',
+            'flex items-center gap-2 w-full px-3 py-2 rounded-lg',
+            'text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all duration-150',
             collapsed && 'justify-center px-2'
           )}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -365,11 +359,6 @@ export default function Sidebar() {
           />
           {!collapsed && <span className="text-sm">Collapse</span>}
         </button>
-        {!collapsed && (
-          <div className="mt-3 px-3 text-xs text-slate-600">
-            Enterprise GRC v1.0
-          </div>
-        )}
       </div>
     </aside>
   );

@@ -75,7 +75,7 @@ function getCategoryStyles(category: string) {
     case 'evidence':
       return 'text-emerald-400 bg-emerald-500/20';
     case 'governance':
-      return 'text-purple-400 bg-purple-500/20';
+      return 'text-primary-600 bg-primary-500/20';
     default:
       return 'text-slate-400 bg-slate-500/20';
   }
@@ -94,8 +94,8 @@ export default function AIInsightsPanel() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 p-2">
               <Sparkles className="h-5 w-5 text-violet-400" />
@@ -109,7 +109,7 @@ export default function AIInsightsPanel() {
         <div className="p-5">
           <div className="space-y-4 animate-pulse">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-lg border border-slate-700 bg-slate-900/50 p-4">
+              <div key={i} className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
                 <div className="flex items-start gap-3">
                   <div className="h-8 w-8 rounded-lg bg-slate-700" />
                   <div className="flex-1 space-y-2">
@@ -128,8 +128,8 @@ export default function AIInsightsPanel() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 p-2">
               <Sparkles className="h-5 w-5 text-violet-400" />
@@ -160,8 +160,8 @@ export default function AIInsightsPanel() {
     (data?.signals?.overdue_mitigations?.length || 0);
 
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 p-2">
             <Sparkles className="h-5 w-5 text-violet-400" />
@@ -191,7 +191,7 @@ export default function AIInsightsPanel() {
               return (
                 <div
                   key={rec.id}
-                  className="rounded-lg border border-slate-700 bg-slate-900/50 p-4 hover:border-slate-600 transition-colors"
+                  className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 hover:border-slate-300 transition-colors"
                 >
                   <div className="flex items-start gap-3">
                     <div className={`rounded-lg p-2 ${getCategoryStyles(rec.category)}`}>
@@ -236,7 +236,7 @@ export default function AIInsightsPanel() {
       </div>
 
       {data?.generated_at && (
-        <div className="px-5 py-3 border-t border-slate-700 bg-slate-900/30">
+        <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/30">
           <p className="text-xs text-slate-500">
             Generated {new Date(data.generated_at).toLocaleString()}
           </p>

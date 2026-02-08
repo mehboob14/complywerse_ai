@@ -204,7 +204,7 @@ export default function RCSAAssessmentsPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-white">RCSA Assessments</h1>
+            <h1 className="text-2xl font-semibold text-slate-800">RCSA Assessments</h1>
             <p className="text-slate-400 mt-1">View and complete your assigned risk assessments</p>
           </div>
         </div>
@@ -259,7 +259,7 @@ export default function RCSAAssessmentsPage() {
       <div className="card overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-slate-700 bg-slate-800/50">
+            <tr className="border-b border-slate-200 bg-white/50">
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Campaign</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Business Unit</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Assessor</th>
@@ -275,21 +275,21 @@ export default function RCSAAssessmentsPage() {
               const isOverdue = new Date(assessment.due_date) < new Date() && !['approved', 'rejected'].includes(assessment.status);
               
               return (
-                <tr key={assessment.id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                <tr key={assessment.id} className="border-b border-slate-200 hover:bg-white/50">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       <ClipboardCheck className="h-4 w-4 text-primary-400" />
-                      <span className="text-white font-medium">{assessment.campaign_name}</span>
+                      <span className="text-slate-800 font-medium">{assessment.campaign_name}</span>
                     </div>
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex items-center gap-2 text-slate-300">
+                    <div className="flex items-center gap-2 text-slate-600">
                       <Building2 className="h-4 w-4 text-slate-500" />
                       {assessment.business_unit}
                     </div>
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex items-center gap-2 text-slate-300">
+                    <div className="flex items-center gap-2 text-slate-600">
                       <User className="h-4 w-4 text-slate-500" />
                       {assessment.assessor_name}
                     </div>
@@ -312,7 +312,7 @@ export default function RCSAAssessmentsPage() {
                     )}
                   </td>
                   <td className="py-3 px-4">
-                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-400' : 'text-slate-300'}`}>
+                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-400' : 'text-slate-600'}`}>
                       <Calendar className="h-4 w-4" />
                       {formatDate(assessment.due_date)}
                     </div>
@@ -329,7 +329,7 @@ export default function RCSAAssessmentsPage() {
         {filteredAssessments.length === 0 && (
           <div className="p-12 text-center">
             <ClipboardCheck className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-white mb-2">No Assessments Found</h3>
+            <h3 className="text-lg font-medium text-slate-800 mb-2">No Assessments Found</h3>
             <p className="text-slate-400">
               {searchTerm || statusFilter || campaignFilter || businessUnitFilter
                 ? 'No assessments match your filters'

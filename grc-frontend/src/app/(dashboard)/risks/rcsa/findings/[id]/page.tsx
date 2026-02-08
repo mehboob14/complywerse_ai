@@ -97,16 +97,16 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Link to {type === 'risk' ? 'Risk' : 'Internal Control'}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h3 className="text-lg font-semibold text-slate-800">Link to {type === 'risk' ? 'Risk' : 'Internal Control'}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
         <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-slate-300">
+          <label className="mb-1 block text-sm font-medium text-slate-600">
             {type === 'risk' ? 'Risk' : 'Control'} ID <span className="text-red-400">*</span>
           </label>
           <input
@@ -114,7 +114,7 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
             value={entityId}
             onChange={(e) => setEntityId(e.target.value)}
             placeholder={`Enter ${type} ID...`}
-            className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400"
+            className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400"
           />
         </div>
 
@@ -160,17 +160,17 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Create Mitigation Action</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h3 className="text-lg font-semibold text-slate-800">Create Mitigation Action</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
         <div className="space-y-4 mb-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">
+            <label className="mb-1 block text-sm font-medium text-slate-600">
               Title <span className="text-red-400">*</span>
             </label>
             <input
@@ -182,7 +182,7 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Description</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -191,7 +191,7 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Due Date</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Due Date</label>
             <input
               type="date"
               value={dueDate}
@@ -332,14 +332,14 @@ export default function FindingDetailPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/risks/rcsa/findings"
-          className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white"
+          className="p-2 rounded-lg hover:bg-slate-200 text-slate-500 hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <AlertTriangle className={`h-6 w-6 ${severityStyle.text}`} />
-            <h1 className="text-2xl font-semibold text-white">{finding.title}</h1>
+            <h1 className="text-2xl font-semibold text-slate-800">{finding.title}</h1>
           </div>
           <div className="flex items-center gap-4 mt-1 text-sm text-slate-400">
             <span className="flex items-center gap-1.5">
@@ -363,7 +363,7 @@ export default function FindingDetailPage() {
       </div>
 
       <div className="card p-6">
-        <h3 className="text-lg font-medium text-white mb-4">Status Workflow</h3>
+        <h3 className="text-lg font-medium text-slate-800 mb-4">Status Workflow</h3>
         <div className="flex items-center justify-between">
           {STATUS_FLOW.map((status, index) => {
             const style = getStatusStyle(status);
@@ -378,9 +378,9 @@ export default function FindingDetailPage() {
                   disabled={!isNext || updateStatusMutation.isPending}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                     isActive ? `${style.bg} ${style.text} ring-2 ring-offset-2 ring-offset-slate-900 ${style.text.replace('text-', 'ring-')}` :
-                    isPast ? 'bg-slate-700 text-slate-300' :
-                    isNext ? 'bg-slate-700 text-white hover:bg-slate-600 cursor-pointer' :
-                    'bg-slate-800 text-slate-500'
+                    isPast ? 'bg-slate-200 text-slate-600' :
+                    isNext ? 'bg-slate-200 text-slate-800 hover:bg-slate-600 cursor-pointer' :
+                    'bg-white text-slate-500'
                   }`}
                 >
                   {isPast ? <CheckCircle className="h-4 w-4" /> : 
@@ -389,7 +389,7 @@ export default function FindingDetailPage() {
                   {style.label}
                 </button>
                 {index < STATUS_FLOW.length - 1 && (
-                  <div className={`w-8 h-0.5 mx-2 ${isPast ? 'bg-slate-500' : 'bg-slate-700'}`} />
+                  <div className={`w-8 h-0.5 mx-2 ${isPast ? 'bg-slate-500' : 'bg-slate-200'}`} />
                 )}
               </div>
             );
@@ -400,23 +400,23 @@ export default function FindingDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="card p-6">
-            <h3 className="text-lg font-medium text-white mb-4">Description</h3>
-            <p className="text-slate-300">{finding.description || 'No description provided.'}</p>
+            <h3 className="text-lg font-medium text-slate-800 mb-4">Description</h3>
+            <p className="text-slate-600">{finding.description || 'No description provided.'}</p>
           </div>
 
           {finding.ai_recommendation && (
-            <div className="card p-6 border-purple-500/30">
+            <div className="card p-6 border-primary-500/30">
               <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="h-5 w-5 text-purple-400" />
-                <h3 className="text-lg font-medium text-white">AI Recommendation</h3>
+                <Sparkles className="h-5 w-5 text-primary-600" />
+                <h3 className="text-lg font-medium text-slate-800">AI Recommendation</h3>
               </div>
-              <p className="text-slate-300">{finding.ai_recommendation}</p>
+              <p className="text-slate-600">{finding.ai_recommendation}</p>
             </div>
           )}
 
           <div className="card p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-white">Mitigation Actions</h3>
+              <h3 className="text-lg font-medium text-slate-800">Mitigation Actions</h3>
               <button
                 onClick={() => setShowActionModal(true)}
                 className="btn-secondary text-sm flex items-center gap-1.5"
@@ -428,9 +428,9 @@ export default function FindingDetailPage() {
             {finding.mitigation_actions && finding.mitigation_actions.length > 0 ? (
               <div className="space-y-3">
                 {finding.mitigation_actions.map((action) => (
-                  <div key={action.id} className="p-3 rounded-lg bg-slate-800/50 flex items-center justify-between">
+                  <div key={action.id} className="p-3 rounded-lg bg-white/50 flex items-center justify-between">
                     <div>
-                      <p className="text-white font-medium">{action.title}</p>
+                      <p className="text-slate-800 font-medium">{action.title}</p>
                       <p className="text-sm text-slate-400">Due: {formatDate(action.due_date)}</p>
                     </div>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -451,27 +451,27 @@ export default function FindingDetailPage() {
 
         <div className="space-y-6">
           <div className="card p-6">
-            <h3 className="text-lg font-medium text-white mb-4">Details</h3>
+            <h3 className="text-lg font-medium text-slate-800 mb-4">Details</h3>
             <div className="space-y-3">
               <div>
                 <p className="text-sm text-slate-400">Assessment</p>
-                <p className="text-white">{finding.assessment_name}</p>
+                <p className="text-slate-800">{finding.assessment_name}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-400">Due Date</p>
-                <p className={`${finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed' ? 'text-red-400' : 'text-white'}`}>
+                <p className={`${finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed' ? 'text-red-400' : 'text-slate-800'}`}>
                   {formatDate(finding.due_date)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-slate-400">Last Updated</p>
-                <p className="text-white">{formatDate(finding.updated_at)}</p>
+                <p className="text-slate-800">{formatDate(finding.updated_at)}</p>
               </div>
             </div>
           </div>
 
           <div className="card p-6">
-            <h3 className="text-lg font-medium text-white mb-4">Linked Items</h3>
+            <h3 className="text-lg font-medium text-slate-800 mb-4">Linked Items</h3>
             <div className="space-y-3">
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -491,10 +491,10 @@ export default function FindingDetailPage() {
                 {finding.linked_risk ? (
                   <Link
                     href={`/erm/risks/${finding.linked_risk.id}`}
-                    className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-between hover:bg-purple-500/20"
+                    className="p-2 rounded-lg bg-primary-500/10 border border-primary-500/30 flex items-center justify-between hover:bg-primary-500/20"
                   >
-                    <span className="text-white">{finding.linked_risk.title}</span>
-                    <ExternalLink className="h-4 w-4 text-purple-400" />
+                    <span className="text-slate-800">{finding.linked_risk.title}</span>
+                    <ExternalLink className="h-4 w-4 text-primary-600" />
                   </Link>
                 ) : (
                   <p className="text-slate-500 text-sm">No risk linked</p>
@@ -520,7 +520,7 @@ export default function FindingDetailPage() {
                     href={`/erm/internal-controls/${finding.linked_control.id}`}
                     className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-between hover:bg-blue-500/20"
                   >
-                    <span className="text-white">{finding.linked_control.name}</span>
+                    <span className="text-slate-800">{finding.linked_control.name}</span>
                     <ExternalLink className="h-4 w-4 text-blue-400" />
                   </Link>
                 ) : (

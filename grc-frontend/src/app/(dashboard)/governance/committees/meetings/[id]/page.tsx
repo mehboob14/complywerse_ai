@@ -117,7 +117,7 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 const SOURCE_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; text: string }> = {
   document: { label: 'Document', icon: FileCheck, bg: 'bg-blue-500/20', text: 'text-blue-400' },
   exception: { label: 'Exception', icon: Shield, bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  regulatory_change: { label: 'Regulatory Change', icon: Scale, bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  regulatory_change: { label: 'Regulatory Change', icon: Scale, bg: 'bg-primary-500/20', text: 'text-primary-600' },
   manual: { label: 'Manual', icon: FileText, bg: 'bg-slate-500/20', text: 'text-slate-400' },
 };
 
@@ -332,7 +332,7 @@ export default function MeetingDetailPage() {
   return (
     <div className="space-y-8">
       <div>
-        <Link href={`/governance/committees/${meeting?.committee_id}`} className="flex items-center gap-2 text-slate-400 hover:text-white mb-4">
+        <Link href={`/governance/committees/${meeting?.committee_id}`} className="flex items-center gap-2 text-slate-400 hover:text-slate-900 mb-4">
           <ArrowLeft className="h-4 w-4" />
           Back to {meeting?.committee_name}
         </Link>
@@ -343,7 +343,7 @@ export default function MeetingDetailPage() {
               <Calendar className="h-7 w-7 text-cyan-400" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-white">{meeting?.title}</h1>
+              <h1 className="text-2xl font-semibold text-slate-800">{meeting?.title}</h1>
               <div className="flex items-center gap-3 mt-1">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${meetingTypeStyle?.bg} ${meetingTypeStyle?.text}`}>
                   {meetingTypeStyle?.label}
@@ -384,7 +384,7 @@ export default function MeetingDetailPage() {
         <div className="lg:col-span-2 space-y-6">
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+              <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
                 <Lightbulb className="h-5 w-5 text-amber-400" />
                 Suggested Agenda Items
               </h3>
@@ -408,14 +408,14 @@ export default function MeetingDetailPage() {
                   const typeConfig = SOURCE_TYPE_CONFIG[item.type] || SOURCE_TYPE_CONFIG.manual;
                   const TypeIcon = typeConfig.icon;
                   return (
-                    <div key={`${item.type}-${item.id}`} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-slate-600 transition-colors">
+                    <div key={`${item.type}-${item.id}`} className="p-4 rounded-lg bg-white/50 border border-slate-200 hover:border-slate-300 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-3">
                           <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${typeConfig.bg}`}>
                             <TypeIcon className={`h-4 w-4 ${typeConfig.text}`} />
                           </div>
                           <div>
-                            <h4 className="text-white font-medium">{item.title}</h4>
+                            <h4 className="text-slate-800 font-medium">{item.title}</h4>
                             {item.description && <p className="text-slate-400 text-sm mt-1">{item.description}</p>}
                             <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
                               <span className={`px-2 py-0.5 rounded-full ${typeConfig.bg} ${typeConfig.text}`}>
@@ -447,7 +447,7 @@ export default function MeetingDetailPage() {
 
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+              <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
                 <ListOrdered className="h-5 w-5 text-primary-400" />
                 Agenda
               </h3>
@@ -465,14 +465,14 @@ export default function MeetingDetailPage() {
                 const sourceConfig = SOURCE_TYPE_CONFIG[item.source_type || 'manual'] || SOURCE_TYPE_CONFIG.manual;
                 const linkedItems = getLinkedItemInfo(item);
                 return (
-                  <div key={item.id} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+                  <div key={item.id} className="p-4 rounded-lg bg-white/50 border border-slate-200">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-500/20 text-primary-400 text-sm font-medium">
                           {item.sequence}
                         </div>
                         <div className="flex-1">
-                          <h4 className="text-white font-medium">{item.title}</h4>
+                          <h4 className="text-slate-800 font-medium">{item.title}</h4>
                           {item.description && <p className="text-slate-400 text-sm mt-1">{item.description}</p>}
                           <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-slate-500">
                             {item.presenter && <span>Presenter: {item.presenter}</span>}
@@ -485,12 +485,12 @@ export default function MeetingDetailPage() {
                             )}
                           </div>
                           {linkedItems.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-700">
+                            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-200">
                               <LinkIcon className="h-3 w-3 text-slate-500" />
                               {linkedItems.map((link, idx) => {
                                 const Icon = link.icon;
                                 return (
-                                  <span key={idx} className="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-700/50 px-2 py-1 rounded">
+                                  <span key={idx} className="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-200/50 px-2 py-1 rounded">
                                     <Icon className="h-3 w-3" />
                                     <span className="text-slate-500">{link.type}:</span> {link.title}
                                   </span>
@@ -522,7 +522,7 @@ export default function MeetingDetailPage() {
 
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+              <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
                 <FileText className="h-5 w-5 text-emerald-400" />
                 Minutes
               </h3>
@@ -544,8 +544,8 @@ export default function MeetingDetailPage() {
                     <span className="text-sm text-slate-400">Approved by {minutes.approved_by}</span>
                   )}
                 </div>
-                <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
-                  <p className="text-slate-300 whitespace-pre-wrap">{minutes.content}</p>
+                <div className="p-4 rounded-lg bg-white/50 border border-slate-200">
+                  <p className="text-slate-600 whitespace-pre-wrap">{minutes.content}</p>
                 </div>
               </div>
             ) : isEditMinutesOpen ? (
@@ -580,7 +580,7 @@ export default function MeetingDetailPage() {
         <div className="space-y-6">
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+              <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
                 <CheckSquare className="h-5 w-5 text-amber-400" />
                 Actions
               </h3>
@@ -591,9 +591,9 @@ export default function MeetingDetailPage() {
 
             <div className="space-y-3">
               {(actions || []).map((action) => (
-                <div key={action.id} className="p-3 rounded-lg bg-slate-800/50 border border-slate-700">
+                <div key={action.id} className="p-3 rounded-lg bg-white/50 border border-slate-200">
                   <div className="flex items-start justify-between">
-                    <h4 className="text-white font-medium text-sm">{action.title}</h4>
+                    <h4 className="text-slate-800 font-medium text-sm">{action.title}</h4>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[action.status]?.bg} ${STATUS_COLORS[action.status]?.text}`}>
                       {action.status.replace('_', ' ')}
                     </span>
@@ -618,13 +618,13 @@ export default function MeetingDetailPage() {
 
       {isAutoPopulateModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-700">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              <h2 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-amber-400" />
                 Auto-Populate Agenda
               </h2>
-              <button onClick={() => setIsAutoPopulateModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsAutoPopulateModalOpen(false)} className="text-slate-400 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -634,44 +634,44 @@ export default function MeetingDetailPage() {
             </p>
 
             <div className="space-y-4 mb-6">
-              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600 cursor-pointer hover:bg-slate-700/80 transition-colors">
+              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-200/50 border border-slate-300 cursor-pointer hover:bg-slate-200/80 transition-colors">
                 <input
                   type="checkbox"
                   checked={autoPopulateOptions.include_documents}
                   onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_documents: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-200 text-primary-500 focus:ring-primary-500"
                 />
                 <FileCheck className="h-5 w-5 text-blue-400" />
                 <div>
-                  <span className="text-white font-medium">Documents</span>
+                  <span className="text-slate-800 font-medium">Documents</span>
                   <p className="text-sm text-slate-400">Pending document approvals and reviews</p>
                 </div>
               </label>
 
-              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600 cursor-pointer hover:bg-slate-700/80 transition-colors">
+              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-200/50 border border-slate-300 cursor-pointer hover:bg-slate-200/80 transition-colors">
                 <input
                   type="checkbox"
                   checked={autoPopulateOptions.include_exceptions}
                   onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_exceptions: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-200 text-primary-500 focus:ring-primary-500"
                 />
                 <Shield className="h-5 w-5 text-amber-400" />
                 <div>
-                  <span className="text-white font-medium">Exceptions</span>
+                  <span className="text-slate-800 font-medium">Exceptions</span>
                   <p className="text-sm text-slate-400">Risk and control exceptions requiring approval</p>
                 </div>
               </label>
 
-              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600 cursor-pointer hover:bg-slate-700/80 transition-colors">
+              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-200/50 border border-slate-300 cursor-pointer hover:bg-slate-200/80 transition-colors">
                 <input
                   type="checkbox"
                   checked={autoPopulateOptions.include_regulatory_changes}
                   onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_regulatory_changes: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-200 text-primary-500 focus:ring-primary-500"
                 />
-                <Scale className="h-5 w-5 text-purple-400" />
+                <Scale className="h-5 w-5 text-primary-600" />
                 <div>
-                  <span className="text-white font-medium">Regulatory Changes</span>
+                  <span className="text-slate-800 font-medium">Regulatory Changes</span>
                   <p className="text-sm text-slate-400">Pending regulatory updates and impact assessments</p>
                 </div>
               </label>
@@ -696,34 +696,34 @@ export default function MeetingDetailPage() {
 
       {isAddAgendaModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-700">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Add Agenda Item</h2>
-              <button onClick={() => setIsAddAgendaModalOpen(false)} className="text-slate-400 hover:text-white">
+              <h2 className="text-xl font-semibold text-slate-800">Add Agenda Item</h2>
+              <button onClick={() => setIsAddAgendaModalOpen(false)} className="text-slate-400 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form onSubmit={(e) => { e.preventDefault(); addAgendaMutation.mutate(newAgendaItem); }} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Title *</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Title *</label>
                 <input type="text" value={newAgendaItem.title} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, title: e.target.value })} className="input w-full" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
                 <textarea value={newAgendaItem.description} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, description: e.target.value })} className="input w-full" rows={2} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Presenter</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Presenter</label>
                   <input type="text" value={newAgendaItem.presenter} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, presenter: e.target.value })} className="input w-full" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Duration (min)</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Duration (min)</label>
                   <input type="number" value={newAgendaItem.duration_minutes} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, duration_minutes: parseInt(e.target.value) })} className="input w-full" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Item Type</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Item Type</label>
                 <select value={newAgendaItem.item_type} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, item_type: e.target.value })} className="input w-full">
                   <option value="procedural">Procedural</option>
                   <option value="approval">Approval</option>
@@ -744,24 +744,24 @@ export default function MeetingDetailPage() {
 
       {isAddActionModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-700">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Create Action</h2>
-              <button onClick={() => setIsAddActionModalOpen(false)} className="text-slate-400 hover:text-white">
+              <h2 className="text-xl font-semibold text-slate-800">Create Action</h2>
+              <button onClick={() => setIsAddActionModalOpen(false)} className="text-slate-400 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form onSubmit={(e) => { e.preventDefault(); createActionMutation.mutate({ ...newAction, assigned_to_id: newAction.assigned_to_id ? parseInt(newAction.assigned_to_id) : null }); }} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Title *</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Title *</label>
                 <input type="text" value={newAction.title} onChange={(e) => setNewAction({ ...newAction, title: e.target.value })} className="input w-full" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
                 <textarea value={newAction.description} onChange={(e) => setNewAction({ ...newAction, description: e.target.value })} className="input w-full" rows={2} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Action Type</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Action Type</label>
                 <select value={newAction.action_type} onChange={(e) => setNewAction({ ...newAction, action_type: e.target.value })} className="input w-full">
                   {ACTION_TYPES.map(({ value, label }) => (
                     <option key={value} value={value}>{label}</option>
@@ -770,11 +770,11 @@ export default function MeetingDetailPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Due Date *</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Due Date *</label>
                   <input type="date" value={newAction.due_date} onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })} className="input w-full" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Assigned To (User ID)</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Assigned To (User ID)</label>
                   <input type="number" value={newAction.assigned_to_id} onChange={(e) => setNewAction({ ...newAction, assigned_to_id: e.target.value })} className="input w-full" />
                 </div>
               </div>

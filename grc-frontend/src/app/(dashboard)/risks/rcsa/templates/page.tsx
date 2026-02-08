@@ -37,7 +37,7 @@ interface Template {
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string }> = {
   system: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  custom: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  custom: { bg: 'bg-primary-500/20', text: 'text-primary-600' },
 };
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
@@ -163,7 +163,7 @@ export default function RCSATemplatesPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-white">RCSA Templates</h1>
+            <h1 className="text-2xl font-semibold text-slate-800">RCSA Templates</h1>
             <p className="text-slate-400 mt-1">Manage Risk & Control Self-Assessment templates</p>
           </div>
           <div className="flex items-center gap-3">
@@ -201,7 +201,7 @@ export default function RCSATemplatesPage() {
           )}
           <p className={uploadResult.success ? 'text-emerald-400' : 'text-rose-400'}>{uploadResult.message}</p>
           <button onClick={() => setUploadResult(null)} className="ml-auto">
-            <X className="h-4 w-4 text-slate-400 hover:text-white" />
+            <X className="h-4 w-4 text-slate-400 hover:text-slate-900" />
           </button>
         </div>
       )}
@@ -237,7 +237,7 @@ export default function RCSATemplatesPage() {
                   <FileText className="h-5 w-5 text-primary-400" />
                 </div>
                 <div>
-                  <h3 className="text-white font-medium">{template.name}</h3>
+                  <h3 className="text-slate-800 font-medium">{template.name}</h3>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${SOURCE_COLORS[template.source]?.bg} ${SOURCE_COLORS[template.source]?.text}`}>
                     {template.source}
                   </span>
@@ -264,7 +264,7 @@ export default function RCSATemplatesPage() {
               </span>
             </div>
             
-            <div className="flex items-center gap-2 pt-4 border-t border-slate-700">
+            <div className="flex items-center gap-2 pt-4 border-t border-slate-200">
               <Link
                 href={`/risks/rcsa/templates/${template.id}`}
                 className="flex-1 btn-secondary text-center text-sm py-1.5 flex items-center justify-center gap-1"
@@ -286,7 +286,7 @@ export default function RCSATemplatesPage() {
                 <>
                   <Link
                     href={`/risks/rcsa/templates/${template.id}?edit=true`}
-                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded"
+                    className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-200 rounded"
                   >
                     <Edit2 className="h-4 w-4" />
                   </Link>
@@ -316,10 +316,10 @@ export default function RCSATemplatesPage() {
 
       {isCloneModalOpen && selectedTemplate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white">Clone Template</h3>
-              <button onClick={() => setIsCloneModalOpen(false)} className="text-slate-400 hover:text-white">
+              <h3 className="text-lg font-medium text-slate-800">Clone Template</h3>
+              <button onClick={() => setIsCloneModalOpen(false)} className="text-slate-400 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -338,7 +338,7 @@ export default function RCSATemplatesPage() {
             >
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">New Template Name</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">New Template Name</label>
                   <input
                     type="text"
                     name="name"
@@ -348,7 +348,7 @@ export default function RCSATemplatesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
                   <textarea
                     name="description"
                     defaultValue={selectedTemplate.description}
@@ -372,10 +372,10 @@ export default function RCSATemplatesPage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white">Create New Template</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
+              <h3 className="text-lg font-medium text-slate-800">Create New Template</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -399,7 +399,7 @@ export default function RCSATemplatesPage() {
             >
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Template Name</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Template Name</label>
                   <input
                     type="text"
                     name="name"
@@ -409,7 +409,7 @@ export default function RCSATemplatesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
                   <textarea
                     name="description"
                     className="input w-full"
@@ -418,7 +418,7 @@ export default function RCSATemplatesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Category</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Category</label>
                   <select name="category" className="input w-full" required>
                     <option value="">Select category</option>
                     <option value="Cybersecurity">Cybersecurity</option>
@@ -429,7 +429,7 @@ export default function RCSATemplatesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Framework Type</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Framework Type</label>
                   <input
                     type="text"
                     name="framework_type"

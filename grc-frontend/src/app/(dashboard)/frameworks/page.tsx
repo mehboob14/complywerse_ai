@@ -229,7 +229,7 @@ export default function FrameworksPage() {
       case 'parsing':
         return { 
           label: 'Parsing Controls', 
-          color: 'bg-purple-500/20 text-purple-400',
+          color: 'bg-primary-500/20 text-primary-600',
           icon: Sparkles,
           description: 'AI is extracting controls and requirements'
         };
@@ -335,13 +335,13 @@ export default function FrameworksPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Compliance Frameworks</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Compliance Frameworks</h1>
           <p className="text-slate-400">Manage frameworks and track certification journeys</p>
         </div>
         <div className="flex items-center gap-3">
           <Link 
             href="/framework-upload"
-            className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 transition-colors"
           >
             <Upload className="h-4 w-4" />
             Upload Framework
@@ -351,8 +351,8 @@ export default function FrameworksPage() {
 
       {processingFrameworks.length > 0 && (
         <section>
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
-            <RefreshCw className={`h-5 w-5 text-purple-400 ${isFetching ? 'animate-spin' : ''}`} />
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
+            <RefreshCw className={`h-5 w-5 text-primary-600 ${isFetching ? 'animate-spin' : ''}`} />
             Processing Frameworks
             <span className="ml-2 text-sm font-normal text-slate-400">
               Auto-refreshing every 3s
@@ -380,14 +380,14 @@ export default function FrameworksPage() {
               return (
                 <div 
                   key={framework.id} 
-                  className="card border-purple-500/30 bg-gradient-to-br from-slate-800 to-slate-800/50"
+                  className="card border-primary-500/30 bg-gradient-to-br from-slate-800 to-slate-800/50"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-purple-500/20 p-2">
-                      <Sparkles className="h-6 w-6 text-purple-400 animate-pulse" />
+                    <div className="rounded-lg bg-primary-500/20 p-2">
+                      <Sparkles className="h-6 w-6 text-primary-600 animate-pulse" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-white truncate">{framework.name}</h3>
+                      <h3 className="font-semibold text-slate-800 truncate">{framework.name}</h3>
                       <p className="text-sm text-slate-400">v{framework.version}</p>
                     </div>
                   </div>
@@ -410,7 +410,7 @@ export default function FrameworksPage() {
                         <div className="flex justify-between text-xs text-slate-400">
                           <span>AI parsing in progress...</span>
                         </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
+                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
                           <div className="h-full w-full rounded-full bg-gradient-to-r from-purple-500 to-blue-500 animate-pulse" />
                         </div>
                       </div>
@@ -424,7 +424,7 @@ export default function FrameworksPage() {
                     )}
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-700 pt-3">
+                  <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3">
                     <div className="flex items-center gap-1 text-xs text-slate-500">
                       <Clock className="h-3 w-3" />
                       Started: {new Date(framework.created_at).toLocaleTimeString()}
@@ -451,7 +451,7 @@ export default function FrameworksPage() {
 
       {activeCertifications.length > 0 && (
         <section>
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
             <Target className="h-5 w-5 text-primary-400" />
             Active Certification Journeys
           </h2>
@@ -470,7 +470,7 @@ export default function FrameworksPage() {
                         <Shield className="h-5 w-5 text-primary-400" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-white">{cert.name}</h3>
+                        <h3 className="font-semibold text-slate-800">{cert.name}</h3>
                         <p className="text-sm text-slate-400">
                           {cert.framework?.name || 'Framework'}
                         </p>
@@ -497,9 +497,9 @@ export default function FrameworksPage() {
                   <div className="mt-4">
                     <div className="mb-2 flex items-center justify-between text-sm">
                       <span className="text-slate-400">Progress</span>
-                      <span className="font-medium text-white">{progress}%</span>
+                      <span className="font-medium text-slate-800">{progress}%</span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-700">
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-200">
                       <div
                         className={`h-full rounded-full transition-all ${getProgressColor(progress)}`}
                         style={{ width: `${progress}%` }}
@@ -507,7 +507,7 @@ export default function FrameworksPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-700 pt-4">
+                  <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-4">
                     <div className="flex items-center gap-4 text-xs text-slate-400">
                       <span className="flex items-center gap-1">
                         <CheckCircle2 className="h-3 w-3" />
@@ -535,7 +535,7 @@ export default function FrameworksPage() {
       )}
 
       <section>
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
           <FileStack className="h-5 w-5 text-slate-400" />
           Available Frameworks
         </h2>
@@ -544,14 +544,14 @@ export default function FrameworksPage() {
             return (
               <div 
                 key={framework.id} 
-                className="card group transition-all hover:border-slate-600"
+                className="card group transition-all hover:border-slate-300"
               >
                 <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-slate-700 p-2 transition-colors group-hover:bg-slate-600">
+                  <div className="rounded-lg bg-slate-200 p-2 transition-colors group-hover:bg-slate-600">
                     <FileStack className="h-6 w-6 text-primary-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-white truncate">{framework.name}</h3>
+                    <h3 className="font-semibold text-slate-800 truncate">{framework.name}</h3>
                     <p className="text-sm text-slate-400">v{framework.version}</p>
                   </div>
                 </div>
@@ -559,7 +559,7 @@ export default function FrameworksPage() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link
                     href={`/controls?framework=${framework.id}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
                   >
                     <Shield className="h-3 w-3" />
                     {framework.controls_count} controls
@@ -589,7 +589,7 @@ export default function FrameworksPage() {
                   </div>
                 )}
 
-                <div className="mt-4 border-t border-slate-700 pt-4 flex flex-col gap-2">
+                <div className="mt-4 border-t border-slate-200 pt-4 flex flex-col gap-2">
                   {(framework.classification === 'certification' || framework.classification === 'compliance') && (
                     <Link
                       href={`/frameworks/overview/${framework.id}`}
@@ -659,7 +659,7 @@ export default function FrameworksPage() {
                       enhanceMutation.mutate(framework.id);
                     }}
                     disabled={enhanceMutation.isPending && enhancingFrameworkId === framework.id}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-purple-500/20 px-3 py-2 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-500/20 px-3 py-2 text-primary-600 hover:bg-primary-500/30 transition-colors disabled:opacity-50"
                     title="Generate AI evidence recommendations for all controls"
                   >
                     {enhanceMutation.isPending && enhancingFrameworkId === framework.id ? (
@@ -683,11 +683,11 @@ export default function FrameworksPage() {
         {(!completedFrameworks || completedFrameworks.length === 0) && (
           <div className="card flex flex-col items-center justify-center py-12 text-center">
             <FileStack className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-white">No frameworks available</h3>
+            <h3 className="text-lg font-medium text-slate-800">No frameworks available</h3>
             <p className="mt-1 text-slate-400">Upload a compliance framework to get started with certification</p>
             <Link 
               href="/framework-upload"
-              className="mt-4 flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 transition-colors"
+              className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 transition-colors"
             >
               <Upload className="h-4 w-4" />
               Upload Framework
@@ -698,9 +698,9 @@ export default function FrameworksPage() {
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl bg-slate-800 p-6 shadow-xl border border-slate-700">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl border border-slate-200">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 Delete Framework
               </h3>
@@ -709,14 +709,14 @@ export default function FrameworksPage() {
                   setDeleteConfirm(null);
                   setDeleteError(null);
                 }}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             
-            <p className="text-slate-300 mb-2">
-              Are you sure you want to delete <span className="font-semibold text-white">{deleteConfirm.name}</span>?
+            <p className="text-slate-600 mb-2">
+              Are you sure you want to delete <span className="font-semibold text-slate-800">{deleteConfirm.name}</span>?
             </p>
             <p className="text-sm text-slate-400 mb-4">
               This will permanently remove the framework and all associated controls. This action cannot be undone.
@@ -734,7 +734,7 @@ export default function FrameworksPage() {
                   setDeleteConfirm(null);
                   setDeleteError(null);
                 }}
-                className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
+                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-600"
               >
                 Cancel
               </button>
@@ -762,9 +762,9 @@ export default function FrameworksPage() {
 
       {journeyDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl bg-slate-800 p-6 shadow-xl border border-slate-700">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl border border-slate-200">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 Delete Certification Journey
               </h3>
@@ -773,14 +773,14 @@ export default function FrameworksPage() {
                   setJourneyDeleteConfirm(null);
                   setJourneyDeleteError(null);
                 }}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             
-            <p className="text-slate-300 mb-2">
-              Are you sure you want to delete <span className="font-semibold text-white">{journeyDeleteConfirm.name}</span>?
+            <p className="text-slate-600 mb-2">
+              Are you sure you want to delete <span className="font-semibold text-slate-800">{journeyDeleteConfirm.name}</span>?
             </p>
             <p className="text-sm text-slate-400 mb-4">
               This will permanently remove the certification journey and all associated progress data, control implementations, and evidence attachments. This action cannot be undone.
@@ -798,7 +798,7 @@ export default function FrameworksPage() {
                   setJourneyDeleteConfirm(null);
                   setJourneyDeleteError(null);
                 }}
-                className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
+                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-600"
               >
                 Cancel
               </button>

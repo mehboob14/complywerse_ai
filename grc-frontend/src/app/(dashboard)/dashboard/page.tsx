@@ -176,7 +176,7 @@ function getActivityColor(type: string) {
     case 'incident':
       return 'text-red-400 bg-red-500/20';
     case 'document':
-      return 'text-purple-400 bg-purple-500/20';
+      return 'text-primary-600 bg-primary-500/20';
     default:
       return 'text-slate-400 bg-slate-500/20';
   }
@@ -225,24 +225,24 @@ export default function UnifiedGRCDashboard() {
     return (
       <div className="space-y-8 animate-pulse">
         <div className="page-header">
-          <div className="h-8 w-72 rounded bg-slate-700" />
-          <div className="h-5 w-96 rounded bg-slate-700 mt-2" />
+          <div className="h-8 w-72 rounded bg-slate-200" />
+          <div className="h-5 w-96 rounded bg-slate-200 mt-2" />
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-xl border border-slate-700 bg-slate-800 p-6">
-              <div className="h-20 w-20 rounded-full bg-slate-700 mx-auto mb-4" />
-              <div className="h-6 w-24 rounded bg-slate-700 mx-auto" />
+            <div key={i} className="rounded-xl border border-slate-200 bg-white p-6">
+              <div className="h-20 w-20 rounded-full bg-slate-200 mx-auto mb-4" />
+              <div className="h-6 w-24 rounded bg-slate-200 mx-auto" />
             </div>
           ))}
         </div>
         <div className="grid gap-6 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-xl border border-slate-700 bg-slate-800 p-6">
-              <div className="h-6 w-32 rounded bg-slate-700 mb-4" />
+            <div key={i} className="rounded-xl border border-slate-200 bg-white p-6">
+              <div className="h-6 w-32 rounded bg-slate-200 mb-4" />
               <div className="space-y-3">
                 {[1, 2, 3].map((j) => (
-                  <div key={j} className="h-12 rounded bg-slate-700" />
+                  <div key={j} className="h-12 rounded bg-slate-200" />
                 ))}
               </div>
             </div>
@@ -297,12 +297,12 @@ export default function UnifiedGRCDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-5 hover:border-primary-500/50 hover:shadow-[0_0_20px_-5px_rgba(59,130,246,0.3)] transition-all duration-300">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 hover:border-primary-500/50 hover:shadow-[0_0_20px_-5px_rgba(59,130,246,0.3)] transition-all duration-300">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm text-slate-400 mb-1">Overall Compliance</p>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-white">{data.executive_summary.overall_compliance_score}%</span>
+                <span className="text-3xl font-bold text-slate-800">{data.executive_summary.overall_compliance_score}%</span>
                 {data.executive_summary.trend === 'up' && (
                   <span className="flex items-center text-xs text-emerald-400">
                     <TrendingUp className="h-3 w-3 mr-0.5" />↑ improving
@@ -320,7 +320,7 @@ export default function UnifiedGRCDashboard() {
               <Shield className="h-6 w-6 text-primary-400" />
             </div>
           </div>
-          <div className="mt-4 h-2 rounded-full bg-slate-700 overflow-hidden">
+          <div className="mt-4 h-2 rounded-full bg-slate-200 overflow-hidden">
             <div
               className={`h-full transition-all duration-500 ${
                 data.executive_summary.overall_compliance_score >= 80 ? 'bg-emerald-500' :
@@ -332,7 +332,7 @@ export default function UnifiedGRCDashboard() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-5 hover:border-amber-500/50 hover:shadow-[0_0_20px_-5px_rgba(245,158,11,0.3)] transition-all duration-300">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 hover:border-amber-500/50 hover:shadow-[0_0_20px_-5px_rgba(245,158,11,0.3)] transition-all duration-300">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm text-slate-400 mb-1">Risk Score</p>
@@ -367,11 +367,11 @@ export default function UnifiedGRCDashboard() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-5 hover:border-red-500/50 hover:shadow-[0_0_20px_-5px_rgba(239,68,68,0.3)] transition-all duration-300">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 hover:border-red-500/50 hover:shadow-[0_0_20px_-5px_rgba(239,68,68,0.3)] transition-all duration-300">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm text-slate-400 mb-1">Open Issues</p>
-              <p className="text-3xl font-bold text-white">{data.risk.incidents_open}</p>
+              <p className="text-3xl font-bold text-slate-800">{data.risk.incidents_open}</p>
               <p className="text-xs text-slate-500 mt-1">
                 {data.risk.mitigations_overdue > 0 ? (
                   <span className="text-red-400">{data.risk.mitigations_overdue} overdue mitigations</span>
@@ -386,11 +386,11 @@ export default function UnifiedGRCDashboard() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-5 hover:border-purple-500/50 hover:shadow-[0_0_20px_-5px_rgba(168,85,247,0.3)] transition-all duration-300">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 hover:border-primary-500/50 hover:shadow-[0_0_20px_-5px_rgba(168,85,247,0.3)] transition-all duration-300">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm text-slate-400 mb-1">Pending Actions</p>
-              <p className="text-3xl font-bold text-white">{data.governance.pending_approvals}</p>
+              <p className="text-3xl font-bold text-slate-800">{data.governance.pending_approvals}</p>
               <p className="text-xs text-slate-500 mt-1">
                 {data.attestations.active_campaigns > 0 ? (
                   <span>{data.attestations.active_campaigns} active campaigns</span>
@@ -400,13 +400,13 @@ export default function UnifiedGRCDashboard() {
               </p>
             </div>
             <div className="rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-3">
-              <ClipboardCheck className="h-6 w-6 text-purple-400" />
+              <ClipboardCheck className="h-6 w-6 text-primary-600" />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="border-b border-slate-700">
+      <div className="border-b border-slate-200">
         <nav className="flex gap-1" aria-label="Dashboard tabs">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -419,7 +419,7 @@ export default function UnifiedGRCDashboard() {
                   border-b-2 -mb-px
                   ${activeTab === tab.id
                     ? 'border-primary-500 text-primary-400 bg-primary-500/5'
-                    : 'border-transparent text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
+                    : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-white/50'
                   }
                 `}
               >
@@ -438,37 +438,37 @@ export default function UnifiedGRCDashboard() {
               <AIInsightsPanel />
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
                 <div className="rounded-lg bg-emerald-500/20 p-2">
                   <BarChart3 className="h-4 w-4 text-emerald-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Quick Stats</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Quick Stats</h3>
               </div>
               <div className="p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Total Documents</span>
-                  <span className="text-lg font-semibold text-white">{data.governance.total_documents}</span>
+                  <span className="text-lg font-semibold text-slate-800">{data.governance.total_documents}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Expiring (30d)</span>
-                  <span className={`text-lg font-semibold ${data.governance.expiring_30_days > 0 ? 'text-amber-400' : 'text-white'}`}>
+                  <span className={`text-lg font-semibold ${data.governance.expiring_30_days > 0 ? 'text-amber-400' : 'text-slate-800'}`}>
                     {data.governance.expiring_30_days}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Evidence Items</span>
-                  <span className="text-lg font-semibold text-white">{data.compliance.evidence_items}</span>
+                  <span className="text-lg font-semibold text-slate-800">{data.compliance.evidence_items}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Controls Implemented</span>
-                  <span className="text-lg font-semibold text-white">
+                  <span className="text-lg font-semibold text-slate-800">
                     {data.compliance.controls_implemented}/{data.compliance.controls_total}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Regulatory Changes</span>
-                  <span className={`text-lg font-semibold ${data.regulatory_changes.high_impact > 0 ? 'text-red-400' : 'text-white'}`}>
+                  <span className={`text-lg font-semibold ${data.regulatory_changes.high_impact > 0 ? 'text-red-400' : 'text-slate-800'}`}>
                     {data.regulatory_changes.pending_review}
                     {data.regulatory_changes.high_impact > 0 && (
                       <span className="text-xs ml-1">({data.regulatory_changes.high_impact} high)</span>
@@ -480,13 +480,13 @@ export default function UnifiedGRCDashboard() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+            <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-blue-500/20 p-2">
                     <TrendingUp className="h-4 w-4 text-blue-400" />
                   </div>
-                  <h3 className="text-sm font-semibold text-white">Compliance Trend</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Compliance Trend</h3>
                 </div>
               </div>
               <div className="p-5">
@@ -504,13 +504,13 @@ export default function UnifiedGRCDashboard() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-cyan-500/20 p-2">
                     <Activity className="h-4 w-4 text-cyan-400" />
                   </div>
-                  <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Recent Activity</h3>
                 </div>
                 <Link href="/evidence" className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1">
                   View all <ChevronRight className="h-3 w-3" />
@@ -526,13 +526,13 @@ export default function UnifiedGRCDashboard() {
                         <Link
                           key={idx}
                           href={activity.link}
-                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-700/50 transition-colors group"
+                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors group"
                         >
                           <div className={`rounded-lg p-2 ${colorClass}`}>
                             <Icon className="h-4 w-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white truncate group-hover:text-primary-400 transition-colors">
+                            <p className="text-sm text-slate-800 truncate group-hover:text-primary-400 transition-colors">
                               {activity.title}
                             </p>
                             <p className="text-xs text-slate-500">
@@ -554,13 +554,13 @@ export default function UnifiedGRCDashboard() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-amber-500/20 p-2">
                     <Calendar className="h-4 w-4 text-amber-400" />
                   </div>
-                  <h3 className="text-sm font-semibold text-white">Upcoming Deadlines</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Upcoming Deadlines</h3>
                 </div>
               </div>
               <div className="p-4">
@@ -570,7 +570,7 @@ export default function UnifiedGRCDashboard() {
                       <Link
                         key={idx}
                         href={deadline.link}
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-700/50 transition-colors group"
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors group"
                       >
                         <div className={`rounded-lg px-2 py-1 text-xs font-medium border ${getUrgencyColor(deadline.urgency)}`}>
                           {deadline.days_remaining < 0
@@ -580,7 +580,7 @@ export default function UnifiedGRCDashboard() {
                             : `${deadline.days_remaining}d`}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white truncate group-hover:text-primary-400 transition-colors">
+                          <p className="text-sm text-slate-800 truncate group-hover:text-primary-400 transition-colors">
                             {deadline.title}
                           </p>
                           <p className="text-xs text-slate-500">
@@ -607,14 +607,14 @@ export default function UnifiedGRCDashboard() {
               data.compliance.framework_coverage.slice(0, 3).map((framework) => (
                 <div
                   key={framework.framework_id}
-                  className="rounded-xl border border-slate-700 bg-slate-800 p-5 hover:border-slate-600 transition-colors"
+                  className="rounded-xl border border-slate-200 bg-white p-5 hover:border-slate-300 transition-colors"
                 >
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary-500/20 text-primary-400">
                         {framework.short_code}
                       </span>
-                      <span className="text-sm font-medium text-white truncate max-w-[150px]" title={framework.name}>
+                      <span className="text-sm font-medium text-slate-800 truncate max-w-[150px]" title={framework.name}>
                         {framework.name}
                       </span>
                     </div>
@@ -637,7 +637,7 @@ export default function UnifiedGRCDashboard() {
                 </div>
               ))
             ) : (
-              <div className="lg:col-span-3 rounded-xl border border-slate-700 bg-slate-800 p-8">
+              <div className="lg:col-span-3 rounded-xl border border-slate-200 bg-white p-8">
                 <ChartEmptyState
                   title="No frameworks tracked yet"
                   description="Upload compliance frameworks to begin tracking coverage and maturity"
@@ -662,7 +662,7 @@ export default function UnifiedGRCDashboard() {
               title="Pending Approvals"
               value={data.governance.pending_approvals}
               subtitle={data.governance.pending_approvals > 0 ? 'Requires attention' : 'All clear'}
-              icon={<ClipboardCheck className="h-5 w-5 text-purple-400" />}
+              icon={<ClipboardCheck className="h-5 w-5 text-primary-600" />}
               color="purple"
             />
             <KPICard
@@ -682,12 +682,12 @@ export default function UnifiedGRCDashboard() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
                 <div className="rounded-lg bg-blue-500/20 p-2">
                   <BarChart3 className="h-4 w-4 text-blue-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Document Status</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Document Status</h3>
               </div>
               <div className="p-5">
                 {Object.keys(data.governance.by_status).length > 0 ? (
@@ -702,13 +702,13 @@ export default function UnifiedGRCDashboard() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-emerald-500/20 p-2">
                     <BookOpen className="h-4 w-4 text-emerald-400" />
                   </div>
-                  <h3 className="text-sm font-semibold text-white">Recent Publications</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Recent Publications</h3>
                 </div>
                 <Link href="/governance/documents" className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1">
                   View all <ChevronRight className="h-3 w-3" />
@@ -721,13 +721,13 @@ export default function UnifiedGRCDashboard() {
                       <Link
                         key={pub.id}
                         href={`/governance/documents`}
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-700/50 transition-colors group"
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors group"
                       >
                         <div className="rounded-lg bg-emerald-500/20 p-2">
                           <CheckCircle className="h-4 w-4 text-emerald-400" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white truncate group-hover:text-primary-400 transition-colors">
+                          <p className="text-sm text-slate-800 truncate group-hover:text-primary-400 transition-colors">
                             {pub.title}
                           </p>
                           <p className="text-xs text-slate-500">
@@ -749,21 +749,21 @@ export default function UnifiedGRCDashboard() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
                 <div className="rounded-lg bg-cyan-500/20 p-2">
                   <Users className="h-4 w-4 text-cyan-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Attestation Campaigns</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Attestation Campaigns</h3>
               </div>
               <div className="p-5">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-4 text-center">
-                    <p className="text-2xl font-bold text-white">{data.attestations.active_campaigns}</p>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-center">
+                    <p className="text-2xl font-bold text-slate-800">{data.attestations.active_campaigns}</p>
                     <p className="text-xs text-slate-400 mt-1">Active Campaigns</p>
                   </div>
-                  <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-4 text-center">
-                    <p className={`text-2xl font-bold ${data.attestations.overdue > 0 ? 'text-red-400' : 'text-white'}`}>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-center">
+                    <p className={`text-2xl font-bold ${data.attestations.overdue > 0 ? 'text-red-400' : 'text-slate-800'}`}>
                       {data.attestations.overdue}
                     </p>
                     <p className="text-xs text-slate-400 mt-1">Overdue Responses</p>
@@ -781,17 +781,17 @@ export default function UnifiedGRCDashboard() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
                 <div className="rounded-lg bg-amber-500/20 p-2">
                   <Scale className="h-4 w-4 text-amber-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Regulatory Changes</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Regulatory Changes</h3>
               </div>
               <div className="p-5">
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="text-center">
-                    <p className="text-xl font-bold text-white">{data.regulatory_changes.total_changes}</p>
+                    <p className="text-xl font-bold text-slate-800">{data.regulatory_changes.total_changes}</p>
                     <p className="text-xs text-slate-400">Total</p>
                   </div>
                   <div className="text-center">
@@ -799,7 +799,7 @@ export default function UnifiedGRCDashboard() {
                     <p className="text-xs text-slate-400">Pending</p>
                   </div>
                   <div className="text-center">
-                    <p className={`text-xl font-bold ${data.regulatory_changes.high_impact > 0 ? 'text-red-400' : 'text-white'}`}>
+                    <p className={`text-xl font-bold ${data.regulatory_changes.high_impact > 0 ? 'text-red-400' : 'text-slate-800'}`}>
                       {data.regulatory_changes.high_impact}
                     </p>
                     <p className="text-xs text-slate-400">High Impact</p>
@@ -808,8 +808,8 @@ export default function UnifiedGRCDashboard() {
                 {data.regulatory_changes.recent.length > 0 ? (
                   <div className="space-y-2">
                     {data.regulatory_changes.recent.slice(0, 3).map((change: any) => (
-                      <div key={change.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/50">
-                        <span className="text-sm text-slate-300 truncate flex-1">{change.title}</span>
+                      <div key={change.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50/50">
+                        <span className="text-sm text-slate-600 truncate flex-1">{change.title}</span>
                         <span className={`text-xs px-2 py-0.5 rounded ${
                           change.impact_level === 'high' || change.impact_level === 'critical'
                             ? 'bg-red-500/20 text-red-400'
@@ -857,19 +857,19 @@ export default function UnifiedGRCDashboard() {
               title="Overdue Mitigations"
               value={data.risk.mitigations_overdue}
               subtitle={data.risk.mitigations_overdue > 0 ? 'Requires action' : 'On track'}
-              icon={<Clock className="h-5 w-5 text-purple-400" />}
+              icon={<Clock className="h-5 w-5 text-primary-600" />}
               color="purple"
             />
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-red-500/20 p-2">
                     <Target className="h-4 w-4 text-red-400" />
                   </div>
-                  <h3 className="text-sm font-semibold text-white">Risk Heatmap</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Risk Heatmap</h3>
                 </div>
                 <Link href="/erm/risks" className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1">
                   View all <ChevronRight className="h-3 w-3" />
@@ -880,12 +880,12 @@ export default function UnifiedGRCDashboard() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
                 <div className="rounded-lg bg-amber-500/20 p-2">
                   <Layers className="h-4 w-4 text-amber-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Risk by Category</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Risk by Category</h3>
               </div>
               <div className="p-5">
                 {Object.keys(data.risk.by_category).length > 0 ? (
@@ -896,10 +896,10 @@ export default function UnifiedGRCDashboard() {
                       return (
                         <div key={category}>
                           <div className="flex justify-between items-center text-sm mb-1">
-                            <span className="text-slate-300 capitalize">{category.replace(/_/g, ' ')}</span>
+                            <span className="text-slate-600 capitalize">{category.replace(/_/g, ' ')}</span>
                             <span className="text-slate-400">{count} ({percentage}%)</span>
                           </div>
-                          <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
+                          <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
                             <div
                               className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-300"
                               style={{ width: `${percentage}%` }}
@@ -920,13 +920,13 @@ export default function UnifiedGRCDashboard() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-blue-500/20 p-2">
                   <TrendingUp className="h-4 w-4 text-blue-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Risk Trend</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Risk Trend</h3>
               </div>
             </div>
             <div className="p-5">
@@ -984,7 +984,7 @@ export default function UnifiedGRCDashboard() {
               subtitle={data.compliance.controls_total > 0 
                 ? `${Math.round((data.compliance.controls_implemented / data.compliance.controls_total) * 100)}% complete`
                 : 'No controls yet'}
-              icon={<CheckCircle className="h-5 w-5 text-purple-400" />}
+              icon={<CheckCircle className="h-5 w-5 text-primary-600" />}
               color="purple"
             />
             <KPICard
@@ -995,13 +995,13 @@ export default function UnifiedGRCDashboard() {
             />
           </div>
 
-          <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-primary-500/20 p-2">
                   <Shield className="h-4 w-4 text-primary-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Framework Coverage</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Framework Coverage</h3>
               </div>
               <Link href="/frameworks" className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1">
                 View all <ChevronRight className="h-3 w-3" />
@@ -1013,7 +1013,7 @@ export default function UnifiedGRCDashboard() {
                   {data.compliance.framework_coverage.map((framework) => (
                     <div
                       key={framework.framework_id}
-                      className="rounded-lg border border-slate-700 bg-slate-900/50 p-4 hover:border-slate-600 transition-colors"
+                      className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 hover:border-slate-300 transition-colors"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -1029,7 +1029,7 @@ export default function UnifiedGRCDashboard() {
                           {framework.status}
                         </span>
                       </div>
-                      <p className="text-sm font-medium text-white mb-3 truncate" title={framework.name}>
+                      <p className="text-sm font-medium text-slate-800 mb-3 truncate" title={framework.name}>
                         {framework.name}
                       </p>
                       <div className="relative pt-1">
@@ -1044,7 +1044,7 @@ export default function UnifiedGRCDashboard() {
                             {framework.score}%
                           </span>
                         </div>
-                        <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
+                        <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
                           <div
                             className={`h-full transition-all duration-500 ${
                               framework.score >= 80 ? 'bg-emerald-500' :
@@ -1068,12 +1068,12 @@ export default function UnifiedGRCDashboard() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
                 <div className="rounded-lg bg-emerald-500/20 p-2">
                   <Eye className="h-4 w-4 text-emerald-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Compliance Maturity</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Compliance Maturity</h3>
               </div>
               <div className="p-5 flex justify-center">
                 {data.compliance.framework_coverage.length > 0 ? (
@@ -1094,12 +1094,12 @@ export default function UnifiedGRCDashboard() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-slate-700 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
                 <div className="rounded-lg bg-blue-500/20 p-2">
                   <TrendingUp className="h-4 w-4 text-blue-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Evidence Upload Trend</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Evidence Upload Trend</h3>
               </div>
               <div className="p-5">
                 {trendLabels.length > 0 ? (

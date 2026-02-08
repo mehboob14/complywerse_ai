@@ -70,29 +70,29 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
-        <p className="mb-4 text-sm text-slate-300">
+        <p className="mb-4 text-sm text-slate-600">
           {actionType === 'approve'
             ? `You are about to approve the assessment for "${assessmentName}".`
             : `You are about to reject the assessment for "${assessmentName}". Please provide a reason.`}
         </p>
 
         <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-slate-300">
+          <label className="mb-1 block text-sm font-medium text-slate-600">
             Comments {actionType === 'reject' && <span className="text-red-400">*</span>}
           </label>
           <textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}
             placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
-            className="h-24 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="h-24 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
           {actionType === 'reject' && !comments.trim() && (
             <p className="mt-1 text-xs text-red-400">Comments are required when rejecting</p>
@@ -103,14 +103,14 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="rounded-lg border border-slate-600 px-4 py-2 font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+            className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={isLoading || (actionType === 'reject' && !comments.trim())}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-white disabled:opacity-50 ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-slate-800 disabled:opacity-50 ${
               actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
             }`}
           >
@@ -228,7 +228,7 @@ export default function RCSAApprovalsPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-white">RCSA Approvals</h1>
+            <h1 className="text-2xl font-semibold text-slate-800">RCSA Approvals</h1>
             <p className="text-slate-400 mt-1">Review and approve submitted risk assessments</p>
           </div>
         </div>
@@ -266,7 +266,7 @@ export default function RCSAApprovalsPage() {
                   <Clock className="h-6 w-6 text-primary-400" />
                 </div>
                 <div>
-                  <h3 className="text-white font-medium">{approval.campaign_name}</h3>
+                  <h3 className="text-slate-800 font-medium">{approval.campaign_name}</h3>
                   <div className="flex items-center gap-4 text-sm text-slate-400 mt-1">
                     <span className="flex items-center gap-1">
                       <Building2 className="h-3.5 w-3.5" />
@@ -287,7 +287,7 @@ export default function RCSAApprovalsPage() {
               <div className="flex items-center gap-6">
                 <div className="text-center">
                   <p className="text-xs text-slate-400">Approval Tier</p>
-                  <p className="text-white font-medium">{approval.current_tier} of {approval.total_tiers}</p>
+                  <p className="text-slate-800 font-medium">{approval.current_tier} of {approval.total_tiers}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-xs text-slate-400">Score</p>
@@ -313,7 +313,7 @@ export default function RCSAApprovalsPage() {
                 <div className="flex items-center gap-2">
                   <Link
                     href={`/risks/rcsa/approvals/${approval.id}`}
-                    className="p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white"
+                    className="p-2 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-600 hover:text-slate-900"
                     title="Review Details"
                   >
                     <Eye className="h-4 w-4" />
@@ -342,7 +342,7 @@ export default function RCSAApprovalsPage() {
       {filteredApprovals.length === 0 && (
         <div className="card p-12 text-center">
           <CheckCircle className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-white mb-2">No Pending Approvals</h3>
+          <h3 className="text-lg font-medium text-slate-800 mb-2">No Pending Approvals</h3>
           <p className="text-slate-400">
             {searchTerm || campaignFilter
               ? 'No approvals match your filters'

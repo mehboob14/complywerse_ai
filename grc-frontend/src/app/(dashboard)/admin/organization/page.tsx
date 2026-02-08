@@ -45,7 +45,7 @@ export default function OrganizationProfilePage() {
         fetchProfile();
       } else {
         setLoading(false);
-        setError('No organization context found. Please log out and log in with your organization credentials.');
+        setError('No company context found. Please log out and log in with your company credentials.');
       }
     };
     init();
@@ -58,7 +58,7 @@ export default function OrganizationProfilePage() {
       setProfile(response.data);
       setFormData(response.data);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load organization profile');
+      setError(err.response?.data?.detail || 'Failed to load company profile');
     } finally {
       setLoading(false);
     }
@@ -69,7 +69,7 @@ export default function OrganizationProfilePage() {
       setSaving(true);
       setError(null);
       await adminApi.updateOrganization(formData);
-      setSuccess('Organization profile updated successfully');
+      setSuccess('Company profile updated successfully');
       setEditing(false);
       fetchProfile();
     } catch (err: any) {
@@ -86,7 +86,7 @@ export default function OrganizationProfilePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
       </div>
     );
   }
@@ -94,29 +94,29 @@ export default function OrganizationProfilePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Organization Profile"
-        subtitle="View and manage your organization settings"
+        title="Company Profile"
+        subtitle="View and manage your company settings"
       />
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-red-400">
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4 text-green-400">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-emerald-700">
           {success}
         </div>
       )}
 
-      <div className="bg-slate-800 border border-slate-700 rounded-lg">
-        <div className="p-6 border-b border-slate-700 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Organization Details</h2>
+      <div className="bg-white border border-slate-200 rounded-xl shadow-card">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-800">Company Details</h2>
           {!editing ? (
             <button
               onClick={() => setEditing(true)}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors"
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors"
             >
               Edit Profile
             </button>
@@ -127,14 +127,14 @@ export default function OrganizationProfilePage() {
                   setEditing(false);
                   setFormData(profile || {});
                 }}
-                className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm transition-colors"
+                className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-sm transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>
@@ -145,23 +145,23 @@ export default function OrganizationProfilePage() {
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">
-                Organization Name
+              <label className="block text-sm font-medium text-slate-500 mb-2">
+                Company Name
               </label>
               {editing ? (
                 <input
                   type="text"
                   value={formData.name || ''}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-white">{profile?.name || '-'}</p>
+                <p className="text-slate-800">{profile?.name || '-'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">
+              <label className="block text-sm font-medium text-slate-500 mb-2">
                 Legal Entity
               </label>
               {editing ? (
@@ -169,22 +169,22 @@ export default function OrganizationProfilePage() {
                   type="text"
                   value={formData.legal_entity || ''}
                   onChange={(e) => handleChange('legal_entity', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-white">{profile?.legal_entity || '-'}</p>
+                <p className="text-slate-800">{profile?.legal_entity || '-'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">
+              <label className="block text-sm font-medium text-slate-500 mb-2">
                 Industry
               </label>
               {editing ? (
                 <select
                   value={formData.industry || ''}
                   onChange={(e) => handleChange('industry', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="">Select Industry</option>
                   <option value="Banking">Banking</option>
@@ -197,19 +197,19 @@ export default function OrganizationProfilePage() {
                   <option value="Other">Other</option>
                 </select>
               ) : (
-                <p className="text-white">{profile?.industry || '-'}</p>
+                <p className="text-slate-800">{profile?.industry || '-'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">
+              <label className="block text-sm font-medium text-slate-500 mb-2">
                 Company Size
               </label>
               {editing ? (
                 <select
                   value={formData.company_size || ''}
                   onChange={(e) => handleChange('company_size', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="">Select Size</option>
                   <option value="1-50">1-50 employees</option>
@@ -219,12 +219,12 @@ export default function OrganizationProfilePage() {
                   <option value="1000+">1000+ employees</option>
                 </select>
               ) : (
-                <p className="text-white">{profile?.company_size || '-'}</p>
+                <p className="text-slate-800">{profile?.company_size || '-'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">
+              <label className="block text-sm font-medium text-slate-500 mb-2">
                 Geography
               </label>
               {editing ? (
@@ -232,15 +232,15 @@ export default function OrganizationProfilePage() {
                   type="text"
                   value={formData.geography || ''}
                   onChange={(e) => handleChange('geography', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-white">{profile?.geography || '-'}</p>
+                <p className="text-slate-800">{profile?.geography || '-'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">
+              <label className="block text-sm font-medium text-slate-500 mb-2">
                 Regulatory Scope
               </label>
               {editing ? (
@@ -248,15 +248,15 @@ export default function OrganizationProfilePage() {
                   type="text"
                   value={formData.regulatory_scope || ''}
                   onChange={(e) => handleChange('regulatory_scope', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-white">{profile?.regulatory_scope || '-'}</p>
+                <p className="text-slate-800">{profile?.regulatory_scope || '-'}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">
+              <label className="block text-sm font-medium text-slate-500 mb-2">
                 Website
               </label>
               {editing ? (
@@ -264,19 +264,19 @@ export default function OrganizationProfilePage() {
                   type="url"
                   value={formData.website || ''}
                   onChange={(e) => handleChange('website', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-white">{profile?.website || '-'}</p>
+                <p className="text-slate-800">{profile?.website || '-'}</p>
               )}
             </div>
           </div>
 
-          <div className="border-t border-slate-700 pt-6">
-            <h3 className="text-md font-semibold text-white mb-4">Primary Contact</h3>
+          <div className="border-t border-slate-200 pt-6">
+            <h3 className="text-md font-semibold text-slate-800 mb-4">Primary Contact</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">
+                <label className="block text-sm font-medium text-slate-500 mb-2">
                   Contact Name
                 </label>
                 {editing ? (
@@ -284,15 +284,15 @@ export default function OrganizationProfilePage() {
                     type="text"
                     value={formData.primary_contact_name || ''}
                     onChange={(e) => handleChange('primary_contact_name', e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   />
                 ) : (
-                  <p className="text-white">{profile?.primary_contact_name || '-'}</p>
+                  <p className="text-slate-800">{profile?.primary_contact_name || '-'}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">
+                <label className="block text-sm font-medium text-slate-500 mb-2">
                   Contact Email
                 </label>
                 {editing ? (
@@ -300,15 +300,15 @@ export default function OrganizationProfilePage() {
                     type="email"
                     value={formData.primary_contact_email || ''}
                     onChange={(e) => handleChange('primary_contact_email', e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   />
                 ) : (
-                  <p className="text-white">{profile?.primary_contact_email || '-'}</p>
+                  <p className="text-slate-800">{profile?.primary_contact_email || '-'}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">
+                <label className="block text-sm font-medium text-slate-500 mb-2">
                   Contact Phone
                 </label>
                 {editing ? (
@@ -316,18 +316,18 @@ export default function OrganizationProfilePage() {
                     type="tel"
                     value={formData.primary_contact_phone || ''}
                     onChange={(e) => handleChange('primary_contact_phone', e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   />
                 ) : (
-                  <p className="text-white">{profile?.primary_contact_phone || '-'}</p>
+                  <p className="text-slate-800">{profile?.primary_contact_phone || '-'}</p>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="border-t border-slate-700 pt-6">
+          <div className="border-t border-slate-200 pt-6">
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">
+              <label className="block text-sm font-medium text-slate-500 mb-2">
                 Address
               </label>
               {editing ? (
@@ -335,10 +335,10 @@ export default function OrganizationProfilePage() {
                   value={formData.address || ''}
                   onChange={(e) => handleChange('address', e.target.value)}
                   rows={3}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
               ) : (
-                <p className="text-white">{profile?.address || '-'}</p>
+                <p className="text-slate-800">{profile?.address || '-'}</p>
               )}
             </div>
           </div>

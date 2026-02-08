@@ -231,7 +231,7 @@ export default function AttestationsPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-white">Attestations & Certifications</h1>
+            <h1 className="text-2xl font-semibold text-slate-800">Attestations & Certifications</h1>
             <p className="text-slate-400 mt-1">Manage attestation campaigns and track compliance certifications</p>
           </div>
           <div className="flex items-center gap-3">
@@ -254,7 +254,7 @@ export default function AttestationsPage() {
               <ClipboardCheck className="h-6 w-6 text-primary-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.total_campaigns || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.total_campaigns || 0}</p>
               <p className="text-sm text-slate-400">Total Campaigns</p>
             </div>
           </div>
@@ -266,7 +266,7 @@ export default function AttestationsPage() {
               <Clock className="h-6 w-6 text-amber-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.pending_attestations || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.pending_attestations || 0}</p>
               <p className="text-sm text-slate-400">Pending Attestations</p>
             </div>
           </div>
@@ -278,7 +278,7 @@ export default function AttestationsPage() {
               <AlertTriangle className="h-6 w-6 text-rose-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.overdue_attestations || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.overdue_attestations || 0}</p>
               <p className="text-sm text-slate-400">Overdue</p>
             </div>
           </div>
@@ -290,7 +290,7 @@ export default function AttestationsPage() {
               <TrendingUp className="h-6 w-6 text-emerald-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.completion_rate || 0}%</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.completion_rate || 0}%</p>
               <p className="text-sm text-slate-400">Completion Rate</p>
             </div>
           </div>
@@ -300,7 +300,7 @@ export default function AttestationsPage() {
       {pendingAttestations.length > 0 && (
         <div className="card p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-white flex items-center gap-2">
+            <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-amber-400" />
               My Pending Attestations
             </h3>
@@ -313,11 +313,11 @@ export default function AttestationsPage() {
               const isOverdue = attestation.status === 'overdue';
 
               return (
-                <div key={attestation.id} className={`p-4 rounded-lg border ${isOverdue ? 'bg-rose-500/5 border-rose-500/30' : 'bg-slate-800/50 border-slate-700'}`}>
+                <div key={attestation.id} className={`p-4 rounded-lg border ${isOverdue ? 'bg-rose-500/5 border-rose-500/30' : 'bg-white/50 border-slate-200'}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h4 className="text-white font-medium">{attestation.campaign_name}</h4>
+                        <h4 className="text-slate-800 font-medium">{attestation.campaign_name}</h4>
                         <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
                           <StatusIcon className="h-3 w-3" />
                           {attestation.status}
@@ -350,7 +350,7 @@ export default function AttestationsPage() {
       {completedAttestations.length > 0 && (
         <div className="card p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-white flex items-center gap-2">
+            <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-emerald-400" />
               Completed Attestations
             </h3>
@@ -360,7 +360,7 @@ export default function AttestationsPage() {
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                   showUnlinkedOnly 
                     ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30' 
-                    : 'bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600'
+                    : 'bg-slate-200 text-slate-600 border border-slate-300 hover:bg-slate-600'
                 }`}
               >
                 <Filter className="h-4 w-4" />
@@ -378,7 +378,7 @@ export default function AttestationsPage() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setSelectedAttestations([])}
-                  className="text-sm text-slate-400 hover:text-white px-3 py-1"
+                  className="text-sm text-slate-400 hover:text-slate-900 px-3 py-1"
                 >
                   Clear Selection
                 </button>
@@ -395,7 +395,7 @@ export default function AttestationsPage() {
           )}
 
           <div className="space-y-3">
-            <div className="flex items-center gap-3 px-4 py-2 text-sm text-slate-400 border-b border-slate-700">
+            <div className="flex items-center gap-3 px-4 py-2 text-sm text-slate-400 border-b border-slate-200">
               <input
                 type="checkbox"
                 checked={
@@ -405,7 +405,7 @@ export default function AttestationsPage() {
                     .every(a => selectedAttestations.includes(a.id))
                 }
                 onChange={handleSelectAllCompleted}
-                className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
                 disabled={filteredCompletedAttestations.filter(a => !a.linked_to_evidence).length === 0}
               />
               <span>Select All Unlinked</span>
@@ -415,18 +415,18 @@ export default function AttestationsPage() {
               const isLinked = attestation.linked_to_evidence;
 
               return (
-                <div key={attestation.id} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-slate-600 transition-colors">
+                <div key={attestation.id} className="p-4 rounded-lg bg-white/50 border border-slate-200 hover:border-slate-300 transition-colors">
                   <div className="flex items-center gap-4">
                     <input
                       type="checkbox"
                       checked={selectedAttestations.includes(attestation.id)}
                       onChange={() => handleSelectAttestation(attestation.id)}
                       disabled={isLinked}
-                      className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500 disabled:opacity-50"
+                      className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500 disabled:opacity-50"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-1">
-                        <h4 className="text-white font-medium">{attestation.campaign_name}</h4>
+                        <h4 className="text-slate-800 font-medium">{attestation.campaign_name}</h4>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 inline-flex items-center gap-1">
                           <CheckCircle className="h-3 w-3" />
                           completed
@@ -473,7 +473,7 @@ export default function AttestationsPage() {
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-white flex items-center gap-2">
+          <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
             <ClipboardCheck className="h-5 w-5 text-primary-400" />
             Recent Campaigns
           </h3>
@@ -485,7 +485,7 @@ export default function AttestationsPage() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-700">
+              <tr className="border-b border-slate-200">
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Campaign</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Type</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Status</th>
@@ -500,17 +500,17 @@ export default function AttestationsPage() {
                 const StatusIcon = statusStyle.icon;
 
                 return (
-                  <tr key={campaign.id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                  <tr key={campaign.id} className="border-b border-slate-200 hover:bg-white/50">
                     <td className="py-3 px-4">
                       <div>
-                        <p className="text-white font-medium">{campaign.name}</p>
+                        <p className="text-slate-800 font-medium">{campaign.name}</p>
                         {campaign.description && (
                           <p className="text-xs text-slate-500">{campaign.description}</p>
                         )}
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="text-slate-300 capitalize text-sm">{campaign.attestation_type.replace('_', ' ')}</span>
+                      <span className="text-slate-600 capitalize text-sm">{campaign.attestation_type.replace('_', ' ')}</span>
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
@@ -523,7 +523,7 @@ export default function AttestationsPage() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-20 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div className="w-20 h-2 bg-slate-200 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${campaign.progress === 100 ? 'bg-emerald-500' : 'bg-primary-500'}`}
                             style={{ width: `${campaign.progress}%` }}

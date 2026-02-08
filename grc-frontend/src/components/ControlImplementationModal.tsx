@@ -154,9 +154,9 @@ export default function ControlImplementationModal({
     <div className="fixed inset-0 z-50 overflow-hidden">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="absolute right-0 top-0 h-full w-full max-w-2xl overflow-hidden bg-slate-900 shadow-2xl">
+      <div className="absolute right-0 top-0 h-full w-full max-w-2xl overflow-hidden bg-slate-50 shadow-2xl">
         <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
+          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-primary-500/20 p-2">
                 <Shield className="h-5 w-5 text-primary-400" />
@@ -170,7 +170,7 @@ export default function ControlImplementationModal({
             </div>
             <button
               onClick={onClose}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             >
               <X className="h-5 w-5" />
             </button>
@@ -233,7 +233,7 @@ export default function ControlImplementationModal({
                   id="applicable"
                   checked={isApplicable}
                   onChange={(e) => setIsApplicable(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                  className="h-4 w-4 rounded border-slate-300 bg-slate-700 text-primary-500 focus:ring-primary-500"
                 />
                 <label htmlFor="applicable" className="text-sm text-slate-300">
                   This control is applicable to our organization
@@ -264,7 +264,7 @@ export default function ControlImplementationModal({
                   className={`mb-4 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
                     isDragging
                       ? 'border-primary-500 bg-primary-500/10'
-                      : 'border-slate-600 hover:border-slate-500'
+                      : 'border-slate-300 hover:border-slate-500'
                   }`}
                 >
                   {uploading ? (
@@ -303,7 +303,7 @@ export default function ControlImplementationModal({
                     {evidence.map((ev: ImplementationEvidence) => (
                       <div
                         key={ev.id}
-                        className="rounded-lg border border-slate-700 bg-slate-800 p-4"
+                        className="rounded-lg border border-slate-200 bg-white p-4"
                       >
                         <div className="flex items-start gap-3">
                           <div className="rounded-lg bg-slate-700 p-2">
@@ -328,7 +328,7 @@ export default function ControlImplementationModal({
                         </div>
 
                         {ev.ai_confidence_score !== undefined && (
-                          <div className="mt-3 rounded-lg bg-slate-900 p-3">
+                          <div className="mt-3 rounded-lg bg-slate-50 p-3">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <Sparkles className="h-4 w-4 text-primary-400" />
@@ -355,7 +355,7 @@ export default function ControlImplementationModal({
                         )}
 
                         {ev.review_status === 'pending' && (
-                          <div className="mt-3 flex items-center gap-2 border-t border-slate-700 pt-3">
+                          <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3">
                             <button
                               onClick={() => reviewEvidenceMutation.mutate({
                                 evidenceId: ev.id,
@@ -400,7 +400,7 @@ export default function ControlImplementationModal({
             </div>
           </div>
 
-          <div className="border-t border-slate-700 px-6 py-4">
+          <div className="border-t border-slate-200 px-6 py-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex gap-2">
                 {status !== 'implemented' && status !== 'verified' && (

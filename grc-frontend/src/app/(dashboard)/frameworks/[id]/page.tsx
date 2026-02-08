@@ -55,7 +55,7 @@ import {
 
 const EVIDENCE_TYPE_MAP: Record<string, { label: string; color: string }> = {
   policy: { label: 'Policy', color: 'bg-blue-500/20 text-blue-400' },
-  procedure: { label: 'Procedure', color: 'bg-purple-500/20 text-purple-400' },
+  procedure: { label: 'Procedure', color: 'bg-primary-500/20 text-primary-600' },
   screenshot: { label: 'Screenshot', color: 'bg-cyan-500/20 text-cyan-400' },
   audit: { label: 'Audit Log', color: 'bg-orange-500/20 text-orange-400' },
   log: { label: 'Log', color: 'bg-orange-500/20 text-orange-400' },
@@ -503,7 +503,7 @@ export default function CertificationJourneyPage() {
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-white">{percentage}%</span>
+          <span className="text-2xl font-bold text-slate-800">{percentage}%</span>
           <span className="text-xs text-slate-400">Ready</span>
         </div>
       </div>
@@ -514,7 +514,7 @@ export default function CertificationJourneyPage() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
         <div className="card">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
             <Clock className="h-5 w-5 text-primary-400" />
             Certification Timeline
           </h3>
@@ -529,20 +529,20 @@ export default function CertificationJourneyPage() {
               const isCompleted = journey.current_phase > phase.id;
               
               return (
-                <div key={phase.id} className="rounded-lg border border-slate-700 bg-slate-800/50">
+                <div key={phase.id} className="rounded-lg border border-slate-200 bg-white/50">
                   <button
                     onClick={() => togglePhase(phase.id)}
                     className="flex w-full items-center justify-between p-4 text-left"
                   >
                     <div className="flex items-center gap-3">
                       <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-                        isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-primary-500 text-white' : 'bg-slate-700 text-slate-400'
+                        isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-primary-500 text-white' : 'bg-slate-200 text-slate-500'
                       }`}>
                         {isCompleted ? <Check className="h-4 w-4" /> : phase.id}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className={`font-medium ${isCompleted ? 'text-green-400' : isCurrent ? 'text-white' : 'text-slate-400'}`}>
+                          <span className={`font-medium ${isCompleted ? 'text-green-400' : isCurrent ? 'text-slate-800' : 'text-slate-400'}`}>
                             {phase.name}
                           </span>
                           {isCurrent && (
@@ -561,9 +561,9 @@ export default function CertificationJourneyPage() {
                     )}
                   </button>
                   {isExpanded && (
-                    <div className="border-t border-slate-700 p-4">
+                    <div className="border-t border-slate-200 p-4">
                       <div className="mb-3">
-                        <h4 className="mb-2 text-sm font-medium text-slate-300">Key Tasks</h4>
+                        <h4 className="mb-2 text-sm font-medium text-slate-600">Key Tasks</h4>
                         <ul className="space-y-1">
                           {phase.tasks.map((task, idx) => (
                             <li key={idx} className="flex items-center gap-2 text-sm text-slate-400">
@@ -574,10 +574,10 @@ export default function CertificationJourneyPage() {
                         </ul>
                       </div>
                       <div>
-                        <h4 className="mb-2 text-sm font-medium text-slate-300">Deliverables</h4>
+                        <h4 className="mb-2 text-sm font-medium text-slate-600">Deliverables</h4>
                         <div className="flex flex-wrap gap-2">
                           {phase.deliverables.map((deliverable, idx) => (
-                            <span key={idx} className="rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-300">
+                            <span key={idx} className="rounded-full bg-slate-200 px-3 py-1 text-xs text-slate-600">
                               {deliverable}
                             </span>
                           ))}
@@ -594,22 +594,22 @@ export default function CertificationJourneyPage() {
 
       <div className="space-y-6">
         <div className="card">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
             <BarChart3 className="h-5 w-5 text-primary-400" />
             Key Metrics
           </h3>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-slate-400">SoA Controls Applicable</span>
-              <span className="font-semibold text-white">{progress?.implemented || 0}/{progress?.total_controls || 93}</span>
+              <span className="font-semibold text-slate-800">{progress?.implemented || 0}/{progress?.total_controls || 93}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Risks Assessed</span>
-              <span className="font-semibold text-white">24/28</span>
+              <span className="font-semibold text-slate-800">24/28</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Evidence Collected</span>
-              <span className="font-semibold text-white">156/189</span>
+              <span className="font-semibold text-slate-800">156/189</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Training Completion</span>
@@ -623,7 +623,7 @@ export default function CertificationJourneyPage() {
         </div>
 
         <div className="card">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
             <AlertTriangle className="h-5 w-5 text-orange-400" />
             Attention Required
           </h3>
@@ -645,7 +645,7 @@ export default function CertificationJourneyPage() {
   const renderPhasesTab = () => (
     <div className="card">
       <div className="mb-6 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Certification Phases</h3>
+        <h3 className="text-lg font-semibold text-slate-800">Certification Phases</h3>
         <span className="text-sm text-slate-400">
           Phase {journey.current_phase} of {phases.length || '...'}
         </span>
@@ -661,20 +661,20 @@ export default function CertificationJourneyPage() {
           const isCompleted = journey.current_phase > phase.id;
           
           return (
-            <div key={phase.id} className={`rounded-lg border ${isCurrent ? 'border-primary-500' : 'border-slate-700'} bg-slate-800/50`}>
+            <div key={phase.id} className={`rounded-lg border ${isCurrent ? 'border-primary-500' : 'border-slate-200'} bg-white/50`}>
               <button
                 onClick={() => togglePhase(phase.id)}
                 className="flex w-full items-center justify-between p-4 text-left"
               >
                 <div className="flex items-center gap-4">
                   <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${
-                    isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-primary-500 text-white' : 'bg-slate-700 text-slate-400'
+                    isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-primary-500 text-white' : 'bg-slate-200 text-slate-500'
                   }`}>
                     {isCompleted ? <Check className="h-5 w-5" /> : phase.id}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className={`text-lg font-medium ${isCompleted ? 'text-green-400' : isCurrent ? 'text-white' : 'text-slate-400'}`}>
+                      <span className={`text-lg font-medium ${isCompleted ? 'text-green-400' : isCurrent ? 'text-slate-800' : 'text-slate-400'}`}>
                         {phase.name}
                       </span>
                       {isCurrent && (
@@ -698,10 +698,10 @@ export default function CertificationJourneyPage() {
                 )}
               </button>
               {isExpanded && (
-                <div className="border-t border-slate-700 p-4">
+                <div className="border-t border-slate-200 p-4">
                   <div className="grid gap-6 md:grid-cols-2">
                     <div>
-                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
+                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-600">
                         <CheckCircle2 className="h-4 w-4" />
                         Key Tasks
                       </h4>
@@ -715,7 +715,7 @@ export default function CertificationJourneyPage() {
                       </ul>
                     </div>
                     <div>
-                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
+                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-600">
                         <FileText className="h-4 w-4" />
                         Deliverables
                       </h4>
@@ -745,7 +745,7 @@ export default function CertificationJourneyPage() {
             <MapPin className="h-5 w-5 text-blue-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">0</p>
+            <p className="text-2xl font-bold text-slate-800">0</p>
             <p className="text-xs text-slate-400">Locations</p>
           </div>
         </div>
@@ -754,16 +754,16 @@ export default function CertificationJourneyPage() {
             <XCircle className="h-5 w-5 text-orange-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">0</p>
+            <p className="text-2xl font-bold text-slate-800">0</p>
             <p className="text-xs text-slate-400">Exclusions</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-purple-500/20 p-2">
-            <Building2 className="h-5 w-5 text-purple-400" />
+          <div className="rounded-lg bg-primary-500/20 p-2">
+            <Building2 className="h-5 w-5 text-primary-600" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">0</p>
+            <p className="text-2xl font-bold text-slate-800">0</p>
             <p className="text-xs text-slate-400">Departments</p>
           </div>
         </div>
@@ -772,14 +772,14 @@ export default function CertificationJourneyPage() {
             <Percent className="h-5 w-5 text-green-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">0%</p>
+            <p className="text-2xl font-bold text-slate-800">0%</p>
             <p className="text-xs text-slate-400">Complete</p>
           </div>
         </div>
       </div>
 
       <div className="card">
-        <div className="mb-6 flex gap-4 border-b border-slate-700">
+        <div className="mb-6 flex gap-4 border-b border-slate-200">
           {(['definition', 'locations', 'exclusions', 'departments'] as ScopingSubTab[]).map((tab) => (
             <button
               key={tab}
@@ -787,7 +787,7 @@ export default function CertificationJourneyPage() {
               className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                 scopingSubTab === tab
                   ? 'border-primary-500 text-primary-400'
-                  : 'border-transparent text-slate-400 hover:text-white'
+                  : 'border-transparent text-slate-400 hover:text-slate-900'
               }`}
             >
               {tab === 'definition' ? 'Scope Definition' : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -835,7 +835,7 @@ export default function CertificationJourneyPage() {
         {scopingSubTab === 'locations' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <MapPin className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-white">No Locations Defined</h3>
+            <h3 className="text-lg font-medium text-slate-800">No Locations Defined</h3>
             <p className="mt-1 text-slate-400">Add locations that are in scope for certification</p>
             <button className="btn-primary mt-4 flex items-center gap-2">
               <Plus className="h-4 w-4" />
@@ -847,7 +847,7 @@ export default function CertificationJourneyPage() {
         {scopingSubTab === 'exclusions' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <XCircle className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-white">No Exclusions Defined</h3>
+            <h3 className="text-lg font-medium text-slate-800">No Exclusions Defined</h3>
             <p className="mt-1 text-slate-400">Document any scope exclusions with justifications</p>
             <button className="btn-primary mt-4 flex items-center gap-2">
               <Plus className="h-4 w-4" />
@@ -859,7 +859,7 @@ export default function CertificationJourneyPage() {
         {scopingSubTab === 'departments' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Building2 className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-white">No Departments Defined</h3>
+            <h3 className="text-lg font-medium text-slate-800">No Departments Defined</h3>
             <p className="mt-1 text-slate-400">Add departments that are in scope for certification</p>
             <button className="btn-primary mt-4 flex items-center gap-2">
               <Plus className="h-4 w-4" />
@@ -872,8 +872,8 @@ export default function CertificationJourneyPage() {
   );
 
   const renderSubControlsRecursive = (subControls: SubControlWithEvidence[], depth: number): JSX.Element => {
-    const borderColors = ['border-primary-500/30', 'border-cyan-500/30', 'border-purple-500/30'];
-    const bgColors = ['bg-slate-900/50', 'bg-slate-900/40', 'bg-slate-900/30'];
+    const borderColors = ['border-primary-500/30', 'border-cyan-500/30', 'border-primary-500/30'];
+    const bgColors = ['bg-slate-50/50', 'bg-slate-50/40', 'bg-slate-50/30'];
     const borderColor = borderColors[Math.min(depth, borderColors.length - 1)];
     const bgColor = bgColors[Math.min(depth, bgColors.length - 1)];
     
@@ -882,13 +882,13 @@ export default function CertificationJourneyPage() {
         {subControls.map((sub, idx) => (
           <div key={sub.id || idx} className={`rounded-lg ${bgColor} p-3`}>
             <div className="flex items-start gap-3">
-              <ChevronRight className={`h-4 w-4 mt-0.5 flex-shrink-0 ${depth === 0 ? 'text-primary-400' : depth === 1 ? 'text-cyan-400' : 'text-purple-400'}`} />
+              <ChevronRight className={`h-4 w-4 mt-0.5 flex-shrink-0 ${depth === 0 ? 'text-primary-400' : depth === 1 ? 'text-cyan-400' : 'text-primary-600'}`} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className={`font-mono text-xs ${depth === 0 ? 'text-primary-400' : depth === 1 ? 'text-cyan-400' : 'text-purple-400'}`}>{sub.code}</span>
-                  <span className="text-sm font-medium text-white">{sub.name}</span>
+                  <span className={`font-mono text-xs ${depth === 0 ? 'text-primary-400' : depth === 1 ? 'text-cyan-400' : 'text-primary-600'}`}>{sub.code}</span>
+                  <span className="text-sm font-medium text-slate-800">{sub.name}</span>
                   {depth > 0 && (
-                    <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-xs text-slate-500">Level {depth + 1}</span>
+                    <span className="rounded bg-slate-200/50 px-1.5 py-0.5 text-xs text-slate-500">Level {depth + 1}</span>
                   )}
                 </div>
                 {sub.description && (
@@ -897,7 +897,7 @@ export default function CertificationJourneyPage() {
                 {sub.evidence_requirements && sub.evidence_requirements.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {sub.evidence_requirements.slice(0, 4).map((ev, evIdx) => (
-                      <span key={evIdx} className="rounded bg-slate-700/50 px-1.5 py-0.5 text-xs text-slate-400">
+                      <span key={evIdx} className="rounded bg-slate-200/50 px-1.5 py-0.5 text-xs text-slate-400">
                         {ev.title}
                       </span>
                     ))}
@@ -933,7 +933,7 @@ export default function CertificationJourneyPage() {
     const status = statusConfig[control.status] || statusConfig.not_started;
     
     return (
-      <div key={control.id} className="rounded-lg border border-slate-700 bg-slate-800/50">
+      <div key={control.id} className="rounded-lg border border-slate-200 bg-white/50">
         <button
           onClick={() => toggleControl(control.id)}
           className="flex w-full items-center justify-between p-4 text-left"
@@ -947,13 +947,13 @@ export default function CertificationJourneyPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm text-primary-400">{control.control_code}</span>
-                <span className="font-medium text-white truncate">{control.control_name}</span>
+                <span className="font-medium text-slate-800 truncate">{control.control_name}</span>
               </div>
               <p className="text-sm text-slate-500 truncate mt-0.5">{control.control_statement}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-            <span className="rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300">{category}</span>
+            <span className="rounded-full bg-slate-200 px-2 py-1 text-xs text-slate-600">{category}</span>
             <span className={`rounded-full px-2 py-1 text-xs ${control.is_applicable ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/20 text-slate-400'}`}>
               {control.is_applicable ? 'Applicable' : 'N/A'}
             </span>
@@ -963,11 +963,11 @@ export default function CertificationJourneyPage() {
           </div>
         </button>
         {isExpanded && (
-          <div className="border-t border-slate-700 p-4">
+          <div className="border-t border-slate-200 p-4">
             {/* Sub-controls section - recursive hierarchy */}
             {control.sub_controls && control.sub_controls.length > 0 && (
               <div className="mb-6">
-                <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
+                <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
                   <Layers className="h-4 w-4 text-primary-400" />
                   Control Hierarchy ({control.sub_controls.length} sub-controls)
                 </h4>
@@ -979,7 +979,7 @@ export default function CertificationJourneyPage() {
               {/* Linked Evidence - Now appears FIRST (left column) */}
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
                     <Paperclip className="h-4 w-4 text-primary-400" />
                     Linked Evidence ({control.evidence_count})
                   </h4>
@@ -1026,11 +1026,11 @@ export default function CertificationJourneyPage() {
                       const isPendingReview = ev.review_status === 'pending';
                       
                       return (
-                        <div key={ev.id} className="rounded-lg bg-slate-900/50 p-3">
+                        <div key={ev.id} className="rounded-lg bg-slate-50/50 p-3">
                           <div className="flex items-center gap-3">
                             <Paperclip className="h-4 w-4 text-slate-400 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-white truncate">{ev.file_name || 'Evidence file'}</p>
+                              <p className="text-sm text-slate-800 truncate">{ev.file_name || 'Evidence file'}</p>
                               <p className="text-xs text-slate-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
@@ -1047,8 +1047,8 @@ export default function CertificationJourneyPage() {
                             </div>
                           </div>
                           {ev.ai_assessment_summary && (
-                            <div className="mt-2 ml-7 rounded bg-slate-800/50 p-2">
-                              <p className="text-xs text-slate-300">{ev.ai_assessment_summary}</p>
+                            <div className="mt-2 ml-7 rounded bg-white/50 p-2">
+                              <p className="text-xs text-slate-600">{ev.ai_assessment_summary}</p>
                             </div>
                           )}
                           {/* Action buttons row */}
@@ -1121,7 +1121,7 @@ export default function CertificationJourneyPage() {
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6 text-center">
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/30 p-6 text-center">
                     <Paperclip className="mx-auto h-8 w-8 text-slate-600 mb-2" />
                     <p className="text-sm text-slate-400">No evidence linked yet</p>
                     <p className="text-xs text-slate-500 mt-1">Upload evidence to comply</p>
@@ -1130,7 +1130,7 @@ export default function CertificationJourneyPage() {
               </div>
               {/* Required Evidence - Now appears SECOND (right column) */}
               <div>
-                <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
+                <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
                   <FileCheck className="h-4 w-4 text-slate-400" />
                   Required Evidence for {control.control_code}
                 </h4>
@@ -1140,7 +1140,7 @@ export default function CertificationJourneyPage() {
                       const evType = ev.type || 'document';
                       const typeColors: Record<string, string> = {
                         'policy': 'bg-blue-500/20 text-blue-400',
-                        'procedure': 'bg-purple-500/20 text-purple-400',
+                        'procedure': 'bg-primary-500/20 text-primary-600',
                         'log': 'bg-orange-500/20 text-orange-400',
                         'report': 'bg-pink-500/20 text-pink-400',
                         'screenshot': 'bg-cyan-500/20 text-cyan-400',
@@ -1156,11 +1156,11 @@ export default function CertificationJourneyPage() {
                       const typeLabel = evType.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                       
                       return (
-                        <div key={`${idx}`} className="rounded-lg bg-slate-900/50 p-3">
+                        <div key={`${idx}`} className="rounded-lg bg-slate-50/50 p-3">
                           <div className="flex items-start gap-3">
                             <Radio className="h-4 w-4 text-primary-400 mt-1 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-white">{ev.title}</p>
+                              <p className="text-sm font-medium text-slate-800">{ev.title}</p>
                               <p className="text-xs text-slate-400 mt-1">{ev.description}</p>
                               <div className="mt-2 flex flex-wrap items-center gap-2">
                                 <span className={`rounded px-1.5 py-0.5 text-xs ${typeColor}`}>
@@ -1169,7 +1169,7 @@ export default function CertificationJourneyPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className={`rounded px-2 py-1 text-xs ${ev.is_required !== false ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-400'}`}>
+                              <span className={`rounded px-2 py-1 text-xs ${ev.is_required !== false ? 'bg-red-500/20 text-red-400' : 'bg-slate-200 text-slate-500'}`}>
                                 {ev.is_required !== false ? 'Required' : 'Optional'}
                               </span>
                               {showUpload && (
@@ -1180,7 +1180,7 @@ export default function CertificationJourneyPage() {
                                     onChange={(e) => handleFileUpload(control.id, e)}
                                     disabled={uploadingControlId === control.id}
                                   />
-                                  <span className="flex items-center gap-1 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700">
+                                  <span className="flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-200">
                                     {uploadingControlId === control.id ? (
                                       <Loader2 className="h-3 w-3 animate-spin" />
                                     ) : (
@@ -1196,7 +1196,7 @@ export default function CertificationJourneyPage() {
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-lg bg-slate-900/50 p-4 text-center">
+                  <div className="rounded-lg bg-slate-50/50 p-4 text-center">
                     <p className="text-sm text-slate-400">No evidence requirements defined</p>
                   </div>
                 )}
@@ -1212,11 +1212,11 @@ export default function CertificationJourneyPage() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-slate-700 p-2">
+          <div className="rounded-lg bg-slate-200 p-2">
             <Layers className="h-5 w-5 text-slate-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">{controlStats.total}</p>
+            <p className="text-2xl font-bold text-slate-800">{controlStats.total}</p>
             <p className="text-xs text-slate-400">Total Controls</p>
           </div>
         </div>
@@ -1230,7 +1230,7 @@ export default function CertificationJourneyPage() {
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-slate-700 p-2">
+          <div className="rounded-lg bg-slate-200 p-2">
             <XCircle className="h-5 w-5 text-slate-400" />
           </div>
           <div>
@@ -1268,7 +1268,7 @@ export default function CertificationJourneyPage() {
       </div>
 
       <div className="card">
-        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-700 pb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-4">
           {([
             { key: 'all', label: 'All', count: controlStats.total },
             { key: 'organizational', label: 'Organizational', count: controlStats.byCategory.organizational },
@@ -1282,7 +1282,7 @@ export default function CertificationJourneyPage() {
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 categoryFilter === cat.key
                   ? 'bg-primary-500 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                  : 'bg-white text-slate-400 hover:bg-slate-200 hover:text-slate-900'
               }`}
             >
               {cat.label} ({cat.count})
@@ -1334,11 +1334,11 @@ export default function CertificationJourneyPage() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-slate-700 p-2">
+          <div className="rounded-lg bg-slate-200 p-2">
             <Layers className="h-5 w-5 text-slate-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">{controlStats.total}</p>
+            <p className="text-2xl font-bold text-slate-800">{controlStats.total}</p>
             <p className="text-xs text-slate-400">Total Controls</p>
           </div>
         </div>
@@ -1361,11 +1361,11 @@ export default function CertificationJourneyPage() {
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-purple-500/20 p-2">
-            <FileText className="h-5 w-5 text-purple-400" />
+          <div className="rounded-lg bg-primary-500/20 p-2">
+            <FileText className="h-5 w-5 text-primary-600" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-purple-400">{totalEvidence}</p>
+            <p className="text-2xl font-bold text-primary-600">{totalEvidence}</p>
             <p className="text-xs text-slate-400">Evidence Collected</p>
           </div>
         </div>
@@ -1374,9 +1374,9 @@ export default function CertificationJourneyPage() {
       <div className="card !p-4">
         <div className="mb-2 flex items-center justify-between text-sm">
           <span className="text-slate-400">Implementation Progress</span>
-          <span className="font-medium text-white">{completionPercentage}%</span>
+          <span className="font-medium text-slate-800">{completionPercentage}%</span>
         </div>
-        <div className="h-3 overflow-hidden rounded-full bg-slate-700">
+        <div className="h-3 overflow-hidden rounded-full bg-slate-200">
           <div
             className="h-full rounded-full bg-primary-500 transition-all"
             style={{ width: `${completionPercentage}%` }}
@@ -1385,7 +1385,7 @@ export default function CertificationJourneyPage() {
       </div>
 
       <div className="card">
-        <div className="mb-6 flex items-center justify-between border-b border-slate-700 pb-4">
+        <div className="mb-6 flex items-center justify-between border-b border-slate-200 pb-4">
           <div className="flex gap-4">
             {(['library', 'policies', 'evidence'] as ControlsSubTab[]).map((tab) => (
               <button
@@ -1394,7 +1394,7 @@ export default function CertificationJourneyPage() {
                 className={`text-sm font-medium transition-colors ${
                   controlsSubTab === tab
                     ? 'text-primary-400'
-                    : 'text-slate-400 hover:text-white'
+                    : 'text-slate-400 hover:text-slate-900'
                 }`}
               >
                 {tab === 'library' ? 'Control Library' : tab === 'policies' ? 'Policies & Procedures' : 'Evidence Management'}
@@ -1469,7 +1469,7 @@ export default function CertificationJourneyPage() {
         {controlsSubTab === 'policies' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <BookOpen className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-white">Policies & Procedures</h3>
+            <h3 className="text-lg font-medium text-slate-800">Policies & Procedures</h3>
             <p className="mt-1 text-slate-400">Manage policies and procedures documentation</p>
             <button className="btn-primary mt-4 flex items-center gap-2">
               <Upload className="h-4 w-4" />
@@ -1481,7 +1481,7 @@ export default function CertificationJourneyPage() {
         {controlsSubTab === 'evidence' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <FileText className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-white">Evidence Management</h3>
+            <h3 className="text-lg font-medium text-slate-800">Evidence Management</h3>
             <p className="mt-1 text-slate-400">Collect and manage implementation evidence</p>
             <button className="btn-primary mt-4 flex items-center gap-2">
               <Upload className="h-4 w-4" />
@@ -1496,10 +1496,10 @@ export default function CertificationJourneyPage() {
   const renderPlaceholderTab = (title: string, icon: React.ReactNode, description: string) => (
     <div className="card">
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-4 rounded-full bg-slate-800 p-4">
+        <div className="mb-4 rounded-full bg-white p-4">
           {icon}
         </div>
-        <h3 className="text-xl font-semibold text-white">{title}</h3>
+        <h3 className="text-xl font-semibold text-slate-800">{title}</h3>
         <p className="mt-2 max-w-md text-slate-400">{description}</p>
         <button className="btn-primary mt-6">
           Get Started
@@ -1568,12 +1568,12 @@ export default function CertificationJourneyPage() {
           <div className="flex items-center gap-4">
             <button 
               onClick={() => router.push('/frameworks')}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+              className="rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-900"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-white">{journey.name}</h1>
+              <h1 className="text-2xl font-bold text-slate-800">{journey.name}</h1>
               <p className="text-slate-400">{journey?.framework?.name || 'Framework'} certification lifecycle</p>
             </div>
           </div>
@@ -1581,7 +1581,7 @@ export default function CertificationJourneyPage() {
             <button
               onClick={() => journey?.framework_id && enhanceMutation.mutate(journey.framework_id)}
               disabled={enhanceMutation.isPending || !journey?.framework_id}
-              className="flex items-center gap-2 rounded-lg bg-purple-500/20 px-4 py-2 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary-500/20 px-4 py-2 text-primary-600 hover:bg-primary-500/30 transition-colors disabled:opacity-50"
               title="Generate AI evidence recommendations for all controls"
             >
               {enhanceMutation.isPending ? (
@@ -1629,7 +1629,7 @@ export default function CertificationJourneyPage() {
           <div className="card flex items-center justify-center !p-6">
             <CircularProgress percentage={completionPercentage} />
             <div className="ml-4">
-              <p className="text-lg font-semibold text-white">Certification Readiness</p>
+              <p className="text-lg font-semibold text-slate-800">Certification Readiness</p>
               <p className="text-sm text-slate-400">Overall progress</p>
             </div>
           </div>
@@ -1640,7 +1640,7 @@ export default function CertificationJourneyPage() {
               </div>
               <div>
                 <p className="text-sm text-slate-400">Current Phase</p>
-                <p className="text-lg font-semibold text-white">Phase {journey.current_phase}</p>
+                <p className="text-lg font-semibold text-slate-800">Phase {journey.current_phase}</p>
                 <p className="text-sm text-primary-400">{phases[journey.current_phase - 1]?.name || 'Loading...'}</p>
               </div>
             </div>
@@ -1652,8 +1652,8 @@ export default function CertificationJourneyPage() {
               </div>
               <div className="flex-1">
                 <p className="text-sm text-slate-400">Control Coverage</p>
-                <p className="text-lg font-semibold text-white">{progress?.implemented || 0}/{progress?.total_controls || 0}</p>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-700">
+                <p className="text-lg font-semibold text-slate-800">{progress?.implemented || 0}/{progress?.total_controls || 0}</p>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
                   <div
                     className="h-full rounded-full bg-blue-500"
                     style={{ width: `${progress?.total_controls ? (progress.implemented / progress.total_controls) * 100 : 0}%` }}
@@ -1664,12 +1664,12 @@ export default function CertificationJourneyPage() {
           </div>
           <div className="card !p-6">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-purple-500/20 p-2">
-                <Calendar className="h-5 w-5 text-purple-400" />
+              <div className="rounded-lg bg-primary-500/20 p-2">
+                <Calendar className="h-5 w-5 text-primary-600" />
               </div>
               <div>
                 <p className="text-sm text-slate-400">Target Date</p>
-                <p className="text-lg font-semibold text-white">
+                <p className="text-lg font-semibold text-slate-800">
                   {journey.target_date ? new Date(journey.target_date).toLocaleDateString() : 'Not set'}
                 </p>
                 <p className="text-sm text-slate-500">Stage 2 audit scheduled</p>
@@ -1680,7 +1680,7 @@ export default function CertificationJourneyPage() {
       </div>
 
       <div className="mb-6 overflow-x-auto">
-        <div className="flex min-w-max gap-1 border-b border-slate-700">
+        <div className="flex min-w-max gap-1 border-b border-slate-200">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -1688,7 +1688,7 @@ export default function CertificationJourneyPage() {
               className={`whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'border-b-2 border-primary-500 text-primary-400'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-400 hover:text-slate-900'
               }`}
             >
               {tab.label}

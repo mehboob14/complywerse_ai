@@ -398,7 +398,7 @@ export default function AuditPackagesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Audit Package Builder</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Audit Package Builder</h1>
           <p className="text-slate-400">Create and manage audit evidence packages</p>
         </div>
         <button
@@ -410,7 +410,7 @@ export default function AuditPackagesPage() {
         </button>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -419,13 +419,13 @@ export default function AuditPackagesPage() {
               placeholder="Search packages..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-            className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
           >
             <option value="">All Statuses</option>
             <option value="draft">Draft</option>
@@ -438,7 +438,7 @@ export default function AuditPackagesPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className={`${selectedPackage ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
-          <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
             {isLoading ? (
               <div className="flex h-64 items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
@@ -459,7 +459,7 @@ export default function AuditPackagesPage() {
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-slate-900/50">
+                    <thead className="bg-slate-50/50">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Name</th>
                         <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Framework</th>
@@ -473,12 +473,12 @@ export default function AuditPackagesPage() {
                       {filteredPackages.map((pkg) => (
                         <tr
                           key={pkg.id}
-                          className={`hover:bg-slate-700/50 transition-colors cursor-pointer ${selectedPackage?.id === pkg.id ? 'bg-slate-700/50' : ''}`}
+                          className={`hover:bg-slate-50 transition-colors cursor-pointer ${selectedPackage?.id === pkg.id ? 'bg-slate-200/50' : ''}`}
                           onClick={() => setSelectedPackage(pkg)}
                         >
                           <td className="px-4 py-4">
                             <div>
-                              <p className="font-medium text-white">{pkg.name}</p>
+                              <p className="font-medium text-slate-800">{pkg.name}</p>
                               {pkg.description && (
                                 <p className="text-sm text-slate-400 truncate max-w-xs">{pkg.description}</p>
                               )}
@@ -494,7 +494,7 @@ export default function AuditPackagesPage() {
                               <span className="text-slate-500">-</span>
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-300">
+                          <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
                             {pkg.audit_period_start || pkg.audit_period_end ? (
                               <div className="flex items-center gap-1">
                                 <Calendar size={14} className="text-slate-400" />
@@ -508,7 +508,7 @@ export default function AuditPackagesPage() {
                             {getStatusBadge(pkg.status, pkg.is_legal_hold)}
                           </td>
                           <td className="whitespace-nowrap px-4 py-4">
-                            <span className="inline-flex items-center gap-1 text-sm text-slate-300">
+                            <span className="inline-flex items-center gap-1 text-sm text-slate-600">
                               <FileCheck size={14} className="text-slate-400" />
                               {pkg.evidence_count}
                             </span>
@@ -517,7 +517,7 @@ export default function AuditPackagesPage() {
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => setSelectedPackage(pkg)}
-                                className="rounded p-1.5 text-slate-400 hover:bg-slate-600 hover:text-white transition-colors"
+                                className="rounded p-1.5 text-slate-400 hover:bg-slate-600 hover:text-slate-900 transition-colors"
                                 title="View Details"
                               >
                                 <Eye className="h-4 w-4" />
@@ -569,7 +569,7 @@ export default function AuditPackagesPage() {
                 </div>
 
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between border-t border-slate-700 px-4 py-3">
+                  <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
                     <p className="text-sm text-slate-400">
                       Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalItems)} of {totalItems}
                     </p>
@@ -577,15 +577,15 @@ export default function AuditPackagesPage() {
                       <button
                         onClick={() => setPage(p => Math.max(0, p - 1))}
                         disabled={page === 0}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-700 disabled:opacity-50"
+                        className="rounded p-1.5 text-slate-400 hover:bg-slate-200 disabled:opacity-50"
                       >
                         <ChevronLeft size={18} />
                       </button>
-                      <span className="text-sm text-slate-300">{page + 1} / {totalPages}</span>
+                      <span className="text-sm text-slate-600">{page + 1} / {totalPages}</span>
                       <button
                         onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                         disabled={page >= totalPages - 1}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-700 disabled:opacity-50"
+                        className="rounded p-1.5 text-slate-400 hover:bg-slate-200 disabled:opacity-50"
                       >
                         <ChevronRight size={18} />
                       </button>
@@ -599,13 +599,13 @@ export default function AuditPackagesPage() {
 
         {selectedPackage && (
           <div className="lg:col-span-1">
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden sticky top-4">
-              <div className="border-b border-slate-700 p-4">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden sticky top-4">
+              <div className="border-b border-slate-200 p-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-white">Package Details</h2>
+                  <h2 className="text-lg font-semibold text-slate-800">Package Details</h2>
                   <button
                     onClick={() => setSelectedPackage(null)}
-                    className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                    className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
                   >
                     <X size={18} />
                   </button>
@@ -614,14 +614,14 @@ export default function AuditPackagesPage() {
 
               <div className="p-4 space-y-4">
                 <div>
-                  <h3 className="font-medium text-white">{packageDetail?.name || selectedPackage.name}</h3>
+                  <h3 className="font-medium text-slate-800">{packageDetail?.name || selectedPackage.name}</h3>
                   <p className="text-sm text-slate-400 mt-1">{packageDetail?.description || selectedPackage.description || 'No description'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-slate-500">Framework</p>
-                    <p className="text-slate-300">{packageDetail?.framework_name || '-'}</p>
+                    <p className="text-slate-600">{packageDetail?.framework_name || '-'}</p>
                   </div>
                   <div>
                     <p className="text-slate-500">Status</p>
@@ -629,19 +629,19 @@ export default function AuditPackagesPage() {
                   </div>
                   <div>
                     <p className="text-slate-500">Period Start</p>
-                    <p className="text-slate-300">{formatDate(packageDetail?.audit_period_start)}</p>
+                    <p className="text-slate-600">{formatDate(packageDetail?.audit_period_start)}</p>
                   </div>
                   <div>
                     <p className="text-slate-500">Period End</p>
-                    <p className="text-slate-300">{formatDate(packageDetail?.audit_period_end)}</p>
+                    <p className="text-slate-600">{formatDate(packageDetail?.audit_period_end)}</p>
                   </div>
                   <div>
                     <p className="text-slate-500">Created</p>
-                    <p className="text-slate-300">{formatDate(packageDetail?.created_at)}</p>
+                    <p className="text-slate-600">{formatDate(packageDetail?.created_at)}</p>
                   </div>
                   <div>
                     <p className="text-slate-500">Created By</p>
-                    <p className="text-slate-300">{packageDetail?.creator_name || '-'}</p>
+                    <p className="text-slate-600">{packageDetail?.creator_name || '-'}</p>
                   </div>
                 </div>
 
@@ -655,8 +655,8 @@ export default function AuditPackagesPage() {
                   </button>
                 )}
 
-                <div className="border-t border-slate-700 pt-4">
-                  <h4 className="text-sm font-medium text-slate-300 mb-3">Evidence Items ({packageDetail?.evidence_items?.length || 0})</h4>
+                <div className="border-t border-slate-200 pt-4">
+                  <h4 className="text-sm font-medium text-slate-600 mb-3">Evidence Items ({packageDetail?.evidence_items?.length || 0})</h4>
                   
                   {packageDetail?.evidence_items && packageDetail.evidence_items.length > 0 ? (
                     <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -665,28 +665,28 @@ export default function AuditPackagesPage() {
                         .map((item, index) => (
                           <div
                             key={item.id}
-                            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700/50 p-2"
+                            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-200/50 p-2"
                           >
                             {(packageDetail.status || selectedPackage.status) === 'draft' && (
                               <div className="flex flex-col">
                                 <button
                                   onClick={() => moveEvidence(item, 'up')}
                                   disabled={index === 0}
-                                  className="p-0.5 text-slate-400 hover:text-white disabled:opacity-30"
+                                  className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-30"
                                 >
                                   <ChevronLeft size={14} className="rotate-90" />
                                 </button>
                                 <button
                                   onClick={() => moveEvidence(item, 'down')}
                                   disabled={index === packageDetail.evidence_items!.length - 1}
-                                  className="p-0.5 text-slate-400 hover:text-white disabled:opacity-30"
+                                  className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-30"
                                 >
                                   <ChevronRight size={14} className="rotate-90" />
                                 </button>
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-white truncate">{item.evidence?.name || `Evidence #${item.evidence_id}`}</p>
+                              <p className="text-sm font-medium text-slate-800 truncate">{item.evidence?.name || `Evidence #${item.evidence_id}`}</p>
                               <p className="text-xs text-slate-400">{item.evidence?.evidence_type || 'Unknown type'}</p>
                             </div>
                             {(packageDetail.status || selectedPackage.status) === 'draft' && (
@@ -734,7 +734,7 @@ export default function AuditPackagesPage() {
                     className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                       (packageDetail?.is_legal_hold || selectedPackage.is_legal_hold)
                         ? 'bg-red-600 text-white hover:bg-red-700'
-                        : 'border border-slate-600 text-slate-300 hover:bg-slate-700'
+                        : 'border border-slate-300 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
                     {(packageDetail?.is_legal_hold || selectedPackage.is_legal_hold) ? (
@@ -758,12 +758,12 @@ export default function AuditPackagesPage() {
 
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Create Audit Package</h2>
+              <h2 className="text-xl font-semibold text-slate-800">Create Audit Package</h2>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X size={20} />
               </button>
@@ -778,34 +778,34 @@ export default function AuditPackagesPage() {
               className="space-y-4"
             >
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Name *</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Name *</label>
                 <input
                   type="text"
                   value={createForm.name}
                   onChange={(e) => setCreateForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                   placeholder="Q4 2025 Audit Package"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
                 <textarea
                   value={createForm.description}
                   onChange={(e) => setCreateForm(f => ({ ...f, description: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
                   rows={3}
                   placeholder="Description of the audit package..."
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Framework</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Framework</label>
                 <select
                   value={createForm.framework_id}
                   onChange={(e) => setCreateForm(f => ({ ...f, framework_id: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
                 >
                   <option value="">Select a framework...</option>
                   {frameworksData?.map(fw => (
@@ -816,21 +816,21 @@ export default function AuditPackagesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Audit Period Start</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Audit Period Start</label>
                   <input
                     type="date"
                     value={createForm.audit_period_start}
                     onChange={(e) => setCreateForm(f => ({ ...f, audit_period_start: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Audit Period End</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Audit Period End</label>
                   <input
                     type="date"
                     value={createForm.audit_period_end}
                     onChange={(e) => setCreateForm(f => ({ ...f, audit_period_end: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -839,7 +839,7 @@ export default function AuditPackagesPage() {
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700 transition-colors"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-200 transition-colors"
                 >
                   Cancel
                 </button>
@@ -859,12 +859,12 @@ export default function AuditPackagesPage() {
 
       {isEvidenceSelectorOpen && selectedPackage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-xl max-h-[80vh] flex flex-col">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-white">Add Evidence to Package</h2>
+              <h2 className="text-xl font-semibold text-slate-800">Add Evidence to Package</h2>
               <button
                 onClick={() => { setIsEvidenceSelectorOpen(false); setSelectedEvidenceIds([]); }}
-                className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X size={20} />
               </button>
@@ -877,11 +877,11 @@ export default function AuditPackagesPage() {
                 placeholder="Search approved evidence..."
                 value={evidenceSearchTerm}
                 onChange={(e) => setEvidenceSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
               />
             </div>
 
-            <div className="flex-1 overflow-y-auto border border-slate-700 rounded-lg">
+            <div className="flex-1 overflow-y-auto border border-slate-200 rounded-lg">
               {availableEvidence?.items && availableEvidence.items.length > 0 ? (
                 <div className="divide-y divide-slate-700">
                   {availableEvidence.items.map((evidence) => {
@@ -892,7 +892,7 @@ export default function AuditPackagesPage() {
                       <label
                         key={evidence.id}
                         className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${
-                          alreadyAdded ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-700/50'
+                          alreadyAdded ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'
                         } ${isSelected ? 'bg-primary-600/10' : ''}`}
                       >
                         <input
@@ -900,10 +900,10 @@ export default function AuditPackagesPage() {
                           checked={isSelected}
                           onChange={() => !alreadyAdded && toggleEvidenceSelection(evidence.id)}
                           disabled={alreadyAdded}
-                          className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-primary-600 focus:ring-primary-500"
+                          className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-white">{evidence.name}</p>
+                          <p className="font-medium text-slate-800">{evidence.name}</p>
                           <div className="flex items-center gap-2 text-xs text-slate-400">
                             <span>{evidence.evidence_type || 'Unknown type'}</span>
                             {evidence.collection_date && (
@@ -933,7 +933,7 @@ export default function AuditPackagesPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-slate-700 mt-4">
+            <div className="flex items-center justify-between pt-4 border-t border-slate-200 mt-4">
               <p className="text-sm text-slate-400">
                 {selectedEvidenceIds.length} item{selectedEvidenceIds.length !== 1 ? 's' : ''} selected
               </p>
@@ -941,7 +941,7 @@ export default function AuditPackagesPage() {
                 <button
                   type="button"
                   onClick={() => { setIsEvidenceSelectorOpen(false); setSelectedEvidenceIds([]); }}
-                  className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700 transition-colors"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-200 transition-colors"
                 >
                   Cancel
                 </button>

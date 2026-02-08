@@ -154,46 +154,46 @@ export default function IncidentsPage() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-red-500/20 p-2">
               <AlertTriangle className="h-5 w-5 text-red-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{incidentDashboard?.open_incidents || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{incidentDashboard?.open_incidents || 0}</p>
               <p className="text-sm text-slate-400">Open Incidents</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-yellow-500/20 p-2">
               <Clock className="h-5 w-5 text-yellow-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{incidentDashboard?.investigating || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{incidentDashboard?.investigating || 0}</p>
               <p className="text-sm text-slate-400">Investigating</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/20 p-2">
               <CheckCircle className="h-5 w-5 text-green-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{incidentDashboard?.resolved_this_month || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{incidentDashboard?.resolved_this_month || 0}</p>
               <p className="text-sm text-slate-400">Resolved (Month)</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-orange-500/20 p-2">
               <DollarSign className="h-5 w-5 text-orange-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-slate-800">
                 ${((incidentDashboard?.total_financial_impact || 0) / 1000).toFixed(0)}K
               </p>
               <p className="text-sm text-slate-400">Total Impact</p>
@@ -207,7 +207,7 @@ export default function IncidentsPage() {
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
-            className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
           >
             <option value="all">All Severities</option>
             {SEVERITIES.map((s) => (
@@ -217,7 +217,7 @@ export default function IncidentsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
           >
             <option value="all">All Statuses</option>
             {INCIDENT_STATUSES.map((s) => (
@@ -243,11 +243,11 @@ export default function IncidentsPage() {
             return (
               <div
                 key={incident.id}
-                className="rounded-xl border border-slate-700 bg-slate-800 p-4 hover:border-slate-600"
+                className="rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="font-medium text-white">{incident.title}</h3>
+                    <h3 className="font-medium text-slate-800">{incident.title}</h3>
                     <p className="mt-1 text-sm text-slate-400 line-clamp-2">{incident.description}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${severityStyle?.color || ''}`}>
@@ -270,14 +270,14 @@ export default function IncidentsPage() {
                   <div className="ml-4 flex gap-1">
                     <button
                       onClick={() => handleAnalyzeWithAI(incident)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-purple-500/20 hover:text-purple-400"
+                      className="rounded p-1.5 text-slate-400 hover:bg-primary-500/20 hover:text-primary-600"
                       title="AI Analysis"
                     >
                       <Sparkles className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => setEditingIncident(incident)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
+                      className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>
@@ -298,9 +298,9 @@ export default function IncidentsPage() {
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-700 bg-slate-800">
+        <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <AlertCircle className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-white">No incidents found</h3>
+          <h3 className="mt-4 text-lg font-medium text-slate-800">No incidents found</h3>
           <p className="mt-1 text-slate-400">Report incidents as they occur to track and resolve them</p>
         </div>
       )}
@@ -384,10 +384,10 @@ function IncidentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-slate-800 p-6">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{incident ? 'Edit Incident' : 'Report Incident'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">{incident ? 'Edit Incident' : 'Report Incident'}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -399,7 +399,7 @@ function IncidentModal({
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             />
           </div>
@@ -410,7 +410,7 @@ function IncidentModal({
               <select
                 value={formData.risk_id}
                 onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
                 required
               >
                 {risks.map((risk) => (
@@ -426,7 +426,7 @@ function IncidentModal({
                 type="date"
                 value={formData.incident_date}
                 onChange={(e) => setFormData({ ...formData, incident_date: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
                 required
               />
             </div>
@@ -438,7 +438,7 @@ function IncidentModal({
               <select
                 value={formData.severity}
                 onChange={(e) => setFormData({ ...formData, severity: e.target.value as IncidentSeverity })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 {SEVERITIES.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -453,7 +453,7 @@ function IncidentModal({
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as IncidentStatus)}
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
                 >
                   {INCIDENT_STATUSES.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -469,7 +469,7 @@ function IncidentModal({
                 type="number"
                 value={formData.financial_impact || ''}
                 onChange={(e) => setFormData({ ...formData, financial_impact: e.target.value ? Number(e.target.value) : undefined })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               />
             </div>
           </div>
@@ -479,7 +479,7 @@ function IncidentModal({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -489,7 +489,7 @@ function IncidentModal({
             <textarea
               value={formData.root_cause}
               onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -499,7 +499,7 @@ function IncidentModal({
             <textarea
               value={formData.corrective_actions}
               onChange={(e) => setFormData({ ...formData, corrective_actions: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -508,7 +508,7 @@ function IncidentModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -550,7 +550,7 @@ function AIAnalysisModal({
 
   const getRelevanceColor = (level: string) => {
     switch (level) {
-      case 'high': return 'bg-purple-500/20 text-purple-400';
+      case 'high': return 'bg-primary-500/20 text-primary-600';
       case 'medium': return 'bg-blue-500/20 text-blue-400';
       case 'low': return 'bg-slate-500/20 text-slate-400';
       default: return 'bg-slate-500/20 text-slate-400';
@@ -559,18 +559,18 @@ function AIAnalysisModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-slate-800 p-6">
-        <div className="flex items-center justify-between border-b border-slate-700 pb-4">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 p-2">
-              <Brain className="h-6 w-6 text-purple-400" />
+              <Brain className="h-6 w-6 text-primary-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">AI Analysis</h2>
+              <h2 className="text-lg font-semibold text-slate-800">AI Analysis</h2>
               <p className="text-sm text-slate-400">{incident.title}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -578,27 +578,27 @@ function AIAnalysisModal({
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="relative">
-              <div className="absolute inset-0 animate-ping rounded-full bg-purple-500/30" />
-              <Sparkles className="relative h-12 w-12 text-purple-400 animate-pulse" />
+              <div className="absolute inset-0 animate-ping rounded-full bg-primary-500/30" />
+              <Sparkles className="relative h-12 w-12 text-primary-600 animate-pulse" />
             </div>
             <p className="mt-4 text-slate-400">Analyzing incident with AI...</p>
             <p className="text-xs text-slate-500 mt-1">This may take a few seconds</p>
           </div>
         ) : analysis ? (
           <div className="mt-6 space-y-6">
-            <div className="rounded-xl border border-purple-500/20 bg-gradient-to-br from-purple-900/20 to-blue-900/20 p-4">
+            <div className="rounded-xl border border-primary-500/20 bg-gradient-to-br from-purple-900/20 to-blue-900/20 p-4">
               <div className="flex items-center gap-2 mb-3">
-                <Target className="h-5 w-5 text-purple-400" />
-                <h3 className="font-semibold text-white">Root Cause Analysis</h3>
+                <Target className="h-5 w-5 text-primary-600" />
+                <h3 className="font-semibold text-slate-800">Root Cause Analysis</h3>
               </div>
-              <p className="text-slate-300">{analysis.root_cause_analysis.primary_cause}</p>
+              <p className="text-slate-600">{analysis.root_cause_analysis.primary_cause}</p>
               {analysis.root_cause_analysis.contributing_factors.length > 0 && (
                 <div className="mt-3">
                   <p className="text-xs text-slate-400 mb-2">Contributing Factors:</p>
                   <ul className="space-y-1">
                     {analysis.root_cause_analysis.contributing_factors.map((factor, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
-                        <ChevronRight className="h-4 w-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                      <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                        <ChevronRight className="h-4 w-4 text-primary-600 mt-0.5 flex-shrink-0" />
                         {factor}
                       </li>
                     ))}
@@ -638,14 +638,14 @@ function AIAnalysisModal({
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <AlertTriangle className="h-5 w-5 text-orange-400" />
-                  <h3 className="font-semibold text-white">Related Risks</h3>
+                  <h3 className="font-semibold text-slate-800">Related Risks</h3>
                 </div>
                 <div className="space-y-2">
                   {analysis.related_risks.map((risk, i) => (
-                    <div key={i} className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                    <div key={i} className="rounded-lg border border-slate-200 bg-white/50 p-3">
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="font-medium text-white">{risk.risk_title}</p>
+                          <p className="font-medium text-slate-800">{risk.risk_title}</p>
                           <p className="text-sm text-slate-400 mt-1">{risk.explanation}</p>
                         </div>
                         <span className={`rounded-full px-2 py-0.5 text-xs ${getRelevanceColor(risk.relevance)}`}>
@@ -662,15 +662,15 @@ function AIAnalysisModal({
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <Shield className="h-5 w-5 text-blue-400" />
-                  <h3 className="font-semibold text-white">Related Controls</h3>
+                  <h3 className="font-semibold text-slate-800">Related Controls</h3>
                 </div>
                 <div className="space-y-2">
                   {analysis.related_controls.map((control, i) => (
-                    <div key={i} className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                    <div key={i} className="rounded-lg border border-slate-200 bg-white/50 p-3">
                       <div className="flex items-start justify-between">
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="font-medium text-white">{control.control_title}</p>
+                            <p className="font-medium text-slate-800">{control.control_title}</p>
                             <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-xs text-blue-400">
                               {control.framework}
                             </span>
@@ -691,15 +691,15 @@ function AIAnalysisModal({
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <CheckCircle className="h-5 w-5 text-green-400" />
-                  <h3 className="font-semibold text-white">Recommended Actions</h3>
+                  <h3 className="font-semibold text-slate-800">Recommended Actions</h3>
                 </div>
                 <div className="space-y-2">
                   {analysis.recommended_actions.map((action, i) => (
-                    <div key={i} className="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                      <div className="rounded-full border border-slate-600 p-1">
+                    <div key={i} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white/50 p-3">
+                      <div className="rounded-full border border-slate-300 p-1">
                         <div className="h-2 w-2 rounded-full bg-slate-600" />
                       </div>
-                      <p className="text-sm text-slate-300">{action}</p>
+                      <p className="text-sm text-slate-600">{action}</p>
                     </div>
                   ))}
                 </div>
@@ -710,12 +710,12 @@ function AIAnalysisModal({
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <Link2 className="h-5 w-5 text-slate-400" />
-                  <h3 className="font-semibold text-white">Similar Incidents</h3>
+                  <h3 className="font-semibold text-slate-800">Similar Incidents</h3>
                 </div>
                 <div className="space-y-2">
                   {analysis.similar_incidents.map((inc, i) => (
-                    <div key={i} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-                      <p className="text-sm text-slate-300">{inc.title}</p>
+                    <div key={i} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/50 p-3">
+                      <p className="text-sm text-slate-600">{inc.title}</p>
                       <span className="text-xs text-slate-400">
                         {Math.round(inc.similarity * 100)}% match
                       </span>
@@ -732,10 +732,10 @@ function AIAnalysisModal({
           </div>
         )}
 
-        <div className="mt-6 flex justify-end border-t border-slate-700 pt-4">
+        <div className="mt-6 flex justify-end border-t border-slate-200 pt-4">
           <button
             onClick={onClose}
-            className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+            className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
           >
             Close
           </button>

@@ -17,11 +17,11 @@ export interface PageHeaderProps {
 }
 
 const iconColorClasses = {
-  primary: 'bg-primary-600/20 text-primary-400',
-  success: 'bg-emerald-600/20 text-emerald-400',
-  warning: 'bg-amber-600/20 text-amber-400',
-  danger: 'bg-rose-600/20 text-rose-400',
-  info: 'bg-cyan-600/20 text-cyan-400',
+  primary: 'text-primary-600',
+  success: 'text-emerald-600',
+  warning: 'text-amber-600',
+  danger: 'text-rose-600',
+  info: 'text-cyan-600',
 };
 
 export function PageHeader({
@@ -53,11 +53,11 @@ export function PageHeader({
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-white tracking-tight">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
               {title}
             </h1>
             {subtitle && (
-              <p className="mt-1 text-slate-400 text-sm leading-relaxed max-w-2xl">
+              <p className="mt-1 text-slate-500 text-sm leading-relaxed max-w-2xl">
                 {subtitle}
               </p>
             )}

@@ -63,7 +63,7 @@ export default function AuditLogsPage() {
     {
       header: 'Timestamp',
       accessor: (log: AuditLogEntry) => (
-        <span className="text-slate-300 text-sm whitespace-nowrap">
+        <span className="text-slate-600 text-sm whitespace-nowrap">
           {formatTimestamp(log.timestamp)}
         </span>
       ),
@@ -71,7 +71,7 @@ export default function AuditLogsPage() {
     {
       header: 'User',
       accessor: (log: AuditLogEntry) => (
-        <span className="text-white">{log.user_name}</span>
+        <span className="text-slate-800">{log.user_name}</span>
       ),
     },
     {
@@ -86,7 +86,7 @@ export default function AuditLogsPage() {
       header: 'Resource',
       accessor: (log: AuditLogEntry) => (
         <div>
-          <span className="text-slate-300">{log.resource_type}</span>
+          <span className="text-slate-600">{log.resource_type}</span>
           {log.resource_id && (
             <span className="text-slate-500 ml-1">#{log.resource_id}</span>
           )}
@@ -106,7 +106,7 @@ export default function AuditLogsPage() {
           onClick={() => {
             alert(JSON.stringify(log.details, null, 2));
           }}
-          className="text-purple-400 hover:text-purple-300 text-sm underline"
+          className="text-primary-600 hover:text-primary-500 text-sm underline"
         >
           View
         </button>
@@ -117,7 +117,7 @@ export default function AuditLogsPage() {
   if (loading && logs.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
       </div>
     );
   }
@@ -138,7 +138,7 @@ export default function AuditLogsPage() {
         </div>
       )}
 
-      <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
         <DataTable data={logs} columns={columns} />
       </div>
 
@@ -151,14 +151,14 @@ export default function AuditLogsPage() {
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-slate-200 hover:bg-slate-600 text-slate-800 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={(page + 1) * limit >= total}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-slate-200 hover:bg-slate-600 text-slate-800 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>

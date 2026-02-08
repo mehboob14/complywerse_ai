@@ -140,13 +140,13 @@ export default function ControlsPage() {
   const getProcedureTypeBadge = (type: string) => {
     const colors: Record<string, string> = {
       walkthrough: 'bg-blue-500/20 text-blue-400',
-      inquiry: 'bg-purple-500/20 text-purple-400',
+      inquiry: 'bg-primary-500/20 text-primary-600',
       observation: 'bg-cyan-500/20 text-cyan-400',
       inspection: 'bg-amber-500/20 text-amber-400',
       reperformance: 'bg-emerald-500/20 text-emerald-400',
     };
     return (
-      <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${colors[type] || 'bg-slate-700 text-slate-400'}`}>
+      <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${colors[type] || 'bg-slate-200 text-slate-500'}`}>
         {type}
       </span>
     );
@@ -204,7 +204,7 @@ export default function ControlsPage() {
       low: 'bg-emerald-500/20 text-emerald-400',
     };
     return (
-      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[priority] || 'bg-slate-700 text-slate-400'}`}>
+      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[priority] || 'bg-slate-200 text-slate-500'}`}>
         {priority}
       </span>
     );
@@ -255,13 +255,13 @@ export default function ControlsPage() {
               <div className="flex items-center gap-2 mb-1">
                 <Link 
                   href="/frameworks" 
-                  className="flex items-center gap-1 text-sm text-slate-400 hover:text-white transition-colors"
+                  className="flex items-center gap-1 text-sm text-slate-400 hover:text-slate-900 transition-colors"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   Back to Frameworks
                 </Link>
               </div>
-              <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                 <FileStack className="h-6 w-6 text-primary-400" />
                 {selectedFramework.name}
               </h1>
@@ -271,14 +271,14 @@ export default function ControlsPage() {
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-bold text-white">Framework Controls</h1>
+              <h1 className="text-2xl font-bold text-slate-800">Framework Controls</h1>
               <p className="text-slate-400">Controls extracted from your uploaded regulatory frameworks</p>
             </>
           )}
         </div>
         <button
           onClick={() => setShowInfoModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-600 transition-colors"
+          className="flex items-center gap-2 rounded-lg bg-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-600 transition-colors"
         >
           <HelpCircle className="h-4 w-4" />
           How It Works
@@ -287,15 +287,15 @@ export default function ControlsPage() {
 
       {showInfoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-lg mx-4 rounded-xl bg-slate-800 border border-slate-700 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-700 p-4">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <div className="w-full max-w-lg mx-4 rounded-xl bg-white border border-slate-200 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
                 <Info className="h-5 w-5 text-primary-400" />
                 Understanding Frameworks & Controls
               </h2>
               <button
                 onClick={() => setShowInfoModal(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
               >
                 <ChevronDown className="h-5 w-5" />
               </button>
@@ -305,39 +305,39 @@ export default function ControlsPage() {
                 <div className="flex gap-3">
                   <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-400 font-bold">1</div>
                   <div>
-                    <h3 className="font-medium text-white">Upload Framework</h3>
+                    <h3 className="font-medium text-slate-800">Upload Framework</h3>
                     <p className="text-slate-400">Upload your regulatory framework document (PDF, Excel). The AI extracts individual controls/requirements.</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <div className="flex-shrink-0 h-8 w-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold">2</div>
                   <div>
-                    <h3 className="font-medium text-white">Controls Are Extracted</h3>
+                    <h3 className="font-medium text-slate-800">Controls Are Extracted</h3>
                     <p className="text-slate-400">Each requirement becomes a control shown here. Controls retain their original reference IDs from the framework document.</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <div className="flex-shrink-0 h-8 w-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold">3</div>
                   <div>
-                    <h3 className="font-medium text-white">Link Evidence</h3>
+                    <h3 className="font-medium text-slate-800">Link Evidence</h3>
                     <p className="text-slate-400">Upload evidence documents to prove compliance. Link evidence to specific controls to demonstrate you meet each requirement.</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-bold">4</div>
+                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-600 font-bold">4</div>
                   <div>
-                    <h3 className="font-medium text-white">Track Compliance</h3>
+                    <h3 className="font-medium text-slate-800">Track Compliance</h3>
                     <p className="text-slate-400">Start a certification journey from the Frameworks page to track your progress toward full compliance.</p>
                   </div>
                 </div>
               </div>
-              <div className="pt-3 border-t border-slate-700">
+              <div className="pt-3 border-t border-slate-200">
                 <p className="text-xs text-slate-500">
                   <strong>Tip:</strong> Use the Evidence module to upload documents, then link them to controls here. Each control can have multiple pieces of evidence.
                 </p>
               </div>
             </div>
-            <div className="flex justify-end border-t border-slate-700 p-4">
+            <div className="flex justify-end border-t border-slate-200 p-4">
               <button
                 onClick={() => setShowInfoModal(false)}
                 className="btn-primary"
@@ -357,7 +357,7 @@ export default function ControlsPage() {
                 <Layers className="h-5 w-5 text-primary-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-white">{summaryData.total_frameworks}</p>
+                <p className="text-2xl font-bold text-slate-800">{summaryData.total_frameworks}</p>
                 <p className="text-sm text-slate-400">Frameworks</p>
               </div>
             </div>
@@ -368,7 +368,7 @@ export default function ControlsPage() {
                 <Shield className="h-5 w-5 text-emerald-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-white">{summaryData.total_controls}</p>
+                <p className="text-2xl font-bold text-slate-800">{summaryData.total_controls}</p>
                 <p className="text-sm text-slate-400">Total Controls</p>
               </div>
             </div>
@@ -380,7 +380,7 @@ export default function ControlsPage() {
                   <FileText className="h-5 w-5 text-blue-400" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-lg font-bold text-white truncate">{fw.name}</p>
+                  <p className="text-lg font-bold text-slate-800 truncate">{fw.name}</p>
                   <p className="text-sm text-slate-400">{fw.control_count} controls</p>
                 </div>
               </div>
@@ -400,7 +400,7 @@ export default function ControlsPage() {
               setSearchTerm(e.target.value);
               setPage(0);
             }}
-            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
 
@@ -413,7 +413,7 @@ export default function ControlsPage() {
                 setFrameworkFilter(e.target.value ? Number(e.target.value) : null);
                 setPage(0);
               }}
-              className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Frameworks</option>
               {summaryData?.frameworks.map((fw) => (
@@ -426,18 +426,18 @@ export default function ControlsPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-700">
+      <div className="overflow-hidden rounded-lg border border-slate-200">
         <table className="w-full">
-          <thead className="bg-slate-800">
+          <thead className="bg-white">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Control ID</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Title</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 md:table-cell">Framework</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 lg:table-cell">Domain</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Priority</th>
-              <th className="px-4 py-3 text-center text-sm font-medium text-slate-300">Evidence</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Status</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-slate-300"></th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Control ID</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Title</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 md:table-cell">Framework</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 lg:table-cell">Domain</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Priority</th>
+              <th className="px-4 py-3 text-center text-sm font-medium text-slate-600">Evidence</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-slate-600"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700">
@@ -447,19 +447,19 @@ export default function ControlsPage() {
                 <>
                   <tr 
                     key={control.id}
-                    className="bg-slate-800/50 hover:bg-slate-700/50 cursor-pointer"
+                    className="bg-white/50 hover:bg-slate-50 cursor-pointer"
                     onClick={() => setExpandedControl(isExpanded ? null : control.id)}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Shield className="h-4 w-4 text-primary-400 flex-shrink-0" />
-                        <span className="font-mono text-sm text-white">
+                        <span className="font-mono text-sm text-slate-800">
                           {control.original_reference || control.control_id}
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-sm text-white line-clamp-1">{control.title}</p>
+                      <p className="text-sm text-slate-800 line-clamp-1">{control.title}</p>
                     </td>
                     <td className="hidden px-4 py-3 md:table-cell">
                       <span className="rounded-full bg-blue-500/20 px-2 py-1 text-xs text-blue-400">
@@ -479,7 +479,7 @@ export default function ControlsPage() {
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors ${
                           control.evidence_count > 0
                             ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
-                            : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                            : 'bg-slate-200 text-slate-500 hover:bg-slate-600'
                         }`}
                       >
                         <Paperclip className="h-3 w-3" />
@@ -498,25 +498,25 @@ export default function ControlsPage() {
                     </td>
                   </tr>
                   {isExpanded && (
-                    <tr key={`${control.id}-details`} className="bg-slate-900">
-                      <td colSpan={8} className="px-4 py-4 border-t border-slate-700">
+                    <tr key={`${control.id}-details`} className="bg-slate-50">
+                      <td colSpan={8} className="px-4 py-4 border-t border-slate-200">
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <div>
-                              <h4 className="text-sm font-medium text-slate-300">Framework</h4>
-                              <p className="mt-1 text-sm text-white">
+                              <h4 className="text-sm font-medium text-slate-600">Framework</h4>
+                              <p className="mt-1 text-sm text-slate-800">
                                 {control.framework_name}
                                 {control.framework_version && ` (${control.framework_version})`}
                               </p>
                             </div>
                             <div>
-                              <h4 className="text-sm font-medium text-slate-300">Original Reference</h4>
-                              <p className="mt-1 text-sm font-mono text-white">
+                              <h4 className="text-sm font-medium text-slate-600">Original Reference</h4>
+                              <p className="mt-1 text-sm font-mono text-slate-800">
                                 {control.original_reference || control.control_id}
                               </p>
                             </div>
                             <div>
-                              <h4 className="text-sm font-medium text-slate-300">Linked Evidence</h4>
+                              <h4 className="text-sm font-medium text-slate-600">Linked Evidence</h4>
                               <div className="mt-1 flex items-center gap-2">
                                 <span className={`text-sm font-medium ${control.evidence_count > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
                                   {control.evidence_count} document{control.evidence_count !== 1 ? 's' : ''}
@@ -532,13 +532,13 @@ export default function ControlsPage() {
                             </div>
                             {control.section_number && (
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300">Section</h4>
+                                <h4 className="text-sm font-medium text-slate-600">Section</h4>
                                 <p className="mt-1 text-sm text-slate-400">{control.section_number}</p>
                               </div>
                             )}
                             {control.parent_section && (
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300">Parent Section</h4>
+                                <h4 className="text-sm font-medium text-slate-600">Parent Section</h4>
                                 <p className="mt-1 text-sm text-slate-400">{control.parent_section}</p>
                               </div>
                             )}
@@ -546,14 +546,14 @@ export default function ControlsPage() {
                           
                           {control.description && (
                             <div>
-                              <h4 className="text-sm font-medium text-slate-300">Description</h4>
+                              <h4 className="text-sm font-medium text-slate-600">Description</h4>
                               <p className="mt-1 text-sm text-slate-400">{control.description}</p>
                             </div>
                           )}
                           
                           {control.full_text && (
                             <div>
-                              <h4 className="text-sm font-medium text-slate-300">Full Requirement Text</h4>
+                              <h4 className="text-sm font-medium text-slate-600">Full Requirement Text</h4>
                               <p className="mt-1 text-sm text-slate-400 whitespace-pre-wrap">{control.full_text}</p>
                             </div>
                           )}
@@ -578,11 +578,11 @@ export default function ControlsPage() {
                             </div>
                           </div>
 
-                          <div className="mt-6 border-t border-slate-700 pt-4">
+                          <div className="mt-6 border-t border-slate-200 pt-4">
                             <div className="flex items-center justify-between mb-4">
                               <div className="flex items-center gap-2">
-                                <Sparkles className="h-5 w-5 text-purple-400" />
-                                <h4 className="text-sm font-semibold text-white">AI Recommendations</h4>
+                                <Sparkles className="h-5 w-5 text-primary-600" />
+                                <h4 className="text-sm font-semibold text-slate-800">AI Recommendations</h4>
                               </div>
                               {!aiRecommendations[control.id] && (
                                 <button
@@ -591,7 +591,7 @@ export default function ControlsPage() {
                                     handleGetAIRecommendations(control);
                                   }}
                                   disabled={loadingAI === control.id}
-                                  className="flex items-center gap-2 rounded-lg bg-purple-500/20 px-3 py-1.5 text-sm text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+                                  className="flex items-center gap-2 rounded-lg bg-primary-500/20 px-3 py-1.5 text-sm text-primary-600 hover:bg-primary-500/30 transition-colors disabled:opacity-50"
                                 >
                                   {loadingAI === control.id ? (
                                     <>
@@ -610,15 +610,15 @@ export default function ControlsPage() {
 
                             {aiRecommendations[control.id] && (
                               <div className="space-y-6">
-                                <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-4">
+                                <div className="rounded-lg border border-primary-500/20 bg-primary-500/5 p-4">
                                   <div className="flex items-center gap-2 mb-3">
-                                    <ClipboardList className="h-4 w-4 text-purple-400" />
-                                    <h5 className="text-sm font-medium text-purple-300">Test Procedures</h5>
+                                    <ClipboardList className="h-4 w-4 text-primary-600" />
+                                    <h5 className="text-sm font-medium text-primary-500">Test Procedures</h5>
                                   </div>
                                   <div className="space-y-3">
                                     {aiRecommendations[control.id].test_procedures.map((proc, idx) => (
                                       <div key={idx} className="flex gap-3">
-                                        <span className="flex-shrink-0 h-6 w-6 rounded-full bg-purple-500/20 flex items-center justify-center text-xs text-purple-400 font-medium">
+                                        <span className="flex-shrink-0 h-6 w-6 rounded-full bg-primary-500/20 flex items-center justify-center text-xs text-primary-600 font-medium">
                                           {idx + 1}
                                         </span>
                                         <div className="flex-1">
@@ -629,7 +629,7 @@ export default function ControlsPage() {
                                               <span className="text-xs text-slate-500">| Sample: {proc.sample_size}</span>
                                             )}
                                           </div>
-                                          <p className="text-sm text-slate-300">{proc.description}</p>
+                                          <p className="text-sm text-slate-600">{proc.description}</p>
                                         </div>
                                       </div>
                                     ))}
@@ -643,19 +643,19 @@ export default function ControlsPage() {
                                   </div>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {aiRecommendations[control.id].evidence_requirements.map((ev, idx) => (
-                                      <div key={idx} className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                                      <div key={idx} className="rounded-lg border border-slate-200 bg-white/50 p-3">
                                         <div className="flex items-start gap-2">
                                           <div className="flex-shrink-0 mt-0.5 text-blue-400">
                                             {getEvidenceTypeIcon(ev.evidence_type)}
                                           </div>
                                           <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
-                                              <span className="text-sm font-medium text-white">{ev.title}</span>
+                                              <span className="text-sm font-medium text-slate-800">{ev.title}</span>
                                               {ev.mandatory && (
                                                 <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-xs text-rose-400">Required</span>
                                               )}
                                             </div>
-                                            <span className="inline-block rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400 mt-1 capitalize">{ev.evidence_type}</span>
+                                            <span className="inline-block rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-400 mt-1 capitalize">{ev.evidence_type}</span>
                                             <p className="text-xs text-slate-400 mt-1">{ev.description}</p>
                                           </div>
                                         </div>
@@ -672,7 +672,7 @@ export default function ControlsPage() {
                                     </div>
                                     <ul className="space-y-1">
                                       {aiRecommendations[control.id].key_risks_addressed.map((risk, idx) => (
-                                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-300">
+                                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
                                           <span className="text-amber-400 mt-1">•</span>
                                           {risk}
                                         </li>
@@ -687,7 +687,7 @@ export default function ControlsPage() {
                                     </div>
                                     <ul className="space-y-1">
                                       {aiRecommendations[control.id].audit_focus_areas.map((area, idx) => (
-                                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-300">
+                                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
                                           <span className="text-emerald-400 mt-1">•</span>
                                           {area}
                                         </li>
@@ -746,7 +746,7 @@ export default function ControlsPage() {
       {(!data?.controls || data.controls.length === 0) && (
         <div className="card flex flex-col items-center justify-center py-12 text-center">
           <Shield className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-white">No controls found</h3>
+          <h3 className="text-lg font-medium text-slate-800">No controls found</h3>
           <p className="mt-1 text-slate-400">
             {summaryData?.total_frameworks === 0
               ? 'Upload a regulatory framework to see controls here'

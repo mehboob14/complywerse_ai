@@ -50,7 +50,7 @@ const ACTION_TYPE_LABELS: Record<string, { label: string; bg: string; text: stri
   follow_up: { label: 'Follow Up', bg: 'bg-slate-500/20', text: 'text-slate-400' },
   policy_approval: { label: 'Policy Approval', bg: 'bg-blue-500/20', text: 'text-blue-400' },
   risk_review: { label: 'Risk Review', bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  audit_response: { label: 'Audit Response', bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  audit_response: { label: 'Audit Response', bg: 'bg-primary-500/20', text: 'text-primary-600' },
 };
 
 export default function ActionsPage() {
@@ -145,11 +145,11 @@ export default function ActionsPage() {
     <div className="space-y-8">
       <div className="page-header">
         <div>
-          <Link href="/governance/committees" className="flex items-center gap-2 text-slate-400 hover:text-white mb-4">
+          <Link href="/governance/committees" className="flex items-center gap-2 text-slate-400 hover:text-slate-900 mb-4">
             <ArrowLeft className="h-4 w-4" />
             Back to Committees
           </Link>
-          <h1 className="text-2xl font-semibold text-white">Oversight Actions</h1>
+          <h1 className="text-2xl font-semibold text-slate-800">Oversight Actions</h1>
           <p className="text-slate-400 mt-1">Track and manage actions across all committees</p>
         </div>
       </div>
@@ -161,7 +161,7 @@ export default function ActionsPage() {
               <Clock className="h-6 w-6 text-amber-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{openCount}</p>
+              <p className="text-2xl font-bold text-slate-800">{openCount}</p>
               <p className="text-sm text-slate-400">Open</p>
             </div>
           </div>
@@ -173,7 +173,7 @@ export default function ActionsPage() {
               <Clock className="h-6 w-6 text-blue-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{inProgressCount}</p>
+              <p className="text-2xl font-bold text-slate-800">{inProgressCount}</p>
               <p className="text-sm text-slate-400">In Progress</p>
             </div>
           </div>
@@ -185,7 +185,7 @@ export default function ActionsPage() {
               <AlertCircle className="h-6 w-6 text-rose-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{overdueCount}</p>
+              <p className="text-2xl font-bold text-slate-800">{overdueCount}</p>
               <p className="text-sm text-slate-400">Overdue</p>
             </div>
           </div>
@@ -197,7 +197,7 @@ export default function ActionsPage() {
               <CheckCircle className="h-6 w-6 text-emerald-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{completedCount}</p>
+              <p className="text-2xl font-bold text-slate-800">{completedCount}</p>
               <p className="text-sm text-slate-400">Completed</p>
             </div>
           </div>
@@ -241,7 +241,7 @@ export default function ActionsPage() {
             type="checkbox"
             checked={overdueOnly}
             onChange={(e) => setOverdueOnly(e.target.checked)}
-            className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+            className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
           />
           Overdue Only
         </label>
@@ -259,7 +259,7 @@ export default function ActionsPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-white font-medium">{action.title}</h3>
+                    <h3 className="text-slate-800 font-medium">{action.title}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
                       <StatusIcon className="h-3 w-3" />
                       {action.status.replace('_', ' ')}

@@ -92,7 +92,7 @@ const DEPENDENCY_TYPES: { value: DependencyType; label: string; color: string }[
   { value: 'causes', label: 'Causes', color: 'text-red-400' },
   { value: 'caused_by', label: 'Caused By', color: 'text-orange-400' },
   { value: 'related', label: 'Related', color: 'text-blue-400' },
-  { value: 'amplifies', label: 'Amplifies', color: 'text-purple-400' },
+  { value: 'amplifies', label: 'Amplifies', color: 'text-primary-600' },
   { value: 'mitigates', label: 'Mitigates', color: 'text-green-400' },
 ];
 
@@ -104,18 +104,18 @@ export default function AdvancedERMPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Advanced ERM</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Advanced ERM</h1>
           <p className="text-slate-400">Enterprise Risk Management - KRIs, Incidents, Reviews & Reports</p>
         </div>
         <Link
           href="/risks"
-          className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+          className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
         >
           Back to Risk Register
         </Link>
       </div>
 
-      <div className="flex space-x-1 rounded-xl bg-slate-800 p-1">
+      <div className="flex space-x-1 rounded-xl bg-white p-1">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -123,7 +123,7 @@ export default function AdvancedERMPage() {
             className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-primary-600 text-white'
-                : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                : 'text-slate-400 hover:bg-slate-200 hover:text-slate-900'
             }`}
           >
             <tab.icon className="h-4 w-4" />
@@ -132,7 +132,7 @@ export default function AdvancedERMPage() {
         ))}
       </div>
 
-      <div className="rounded-xl bg-slate-800 p-6">
+      <div className="rounded-xl bg-white p-6">
         {activeTab === 'kris' && <KRIsTab />}
         {activeTab === 'incidents' && <IncidentsTab />}
         {activeTab === 'reviews' && <ReviewsTab />}
@@ -197,7 +197,7 @@ function KRIsTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold text-white">Key Risk Indicators</h2>
+          <h2 className="text-lg font-semibold text-slate-800">Key Risk Indicators</h2>
           {alertCount > 0 && (
             <div className="flex items-center gap-2">
               {redAlerts > 0 && (
@@ -241,7 +241,7 @@ function KRIsTab() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Activity className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-white">No KRIs defined</h3>
+          <h3 className="mt-4 text-lg font-medium text-slate-800">No KRIs defined</h3>
           <p className="mt-1 text-slate-400">Create Key Risk Indicators to monitor risk metrics</p>
         </div>
       )}
@@ -301,19 +301,19 @@ function KRICard({
     : 0;
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className={`h-3 w-3 rounded-full ${statusColor}`} />
           <div>
-            <h3 className="font-medium text-white">{kri.name}</h3>
+            <h3 className="font-medium text-slate-800">{kri.name}</h3>
             <p className="text-sm text-slate-400">{kri.frequency} measurement</p>
           </div>
         </div>
         <div className="flex gap-1">
           <button
             onClick={onEdit}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
+            className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
           >
             <Edit2 className="h-4 w-4" />
           </button>
@@ -329,7 +329,7 @@ function KRICard({
       <div className="mt-4">
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-3xl font-bold text-white">
+            <p className="text-3xl font-bold text-slate-800">
               {kri.current_value !== undefined && kri.current_value !== null
                 ? `${kri.current_value}${kri.unit || ''}`
                 : '—'}
@@ -366,7 +366,7 @@ function KRICard({
 
       <button
         onClick={onMeasure}
-        className="mt-4 w-full rounded-lg bg-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-600"
+        className="mt-4 w-full rounded-lg bg-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-600"
       >
         Record Measurement
       </button>
@@ -421,10 +421,10 @@ function KRIModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-slate-800 p-6">
+      <div className="w-full max-w-lg rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{kri ? 'Edit KRI' : 'Create KRI'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">{kri ? 'Edit KRI' : 'Create KRI'}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -435,7 +435,7 @@ function KRIModal({
             <select
               value={formData.risk_id}
               onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             >
               {risks.map((risk) => (
@@ -452,7 +452,7 @@ function KRIModal({
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             />
           </div>
@@ -462,7 +462,7 @@ function KRIModal({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -473,7 +473,7 @@ function KRIModal({
               <select
                 value={formData.metric_type}
                 onChange={(e) => setFormData({ ...formData, metric_type: e.target.value as KRIMetricType })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 <option value="percentage">Percentage</option>
                 <option value="count">Count</option>
@@ -488,7 +488,7 @@ function KRIModal({
                 type="text"
                 value={formData.unit}
                 onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               />
             </div>
           </div>
@@ -500,7 +500,7 @@ function KRIModal({
                 type="number"
                 value={formData.green_threshold}
                 onChange={(e) => setFormData({ ...formData, green_threshold: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               />
             </div>
             <div>
@@ -509,7 +509,7 @@ function KRIModal({
                 type="number"
                 value={formData.amber_threshold}
                 onChange={(e) => setFormData({ ...formData, amber_threshold: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               />
             </div>
           </div>
@@ -520,7 +520,7 @@ function KRIModal({
               <select
                 value={formData.threshold_direction}
                 onChange={(e) => setFormData({ ...formData, threshold_direction: e.target.value as KRIThresholdDirection })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 <option value="higher_is_better">Higher is Better</option>
                 <option value="lower_is_better">Lower is Better</option>
@@ -531,7 +531,7 @@ function KRIModal({
               <select
                 value={formData.frequency}
                 onChange={(e) => setFormData({ ...formData, frequency: e.target.value as KRIFrequency })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
@@ -546,7 +546,7 @@ function KRIModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -589,10 +589,10 @@ function MeasureKRIModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Record Measurement</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">Record Measurement</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -608,7 +608,7 @@ function MeasureKRIModal({
                 step="0.01"
                 value={value}
                 onChange={(e) => setValue(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
                 required
               />
               {kri.unit && <span className="text-slate-400">{kri.unit}</span>}
@@ -620,7 +620,7 @@ function MeasureKRIModal({
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -629,7 +629,7 @@ function MeasureKRIModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -701,48 +701,48 @@ function IncidentsTab() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg bg-slate-900 p-4">
+        <div className="rounded-lg bg-slate-50 p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-slate-700 p-2">
+            <div className="rounded-lg bg-slate-200 p-2">
               <AlertTriangle className="h-5 w-5 text-red-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.total_incidents || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.total_incidents || 0}</p>
               <p className="text-xs text-slate-400">Total Incidents</p>
             </div>
           </div>
         </div>
-        <div className="rounded-lg bg-slate-900 p-4">
+        <div className="rounded-lg bg-slate-50 p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-slate-700 p-2">
+            <div className="rounded-lg bg-slate-200 p-2">
               <AlertCircle className="h-5 w-5 text-yellow-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.open_incidents || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.open_incidents || 0}</p>
               <p className="text-xs text-slate-400">Open Incidents</p>
             </div>
           </div>
         </div>
-        <div className="rounded-lg bg-slate-900 p-4">
+        <div className="rounded-lg bg-slate-50 p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-slate-700 p-2">
+            <div className="rounded-lg bg-slate-200 p-2">
               <DollarSign className="h-5 w-5 text-green-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-slate-800">
                 ${((dashboard?.total_financial_impact || 0) / 1000).toFixed(0)}K
               </p>
               <p className="text-xs text-slate-400">Financial Impact</p>
             </div>
           </div>
         </div>
-        <div className="rounded-lg bg-slate-900 p-4">
+        <div className="rounded-lg bg-slate-50 p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-slate-700 p-2">
+            <div className="rounded-lg bg-slate-200 p-2">
               <Clock className="h-5 w-5 text-blue-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.avg_resolution_time_days || 0}d</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.avg_resolution_time_days || 0}d</p>
               <p className="text-xs text-slate-400">Avg Resolution</p>
             </div>
           </div>
@@ -754,7 +754,7 @@ function IncidentsTab() {
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
-            className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
           >
             <option value="all">All Severities</option>
             {SEVERITIES.map((s) => (
@@ -766,7 +766,7 @@ function IncidentsTab() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
           >
             <option value="all">All Statuses</option>
             {INCIDENT_STATUSES.map((s) => (
@@ -789,7 +789,7 @@ function IncidentsTab() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-700">
+              <tr className="border-b border-slate-200">
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Incident</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Severity</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Status</th>
@@ -803,10 +803,10 @@ function IncidentsTab() {
                 const severity = SEVERITIES.find((s) => s.value === incident.severity);
                 const status = INCIDENT_STATUSES.find((s) => s.value === incident.status);
                 return (
-                  <tr key={incident.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                  <tr key={incident.id} className="border-b border-slate-200 hover:bg-slate-200/30">
                     <td className="px-4 py-3">
                       <div>
-                        <p className="font-medium text-white">{incident.title}</p>
+                        <p className="font-medium text-slate-800">{incident.title}</p>
                         {incident.risk_title && (
                           <p className="text-sm text-slate-400">Risk: {incident.risk_title}</p>
                         )}
@@ -822,10 +822,10 @@ function IncidentsTab() {
                         {status?.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-300">
+                    <td className="px-4 py-3 text-sm text-slate-600">
                       {new Date(incident.incident_date).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-300">
+                    <td className="px-4 py-3 text-sm text-slate-600">
                       {incident.financial_impact
                         ? `$${incident.financial_impact.toLocaleString()}`
                         : '—'}
@@ -834,7 +834,7 @@ function IncidentsTab() {
                       <div className="flex gap-1">
                         <button
                           onClick={() => setEditingIncident(incident)}
-                          className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
+                          className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
@@ -859,7 +859,7 @@ function IncidentsTab() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertTriangle className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-white">No incidents logged</h3>
+          <h3 className="mt-4 text-lg font-medium text-slate-800">No incidents logged</h3>
           <p className="mt-1 text-slate-400">Log incidents when they occur to track and analyze</p>
         </div>
       )}
@@ -940,10 +940,10 @@ function IncidentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-slate-800 p-6">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{incident ? 'Edit Incident' : 'Log Incident'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">{incident ? 'Edit Incident' : 'Log Incident'}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -955,7 +955,7 @@ function IncidentModal({
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             />
           </div>
@@ -966,7 +966,7 @@ function IncidentModal({
               <select
                 value={formData.risk_id || ''}
                 onChange={(e) => setFormData({ ...formData, risk_id: e.target.value ? Number(e.target.value) : undefined })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 <option value="">None</option>
                 {risks.map((risk) => (
@@ -982,7 +982,7 @@ function IncidentModal({
                 type="date"
                 value={formData.incident_date}
                 onChange={(e) => setFormData({ ...formData, incident_date: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
                 required
               />
             </div>
@@ -994,7 +994,7 @@ function IncidentModal({
               <select
                 value={formData.severity}
                 onChange={(e) => setFormData({ ...formData, severity: e.target.value as IncidentSeverity })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 {SEVERITIES.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -1009,7 +1009,7 @@ function IncidentModal({
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as IncidentStatus)}
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
                 >
                   {INCIDENT_STATUSES.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -1025,7 +1025,7 @@ function IncidentModal({
                 type="number"
                 value={formData.financial_impact || ''}
                 onChange={(e) => setFormData({ ...formData, financial_impact: e.target.value ? Number(e.target.value) : undefined })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               />
             </div>
           </div>
@@ -1035,7 +1035,7 @@ function IncidentModal({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -1045,7 +1045,7 @@ function IncidentModal({
             <textarea
               value={formData.root_cause}
               onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -1055,7 +1055,7 @@ function IncidentModal({
             <textarea
               value={formData.corrective_actions}
               onChange={(e) => setFormData({ ...formData, corrective_actions: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -1064,7 +1064,7 @@ function IncidentModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -1137,7 +1137,7 @@ function ReviewsTab() {
           <div className="flex items-center gap-3">
             <Clock className="h-8 w-8 text-yellow-400" />
             <div>
-              <p className="text-2xl font-bold text-white">{pendingReviews?.length || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{pendingReviews?.length || 0}</p>
               <p className="text-sm text-yellow-400">Pending Reviews</p>
             </div>
           </div>
@@ -1146,7 +1146,7 @@ function ReviewsTab() {
           <div className="flex items-center gap-3">
             <AlertCircle className="h-8 w-8 text-red-400" />
             <div>
-              <p className="text-2xl font-bold text-white">{overdueReviews?.length || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{overdueReviews?.length || 0}</p>
               <p className="text-sm text-red-400">Overdue Reviews</p>
             </div>
           </div>
@@ -1155,7 +1155,7 @@ function ReviewsTab() {
           <div className="flex items-center gap-3">
             <CheckCircle className="h-8 w-8 text-green-400" />
             <div>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-slate-800">
                 {reviews?.filter((r) => r.status === 'completed').length || 0}
               </p>
               <p className="text-sm text-green-400">Completed This Month</p>
@@ -1168,7 +1168,7 @@ function ReviewsTab() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white"
+          className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
@@ -1194,7 +1194,7 @@ function ReviewsTab() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Calendar className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-white">No reviews scheduled</h3>
+          <h3 className="mt-4 text-lg font-medium text-slate-800">No reviews scheduled</h3>
           <p className="mt-1 text-slate-400">Schedule risk reviews to maintain compliance</p>
         </div>
       )}
@@ -1229,10 +1229,10 @@ function ReviewCard({ review }: { review: RiskReview }) {
   });
 
   return (
-    <div className={`rounded-lg border p-4 ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700 bg-slate-900'}`}>
+    <div className={`rounded-lg border p-4 ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 bg-slate-50'}`}>
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="font-medium text-white">{review.risk_title || `Risk #${review.risk_id}`}</h3>
+          <h3 className="font-medium text-slate-800">{review.risk_title || `Risk #${review.risk_id}`}</h3>
           <div className="mt-1 flex items-center gap-3">
             <span className={`rounded-full px-2 py-0.5 text-xs ${statusColor}`}>
               {review.status.replace('_', ' ')}
@@ -1243,7 +1243,7 @@ function ReviewCard({ review }: { review: RiskReview }) {
           </div>
         </div>
         <div className="text-right">
-          <p className={`text-sm font-medium ${isOverdue ? 'text-red-400' : 'text-slate-300'}`}>
+          <p className={`text-sm font-medium ${isOverdue ? 'text-red-400' : 'text-slate-600'}`}>
             Due: {new Date(review.due_date).toLocaleDateString()}
           </p>
           {isOverdue && <p className="text-xs text-red-400">Overdue</p>}
@@ -1275,8 +1275,8 @@ function ReviewCard({ review }: { review: RiskReview }) {
       )}
 
       {review.findings && (
-        <div className="mt-3 rounded bg-slate-800 p-3">
-          <p className="text-sm text-slate-300">{review.findings}</p>
+        <div className="mt-3 rounded bg-white p-3">
+          <p className="text-sm text-slate-600">{review.findings}</p>
         </div>
       )}
     </div>
@@ -1311,10 +1311,10 @@ function ReviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-slate-800 p-6">
+      <div className="w-full max-w-lg rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Schedule Review</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">Schedule Review</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1325,7 +1325,7 @@ function ReviewModal({
             <select
               value={formData.risk_id}
               onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             >
               {risks.map((risk) => (
@@ -1342,7 +1342,7 @@ function ReviewModal({
               <select
                 value={formData.review_cycle}
                 onChange={(e) => setFormData({ ...formData, review_cycle: e.target.value as ReviewCycle })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 <option value="monthly">Monthly</option>
                 <option value="quarterly">Quarterly</option>
@@ -1355,7 +1355,7 @@ function ReviewModal({
               <select
                 value={formData.review_type}
                 onChange={(e) => setFormData({ ...formData, review_type: e.target.value as ReviewType })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 <option value="periodic">Periodic</option>
                 <option value="triggered">Triggered</option>
@@ -1371,7 +1371,7 @@ function ReviewModal({
               type="date"
               value={formData.due_date}
               onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             />
           </div>
@@ -1380,7 +1380,7 @@ function ReviewModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -1449,11 +1449,11 @@ function DependenciesTab() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold text-white">Risk Dependencies</h2>
+          <h2 className="text-lg font-semibold text-slate-800">Risk Dependencies</h2>
           <select
             value={selectedRisk || ''}
             onChange={(e) => setSelectedRisk(e.target.value ? Number(e.target.value) : null)}
-            className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
           >
             <option value="">Select risk for cascade analysis</option>
             {risks?.map((risk) => (
@@ -1474,19 +1474,19 @@ function DependenciesTab() {
 
       {cascadeAnalysis && (
         <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
-          <h3 className="font-medium text-white">Cascade Analysis: {cascadeAnalysis.risk_title}</h3>
+          <h3 className="font-medium text-slate-800">Cascade Analysis: {cascadeAnalysis.risk_title}</h3>
           <p className="mt-1 text-sm text-slate-400">
             Total Cascade Score: <span className="font-bold text-blue-400">{cascadeAnalysis.total_cascade_score.toFixed(1)}</span>
           </p>
           
           {cascadeAnalysis.direct_impacts.length > 0 && (
             <div className="mt-4">
-              <p className="text-sm font-medium text-slate-300">Direct Impacts:</p>
+              <p className="text-sm font-medium text-slate-600">Direct Impacts:</p>
               <div className="mt-2 space-y-1">
                 {cascadeAnalysis.direct_impacts.map((impact) => (
                   <div key={impact.id} className="flex items-center gap-2 text-sm">
                     <ArrowRight className="h-4 w-4 text-blue-400" />
-                    <span className="text-slate-300">{impact.title}</span>
+                    <span className="text-slate-600">{impact.title}</span>
                     <span className="text-slate-500">({impact.type}, strength: {impact.strength})</span>
                   </div>
                 ))}
@@ -1501,10 +1501,10 @@ function DependenciesTab() {
           {dependencies.map((dep) => {
             const typeInfo = DEPENDENCY_TYPES.find((t) => t.value === dep.dependency_type);
             return (
-              <div key={dep.id} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900 p-4">
+              <div key={dep.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="font-medium text-white">{dep.source_risk_title || `Risk #${dep.source_risk_id}`}</p>
+                    <p className="font-medium text-slate-800">{dep.source_risk_title || `Risk #${dep.source_risk_id}`}</p>
                     <p className="text-xs text-slate-500">Source</p>
                   </div>
                   <div className="flex flex-col items-center">
@@ -1512,14 +1512,14 @@ function DependenciesTab() {
                     <span className={`text-xs ${typeInfo?.color || 'text-slate-400'}`}>{typeInfo?.label}</span>
                   </div>
                   <div>
-                    <p className="font-medium text-white">{dep.target_risk_title || `Risk #${dep.target_risk_id}`}</p>
+                    <p className="font-medium text-slate-800">{dep.target_risk_title || `Risk #${dep.target_risk_id}`}</p>
                     <p className="text-xs text-slate-500">Target</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <p className="text-sm text-slate-400">Strength</p>
-                    <p className="font-medium text-white">{dep.strength}/5</p>
+                    <p className="font-medium text-slate-800">{dep.strength}/5</p>
                   </div>
                   <button
                     onClick={() => {
@@ -1539,7 +1539,7 @@ function DependenciesTab() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <GitBranch className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-white">No dependencies defined</h3>
+          <h3 className="mt-4 text-lg font-medium text-slate-800">No dependencies defined</h3>
           <p className="mt-1 text-slate-400">Create relationships between risks to understand cascading effects</p>
         </div>
       )}
@@ -1591,10 +1591,10 @@ function DependencyModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-slate-800 p-6">
+      <div className="w-full max-w-lg rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Add Dependency</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">Add Dependency</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1605,7 +1605,7 @@ function DependencyModal({
             <select
               value={formData.source_risk_id}
               onChange={(e) => setFormData({ ...formData, source_risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             >
               {risks.map((risk) => (
@@ -1621,7 +1621,7 @@ function DependencyModal({
             <select
               value={formData.dependency_type}
               onChange={(e) => setFormData({ ...formData, dependency_type: e.target.value as DependencyType })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
             >
               {DEPENDENCY_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -1636,7 +1636,7 @@ function DependencyModal({
             <select
               value={formData.target_risk_id}
               onChange={(e) => setFormData({ ...formData, target_risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             >
               {risks.map((risk) => (
@@ -1659,7 +1659,7 @@ function DependencyModal({
             />
             <div className="flex justify-between text-xs text-slate-500">
               <span>Weak</span>
-              <span className="font-medium text-white">{formData.strength}</span>
+              <span className="font-medium text-slate-800">{formData.strength}</span>
               <span>Strong</span>
             </div>
           </div>
@@ -1669,7 +1669,7 @@ function DependencyModal({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -1678,7 +1678,7 @@ function DependencyModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -1769,7 +1769,7 @@ function ReportsTab() {
             className={`rounded-lg px-4 py-2 text-sm capitalize ${
               selectedReportType === type
                 ? 'bg-primary-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                : 'bg-slate-200 text-slate-600 hover:bg-slate-600'
             }`}
           >
             {type} Report
@@ -1780,33 +1780,33 @@ function ReportsTab() {
       {selectedReportType === 'executive' && executiveDashboard && (
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg bg-slate-900 p-4">
+            <div className="rounded-lg bg-slate-50 p-4">
               <p className="text-sm text-slate-400">Total Risks</p>
-              <p className="text-3xl font-bold text-white">{executiveDashboard.summary?.total_risks || 0}</p>
+              <p className="text-3xl font-bold text-slate-800">{executiveDashboard.summary?.total_risks || 0}</p>
             </div>
-            <div className="rounded-lg bg-slate-900 p-4">
+            <div className="rounded-lg bg-slate-50 p-4">
               <p className="text-sm text-slate-400">Critical Risks</p>
               <p className="text-3xl font-bold text-red-400">{executiveDashboard.summary?.critical_risks || 0}</p>
             </div>
-            <div className="rounded-lg bg-slate-900 p-4">
+            <div className="rounded-lg bg-slate-50 p-4">
               <p className="text-sm text-slate-400">Avg Risk Score</p>
-              <p className="text-3xl font-bold text-white">{executiveDashboard.summary?.avg_risk_score?.toFixed(1) || 0}</p>
+              <p className="text-3xl font-bold text-slate-800">{executiveDashboard.summary?.avg_risk_score?.toFixed(1) || 0}</p>
             </div>
-            <div className="rounded-lg bg-slate-900 p-4">
+            <div className="rounded-lg bg-slate-50 p-4">
               <p className="text-sm text-slate-400">Appetite Breaches</p>
               <p className="text-3xl font-bold text-orange-400">{executiveDashboard.summary?.risks_exceeding_appetite || 0}</p>
             </div>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-lg bg-slate-900 p-4">
-              <h3 className="font-medium text-white">Top Risks</h3>
+            <div className="rounded-lg bg-slate-50 p-4">
+              <h3 className="font-medium text-slate-800">Top Risks</h3>
               <div className="mt-4 space-y-3">
                 {executiveDashboard.top_risks?.slice(0, 5).map((risk) => (
                   <div key={risk.id} className="flex items-center justify-between">
-                    <span className="text-sm text-slate-300">{risk.title}</span>
+                    <span className="text-sm text-slate-600">{risk.title}</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-white">{risk.score}</span>
+                      <span className="font-medium text-slate-800">{risk.score}</span>
                       {risk.trend === 'up' ? (
                         <TrendingUp className="h-4 w-4 text-red-400" />
                       ) : risk.trend === 'down' ? (
@@ -1818,12 +1818,12 @@ function ReportsTab() {
               </div>
             </div>
 
-            <div className="rounded-lg bg-slate-900 p-4">
-              <h3 className="font-medium text-white">KRI Alerts</h3>
+            <div className="rounded-lg bg-slate-50 p-4">
+              <h3 className="font-medium text-slate-800">KRI Alerts</h3>
               <div className="mt-4 space-y-3">
                 {executiveDashboard.kri_alerts?.slice(0, 5).map((alert) => (
                   <div key={alert.id} className="flex items-center justify-between">
-                    <span className="text-sm text-slate-300">{alert.name}</span>
+                    <span className="text-sm text-slate-600">{alert.name}</span>
                     <span className={`rounded-full px-2 py-0.5 text-xs ${
                       alert.status === 'red' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'
                     }`}>
@@ -1839,14 +1839,14 @@ function ReportsTab() {
 
       {selectedReportType === 'board' && boardSummary && (
         <div className="space-y-6">
-          <div className="rounded-lg bg-slate-900 p-4">
-            <h3 className="font-medium text-white">Risk Profile Summary</h3>
+          <div className="rounded-lg bg-slate-50 p-4">
+            <h3 className="font-medium text-slate-800">Risk Profile Summary</h3>
             <p className="text-sm text-slate-400">Period: {boardSummary.period || 'Current Quarter'}</p>
             
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               <div>
                 <p className="text-sm text-slate-400">Total Risks</p>
-                <p className="text-2xl font-bold text-white">{boardSummary.risk_profile_summary?.total_risks || 0}</p>
+                <p className="text-2xl font-bold text-slate-800">{boardSummary.risk_profile_summary?.total_risks || 0}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-400">New Risks</p>
@@ -1860,12 +1860,12 @@ function ReportsTab() {
           </div>
 
           {boardSummary.key_risk_changes && boardSummary.key_risk_changes.length > 0 && (
-            <div className="rounded-lg bg-slate-900 p-4">
-              <h3 className="font-medium text-white">Key Risk Changes</h3>
+            <div className="rounded-lg bg-slate-50 p-4">
+              <h3 className="font-medium text-slate-800">Key Risk Changes</h3>
               <div className="mt-4 space-y-3">
                 {boardSummary.key_risk_changes.map((change) => (
                   <div key={change.risk_id} className="flex items-center justify-between">
-                    <span className="text-sm text-slate-300">{change.title}</span>
+                    <span className="text-sm text-slate-600">{change.title}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-slate-500">{change.previous_score}</span>
                       <ArrowRight className="h-4 w-4 text-slate-500" />
@@ -1883,23 +1883,23 @@ function ReportsTab() {
 
       {selectedReportType === 'department' && aggregatedView && (
         <div className="space-y-6">
-          <div className="rounded-lg bg-slate-900 p-4">
-            <h3 className="font-medium text-white">Risk by Category</h3>
+          <div className="rounded-lg bg-slate-50 p-4">
+            <h3 className="font-medium text-slate-800">Risk by Category</h3>
             <div className="mt-4 space-y-4">
               {aggregatedView.map((view) => (
-                <div key={view.category} className="rounded-lg bg-slate-800 p-3">
+                <div key={view.category} className="rounded-lg bg-white p-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium capitalize text-white">{view.category}</span>
+                    <span className="font-medium capitalize text-slate-800">{view.category}</span>
                     <span className="text-sm text-slate-400">{view.total_count} risks</span>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-slate-400">Avg Inherent: </span>
-                      <span className="text-white">{view.avg_inherent_score?.toFixed(1) || 0}</span>
+                      <span className="text-slate-800">{view.avg_inherent_score?.toFixed(1) || 0}</span>
                     </div>
                     <div>
                       <span className="text-slate-400">Avg Residual: </span>
-                      <span className="text-white">{view.avg_residual_score?.toFixed(1) || 0}</span>
+                      <span className="text-slate-800">{view.avg_residual_score?.toFixed(1) || 0}</span>
                     </div>
                   </div>
                 </div>
@@ -1911,14 +1911,14 @@ function ReportsTab() {
 
       {selectedReportType === 'audit' && (
         <div className="space-y-6">
-          <div className="rounded-lg bg-slate-900 p-4">
-            <h3 className="font-medium text-white">Appetite Breaches</h3>
+          <div className="rounded-lg bg-slate-50 p-4">
+            <h3 className="font-medium text-slate-800">Appetite Breaches</h3>
             {appetiteBreaches && appetiteBreaches.length > 0 ? (
               <div className="mt-4 space-y-3">
                 {appetiteBreaches.map((breach) => (
                   <div key={breach.risk_id} className="flex items-center justify-between rounded-lg bg-red-500/10 border border-red-500/30 p-3">
                     <div>
-                      <p className="font-medium text-white">{breach.risk_title}</p>
+                      <p className="font-medium text-slate-800">{breach.risk_title}</p>
                       <p className="text-sm text-slate-400">{breach.category}</p>
                     </div>
                     <div className="text-right">

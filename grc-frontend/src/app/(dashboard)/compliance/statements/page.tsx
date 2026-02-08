@@ -401,7 +401,7 @@ export default function PolicyStatementsPage() {
                   type="checkbox"
                   checked={allSelected}
                   onChange={handleSelectAll}
-                  className="rounded border-slate-600 bg-slate-800 text-primary-500"
+                  className="rounded border-slate-300 bg-white text-primary-500"
                 />
               </th>
               <th>Code</th>
@@ -439,7 +439,7 @@ export default function PolicyStatementsPage() {
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => handleToggleStatement(stmt.id)}
-                        className="rounded border-slate-600 bg-slate-800 text-primary-500"
+                        className="rounded border-slate-300 bg-white text-primary-500"
                       />
                     </td>
                     <td className="font-mono text-xs">{stmt.statement_code || '-'}</td>
@@ -510,10 +510,10 @@ export default function PolicyStatementsPage() {
 
       {isConvertModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-slate-700">
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
               <div>
-                <h2 className="text-lg font-semibold text-white">Convert to Internal Controls</h2>
+                <h2 className="text-lg font-semibold text-slate-800">Convert to Internal Controls</h2>
                 <p className="text-sm text-slate-400">Create controls from {selectedStatementIds.length} selected statement(s)</p>
               </div>
               <button onClick={() => setIsConvertModalOpen(false)} className="btn-ghost btn-sm">
@@ -522,9 +522,9 @@ export default function PolicyStatementsPage() {
             </div>
 
             <div className="p-6 space-y-6">
-              <div className="bg-slate-900 rounded-lg p-4">
-                <p className="text-sm text-slate-300">
-                  <span className="font-semibold text-white">{selectedStatementIds.length}</span> statement(s) will be converted to internal controls.
+              <div className="bg-slate-50 rounded-lg p-4">
+                <p className="text-sm text-slate-600">
+                  <span className="font-semibold text-slate-800">{selectedStatementIds.length}</span> statement(s) will be converted to internal controls.
                 </p>
               </div>
 
@@ -555,7 +555,7 @@ export default function PolicyStatementsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-700">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
               <button onClick={() => setIsConvertModalOpen(false)} className="btn-secondary">
                 Cancel
               </button>
@@ -578,10 +578,10 @@ export default function PolicyStatementsPage() {
 
       {isModalOpen && selectedStatement && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-slate-700">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
               <div>
-                <h2 className="text-lg font-semibold text-white">Statement Details</h2>
+                <h2 className="text-lg font-semibold text-slate-800">Statement Details</h2>
                 <p className="text-sm text-slate-400">{selectedStatement.statement_code}</p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="btn-ghost btn-sm">
@@ -592,7 +592,7 @@ export default function PolicyStatementsPage() {
             <div className="p-6 space-y-6">
               <div>
                 <label className="label">Statement Text</label>
-                <div className="bg-slate-900 rounded-lg p-4 text-sm text-slate-300">
+                <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-600">
                   {selectedStatement.statement_text || 'No text available'}
                 </div>
               </div>
@@ -600,11 +600,11 @@ export default function PolicyStatementsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label">Document</label>
-                  <p className="text-sm text-slate-300">{selectedStatement.document_title || '-'}</p>
+                  <p className="text-sm text-slate-600">{selectedStatement.document_title || '-'}</p>
                 </div>
                 <div>
                   <label className="label">Category</label>
-                  <p className="text-sm text-slate-300 capitalize">{selectedStatement.category?.replace(/_/g, ' ') || '-'}</p>
+                  <p className="text-sm text-slate-600 capitalize">{selectedStatement.category?.replace(/_/g, ' ') || '-'}</p>
                 </div>
               </div>
 
@@ -656,9 +656,9 @@ export default function PolicyStatementsPage() {
                   <LinkIcon className="h-4 w-4" />
                   Link Evidence
                 </label>
-                <div className="space-y-2 max-h-40 overflow-y-auto bg-slate-900 rounded-lg p-3">
+                <div className="space-y-2 max-h-40 overflow-y-auto bg-slate-50 rounded-lg p-3">
                   {(evidenceList || []).map((ev: any) => (
-                    <label key={ev.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded">
+                    <label key={ev.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-2 rounded">
                       <input
                         type="checkbox"
                         checked={evidenceToLink.includes(ev.id)}
@@ -669,9 +669,9 @@ export default function PolicyStatementsPage() {
                             setEvidenceToLink(evidenceToLink.filter(id => id !== ev.id));
                           }
                         }}
-                        className="rounded border-slate-600 bg-slate-800 text-primary-500"
+                        className="rounded border-slate-300 bg-white text-primary-500"
                       />
-                      <span className="text-sm text-slate-300">{ev.name}</span>
+                      <span className="text-sm text-slate-600">{ev.name}</span>
                     </label>
                   ))}
                   {(!evidenceList || evidenceList.length === 0) && (
@@ -685,9 +685,9 @@ export default function PolicyStatementsPage() {
                   <label className="label">Linked Evidence</label>
                   <div className="space-y-2">
                     {selectedStatement.evidence.map((ev) => (
-                      <div key={ev.id} className="flex items-center gap-2 bg-slate-900 p-2 rounded-lg">
+                      <div key={ev.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg">
                         <CheckCircle className="h-4 w-4 text-emerald-400" />
-                        <span className="text-sm text-slate-300">{ev.name}</span>
+                        <span className="text-sm text-slate-600">{ev.name}</span>
                       </div>
                     ))}
                   </div>
@@ -695,7 +695,7 @@ export default function PolicyStatementsPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-700">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
               <button onClick={() => setIsModalOpen(false)} className="btn-secondary">
                 Cancel
               </button>

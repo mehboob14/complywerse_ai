@@ -131,7 +131,7 @@ const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
 
 const SOURCE_STYLES: Record<string, { bg: string; text: string }> = {
   manual: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  ai: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  ai: { bg: 'bg-primary-500/20', text: 'text-primary-600' },
   import: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
 };
 
@@ -302,7 +302,7 @@ export default function ControlGroupDetailPage() {
       <div className="flex items-start gap-4">
         <Link
           href="/control-library"
-          className="mt-1 rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+          className="mt-1 rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -314,7 +314,7 @@ export default function ControlGroupDetailPage() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm font-medium text-primary-400">{group.code}</span>
-                <h1 className="text-2xl font-bold text-white">{group.name}</h1>
+                <h1 className="text-2xl font-bold text-slate-800">{group.name}</h1>
               </div>
               <p className="text-slate-400">{group.description || 'No description'}</p>
             </div>
@@ -327,7 +327,7 @@ export default function ControlGroupDetailPage() {
             </span>
           )}
           {group.domain && (
-            <span className="rounded-full bg-purple-500/20 px-3 py-1 text-sm text-purple-400">
+            <span className="rounded-full bg-primary-500/20 px-3 py-1 text-sm text-primary-600">
               {group.domain}
             </span>
           )}
@@ -335,7 +335,7 @@ export default function ControlGroupDetailPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowEditModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-white hover:bg-slate-600"
+            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-slate-800 hover:bg-slate-600"
           >
             <Edit2 className="h-4 w-4" />
             Edit
@@ -358,17 +358,17 @@ export default function ControlGroupDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
           {group.ai_summary && (
-            <div className="rounded-lg border border-purple-700/50 bg-purple-900/20 p-4">
-              <div className="mb-2 flex items-center gap-2 text-purple-400">
+            <div className="rounded-lg border border-primary-200 bg-primary-50 p-4">
+              <div className="mb-2 flex items-center gap-2 text-primary-600">
                 <Brain className="h-4 w-4" />
                 <span className="text-sm font-medium">AI Summary</span>
               </div>
-              <p className="text-slate-300">{group.ai_summary}</p>
+              <p className="text-slate-600">{group.ai_summary}</p>
             </div>
           )}
 
           {group.keywords && group.keywords.length > 0 && (
-            <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="mb-3 flex items-center gap-2 text-slate-400">
                 <Tag className="h-4 w-4" />
                 <span className="text-sm font-medium">Keywords</span>
@@ -377,7 +377,7 @@ export default function ControlGroupDetailPage() {
                 {group.keywords.map((keyword, idx) => (
                   <span
                     key={idx}
-                    className="rounded-full bg-slate-700 px-3 py-1 text-sm text-slate-300"
+                    className="rounded-full bg-slate-200 px-3 py-1 text-sm text-slate-600"
                   >
                     {keyword}
                   </span>
@@ -388,7 +388,7 @@ export default function ControlGroupDetailPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
             <div className="mb-3 flex items-center gap-2 text-slate-400">
               <Calendar className="h-4 w-4" />
               <span className="text-sm font-medium">Details</span>
@@ -396,15 +396,15 @@ export default function ControlGroupDetailPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">Created</span>
-                <span className="text-white">{formatDate(group.created_at)}</span>
+                <span className="text-slate-800">{formatDate(group.created_at)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Updated</span>
-                <span className="text-white">{formatDate(group.updated_at)}</span>
+                <span className="text-slate-800">{formatDate(group.updated_at)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Total Controls</span>
-                <span className="text-white">{group.total_control_count}</span>
+                <span className="text-slate-800">{group.total_control_count}</span>
               </div>
             </div>
           </div>
@@ -417,11 +417,11 @@ export default function ControlGroupDetailPage() {
           className={`rounded-lg border p-4 text-center transition-colors ${
             frameworkFilter === null
               ? 'border-primary-500 bg-primary-500/10'
-              : 'border-slate-700 bg-slate-800 hover:bg-slate-700'
+              : 'border-slate-200 bg-white hover:bg-slate-200'
           }`}
         >
           <Shield className="mx-auto mb-2 h-6 w-6 text-green-400" />
-          <div className="text-lg font-bold text-white">
+          <div className="text-lg font-bold text-slate-800">
             {frameworksData?.normalized_control_count || 0}
           </div>
           <div className="text-xs text-slate-400">Normalized</div>
@@ -433,17 +433,17 @@ export default function ControlGroupDetailPage() {
             className={`rounded-lg border p-4 text-center transition-colors ${
               frameworkFilter === fw.framework_id
                 ? 'border-primary-500 bg-primary-500/10'
-                : 'border-slate-700 bg-slate-800 hover:bg-slate-700'
+                : 'border-slate-200 bg-white hover:bg-slate-200'
             }`}
           >
             <Layers className="mx-auto mb-2 h-6 w-6 text-orange-400" />
-            <div className="text-lg font-bold text-white">{fw.control_count}</div>
+            <div className="text-lg font-bold text-slate-800">{fw.control_count}</div>
             <div className="truncate text-xs text-slate-400">{fw.framework_code || fw.framework_name}</div>
           </button>
         ))}
       </div>
 
-      <div className="border-b border-slate-700">
+      <div className="border-b border-slate-200">
         <nav className="flex gap-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -454,7 +454,7 @@ export default function ControlGroupDetailPage() {
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-400'
-                    : 'border-transparent text-slate-400 hover:text-white'
+                    : 'border-transparent text-slate-400 hover:text-slate-900'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -465,7 +465,7 @@ export default function ControlGroupDetailPage() {
         </nav>
       </div>
 
-      <div className="rounded-lg border border-slate-700 bg-slate-800 p-6">
+      <div className="rounded-lg border border-slate-200 bg-white p-6">
         {activeTab === 'controls' && (
           <MappedControlsTab
             normalizedControls={filteredControls.normalized}
@@ -556,7 +556,7 @@ function MappedControlsTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">
+        <h3 className="text-lg font-semibold text-slate-800">
           Mapped Controls ({allControls.length})
         </h3>
         <div className="flex items-center gap-3">
@@ -566,7 +566,7 @@ function MappedControlsTab({
                 type="checkbox"
                 checked={groupByFramework}
                 onChange={(e) => setGroupByFramework(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-primary-600 focus:ring-primary-500"
+                className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
               />
               Group by framework
             </label>
@@ -584,7 +584,7 @@ function MappedControlsTab({
       {allControls.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Shield className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-white">No controls mapped</h3>
+          <h3 className="text-lg font-medium text-slate-800">No controls mapped</h3>
           <p className="mt-1 text-slate-400">Add controls to this group to get started</p>
           <button
             onClick={onAddControls}
@@ -657,9 +657,9 @@ function ControlsTable({
   getSourceStyle: (s: string | null) => { bg: string; text: string };
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-700">
+    <div className="overflow-hidden rounded-lg border border-slate-200">
       <table className="w-full">
-        <thead className="bg-slate-700/50">
+        <thead className="bg-slate-200/50">
           <tr>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Code</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Name</th>
@@ -673,12 +673,12 @@ function ControlsTable({
           {controls.map((control) => {
             const sourceStyle = getSourceStyle(control.mapping_source);
             return (
-              <tr key={`${control.type}-${control.mapping_id}`} className="hover:bg-slate-700/30">
+              <tr key={`${control.type}-${control.mapping_id}`} className="hover:bg-slate-200/30">
                 <td className="px-4 py-3">
                   <span className="font-mono text-sm text-primary-400">{control.code}</span>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="max-w-xs truncate text-sm text-white">{control.name}</p>
+                  <p className="max-w-xs truncate text-sm text-slate-800">{control.name}</p>
                 </td>
                 <td className="px-4 py-3">
                   {control.type === 'normalized' ? (
@@ -720,7 +720,7 @@ function SimilarityTab({ similarities }: { similarities: SimilarityItem[] }) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <GitMerge className="mb-4 h-12 w-12 text-slate-600" />
-        <h3 className="text-lg font-medium text-white">No similarity data</h3>
+        <h3 className="text-lg font-medium text-slate-800">No similarity data</h3>
         <p className="mt-1 text-slate-400">Run AI Analysis from the Control Library to generate similarities</p>
       </div>
     );
@@ -728,10 +728,10 @@ function SimilarityTab({ similarities }: { similarities: SimilarityItem[] }) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-white">Control Similarities</h3>
+      <h3 className="text-lg font-semibold text-slate-800">Control Similarities</h3>
       <div className="space-y-3">
         {similarities.map((sim) => (
-          <div key={sim.id} className="rounded-lg border border-slate-700 bg-slate-700/30 p-4">
+          <div key={sim.id} className="rounded-lg border border-slate-200 bg-slate-200/30 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="text-center">
@@ -779,7 +779,7 @@ function EvidenceRecommendationsTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">
+        <h3 className="text-lg font-semibold text-slate-800">
           Evidence Recommendations ({recommendations.length})
         </h3>
         <button
@@ -799,7 +799,7 @@ function EvidenceRecommendationsTab({
       {recommendations.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <FileCheck className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-white">No recommendations yet</h3>
+          <h3 className="text-lg font-medium text-slate-800">No recommendations yet</h3>
           <p className="mt-1 text-slate-400">Generate AI-powered evidence recommendations for this control group</p>
           <button
             onClick={onGenerateRecs}
@@ -815,11 +815,11 @@ function EvidenceRecommendationsTab({
           {recommendations.map((rec) => {
             const priorityStyle = getPriorityStyle(rec.priority);
             return (
-              <div key={rec.id} className="rounded-lg border border-slate-700 bg-slate-700/30 p-4">
+              <div key={rec.id} className="rounded-lg border border-slate-200 bg-slate-200/30 p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-white">{rec.evidence_type}</h4>
+                      <h4 className="font-medium text-slate-800">{rec.evidence_type}</h4>
                       <span className={`rounded-full px-2 py-0.5 text-xs ${priorityStyle.bg} ${priorityStyle.text}`}>
                         {rec.priority}
                       </span>
@@ -841,7 +841,7 @@ function EvidenceRecommendationsTab({
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className="text-xs text-slate-500">Samples:</span>
                     {rec.sample_evidence_names.map((name, idx) => (
-                      <span key={idx} className="rounded bg-slate-600 px-2 py-0.5 text-xs text-slate-300">
+                      <span key={idx} className="rounded bg-slate-600 px-2 py-0.5 text-xs text-slate-600">
                         {name}
                       </span>
                     ))}
@@ -887,7 +887,7 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-white">Control Inheritance</h3>
+      <h3 className="text-lg font-semibold text-slate-800">Control Inheritance</h3>
       <p className="text-sm text-slate-400">
         Select a control from this group to view its inheritance relationships
       </p>
@@ -895,19 +895,19 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
           <h4 className="mb-3 text-sm font-medium text-slate-400">Controls in this group</h4>
-          <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-700">
+          <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200">
             {controls.map((control) => (
               <button
                 key={`${control.type}-${control.control_id}`}
                 onClick={() => setSelectedControl({ type: control.type, id: control.control_id })}
-                className={`w-full border-b border-slate-700 px-4 py-3 text-left last:border-0 ${
+                className={`w-full border-b border-slate-200 px-4 py-3 text-left last:border-0 ${
                   selectedControl?.type === control.type && selectedControl?.id === control.control_id
                     ? 'bg-primary-500/20'
-                    : 'hover:bg-slate-700/50'
+                    : 'hover:bg-slate-50'
                 }`}
               >
                 <span className="font-mono text-sm text-primary-400">{control.code}</span>
-                <p className="truncate text-sm text-slate-300">{control.name}</p>
+                <p className="truncate text-sm text-slate-600">{control.name}</p>
               </button>
             ))}
             {controls.length === 0 && (
@@ -919,7 +919,7 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
         <div className="space-y-4">
           {selectedControl ? (
             <>
-              <div className="rounded-lg border border-slate-700 bg-slate-700/30 p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-200/30 p-4">
                 <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-green-400">
                   <ChevronDown className="h-4 w-4" />
                   Controls Inherited FROM this control ({inheritedData?.inherited_controls?.length || 0})
@@ -929,10 +929,10 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
                 ) : inheritedData?.inherited_controls?.length > 0 ? (
                   <div className="space-y-2">
                     {inheritedData.inherited_controls.map((item: InheritanceItem) => (
-                      <div key={item.inheritance_id} className="flex items-center justify-between rounded bg-slate-800 p-2">
+                      <div key={item.inheritance_id} className="flex items-center justify-between rounded bg-white p-2">
                         <div>
                           <span className="font-mono text-xs text-primary-400">{item.control.code}</span>
-                          <p className="text-sm text-slate-300">{item.control.name}</p>
+                          <p className="text-sm text-slate-600">{item.control.name}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">{item.coverage_percentage}%</span>
@@ -948,7 +948,7 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
                 )}
               </div>
 
-              <div className="rounded-lg border border-slate-700 bg-slate-700/30 p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-200/30 p-4">
                 <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-orange-400">
                   <ChevronRight className="h-4 w-4" />
                   Controls that SATISFY this control ({satisfyingData?.satisfying_controls?.length || 0})
@@ -958,10 +958,10 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
                 ) : satisfyingData?.satisfying_controls?.length > 0 ? (
                   <div className="space-y-2">
                     {satisfyingData.satisfying_controls.map((item: InheritanceItem) => (
-                      <div key={item.inheritance_id} className="flex items-center justify-between rounded bg-slate-800 p-2">
+                      <div key={item.inheritance_id} className="flex items-center justify-between rounded bg-white p-2">
                         <div>
                           <span className="font-mono text-xs text-primary-400">{item.control.code}</span>
-                          <p className="text-sm text-slate-300">{item.control.name}</p>
+                          <p className="text-sm text-slate-600">{item.control.name}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">{item.coverage_percentage}%</span>
@@ -1077,10 +1077,10 @@ function AddControlsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-3xl rounded-lg border border-slate-700 bg-slate-800 shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
-          <h2 className="text-lg font-semibold text-white">Add Controls to Group</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+      <div className="mx-4 w-full max-w-3xl rounded-lg border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 className="text-lg font-semibold text-slate-800">Add Controls to Group</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1094,13 +1094,13 @@ function AddControlsModal({
                 placeholder="Search controls..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
               />
             </div>
             <select
               value={frameworkFilter || ''}
               onChange={(e) => setFrameworkFilter(e.target.value ? Number(e.target.value) : null)}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Frameworks</option>
               {frameworks?.map((fw: { id: number; name: string }) => (
@@ -1109,26 +1109,26 @@ function AddControlsModal({
             </select>
           </div>
 
-          <div className="max-h-80 overflow-y-auto rounded-lg border border-slate-700">
+          <div className="max-h-80 overflow-y-auto rounded-lg border border-slate-200">
             {frameworkFilter === null && filteredNormalized.length > 0 && (
               <>
-                <div className="sticky top-0 bg-slate-700 px-4 py-2 text-sm font-medium text-green-400">
+                <div className="sticky top-0 bg-slate-200 px-4 py-2 text-sm font-medium text-green-400">
                   Normalized Controls
                 </div>
                 {filteredNormalized.map((control: { id: number; code: string; name: string }) => (
                   <label
                     key={`normalized-${control.id}`}
-                    className="flex cursor-pointer items-center gap-3 border-b border-slate-700 px-4 py-3 hover:bg-slate-700/50"
+                    className="flex cursor-pointer items-center gap-3 border-b border-slate-200 px-4 py-3 hover:bg-slate-50"
                   >
                     <input
                       type="checkbox"
                       checked={selectedNormalized.includes(control.id)}
                       onChange={() => toggleNormalized(control.id)}
-                      className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-primary-600 focus:ring-primary-500"
+                      className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
                       <span className="font-mono text-sm text-primary-400">{control.code}</span>
-                      <p className="text-sm text-slate-300">{control.name}</p>
+                      <p className="text-sm text-slate-600">{control.name}</p>
                     </div>
                   </label>
                 ))}
@@ -1137,23 +1137,23 @@ function AddControlsModal({
 
             {frameworkFilter !== null && filteredFramework.length > 0 && (
               <>
-                <div className="sticky top-0 bg-slate-700 px-4 py-2 text-sm font-medium text-orange-400">
+                <div className="sticky top-0 bg-slate-200 px-4 py-2 text-sm font-medium text-orange-400">
                   Framework Controls
                 </div>
                 {filteredFramework.map((control: { id: number; code: string; name: string }) => (
                   <label
                     key={`framework-${control.id}`}
-                    className="flex cursor-pointer items-center gap-3 border-b border-slate-700 px-4 py-3 hover:bg-slate-700/50"
+                    className="flex cursor-pointer items-center gap-3 border-b border-slate-200 px-4 py-3 hover:bg-slate-50"
                   >
                     <input
                       type="checkbox"
                       checked={selectedFramework.includes(control.id)}
                       onChange={() => toggleFramework(control.id)}
-                      className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-primary-600 focus:ring-primary-500"
+                      className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
                       <span className="font-mono text-sm text-primary-400">{control.code}</span>
-                      <p className="text-sm text-slate-300">{control.name}</p>
+                      <p className="text-sm text-slate-600">{control.name}</p>
                     </div>
                   </label>
                 ))}
@@ -1174,14 +1174,14 @@ function AddControlsModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-700 px-6 py-4">
+        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
           <span className="text-sm text-slate-400">
             {totalSelected} control{totalSelected !== 1 ? 's' : ''} selected
           </span>
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="rounded-lg border border-slate-600 px-4 py-2 text-white hover:bg-slate-700"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-slate-800 hover:bg-slate-200"
             >
               Cancel
             </button>
@@ -1238,76 +1238,76 @@ function EditGroupModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-lg rounded-lg border border-slate-700 bg-slate-800 shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
-          <h2 className="text-lg font-semibold text-white">Edit Control Group</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+      <div className="mx-4 w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 className="text-lg font-semibold text-slate-800">Edit Control Group</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 p-6">
           <div>
-            <label className="block text-sm font-medium text-slate-300">Code</label>
+            <label className="block text-sm font-medium text-slate-600">Code</label>
             <input
               type="text"
               value={formData.code}
               onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))}
               required
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300">Name</label>
+            <label className="block text-sm font-medium text-slate-600">Name</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               required
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300">Description</label>
+            <label className="block text-sm font-medium text-slate-600">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300">Category</label>
+              <label className="block text-sm font-medium text-slate-600">Category</label>
               <input
                 type="text"
                 value={formData.category}
                 onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300">Domain</label>
+              <label className="block text-sm font-medium text-slate-600">Domain</label>
               <input
                 type="text"
                 value={formData.domain}
                 onChange={(e) => setFormData(prev => ({ ...prev, domain: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300">Keywords (comma-separated)</label>
+            <label className="block text-sm font-medium text-slate-600">Keywords (comma-separated)</label>
             <input
               type="text"
               value={formData.keywords}
               onChange={(e) => setFormData(prev => ({ ...prev, keywords: e.target.value }))}
               placeholder="keyword1, keyword2, keyword3"
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
             />
           </div>
 
@@ -1315,7 +1315,7 @@ function EditGroupModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-600 px-4 py-2 text-white hover:bg-slate-700"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-slate-800 hover:bg-slate-200"
             >
               Cancel
             </button>

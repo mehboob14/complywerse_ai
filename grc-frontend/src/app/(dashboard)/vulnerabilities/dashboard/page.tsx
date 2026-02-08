@@ -169,8 +169,8 @@ const SEVERITY_BG: Record<string, string> = {
 const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { percentage: number } }> }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="rounded-lg border border-slate-700 bg-surface-900 px-3 py-2 shadow-lg">
-        <p className="text-sm font-medium text-white capitalize">{payload[0].name}</p>
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 shadow-lg">
+        <p className="text-sm font-medium text-slate-800 capitalize">{payload[0].name}</p>
         <p className="text-xs text-slate-400">
           {payload[0].value} vulnerabilities ({payload[0].payload.percentage}%)
         </p>
@@ -183,8 +183,8 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
 const AgingTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="rounded-lg border border-slate-700 bg-surface-900 px-3 py-2 shadow-lg">
-        <p className="text-sm font-medium text-white">{label}</p>
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 shadow-lg">
+        <p className="text-sm font-medium text-slate-800">{label}</p>
         <p className="text-xs text-slate-400">{payload[0].value} vulnerabilities</p>
       </div>
     );
@@ -350,12 +350,12 @@ export default function VulnerabilityDashboardPage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Vulnerability Dashboard</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Vulnerability Dashboard</h1>
           <p className="mt-1 text-slate-400">Real-time security posture and vulnerability metrics</p>
         </div>
         <button
           onClick={() => refetchDashboard()}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-surface-800 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
         >
           <RefreshCw className="h-4 w-4" />
           Refresh
@@ -385,7 +385,7 @@ export default function VulnerabilityDashboardPage() {
           variant="default"
           subtitle="Average resolution time"
         />
-        <div className="rounded-xl border border-slate-700 bg-surface-800 p-4 hover:border-primary-500/50 hover:shadow-glow-sm transition-all duration-200">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-500/50 hover:shadow-glow-sm transition-all duration-200">
           <div className="flex items-center gap-4">
             <ProgressRing
               percentage={overallSLACompliance}
@@ -395,7 +395,7 @@ export default function VulnerabilityDashboardPage() {
             />
             <div>
               <p className="text-sm font-medium text-slate-400">SLA Compliance</p>
-              <p className="text-lg font-semibold text-white mt-1">
+              <p className="text-lg font-semibold text-slate-800 mt-1">
                 {overallSLACompliance >= 80 ? 'On Track' : overallSLACompliance >= 60 ? 'At Risk' : 'Critical'}
               </p>
               <p className="text-xs text-slate-500 mt-0.5">{dashboard?.overdue_count || 0} overdue items</p>
@@ -449,8 +449,8 @@ export default function VulnerabilityDashboardPage() {
                     onClick={() => setSelectedSeverity(entry.name === selectedSeverity ? null : entry.name)}
                     className={`w-full flex items-center justify-between p-2.5 rounded-lg transition-all duration-200 ${
                       selectedSeverity === entry.name
-                        ? 'bg-slate-700 ring-1 ring-primary-500'
-                        : 'bg-slate-700/50 hover:bg-slate-700'
+                        ? 'bg-slate-200 ring-1 ring-primary-500'
+                        : 'bg-slate-200/50 hover:bg-slate-200'
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -458,10 +458,10 @@ export default function VulnerabilityDashboardPage() {
                         className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: entry.color }}
                       />
-                      <span className="text-sm font-medium text-white capitalize">{entry.name}</span>
+                      <span className="text-sm font-medium text-slate-800 capitalize">{entry.name}</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-sm font-semibold text-white">{entry.value}</span>
+                      <span className="text-sm font-semibold text-slate-800">{entry.value}</span>
                       <span className="text-xs text-slate-400 ml-2">({entry.percentage}%)</span>
                     </div>
                   </button>
@@ -533,10 +533,10 @@ export default function VulnerabilityDashboardPage() {
               {statusData.map((status) => (
                 <div key={status.name} className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-300">{status.name}</span>
-                    <span className="font-medium text-white">{status.value}</span>
+                    <span className="text-slate-600">{status.name}</span>
+                    <span className="font-medium text-slate-800">{status.value}</span>
                   </div>
-                  <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
+                  <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
                     <div
                       className="h-full transition-all duration-500"
                       style={{
@@ -548,10 +548,10 @@ export default function VulnerabilityDashboardPage() {
                 </div>
               ))}
             </div>
-            <div className="pt-4 border-t border-slate-700">
+            <div className="pt-4 border-t border-slate-200">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-400">Resolution Rate</span>
-                <span className="font-medium text-white">
+                <span className="font-medium text-slate-800">
                   {totalVulns > 0 ? Math.round((resolvedCount / totalVulns) * 100) : 0}%
                 </span>
               </div>
@@ -574,12 +574,12 @@ export default function VulnerabilityDashboardPage() {
               <Link
                 key={asset.asset_id}
                 href={`/assets/${asset.asset_id}`}
-                className="flex items-center justify-between p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition-colors group"
+                className="flex items-center justify-between p-3 rounded-lg bg-slate-200/50 hover:bg-slate-200 transition-colors group"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-xs font-medium text-slate-500 w-5">#{index + 1}</span>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-white truncate group-hover:text-primary-400 transition-colors">
+                    <p className="text-sm font-medium text-slate-800 truncate group-hover:text-primary-400 transition-colors">
                       {asset.asset_name}
                     </p>
                     <p className="text-xs text-slate-500 truncate">{asset.asset_type}</p>
@@ -630,7 +630,7 @@ export default function VulnerabilityDashboardPage() {
                         {vuln.days_overdue}d overdue
                       </span>
                     </div>
-                    <p className="text-sm font-medium text-white truncate group-hover:text-red-300 transition-colors">
+                    <p className="text-sm font-medium text-slate-800 truncate group-hover:text-red-300 transition-colors">
                       {vuln.title}
                     </p>
                     {vuln.assignee_name && (
@@ -670,10 +670,10 @@ export default function VulnerabilityDashboardPage() {
               return (
                 <div
                   key={severity}
-                  className={`p-4 rounded-lg ${SEVERITY_BG[severity]} border border-slate-700`}
+                  className={`p-4 rounded-lg ${SEVERITY_BG[severity]} border border-slate-200`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-white capitalize">{severity}</span>
+                    <span className="text-sm font-medium text-slate-800 capitalize">{severity}</span>
                     <span
                       className={`text-sm font-bold ${
                         rate >= 80 ? 'text-green-400' : rate >= 60 ? 'text-yellow-400' : 'text-red-400'
@@ -682,7 +682,7 @@ export default function VulnerabilityDashboardPage() {
                       {rate}%
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden mb-2">
+                  <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden mb-2">
                     <div
                       className={`h-full transition-all duration-500 ${
                         rate >= 80 ? 'bg-green-500' : rate >= 60 ? 'bg-yellow-500' : 'bg-red-500'
@@ -712,12 +712,12 @@ export default function VulnerabilityDashboardPage() {
               <Link
                 key={activity.id}
                 href={`/vulnerabilities/${activity.id}`}
-                className="flex items-center justify-between py-3 first:pt-0 last:pb-0 hover:bg-slate-700/30 -mx-4 px-4 transition-colors"
+                className="flex items-center justify-between py-3 first:pt-0 last:pb-0 hover:bg-slate-200/30 -mx-4 px-4 transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <StatusBadge status={activity.status} size="sm" />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{activity.title}</p>
+                    <p className="text-sm font-medium text-slate-800 truncate">{activity.title}</p>
                     <p className="text-xs text-slate-500">{activity.vuln_id}</p>
                   </div>
                 </div>
@@ -842,7 +842,7 @@ export default function VulnerabilityDashboardPage() {
                   <Legend
                     verticalAlign="bottom"
                     height={36}
-                    formatter={(value) => <span className="text-xs text-slate-300 capitalize">{value}</span>}
+                    formatter={(value) => <span className="text-xs text-slate-600 capitalize">{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -866,7 +866,7 @@ export default function VulnerabilityDashboardPage() {
                   showPercentage={true}
                 />
                 <div>
-                  <p className="text-2xl font-bold text-white">{controlCoverage.coverage_percentage}%</p>
+                  <p className="text-2xl font-bold text-slate-800">{controlCoverage.coverage_percentage}%</p>
                   <p className="text-sm text-slate-400">Coverage Rate</p>
                   <p className="text-xs text-slate-500 mt-1">
                     {controlCoverage.with_controls} of {controlCoverage.total_vulnerabilities} vulns
@@ -881,7 +881,7 @@ export default function VulnerabilityDashboardPage() {
                   showPercentage={true}
                 />
                 <div>
-                  <p className="text-2xl font-bold text-white">{controlCoverage.control_effectiveness}%</p>
+                  <p className="text-2xl font-bold text-slate-800">{controlCoverage.control_effectiveness}%</p>
                   <p className="text-sm text-slate-400">Control Effectiveness</p>
                   <p className="text-xs text-slate-500 mt-1">
                     Remediation rate with controls
@@ -915,10 +915,10 @@ export default function VulnerabilityDashboardPage() {
                   className={`p-4 rounded-lg border ${complianceColor} transition-all hover:scale-[1.02]`}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-white truncate">{dept.department_name}</h4>
+                    <h4 className="text-sm font-semibold text-slate-800 truncate">{dept.department_name}</h4>
                     <span className={`text-lg font-bold ${textColor}`}>{compliance}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-slate-700 overflow-hidden mb-3">
+                  <div className="h-2 rounded-full bg-slate-200 overflow-hidden mb-3">
                     <div
                       className={`h-full transition-all duration-500 ${
                         compliance >= 90 ? 'bg-green-500' : compliance >= 70 ? 'bg-yellow-500' : 'bg-red-500'
@@ -929,24 +929,24 @@ export default function VulnerabilityDashboardPage() {
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="flex justify-between">
                       <span className="text-slate-400">Total:</span>
-                      <span className="text-white font-medium">{dept.total_vulnerabilities}</span>
+                      <span className="text-slate-800 font-medium">{dept.total_vulnerabilities}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Open:</span>
-                      <span className="text-white font-medium">{dept.open_count}</span>
+                      <span className="text-slate-800 font-medium">{dept.open_count}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Overdue:</span>
-                      <span className={`font-medium ${dept.overdue_count > 0 ? 'text-red-400' : 'text-slate-300'}`}>
+                      <span className={`font-medium ${dept.overdue_count > 0 ? 'text-red-400' : 'text-slate-600'}`}>
                         {dept.overdue_count}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">MTTR:</span>
-                      <span className="text-white font-medium">{dept.mttr_days !== null ? `${dept.mttr_days}d` : '-'}</span>
+                      <span className="text-slate-800 font-medium">{dept.mttr_days !== null ? `${dept.mttr_days}d` : '-'}</span>
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-slate-700">
+                  <div className="mt-3 pt-3 border-t border-slate-200">
                     <div className="flex gap-1.5 flex-wrap">
                       {dept.by_severity.critical > 0 && (
                         <span className="px-1.5 py-0.5 text-xs rounded bg-red-500/20 text-red-400">
@@ -1007,7 +1007,7 @@ export default function VulnerabilityDashboardPage() {
                 <Legend 
                   verticalAlign="top" 
                   height={36}
-                  formatter={(value) => <span className="text-xs text-slate-300">{value}</span>}
+                  formatter={(value) => <span className="text-xs text-slate-600">{value}</span>}
                 />
                 {(() => {
                   const deptNames = [...new Set(slaComplianceTrends.trends.map(t => t.department_name))];
@@ -1067,7 +1067,7 @@ export default function VulnerabilityDashboardPage() {
                   <Legend 
                     verticalAlign="top" 
                     height={36}
-                    formatter={(value) => <span className="text-xs text-slate-300 capitalize">{value.replace('_', ' ')}</span>}
+                    formatter={(value) => <span className="text-xs text-slate-600 capitalize">{value.replace('_', ' ')}</span>}
                   />
                   <Bar dataKey="assigned_count" name="Assigned" fill="#3b82f6" radius={[0, 2, 2, 0]} stackId="a" />
                   <Bar dataKey="in_progress_count" name="In Progress" fill="#eab308" radius={[0, 2, 2, 0]} stackId="a" />
@@ -1088,7 +1088,7 @@ export default function VulnerabilityDashboardPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-700">
+                  <tr className="border-b border-slate-200">
                     <th className="text-left py-2 px-2 text-slate-400 font-medium">Department</th>
                     <th className="text-center py-2 px-2 text-green-400 font-medium">0-7d</th>
                     <th className="text-center py-2 px-2 text-yellow-400 font-medium">8-30d</th>
@@ -1099,8 +1099,8 @@ export default function VulnerabilityDashboardPage() {
                 </thead>
                 <tbody>
                   {agingByDepartment.aging.map((dept) => (
-                    <tr key={dept.department_id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
-                      <td className="py-2.5 px-2 text-white font-medium truncate max-w-[150px]">{dept.department_name}</td>
+                    <tr key={dept.department_id} className="border-b border-slate-200 hover:bg-white/50">
+                      <td className="py-2.5 px-2 text-slate-800 font-medium truncate max-w-[150px]">{dept.department_name}</td>
                       <td className="py-2.5 px-2 text-center">
                         <span className={`inline-block min-w-[32px] px-2 py-0.5 rounded ${dept.bucket_0_7 > 0 ? 'bg-green-500/20 text-green-400' : 'text-slate-500'}`}>
                           {dept.bucket_0_7}
@@ -1121,7 +1121,7 @@ export default function VulnerabilityDashboardPage() {
                           {dept.bucket_90_plus}
                         </span>
                       </td>
-                      <td className="py-2.5 px-2 text-center text-white font-semibold">{dept.total}</td>
+                      <td className="py-2.5 px-2 text-center text-slate-800 font-semibold">{dept.total}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1138,8 +1138,8 @@ export default function VulnerabilityDashboardPage() {
           subtitle="Escalation levels and resolution performance"
         >
           <div className="grid gap-4 mb-6 sm:grid-cols-4">
-            <div className="p-4 rounded-lg bg-slate-700/50 border border-slate-600">
-              <p className="text-2xl font-bold text-white">{escalationMetrics.summary?.total_escalations || 0}</p>
+            <div className="p-4 rounded-lg bg-slate-200/50 border border-slate-300">
+              <p className="text-2xl font-bold text-slate-800">{escalationMetrics.summary?.total_escalations || 0}</p>
               <p className="text-sm text-slate-400">Total Escalations</p>
             </div>
             <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
@@ -1158,7 +1158,7 @@ export default function VulnerabilityDashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-700">
+                <tr className="border-b border-slate-200">
                   <th className="text-left py-2 px-2 text-slate-400 font-medium">Department</th>
                   <th className="text-center py-2 px-2 text-slate-400 font-medium">Total</th>
                   <th className="text-center py-2 px-2 text-yellow-400 font-medium">L1</th>
@@ -1169,9 +1169,9 @@ export default function VulnerabilityDashboardPage() {
               </thead>
               <tbody>
                 {escalationMetrics.escalations.map((dept) => (
-                  <tr key={dept.department_id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
-                    <td className="py-2.5 px-2 text-white font-medium">{dept.department_name}</td>
-                    <td className="py-2.5 px-2 text-center text-white">{dept.total_escalations}</td>
+                  <tr key={dept.department_id} className="border-b border-slate-200 hover:bg-white/50">
+                    <td className="py-2.5 px-2 text-slate-800 font-medium">{dept.department_name}</td>
+                    <td className="py-2.5 px-2 text-center text-slate-800">{dept.total_escalations}</td>
                     <td className="py-2.5 px-2 text-center">
                       <span className={`inline-block min-w-[24px] px-1.5 py-0.5 rounded ${dept.level_1_count > 0 ? 'bg-yellow-500/20 text-yellow-400' : 'text-slate-500'}`}>
                         {dept.level_1_count}
@@ -1187,7 +1187,7 @@ export default function VulnerabilityDashboardPage() {
                         {dept.level_3_count}
                       </span>
                     </td>
-                    <td className="py-2.5 px-2 text-center text-slate-300">
+                    <td className="py-2.5 px-2 text-center text-slate-600">
                       {dept.avg_resolution_after_escalation_days !== null ? `${dept.avg_resolution_after_escalation_days}d` : '-'}
                     </td>
                   </tr>

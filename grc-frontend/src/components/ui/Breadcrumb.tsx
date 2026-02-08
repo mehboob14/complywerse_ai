@@ -66,7 +66,7 @@ export function Breadcrumb({ items, showHome = true, className }: BreadcrumbProp
         <>
           <Link 
             href="/dashboard" 
-            className="flex items-center justify-center w-7 h-7 rounded-md text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all duration-150"
+            className="flex items-center justify-center w-7 h-7 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all duration-150"
             aria-label="Home"
           >
             <Home size={15} />
@@ -91,7 +91,7 @@ export function Breadcrumb({ items, showHome = true, className }: BreadcrumbProp
             ) : (
               <Link
                 href={item.href}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all duration-150"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all duration-150"
               >
                 {item.icon && <item.icon size={14} />}
                 <span className="truncate max-w-[150px]">{item.label}</span>

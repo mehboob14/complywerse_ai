@@ -272,7 +272,7 @@ export default function FrameworkComparisonPage() {
   };
 
   const getCellColor = (count: number) => {
-    if (count === 0) return 'bg-slate-800';
+    if (count === 0) return 'bg-white';
     if (count < 5) return 'bg-blue-900/30';
     if (count < 20) return 'bg-blue-700/40';
     if (count < 50) return 'bg-blue-600/50';
@@ -300,7 +300,7 @@ export default function FrameworkComparisonPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Framework Comparison</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Framework Comparison</h1>
           <p className="text-slate-400">Compare controls across regulatory frameworks</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -320,17 +320,17 @@ export default function FrameworkComparisonPage() {
                 <ChevronDown className="h-4 w-4" />
               </button>
               {showExportMenu && (
-                <div className="absolute right-0 top-full z-20 mt-2 w-40 rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-lg">
+                <div className="absolute right-0 top-full z-20 mt-2 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
                   <button
                     onClick={() => exportMutation.mutate('csv')}
-                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700"
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-200"
                   >
                     <FileText className="h-4 w-4" />
                     Export CSV
                   </button>
                   <button
                     onClick={() => exportMutation.mutate('xlsx')}
-                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700"
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-200"
                   >
                     <FileText className="h-4 w-4" />
                     Export Excel
@@ -348,7 +348,7 @@ export default function FrameworkComparisonPage() {
             <div className="relative">
               <button
                 onClick={() => setShowFrameworkDropdown(!showFrameworkDropdown)}
-                className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-white hover:border-slate-500"
+                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 hover:border-slate-400"
               >
                 <Layers className="h-4 w-4 text-slate-400" />
                 {selectedFrameworks.length === 0
@@ -357,7 +357,7 @@ export default function FrameworkComparisonPage() {
                 <ChevronDown className="h-4 w-4 text-slate-400" />
               </button>
               {showFrameworkDropdown && (
-                <div className="absolute left-0 top-full z-20 mt-2 max-h-80 w-80 overflow-auto rounded-lg border border-slate-700 bg-slate-800 py-2 shadow-lg">
+                <div className="absolute left-0 top-full z-20 mt-2 max-h-80 w-80 overflow-auto rounded-lg border border-slate-200 bg-white py-2 shadow-lg">
                   {frameworksLoading ? (
                     <div className="flex items-center justify-center py-4">
                       <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
@@ -367,23 +367,23 @@ export default function FrameworkComparisonPage() {
                       <button
                         key={fw.id}
                         onClick={() => toggleFramework(fw.id)}
-                        className={`flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-slate-700 ${
-                          selectedFrameworks.includes(fw.id) ? 'bg-slate-700/50' : ''
+                        className={`flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-slate-200 ${
+                          selectedFrameworks.includes(fw.id) ? 'bg-slate-200/50' : ''
                         }`}
                       >
                         <div
                           className={`flex h-5 w-5 items-center justify-center rounded border ${
                             selectedFrameworks.includes(fw.id)
                               ? 'border-primary-500 bg-primary-500'
-                              : 'border-slate-600'
+                              : 'border-slate-300'
                           }`}
                         >
                           {selectedFrameworks.includes(fw.id) && (
-                            <CheckCircle className="h-3 w-3 text-white" />
+                            <CheckCircle className="h-3 w-3 text-slate-800" />
                           )}
                         </div>
                         <div className="flex-1">
-                          <p className="font-medium text-white">{fw.short_code}</p>
+                          <p className="font-medium text-slate-800">{fw.short_code}</p>
                           <p className="text-xs text-slate-400 truncate">{fw.name}</p>
                         </div>
                         <span className="text-xs text-slate-500">{fw.control_count} controls</span>
@@ -396,7 +396,7 @@ export default function FrameworkComparisonPage() {
             {selectedFrameworks.length > 0 && (
               <button
                 onClick={clearSelection}
-                className="flex items-center gap-1 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-400 hover:border-slate-500 hover:text-white"
+                className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-400 hover:border-slate-400 hover:text-slate-900"
               >
                 <X className="h-4 w-4" />
                 Clear
@@ -442,7 +442,7 @@ export default function FrameworkComparisonPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-3">
-              <Grid3X3 className="h-6 w-6 text-purple-400" />
+              <Grid3X3 className="h-6 w-6 text-primary-600" />
             </div>
           </div>
           <p className="stat-value">{controlsData?.total || 0}</p>
@@ -468,7 +468,7 @@ export default function FrameworkComparisonPage() {
           ) : !matrixData?.matrix?.length ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Grid3X3 className="mb-4 h-12 w-12 text-slate-600" />
-              <h3 className="text-lg font-medium text-white">No matrix data available</h3>
+              <h3 className="text-lg font-medium text-slate-800">No matrix data available</h3>
               <p className="mt-1 text-slate-400">Select at least 2 frameworks to see the comparison matrix</p>
             </div>
           ) : (
@@ -487,13 +487,13 @@ export default function FrameworkComparisonPage() {
                 <tbody>
                   {matrixData.matrix.map((row) => (
                     <tr key={row.framework_id}>
-                      <td className="px-3 py-2 text-sm font-medium text-white">{row.framework_code}</td>
+                      <td className="px-3 py-2 text-sm font-medium text-slate-800">{row.framework_code}</td>
                       {matrixData.frameworks.map((fw) => {
                         const cell = row.mappings[fw.id];
                         if (cell === null) {
                           return (
                             <td key={fw.id} className="px-3 py-2 text-center">
-                              <div className="mx-auto h-12 w-12 rounded bg-slate-700/50" />
+                              <div className="mx-auto h-12 w-12 rounded bg-slate-200/50" />
                             </td>
                           );
                         }
@@ -505,7 +505,7 @@ export default function FrameworkComparisonPage() {
                                 cell?.shared_mappings || 0
                               )} transition-all hover:ring-2 hover:ring-primary-500`}
                             >
-                              <span className="text-sm font-medium text-white">
+                              <span className="text-sm font-medium text-slate-800">
                                 {cell?.shared_mappings || 0}
                               </span>
                             </button>
@@ -539,7 +539,7 @@ export default function FrameworkComparisonPage() {
           ) : !controlsData?.comparison_grid?.length ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <GitCompare className="mb-4 h-12 w-12 text-slate-600" />
-              <h3 className="text-lg font-medium text-white">No Common Control Groups Found</h3>
+              <h3 className="text-lg font-medium text-slate-800">No Common Control Groups Found</h3>
               <p className="mt-2 max-w-md text-slate-400">
                 To compare controls across frameworks, you need to first create Common Control Groups 
                 that link similar controls together.
@@ -562,7 +562,7 @@ export default function FrameworkComparisonPage() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-700">
+                    <tr className="border-b border-slate-200">
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Group</th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Category</th>
                       {controlsData.frameworks.map((fw) => (
@@ -574,7 +574,7 @@ export default function FrameworkComparisonPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-700">
                     {controlsData.comparison_grid.map((item) => (
-                      <tr key={item.group_id} className="hover:bg-slate-700/30">
+                      <tr key={item.group_id} className="hover:bg-slate-200/30">
                         <td className="px-4 py-3">
                           <div>
                             <p className="font-mono text-sm font-medium text-primary-400">{item.group_code}</p>
@@ -582,7 +582,7 @@ export default function FrameworkComparisonPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300">
+                          <span className="rounded-full bg-slate-200 px-2 py-1 text-xs text-slate-600">
                             {item.category || 'General'}
                           </span>
                         </td>
@@ -606,7 +606,7 @@ export default function FrameworkComparisonPage() {
                                           handleAIAnalysis(ctrl);
                                         }
                                       }}
-                                      className="rounded bg-slate-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-primary-600 transition-colors"
+                                      className="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-800 hover:bg-primary-600 transition-colors"
                                       title={ctrl.name}
                                     >
                                       {ctrl.code}
@@ -623,7 +623,7 @@ export default function FrameworkComparisonPage() {
                 </table>
               </div>
               {controlsData.total > pageSize && (
-                <div className="mt-4 flex items-center justify-between border-t border-slate-700 pt-4">
+                <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-4">
                   <p className="text-sm text-slate-400">
                     Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, controlsData.total)} of{' '}
                     {controlsData.total}
@@ -632,14 +632,14 @@ export default function FrameworkComparisonPage() {
                     <button
                       onClick={() => setPage((p) => Math.max(0, p - 1))}
                       disabled={page === 0}
-                      className="rounded-lg border border-slate-600 px-3 py-1 text-sm text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+                      className="rounded-lg border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200 disabled:opacity-50"
                     >
                       Previous
                     </button>
                     <button
                       onClick={() => setPage((p) => p + 1)}
                       disabled={(page + 1) * pageSize >= controlsData.total}
-                      className="rounded-lg border border-slate-600 px-3 py-1 text-sm text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+                      className="rounded-lg border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200 disabled:opacity-50"
                     >
                       Next
                     </button>
@@ -663,7 +663,7 @@ export default function FrameworkComparisonPage() {
             </div>
             <button
               onClick={() => setSelectedControlPair(null)}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
             >
               <X className="h-5 w-5" />
             </button>
@@ -685,21 +685,21 @@ export default function FrameworkComparisonPage() {
                 ) : (
                   <>
                     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                      <div className="rounded-lg border border-slate-200 bg-white/50 p-4">
                         <div className="mb-3 flex items-center gap-2">
                           <Shield className="h-4 w-4 text-blue-400" />
                           <span className="text-xs font-medium text-blue-400">
                             {comparison.control1.framework_code || 'Control 1'}
                           </span>
                         </div>
-                        <h4 className="font-mono text-lg font-bold text-white">{comparison.control1.code}</h4>
-                        <p className="mt-1 text-sm text-slate-300">{comparison.control1.name}</p>
+                        <h4 className="font-mono text-lg font-bold text-slate-800">{comparison.control1.code}</h4>
+                        <p className="mt-1 text-sm text-slate-600">{comparison.control1.name}</p>
                         {comparison.control1.statement && (
                           <p className="mt-3 text-xs text-slate-400 line-clamp-4">{comparison.control1.statement}</p>
                         )}
                       </div>
 
-                      <div className="flex flex-col items-center justify-center rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                      <div className="flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-white/50 p-4">
                         <div
                           className={`mb-3 flex h-16 w-16 items-center justify-center rounded-full ${getSimilarityBg(
                             comparison.comparison.similarity_score
@@ -715,7 +715,7 @@ export default function FrameworkComparisonPage() {
                             <p className="mb-2 text-xs font-medium text-slate-400">Common Keywords</p>
                             <div className="flex flex-wrap justify-center gap-1">
                               {comparison.comparison.common_keywords.slice(0, 5).map((kw, i) => (
-                                <span key={i} className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                                <span key={i} className="rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
                                   {kw}
                                 </span>
                               ))}
@@ -724,15 +724,15 @@ export default function FrameworkComparisonPage() {
                         )}
                       </div>
 
-                      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                      <div className="rounded-lg border border-slate-200 bg-white/50 p-4">
                         <div className="mb-3 flex items-center gap-2">
-                          <Shield className="h-4 w-4 text-purple-400" />
-                          <span className="text-xs font-medium text-purple-400">
+                          <Shield className="h-4 w-4 text-primary-600" />
+                          <span className="text-xs font-medium text-primary-600">
                             {comparison.control2.framework_code || 'Control 2'}
                           </span>
                         </div>
-                        <h4 className="font-mono text-lg font-bold text-white">{comparison.control2.code}</h4>
-                        <p className="mt-1 text-sm text-slate-300">{comparison.control2.name}</p>
+                        <h4 className="font-mono text-lg font-bold text-slate-800">{comparison.control2.code}</h4>
+                        <p className="mt-1 text-sm text-slate-600">{comparison.control2.name}</p>
                         {comparison.control2.statement && (
                           <p className="mt-3 text-xs text-slate-400 line-clamp-4">{comparison.control2.statement}</p>
                         )}
@@ -740,14 +740,14 @@ export default function FrameworkComparisonPage() {
                     </div>
 
                     {comparison.comparison.differences.length > 0 && (
-                      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                        <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+                      <div className="rounded-lg border border-slate-200 bg-white/50 p-4">
+                        <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-800">
                           <XCircle className="h-4 w-4 text-orange-400" />
                           Key Differences
                         </h4>
                         <ul className="space-y-2">
                           {comparison.comparison.differences.map((diff, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                            <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
                               <span className="mt-1 h-1.5 w-1.5 rounded-full bg-orange-400" />
                               {diff}
                             </li>
@@ -764,19 +764,19 @@ export default function FrameworkComparisonPage() {
                           </h4>
                           <ul className="space-y-1">
                             {comparison.comparison.control1_unique.map((item, i) => (
-                              <li key={i} className="text-sm text-slate-300">• {item}</li>
+                              <li key={i} className="text-sm text-slate-600">• {item}</li>
                             ))}
                           </ul>
                         </div>
                       )}
                       {comparison.comparison.control2_unique.length > 0 && (
-                        <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-4">
-                          <h4 className="mb-2 text-sm font-medium text-purple-400">
+                        <div className="rounded-lg border border-primary-500/30 bg-primary-500/10 p-4">
+                          <h4 className="mb-2 text-sm font-medium text-primary-600">
                             Unique to {comparison.control2.code}
                           </h4>
                           <ul className="space-y-1">
                             {comparison.comparison.control2_unique.map((item, i) => (
-                              <li key={i} className="text-sm text-slate-300">• {item}</li>
+                              <li key={i} className="text-sm text-slate-600">• {item}</li>
                             ))}
                           </ul>
                         </div>
@@ -791,7 +791,7 @@ export default function FrameworkComparisonPage() {
                           </h4>
                           <ul className="space-y-1">
                             {comparison.comparison.control1_stricter.map((item, i) => (
-                              <li key={i} className="text-sm text-slate-300">• {item}</li>
+                              <li key={i} className="text-sm text-slate-600">• {item}</li>
                             ))}
                           </ul>
                         </div>
@@ -803,7 +803,7 @@ export default function FrameworkComparisonPage() {
                           </h4>
                           <ul className="space-y-1">
                             {comparison.comparison.control2_stricter.map((item, i) => (
-                              <li key={i} className="text-sm text-slate-300">• {item}</li>
+                              <li key={i} className="text-sm text-slate-600">• {item}</li>
                             ))}
                           </ul>
                         </div>
@@ -822,14 +822,14 @@ export default function FrameworkComparisonPage() {
           <div className="card-header flex items-center justify-between">
             <div>
               <h2 className="card-title flex items-center gap-2">
-                <Brain className="h-5 w-5 text-purple-400" />
+                <Brain className="h-5 w-5 text-primary-600" />
                 AI Difference Analysis
               </h2>
               <p className="card-description">AI-powered analysis of control differences across frameworks</p>
             </div>
             <button
               onClick={() => setSelectedControlForAI(null)}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
             >
               <X className="h-5 w-5" />
             </button>
@@ -845,15 +845,15 @@ export default function FrameworkComparisonPage() {
             <p className="text-slate-400">No analysis data available</p>
           ) : (
             <div className="space-y-6">
-              <div className="flex items-start gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <div className="flex items-start gap-4 rounded-lg border border-slate-200 bg-white/50 p-4">
                 <div className="rounded-lg bg-primary-500/20 p-3">
                   <Shield className="h-6 w-6 text-primary-400" />
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-mono text-lg font-bold text-white">{aiDifferenceData.control.code}</h4>
-                  <p className="text-sm text-slate-300">{aiDifferenceData.control.name}</p>
+                  <h4 className="font-mono text-lg font-bold text-slate-800">{aiDifferenceData.control.code}</h4>
+                  <p className="text-sm text-slate-600">{aiDifferenceData.control.name}</p>
                   {aiDifferenceData.control.framework_code && (
-                    <span className="mt-2 inline-block rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                    <span className="mt-2 inline-block rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
                       {aiDifferenceData.control.framework_code}
                     </span>
                   )}
@@ -865,12 +865,12 @@ export default function FrameworkComparisonPage() {
               </div>
 
               {aiDifferenceData.analysis.summary && (
-                <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                  <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
+                <div className="rounded-lg border border-slate-200 bg-white/50 p-4">
+                  <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-800">
                     <Sparkles className="h-4 w-4 text-yellow-400" />
                     Summary
                   </h4>
-                  <p className="text-sm text-slate-300">{aiDifferenceData.analysis.summary}</p>
+                  <p className="text-sm text-slate-600">{aiDifferenceData.analysis.summary}</p>
                 </div>
               )}
 
@@ -883,7 +883,7 @@ export default function FrameworkComparisonPage() {
                     </h4>
                     <ul className="space-y-2">
                       {aiDifferenceData.analysis.common_requirements.map((req, i) => (
-                        <li key={i} className="text-sm text-slate-300">• {req}</li>
+                        <li key={i} className="text-sm text-slate-600">• {req}</li>
                       ))}
                     </ul>
                   </div>
@@ -897,7 +897,7 @@ export default function FrameworkComparisonPage() {
                     </h4>
                     <ul className="space-y-2">
                       {aiDifferenceData.analysis.unique_requirements.map((req, i) => (
-                        <li key={i} className="text-sm text-slate-300">• {req}</li>
+                        <li key={i} className="text-sm text-slate-600">• {req}</li>
                       ))}
                     </ul>
                   </div>
@@ -911,7 +911,7 @@ export default function FrameworkComparisonPage() {
                     </h4>
                     <ul className="space-y-2">
                       {aiDifferenceData.analysis.stricter_aspects.map((aspect, i) => (
-                        <li key={i} className="text-sm text-slate-300">• {aspect}</li>
+                        <li key={i} className="text-sm text-slate-600">• {aspect}</li>
                       ))}
                     </ul>
                   </div>
@@ -925,7 +925,7 @@ export default function FrameworkComparisonPage() {
                     </h4>
                     <ul className="space-y-2">
                       {aiDifferenceData.analysis.gaps.map((gap, i) => (
-                        <li key={i} className="text-sm text-slate-300">• {gap}</li>
+                        <li key={i} className="text-sm text-slate-600">• {gap}</li>
                       ))}
                     </ul>
                   </div>
@@ -933,13 +933,13 @@ export default function FrameworkComparisonPage() {
               </div>
 
               {aiDifferenceData.equivalents.length > 0 && (
-                <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                  <h4 className="mb-3 text-sm font-medium text-white">Equivalent Controls</h4>
+                <div className="rounded-lg border border-slate-200 bg-white/50 p-4">
+                  <h4 className="mb-3 text-sm font-medium text-slate-800">Equivalent Controls</h4>
                   <div className="flex flex-wrap gap-2">
                     {aiDifferenceData.equivalents.map((eq, i) => (
                       <div
                         key={i}
-                        className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2"
+                        className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2"
                       >
                         <p className="font-mono text-sm font-medium text-primary-400">{eq.code}</p>
                         <p className="text-xs text-slate-400">{eq.framework_code || eq.type}</p>
@@ -956,7 +956,7 @@ export default function FrameworkComparisonPage() {
       {selectedFrameworks.length === 1 && (
         <div className="card flex flex-col items-center justify-center py-12 text-center">
           <GitCompare className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-white">Select at least 2 frameworks</h3>
+          <h3 className="text-lg font-medium text-slate-800">Select at least 2 frameworks</h3>
           <p className="mt-1 text-slate-400">Choose one more framework to start comparing controls</p>
         </div>
       )}

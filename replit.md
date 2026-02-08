@@ -7,7 +7,8 @@ ComplyVerse is a comprehensive, enterprise-grade Governance, Risk, and Complianc
 - Backend in Python only
 - Modular routers in separate files
 - Separate backend and frontend folders
-- Dark theme UI (slate-900/slate-800)
+- **Light/white theme UI** with Poppins font, blue accents for active states, no icon backgrounds
+- "Company" terminology instead of "Organization" in UI display text (API fields unchanged)
 - Multi-tenant architecture
 - PostgreSQL database
 
@@ -15,7 +16,7 @@ ComplyVerse is a comprehensive, enterprise-grade Governance, Risk, and Complianc
 The platform utilizes a multi-tenant architecture with complete tenant isolation and row-level security. All regulatory frameworks must be uploaded by users, ensuring organizations use their exact framework versions and control IDs. Role-Based Access Control (RBAC) with fine-grained permissions ensures secure access.
 
 **UI/UX Decisions:**
-- Frontend built with Next.js 14, TypeScript, and Tailwind CSS, utilizing a dark theme (slate-900/slate-800) and App Router.
+- Frontend built with Next.js 14, TypeScript, and Tailwind CSS, utilizing a professional white/light theme (white backgrounds, slate-50 surfaces, blue accents, Poppins font) and App Router.
 
 **Technical Implementations:**
 - **Backend**: Python 3.11, FastAPI, SQLAlchemy.

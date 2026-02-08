@@ -112,7 +112,7 @@ const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
     draft: 'bg-slate-500/20 text-slate-400',
     submitted: 'bg-blue-500/20 text-blue-400',
-    pending_review: 'bg-purple-500/20 text-purple-400',
+    pending_review: 'bg-primary-500/20 text-primary-600',
     approved: 'bg-emerald-500/20 text-emerald-400',
     rejected: 'bg-rose-500/20 text-rose-400',
   };
@@ -152,7 +152,7 @@ const getTypeBadge = (type: string) => {
     report: 'bg-blue-500/20 text-blue-400',
     contract: 'bg-pink-500/20 text-pink-400',
     register: 'bg-teal-500/20 text-teal-400',
-    attestation: 'bg-purple-500/20 text-purple-400',
+    attestation: 'bg-primary-500/20 text-primary-600',
     training: 'bg-green-500/20 text-green-400',
     screenshot: 'bg-slate-500/20 text-slate-400',
   };
@@ -301,7 +301,7 @@ export default function EvidenceRequirementsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
           <FileCheck className="h-6 w-6 text-primary-400" />
           Evidence Requirements
         </h1>
@@ -318,7 +318,7 @@ export default function EvidenceRequirementsPage() {
                 setSelectedFramework(e.target.value ? Number(e.target.value) : null);
                 setExpandedRow(null);
               }}
-              className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               <option value="">Select Framework</option>
               {frameworks?.map((fw) => (
@@ -334,7 +334,7 @@ export default function EvidenceRequirementsPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
               >
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -344,7 +344,7 @@ export default function EvidenceRequirementsPage() {
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
-                className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
               >
                 {PRIORITY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -354,7 +354,7 @@ export default function EvidenceRequirementsPage() {
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
               >
                 {EVIDENCE_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -372,7 +372,7 @@ export default function EvidenceRequirementsPage() {
               placeholder="Search by control ID or title..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none sm:w-80"
+              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none sm:w-80"
             />
           </div>
         )}
@@ -386,7 +386,7 @@ export default function EvidenceRequirementsPage() {
                 <List className="h-5 w-5 text-primary-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-white">{totalRequirements}</p>
+                <p className="text-2xl font-bold text-slate-800">{totalRequirements}</p>
                 <p className="text-sm text-slate-400">Total Requirements</p>
               </div>
             </div>
@@ -397,18 +397,18 @@ export default function EvidenceRequirementsPage() {
                 <FileText className="h-5 w-5 text-slate-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-white">{draftCount}</p>
+                <p className="text-2xl font-bold text-slate-800">{draftCount}</p>
                 <p className="text-sm text-slate-400">Draft</p>
               </div>
             </div>
           </div>
           <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/20">
-                <Clock className="h-5 w-5 text-purple-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
+                <Clock className="h-5 w-5 text-primary-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-white">{pendingReviewCount}</p>
+                <p className="text-2xl font-bold text-slate-800">{pendingReviewCount}</p>
                 <p className="text-sm text-slate-400">Pending Review</p>
               </div>
             </div>
@@ -419,7 +419,7 @@ export default function EvidenceRequirementsPage() {
                 <CheckCircle className="h-5 w-5 text-emerald-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-white">{approvedCount}</p>
+                <p className="text-2xl font-bold text-slate-800">{approvedCount}</p>
                 <p className="text-sm text-slate-400">Approved</p>
               </div>
             </div>
@@ -430,7 +430,7 @@ export default function EvidenceRequirementsPage() {
       {!selectedFramework && (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <FileCheck className="mb-4 h-16 w-16 text-slate-600" />
-          <h3 className="text-lg font-medium text-white mb-2">Select a Framework</h3>
+          <h3 className="text-lg font-medium text-slate-800 mb-2">Select a Framework</h3>
           <p className="text-slate-400 max-w-md">
             Choose a framework from the dropdown above to view its AI-generated evidence requirements.
             Evidence requirements help you understand what documentation is needed for each control.
@@ -454,7 +454,7 @@ export default function EvidenceRequirementsPage() {
       {selectedFramework && requirementsData && filteredRequirements.length === 0 && (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Sparkles className="mb-4 h-16 w-16 text-slate-600" />
-          <h3 className="text-lg font-medium text-white mb-2">No Evidence Requirements</h3>
+          <h3 className="text-lg font-medium text-slate-800 mb-2">No Evidence Requirements</h3>
           <p className="text-slate-400 max-w-md">
             {searchTerm || statusFilter || priorityFilter || typeFilter
               ? 'No requirements match your current filters. Try adjusting them.'
@@ -464,17 +464,17 @@ export default function EvidenceRequirementsPage() {
       )}
 
       {selectedFramework && filteredRequirements.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-slate-700">
+        <div className="overflow-hidden rounded-lg border border-slate-200">
           <table className="w-full">
-            <thead className="bg-slate-800">
+            <thead className="bg-white">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Control</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Evidence Title</th>
-                <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 md:table-cell">Type</th>
-                <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 lg:table-cell">Priority</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Status</th>
-                <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 xl:table-cell">Frequency</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-slate-300">Actions</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Control</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Evidence Title</th>
+                <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 md:table-cell">Type</th>
+                <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 lg:table-cell">Priority</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
+                <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 xl:table-cell">Frequency</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
@@ -485,7 +485,7 @@ export default function EvidenceRequirementsPage() {
                   <>
                     <tr
                       key={req.id}
-                      className="bg-slate-800/50 hover:bg-slate-700/50 cursor-pointer"
+                      className="bg-white/50 hover:bg-slate-50 cursor-pointer"
                       onClick={() => setExpandedRow(isExpanded ? null : req.id)}
                     >
                       <td className="px-4 py-3">
@@ -496,7 +496,7 @@ export default function EvidenceRequirementsPage() {
                             <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
                           )}
                           <div className="min-w-0">
-                            <p className="font-mono text-sm text-white truncate">
+                            <p className="font-mono text-sm text-slate-800 truncate">
                               {control?.original_reference || control?.control_id || `Control #${req.parsed_control_id}`}
                             </p>
                             <p className="text-xs text-slate-400 truncate max-w-[200px]">
@@ -507,7 +507,7 @@ export default function EvidenceRequirementsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm text-white line-clamp-1">{req.evidence_title}</p>
+                          <p className="text-sm text-slate-800 line-clamp-1">{req.evidence_title}</p>
                           {req.is_mandatory && (
                             <span className="flex-shrink-0 rounded bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-medium text-rose-400">
                               Required
@@ -543,7 +543,7 @@ export default function EvidenceRequirementsPage() {
                             <button
                               onClick={() => reviewMutation.mutate(req.id)}
                               disabled={reviewMutation.isPending}
-                              className="flex items-center gap-1 rounded bg-purple-600 px-2 py-1 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                              className="flex items-center gap-1 rounded bg-primary-600 px-2 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
                             >
                               <Eye className="h-3 w-3" />
                               Review
@@ -577,24 +577,24 @@ export default function EvidenceRequirementsPage() {
                       </td>
                     </tr>
                     {isExpanded && (
-                      <tr key={`${req.id}-details`} className="bg-slate-900">
-                        <td colSpan={7} className="px-4 py-4 border-t border-slate-700">
+                      <tr key={`${req.id}-details`} className="bg-slate-50">
+                        <td colSpan={7} className="px-4 py-4 border-t border-slate-200">
                           <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300 mb-1">Evidence Type</h4>
-                                <p className="text-sm text-white capitalize">{req.evidence_type}</p>
+                                <h4 className="text-sm font-medium text-slate-600 mb-1">Evidence Type</h4>
+                                <p className="text-sm text-slate-800 capitalize">{req.evidence_type}</p>
                               </div>
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300 mb-1">Collection Frequency</h4>
-                                <p className="text-sm text-white">{req.collection_frequency || 'Not specified'}</p>
+                                <h4 className="text-sm font-medium text-slate-600 mb-1">Collection Frequency</h4>
+                                <p className="text-sm text-slate-800">{req.collection_frequency || 'Not specified'}</p>
                               </div>
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300 mb-1">Retention Period</h4>
-                                <p className="text-sm text-white">{req.retention_period || 'Not specified'}</p>
+                                <h4 className="text-sm font-medium text-slate-600 mb-1">Retention Period</h4>
+                                <p className="text-sm text-slate-800">{req.retention_period || 'Not specified'}</p>
                               </div>
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300 mb-1">AI Confidence</h4>
+                                <h4 className="text-sm font-medium text-slate-600 mb-1">AI Confidence</h4>
                                 <p className={`text-sm font-medium ${
                                   req.ai_confidence >= 0.8 ? 'text-emerald-400' :
                                   req.ai_confidence >= 0.5 ? 'text-amber-400' : 'text-rose-400'
@@ -603,29 +603,29 @@ export default function EvidenceRequirementsPage() {
                                 </p>
                               </div>
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300 mb-1">Mandatory</h4>
+                                <h4 className="text-sm font-medium text-slate-600 mb-1">Mandatory</h4>
                                 <p className={`text-sm font-medium ${req.is_mandatory ? 'text-rose-400' : 'text-slate-400'}`}>
                                   {req.is_mandatory ? 'Yes' : 'No'}
                                 </p>
                               </div>
                               {req.evidence_format && (
                                 <div>
-                                  <h4 className="text-sm font-medium text-slate-300 mb-1">Evidence Format</h4>
-                                  <p className="text-sm text-white">{req.evidence_format}</p>
+                                  <h4 className="text-sm font-medium text-slate-600 mb-1">Evidence Format</h4>
+                                  <p className="text-sm text-slate-800">{req.evidence_format}</p>
                                 </div>
                               )}
                             </div>
 
                             {req.evidence_description && (
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300 mb-1">Description</h4>
+                                <h4 className="text-sm font-medium text-slate-600 mb-1">Description</h4>
                                 <p className="text-sm text-slate-400">{req.evidence_description}</p>
                               </div>
                             )}
 
                             {req.exact_requirements && req.exact_requirements.length > 0 && (
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300 mb-2">Exact Requirements</h4>
+                                <h4 className="text-sm font-medium text-slate-600 mb-2">Exact Requirements</h4>
                                 <ul className="space-y-1">
                                   {req.exact_requirements.map((item, idx) => (
                                     <li key={idx} className="flex items-start gap-2 text-sm text-slate-400">
@@ -639,7 +639,7 @@ export default function EvidenceRequirementsPage() {
 
                             {req.acceptance_criteria && req.acceptance_criteria.length > 0 && (
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300 mb-2">Acceptance Criteria</h4>
+                                <h4 className="text-sm font-medium text-slate-600 mb-2">Acceptance Criteria</h4>
                                 <ul className="space-y-1">
                                   {req.acceptance_criteria.map((item, idx) => (
                                     <li key={idx} className="flex items-start gap-2 text-sm text-slate-400">
@@ -653,14 +653,14 @@ export default function EvidenceRequirementsPage() {
 
                             {req.sample_evidence && (
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300 mb-1">Sample Evidence</h4>
+                                <h4 className="text-sm font-medium text-slate-600 mb-1">Sample Evidence</h4>
                                 <p className="text-sm text-slate-400">{req.sample_evidence}</p>
                               </div>
                             )}
 
                             {req.collection_guidance && (
                               <div>
-                                <h4 className="text-sm font-medium text-slate-300 mb-1">Collection Guidance</h4>
+                                <h4 className="text-sm font-medium text-slate-600 mb-1">Collection Guidance</h4>
                                 <p className="text-sm text-slate-400">{req.collection_guidance}</p>
                               </div>
                             )}
@@ -672,14 +672,14 @@ export default function EvidenceRequirementsPage() {
                                     e.stopPropagation();
                                     setShowAiReasoning(showAiReasoning === req.id ? null : req.id);
                                   }}
-                                  className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+                                  className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-900 transition-colors"
                                 >
-                                  <Sparkles className="h-4 w-4 text-purple-400" />
+                                  <Sparkles className="h-4 w-4 text-primary-600" />
                                   <span>AI Reasoning</span>
                                   <ChevronDown className={`h-4 w-4 transition-transform ${showAiReasoning === req.id ? 'rotate-180' : ''}`} />
                                 </button>
                                 {showAiReasoning === req.id && (
-                                  <div className="mt-2 rounded-lg bg-slate-800 p-3 text-sm text-slate-400">
+                                  <div className="mt-2 rounded-lg bg-white p-3 text-sm text-slate-400">
                                     {req.ai_reasoning}
                                   </div>
                                 )}
@@ -730,9 +730,9 @@ export default function EvidenceRequirementsPage() {
 
       {showRejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md mx-4 rounded-xl bg-slate-800 border border-slate-700 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-700 p-4">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <div className="w-full max-w-md mx-4 rounded-xl bg-white border border-slate-200 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
                 <ThumbsDown className="h-5 w-5 text-rose-400" />
                 Reject Evidence Requirement
               </h2>
@@ -741,13 +741,13 @@ export default function EvidenceRequirementsPage() {
                   setShowRejectModal(null);
                   setRejectionReason('');
                 }}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="p-4">
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-slate-600 mb-2">
                 Rejection Reason <span className="text-rose-400">*</span>
               </label>
               <textarea
@@ -755,16 +755,16 @@ export default function EvidenceRequirementsPage() {
                 onChange={(e) => setRejectionReason(e.target.value)}
                 placeholder="Please provide a reason for rejecting this evidence requirement..."
                 rows={4}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
               />
             </div>
-            <div className="flex justify-end gap-3 border-t border-slate-700 p-4">
+            <div className="flex justify-end gap-3 border-t border-slate-200 p-4">
               <button
                 onClick={() => {
                   setShowRejectModal(null);
                   setRejectionReason('');
                 }}
-                className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-600"
+                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600"
               >
                 Cancel
               </button>

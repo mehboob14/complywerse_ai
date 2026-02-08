@@ -12,7 +12,7 @@ interface EmptyStateProps {
 export function ChartEmptyState({ title, description, icon }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center p-6">
-      <div className="rounded-xl bg-slate-800/50 p-4 mb-4">
+      <div className="rounded-xl bg-white p-4 mb-4">
         {icon || <BarChart3 className="h-8 w-8 text-slate-500" />}
       </div>
       <p className="text-sm font-medium text-slate-400">{title}</p>
@@ -448,7 +448,7 @@ export function KPICard({ title, value, subtitle, trend, trendValue, icon, color
     green: { gradient: 'from-emerald-500/20 to-emerald-600/10', text: 'text-emerald-400', hover: 'hover:border-emerald-500/50' },
     amber: { gradient: 'from-amber-500/20 to-amber-600/10', text: 'text-amber-400', hover: 'hover:border-amber-500/50' },
     red: { gradient: 'from-red-500/20 to-red-600/10', text: 'text-red-400', hover: 'hover:border-red-500/50' },
-    purple: { gradient: 'from-purple-500/20 to-purple-600/10', text: 'text-purple-400', hover: 'hover:border-purple-500/50' },
+    purple: { gradient: 'from-purple-500/20 to-purple-600/10', text: 'text-primary-600', hover: 'hover:border-primary-500/50' },
     cyan: { gradient: 'from-cyan-500/20 to-cyan-600/10', text: 'text-cyan-400', hover: 'hover:border-cyan-500/50' },
   };
 
@@ -470,7 +470,7 @@ export function KPICard({ title, value, subtitle, trend, trendValue, icon, color
     <div 
       onClick={onClick}
       className={`
-        rounded-xl border border-slate-700 bg-surface-800 p-5 
+        rounded-xl border border-slate-200 bg-white p-5 
         transition-all duration-300 ${config.hover}
         ${onClick ? 'cursor-pointer hover:shadow-lg' : ''}
       `}

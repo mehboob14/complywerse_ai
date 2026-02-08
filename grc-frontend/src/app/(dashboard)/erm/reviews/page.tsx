@@ -82,7 +82,7 @@ export default function ReviewsPage() {
           <div className="flex items-center gap-3">
             <Clock className="h-8 w-8 text-yellow-400" />
             <div>
-              <p className="text-2xl font-bold text-white">{pendingReviews?.length || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{pendingReviews?.length || 0}</p>
               <p className="text-sm text-yellow-400">Pending Reviews</p>
             </div>
           </div>
@@ -91,7 +91,7 @@ export default function ReviewsPage() {
           <div className="flex items-center gap-3">
             <AlertCircle className="h-8 w-8 text-red-400" />
             <div>
-              <p className="text-2xl font-bold text-white">{overdueReviews?.length || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{overdueReviews?.length || 0}</p>
               <p className="text-sm text-red-400">Overdue Reviews</p>
             </div>
           </div>
@@ -100,7 +100,7 @@ export default function ReviewsPage() {
           <div className="flex items-center gap-3">
             <CheckCircle className="h-8 w-8 text-green-400" />
             <div>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-slate-800">
                 {reviews?.filter((r) => r.status === 'completed').length || 0}
               </p>
               <p className="text-sm text-green-400">Completed This Month</p>
@@ -113,7 +113,7 @@ export default function ReviewsPage() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white"
+          className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
@@ -137,9 +137,9 @@ export default function ReviewsPage() {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-700 bg-slate-800">
+        <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <Calendar className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-white">No reviews scheduled</h3>
+          <h3 className="mt-4 text-lg font-medium text-slate-800">No reviews scheduled</h3>
           <p className="mt-1 text-slate-400">Schedule risk reviews to maintain compliance</p>
         </div>
       )}
@@ -174,10 +174,10 @@ function ReviewCard({ review }: { review: RiskReview }) {
   });
 
   return (
-    <div className={`rounded-xl border p-4 ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700 bg-slate-800'}`}>
+    <div className={`rounded-xl border p-4 ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 bg-white'}`}>
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="font-medium text-white">{review.risk_title || `Risk #${review.risk_id}`}</h3>
+          <h3 className="font-medium text-slate-800">{review.risk_title || `Risk #${review.risk_id}`}</h3>
           <div className="mt-1 flex items-center gap-3">
             <span className={`rounded-full px-2 py-0.5 text-xs ${statusColor}`}>
               {review.status.replace('_', ' ')}
@@ -188,7 +188,7 @@ function ReviewCard({ review }: { review: RiskReview }) {
           </div>
         </div>
         <div className="text-right">
-          <p className={`text-sm font-medium ${isOverdue ? 'text-red-400' : 'text-slate-300'}`}>
+          <p className={`text-sm font-medium ${isOverdue ? 'text-red-400' : 'text-slate-600'}`}>
             Due: {new Date(review.due_date).toLocaleDateString()}
           </p>
           {isOverdue && <p className="text-xs text-red-400">Overdue</p>}
@@ -220,8 +220,8 @@ function ReviewCard({ review }: { review: RiskReview }) {
       )}
 
       {review.findings && (
-        <div className="mt-3 rounded bg-slate-900 p-3">
-          <p className="text-sm text-slate-300">{review.findings}</p>
+        <div className="mt-3 rounded bg-slate-50 p-3">
+          <p className="text-sm text-slate-600">{review.findings}</p>
         </div>
       )}
     </div>
@@ -256,10 +256,10 @@ function ReviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-slate-800 p-6">
+      <div className="w-full max-w-lg rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Schedule Review</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">Schedule Review</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -270,7 +270,7 @@ function ReviewModal({
             <select
               value={formData.risk_id}
               onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             >
               {risks.map((risk) => (
@@ -287,7 +287,7 @@ function ReviewModal({
               <select
                 value={formData.review_cycle}
                 onChange={(e) => setFormData({ ...formData, review_cycle: e.target.value as ReviewCycle })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 <option value="monthly">Monthly</option>
                 <option value="quarterly">Quarterly</option>
@@ -300,7 +300,7 @@ function ReviewModal({
               <select
                 value={formData.review_type}
                 onChange={(e) => setFormData({ ...formData, review_type: e.target.value as ReviewType })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 <option value="periodic">Periodic</option>
                 <option value="triggered">Triggered</option>
@@ -316,7 +316,7 @@ function ReviewModal({
               type="date"
               value={formData.due_date}
               onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             />
           </div>
@@ -325,7 +325,7 @@ function ReviewModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
             >
               Cancel
             </button>

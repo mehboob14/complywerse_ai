@@ -25,7 +25,7 @@ type ActionPriority = 'critical' | 'high' | 'medium' | 'low';
 
 const ACTION_TYPES: { value: ActionType; label: string; color: string }[] = [
   { value: 'mitigate', label: 'Mitigate', color: 'bg-blue-500/20 text-blue-400' },
-  { value: 'transfer', label: 'Transfer', color: 'bg-purple-500/20 text-purple-400' },
+  { value: 'transfer', label: 'Transfer', color: 'bg-primary-500/20 text-primary-600' },
   { value: 'avoid', label: 'Avoid', color: 'bg-orange-500/20 text-orange-400' },
   { value: 'accept', label: 'Accept', color: 'bg-slate-500/20 text-slate-400' },
 ];
@@ -154,29 +154,29 @@ export default function MitigationActionsPage() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/20 p-2">
               <ListTodo className="h-5 w-5 text-blue-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{stats.total}</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
               <p className="text-sm text-slate-400">Total Actions</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-yellow-500/20 p-2">
               <Clock className="h-5 w-5 text-yellow-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{stats.open}</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.open}</p>
               <p className="text-sm text-slate-400">Open Actions</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-red-700/50 bg-slate-800 p-4">
+        <div className="rounded-xl border border-red-700/50 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-red-500/20 p-2">
               <AlertTriangle className="h-5 w-5 text-red-400" />
@@ -187,13 +187,13 @@ export default function MitigationActionsPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/20 p-2">
               <CheckCircle className="h-5 w-5 text-green-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{stats.completedThisMonth}</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.completedThisMonth}</p>
               <p className="text-sm text-slate-400">Completed (Month)</p>
             </div>
           </div>
@@ -209,13 +209,13 @@ export default function MitigationActionsPage() {
               placeholder="Search actions..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="rounded-lg border border-slate-600 bg-slate-700 py-2 pl-10 pr-4 text-sm text-white placeholder:text-slate-400"
+              className="rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-sm text-slate-800 placeholder:text-slate-400"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
           >
             <option value="all">All Statuses</option>
             {ACTION_STATUSES.map((s) => (
@@ -225,7 +225,7 @@ export default function MitigationActionsPage() {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
           >
             <option value="all">All Priorities</option>
             {ACTION_PRIORITIES.map((p) => (
@@ -235,7 +235,7 @@ export default function MitigationActionsPage() {
           <select
             value={actionTypeFilter}
             onChange={(e) => setActionTypeFilter(e.target.value)}
-            className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white"
+            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800"
           >
             <option value="all">All Types</option>
             {ACTION_TYPES.map((t) => (
@@ -253,10 +253,10 @@ export default function MitigationActionsPage() {
       </div>
 
       {filteredActions && filteredActions.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-700">
+              <tr className="border-b border-slate-200">
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Title</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Risk</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Type</th>
@@ -277,9 +277,9 @@ export default function MitigationActionsPage() {
                   action.status !== 'completed' && action.status !== 'cancelled';
                 
                 return (
-                  <tr key={action.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                  <tr key={action.id} className="border-b border-slate-200 hover:bg-slate-200/30">
                     <td className="px-4 py-3">
-                      <span className="font-medium text-white">{action.title}</span>
+                      <span className="font-medium text-slate-800">{action.title}</span>
                     </td>
                     <td className="px-4 py-3">
                       <Link 
@@ -305,12 +305,12 @@ export default function MitigationActionsPage() {
                         {action.priority}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-300">
+                    <td className="px-4 py-3 text-sm text-slate-600">
                       {action.owner?.full_name || action.owner?.email || '—'}
                     </td>
                     <td className="px-4 py-3">
                       {action.due_date ? (
-                        <span className={`text-sm ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-300'}`}>
+                        <span className={`text-sm ${isOverdue ? 'text-red-400 font-medium' : 'text-slate-600'}`}>
                           {new Date(action.due_date).toLocaleDateString()}
                           {isOverdue && ' (Overdue)'}
                         </span>
@@ -318,7 +318,7 @@ export default function MitigationActionsPage() {
                         <span className="text-sm text-slate-500">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-300">
+                    <td className="px-4 py-3 text-sm text-slate-600">
                       {action.expected_residual_reduction !== undefined && action.expected_residual_reduction !== null
                         ? `${action.expected_residual_reduction}%`
                         : '—'}
@@ -336,7 +336,7 @@ export default function MitigationActionsPage() {
                         )}
                         <button
                           onClick={() => setEditingAction(action)}
-                          className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
+                          className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
                           title="Edit"
                         >
                           <Edit2 className="h-4 w-4" />
@@ -361,9 +361,9 @@ export default function MitigationActionsPage() {
           </table>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-700 bg-slate-800">
+        <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <ListTodo className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-white">No mitigation actions found</h3>
+          <h3 className="mt-4 text-lg font-medium text-slate-800">No mitigation actions found</h3>
           <p className="mt-1 text-slate-400">Create mitigation actions to track risk treatment progress</p>
         </div>
       )}
@@ -451,12 +451,12 @@ function ActionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-slate-800 p-6">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-slate-800">
             {action ? 'Edit Mitigation Action' : 'Create Mitigation Action'}
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -468,7 +468,7 @@ function ActionModal({
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
             />
           </div>
@@ -478,7 +478,7 @@ function ActionModal({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -488,7 +488,7 @@ function ActionModal({
             <select
               value={formData.risk_id}
               onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               required
               disabled={!!action}
             >
@@ -506,7 +506,7 @@ function ActionModal({
               <select
                 value={formData.action_type}
                 onChange={(e) => setFormData({ ...formData, action_type: e.target.value as ActionType })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 {ACTION_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -518,7 +518,7 @@ function ActionModal({
               <select
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value as ActionPriority })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 {ACTION_PRIORITIES.map((p) => (
                   <option key={p.value} value={p.value}>{p.label}</option>
@@ -533,7 +533,7 @@ function ActionModal({
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as ActionStatus })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 {ACTION_STATUSES.filter(s => s.value !== 'overdue').map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -546,7 +546,7 @@ function ActionModal({
                 type="date"
                 value={formData.due_date}
                 onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               />
             </div>
           </div>
@@ -562,7 +562,7 @@ function ActionModal({
                 ...formData, 
                 expected_residual_reduction: e.target.value ? Number(e.target.value) : undefined 
               })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               placeholder="e.g., 25"
             />
           </div>
@@ -572,7 +572,7 @@ function ActionModal({
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -581,7 +581,7 @@ function ActionModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -625,10 +625,10 @@ function CompleteActionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Complete Action</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">Complete Action</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -647,7 +647,7 @@ function CompleteActionModal({
               max="100"
               value={actualReduction}
               onChange={(e) => setActualReduction(Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
             />
           </div>
 
@@ -655,7 +655,7 @@ function CompleteActionModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
             >
               Cancel
             </button>

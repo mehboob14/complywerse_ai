@@ -33,7 +33,7 @@ import { useRef } from 'react';
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 
 const RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string }[] = [
-  { value: 'strategic', label: 'Strategic', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  { value: 'strategic', label: 'Strategic', color: 'text-primary-600', bgColor: 'bg-primary-500/20' },
   { value: 'operational', label: 'Operational', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
   { value: 'financial', label: 'Financial', color: 'text-green-400', bgColor: 'bg-green-500/20' },
   { value: 'compliance', label: 'Compliance', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
@@ -330,7 +330,7 @@ export default function ERMRisksPage() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 font-medium text-white hover:bg-slate-600 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 font-medium text-slate-800 hover:bg-slate-600 disabled:opacity-50"
           >
             {isUploading ? (
               <Loader2 size={18} className="animate-spin" />
@@ -353,7 +353,7 @@ export default function ERMRisksPage() {
       </div>
 
       {uploadResult && (
-        <div className={`rounded-xl border p-4 ${uploadResult.errors.length > 0 ? 'border-red-500/50 bg-slate-800' : 'border-green-500/50 bg-slate-800'}`}>
+        <div className={`rounded-xl border p-4 ${uploadResult.errors.length > 0 ? 'border-red-500/50 bg-white' : 'border-green-500/50 bg-white'}`}>
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
               {uploadResult.errors.length > 0 ? (
@@ -362,7 +362,7 @@ export default function ERMRisksPage() {
                 <CheckCircle className="h-5 w-5 text-green-400 mt-0.5" />
               )}
               <div>
-                <p className="font-medium text-white">{uploadResult.message}</p>
+                <p className="font-medium text-slate-800">{uploadResult.message}</p>
                 <div className="mt-1 flex gap-4 text-sm">
                   <span className="text-green-400">Created: {uploadResult.created}</span>
                   <span className="text-yellow-400">Skipped: {uploadResult.skipped}</span>
@@ -374,7 +374,7 @@ export default function ERMRisksPage() {
             </div>
             <button
               onClick={() => setUploadResult(null)}
-              className="text-slate-400 hover:text-white"
+              className="text-slate-400 hover:text-slate-900"
             >
               <X size={18} />
             </button>
@@ -383,52 +383,52 @@ export default function ERMRisksPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-primary-500/20 p-2">
               <AlertTriangle className="h-5 w-5 text-primary-400" />
             </div>
             <div>
               <p className="text-sm text-slate-400">Total Risks</p>
-              <p className="text-2xl font-bold text-white">{computedDashboard?.total_risks || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{computedDashboard?.total_risks || 0}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-red-500/20 p-2">
               <Shield className="h-5 w-5 text-red-400" />
             </div>
             <div>
               <p className="text-sm text-slate-400">Open Risks</p>
-              <p className="text-2xl font-bold text-white">{computedDashboard?.open_risks || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{computedDashboard?.open_risks || 0}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-orange-500/20 p-2">
               <TrendingUp className="h-5 w-5 text-orange-400" />
             </div>
             <div>
               <p className="text-sm text-slate-400">Avg Inherent</p>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-slate-800">
                 {(computedDashboard?.avg_inherent_score || 0).toFixed(1)}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/20 p-2">
               <TrendingDown className="h-5 w-5 text-green-400" />
             </div>
             <div>
               <p className="text-sm text-slate-400">Avg Residual</p>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-slate-800">
                 {(computedDashboard?.avg_residual_score || 0).toFixed(1)}
               </p>
             </div>
@@ -437,9 +437,9 @@ export default function ERMRisksPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 lg:col-span-1">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-1">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Risk Heatmap</h2>
+            <h2 className="text-lg font-semibold text-slate-800">Risk Heatmap</h2>
             <div className="flex gap-1">
               <button
                 onClick={() => {
@@ -449,7 +449,7 @@ export default function ERMRisksPage() {
                 className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                   heatmapType === 'inherent'
                     ? 'bg-primary-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    : 'bg-slate-200 text-slate-600 hover:bg-slate-600'
                 }`}
               >
                 Inherent
@@ -462,7 +462,7 @@ export default function ERMRisksPage() {
                 className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                   heatmapType === 'residual'
                     ? 'bg-primary-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    : 'bg-slate-200 text-slate-600 hover:bg-slate-600'
                 }`}
               >
                 Residual
@@ -500,7 +500,7 @@ export default function ERMRisksPage() {
                         title={`L${likelihood} x I${impact} = ${likelihood * impact}`}
                       >
                         {cell?.count > 0 && (
-                          <span className="text-white">{cell.count}</span>
+                          <span className="text-slate-800">{cell.count}</span>
                         )}
                       </button>
                     );
@@ -520,7 +520,7 @@ export default function ERMRisksPage() {
           {selectedHeatmapCell && (
             <button
               onClick={() => setSelectedHeatmapCell(null)}
-              className="mt-3 w-full rounded bg-slate-700 py-1 text-xs text-slate-300 hover:bg-slate-600"
+              className="mt-3 w-full rounded bg-slate-200 py-1 text-xs text-slate-600 hover:bg-slate-600"
             >
               Clear filter
             </button>
@@ -536,7 +536,7 @@ export default function ERMRisksPage() {
                 placeholder="Search risks..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
               />
             </div>
 
@@ -544,7 +544,7 @@ export default function ERMRisksPage() {
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value as RiskCategory | 'all')}
-                className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
               >
                 <option value="all">All Categories</option>
                 {RISK_CATEGORIES.map(cat => (
@@ -555,7 +555,7 @@ export default function ERMRisksPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as RiskStatus | 'all')}
-                className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
               >
                 <option value="all">All Statuses</option>
                 {RISK_STATUSES.map(status => (
@@ -566,7 +566,7 @@ export default function ERMRisksPage() {
               <select
                 value={scoreFilter}
                 onChange={(e) => setScoreFilter(e.target.value as ScoreFilter)}
-                className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
               >
                 <option value="all">All Scores</option>
                 <option value="critical">Critical (≥20)</option>
@@ -579,7 +579,7 @@ export default function ERMRisksPage() {
 
           <div className="space-y-3">
             {filteredRisks.length === 0 ? (
-              <div className="rounded-xl border border-slate-700 bg-slate-800 p-8 text-center">
+              <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
                 <AlertTriangle className="mx-auto h-10 w-10 text-slate-500" />
                 <p className="mt-2 text-slate-400">No risks found matching your criteria</p>
               </div>
@@ -592,11 +592,11 @@ export default function ERMRisksPage() {
                 return (
                   <div
                     key={risk.id}
-                    className="rounded-xl border border-slate-700 bg-slate-800 p-4 hover:border-slate-600"
+                    className="rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <Link href={`/risks/${risk.id}`} className="text-lg font-medium text-white hover:text-primary-400">
+                        <Link href={`/risks/${risk.id}`} className="text-lg font-medium text-slate-800 hover:text-primary-400">
                           {risk.title}
                         </Link>
                         {risk.description && (
@@ -607,7 +607,7 @@ export default function ERMRisksPage() {
                             {categoryStyle.label}
                           </span>
                           {risk.risk_sub_category && (
-                            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-600/50 text-slate-300">
+                            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-600/50 text-slate-600">
                               {risk.risk_sub_category}
                             </span>
                           )}
@@ -617,7 +617,7 @@ export default function ERMRisksPage() {
                           {risk.closure_status && (
                             <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                               risk.closure_status === 'closed' 
-                                ? 'bg-slate-500/30 text-slate-300' 
+                                ? 'bg-slate-500/30 text-slate-600' 
                                 : 'bg-amber-500/20 text-amber-400'
                             }`}>
                               {risk.closure_status === 'closed' ? <Lock size={10} /> : <Unlock size={10} />}
@@ -651,7 +651,7 @@ export default function ERMRisksPage() {
                               setEditingRisk(risk);
                               setIsModalOpen(true);
                             }}
-                            className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
+                            className="rounded p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
                           >
                             <Edit2 className="h-4 w-4" />
                           </button>
@@ -849,10 +849,10 @@ function RiskModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-slate-800 p-6">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{risk ? 'Edit Risk' : 'Create Risk'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">{risk ? 'Edit Risk' : 'Create Risk'}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -865,7 +865,7 @@ function RiskModal({
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="flex-1 rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="flex-1 rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
                 required
                 placeholder="Enter risk title..."
               />
@@ -873,7 +873,7 @@ function RiskModal({
                 type="button"
                 onClick={handleGetAISuggestions}
                 disabled={isLoadingAI || formData.title.trim().length < 3}
-                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-white hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-slate-800 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isLoadingAI ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -890,15 +890,15 @@ function RiskModal({
 
           {aiSuggestions && (
             <div className="rounded-xl border-2 border-transparent bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-[2px]">
-              <div className="rounded-[10px] bg-slate-800 p-4">
+              <div className="rounded-[10px] bg-white p-4">
                 <button
                   type="button"
                   onClick={() => setShowSuggestions(!showSuggestions)}
                   className="flex w-full items-center justify-between text-left"
                 >
                   <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-purple-400" />
-                    <span className="text-sm font-medium text-white">AI Suggestions</span>
+                    <Zap className="h-4 w-4 text-primary-600" />
+                    <span className="text-sm font-medium text-slate-800">AI Suggestions</span>
                   </div>
                   {showSuggestions ? (
                     <ChevronUp className="h-4 w-4 text-slate-400" />
@@ -915,13 +915,13 @@ function RiskModal({
                         <button
                           type="button"
                           onClick={applyDescription}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-purple-400 hover:bg-purple-500/20"
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-500/20"
                         >
                           <Check className="h-3 w-3" />
                           Use this
                         </button>
                       </div>
-                      <p className="mt-1 text-sm text-slate-300 bg-slate-700/50 rounded-lg p-3">
+                      <p className="mt-1 text-sm text-slate-600 bg-slate-200/50 rounded-lg p-3">
                         {aiSuggestions.suggested_description}
                       </p>
                     </div>
@@ -965,7 +965,7 @@ function RiskModal({
                         <button
                           type="button"
                           onClick={applyLikelihoodImpact}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-purple-400 hover:bg-purple-500/20"
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-500/20"
                         >
                           <Check className="h-3 w-3" />
                           Apply
@@ -1000,16 +1000,16 @@ function RiskModal({
                           {aiSuggestions.recommended_controls.map((control) => (
                             <div
                               key={control.control_id}
-                              className="flex items-start gap-3 rounded-lg bg-slate-700/50 p-3"
+                              className="flex items-start gap-3 rounded-lg bg-slate-200/50 p-3"
                             >
                               <Shield className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-white truncate">
+                                  <span className="text-sm font-medium text-slate-800 truncate">
                                     {control.control_name}
                                   </span>
                                   {control.control_code && (
-                                    <span className="rounded bg-slate-600 px-1.5 py-0.5 text-xs text-slate-300">
+                                    <span className="rounded bg-slate-600 px-1.5 py-0.5 text-xs text-slate-600">
                                       {control.control_code}
                                     </span>
                                   )}
@@ -1018,7 +1018,7 @@ function RiskModal({
                                       ? 'bg-green-500/20 text-green-300'
                                       : control.relevance === 'medium'
                                       ? 'bg-yellow-500/20 text-yellow-300'
-                                      : 'bg-slate-500/20 text-slate-300'
+                                      : 'bg-slate-500/20 text-slate-600'
                                   }`}>
                                     {control.relevance}
                                   </span>
@@ -1037,7 +1037,7 @@ function RiskModal({
                         {aiSuggestions.risk_treatment_options.map((option, idx) => (
                           <span
                             key={idx}
-                            className="rounded-full bg-purple-500/20 px-3 py-1 text-xs text-purple-300"
+                            className="rounded-full bg-primary-500/20 px-3 py-1 text-xs text-primary-500"
                           >
                             {option}
                           </span>
@@ -1055,7 +1055,7 @@ function RiskModal({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={3}
               placeholder="Describe the risk..."
             />
@@ -1067,7 +1067,7 @@ function RiskModal({
               <select
                 value={formData.risk_category}
                 onChange={(e) => handleCategoryChange(e.target.value as RiskCategory)}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 {RISK_CATEGORIES.map((cat) => (
                   <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -1079,7 +1079,7 @@ function RiskModal({
               <select
                 value={formData.risk_sub_category}
                 onChange={(e) => setFormData({ ...formData, risk_sub_category: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 <option value="">Select sub-category...</option>
                 {subCategories.map((sub) => (
@@ -1095,7 +1095,7 @@ function RiskModal({
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as RiskStatus })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 {RISK_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -1107,7 +1107,7 @@ function RiskModal({
               <select
                 value={formData.business_owner_id || ''}
                 onChange={(e) => setFormData({ ...formData, business_owner_id: e.target.value ? Number(e.target.value) : undefined })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               >
                 <option value="">Select owner...</option>
                 {(users || []).map((user) => (
@@ -1128,7 +1128,7 @@ function RiskModal({
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     formData.affected_department_ids.includes(dept.id)
                       ? 'bg-primary-600 text-white'
-                      : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
+                      : 'bg-slate-600 text-slate-600 hover:bg-slate-500'
                   }`}
                 >
                   {dept.name}
@@ -1146,7 +1146,7 @@ function RiskModal({
                 max="5"
                 value={formData.inherent_likelihood}
                 onChange={(e) => setFormData({ ...formData, inherent_likelihood: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               />
             </div>
             <div>
@@ -1157,7 +1157,7 @@ function RiskModal({
                 max="5"
                 value={formData.inherent_impact}
                 onChange={(e) => setFormData({ ...formData, inherent_impact: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               />
             </div>
           </div>
@@ -1171,7 +1171,7 @@ function RiskModal({
                 max="5"
                 value={formData.residual_likelihood}
                 onChange={(e) => setFormData({ ...formData, residual_likelihood: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               />
             </div>
             <div>
@@ -1182,7 +1182,7 @@ function RiskModal({
                 max="5"
                 value={formData.residual_impact}
                 onChange={(e) => setFormData({ ...formData, residual_impact: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               />
             </div>
           </div>
@@ -1192,7 +1192,7 @@ function RiskModal({
             <textarea
               value={formData.treatment_plan}
               onChange={(e) => setFormData({ ...formData, treatment_plan: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
               rows={2}
             />
           </div>
@@ -1201,7 +1201,7 @@ function RiskModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-600"
+              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
             >
               Cancel
             </button>

@@ -138,7 +138,7 @@ export default function AttestationCampaignsPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-white">Attestation Campaigns</h1>
+            <h1 className="text-2xl font-semibold text-slate-800">Attestation Campaigns</h1>
             <p className="text-slate-400 mt-1">Manage attestation and certification campaigns</p>
           </div>
           <button
@@ -188,7 +188,7 @@ export default function AttestationCampaignsPage() {
                     <ClipboardCheck className="h-5 w-5 text-primary-400" />
                   </div>
                   <div>
-                    <h3 className="text-white font-medium">{campaign.name}</h3>
+                    <h3 className="text-slate-800 font-medium">{campaign.name}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
                       <StatusIcon className="h-3 w-3" />
                       {campaign.status}
@@ -225,9 +225,9 @@ export default function AttestationCampaignsPage() {
                 <div>
                   <div className="flex items-center justify-between text-sm mb-1">
                     <span className="text-slate-400">Progress</span>
-                    <span className="text-white font-medium">{campaign.progress}%</span>
+                    <span className="text-slate-800 font-medium">{campaign.progress}%</span>
                   </div>
-                  <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${campaign.progress === 100 ? 'bg-emerald-500' : 'bg-primary-500'}`}
                       style={{ width: `${campaign.progress}%` }}
@@ -243,7 +243,7 @@ export default function AttestationCampaignsPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 pt-4 border-t border-slate-700">
+              <div className="flex items-center gap-2 pt-4 border-t border-slate-200">
                 <Link
                   href={`/governance/attestations/campaigns/${campaign.id}`}
                   className="flex-1 btn-secondary text-center text-sm py-1.5 flex items-center justify-center gap-1"
@@ -302,7 +302,7 @@ export default function AttestationCampaignsPage() {
       {filteredCampaigns.length === 0 && (
         <div className="card p-12 text-center">
           <ClipboardCheck className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-white mb-2">No Campaigns Found</h3>
+          <h3 className="text-lg font-medium text-slate-800 mb-2">No Campaigns Found</h3>
           <p className="text-slate-400 mb-4">
             {searchTerm || statusFilter
               ? 'No campaigns match your filters'
@@ -317,10 +317,10 @@ export default function AttestationCampaignsPage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg border border-slate-700 mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-slate-200 mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white">Create New Campaign</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
+              <h3 className="text-lg font-medium text-slate-800">Create New Campaign</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -341,7 +341,7 @@ export default function AttestationCampaignsPage() {
             >
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Campaign Name</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Campaign Name</label>
                   <input
                     type="text"
                     name="name"
@@ -351,7 +351,7 @@ export default function AttestationCampaignsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
                   <textarea
                     name="description"
                     className="input w-full"
@@ -360,7 +360,7 @@ export default function AttestationCampaignsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Attestation Type</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Attestation Type</label>
                   <select name="attestation_type" className="input w-full" required>
                     <option value="">Select type</option>
                     {ATTESTATION_TYPES.map((type) => (
@@ -369,7 +369,7 @@ export default function AttestationCampaignsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Attestation Text</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Attestation Text</label>
                   <textarea
                     name="attestation_text"
                     className="input w-full"
@@ -380,7 +380,7 @@ export default function AttestationCampaignsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Start Date</label>
+                    <label className="block text-sm font-medium text-slate-600 mb-1">Start Date</label>
                     <input
                       type="date"
                       name="start_date"
@@ -389,7 +389,7 @@ export default function AttestationCampaignsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">End Date</label>
+                    <label className="block text-sm font-medium text-slate-600 mb-1">End Date</label>
                     <input
                       type="date"
                       name="end_date"
@@ -403,9 +403,9 @@ export default function AttestationCampaignsPage() {
                     type="checkbox"
                     name="requires_evidence"
                     id="requires_evidence"
-                    className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                    className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
                   />
-                  <label htmlFor="requires_evidence" className="text-sm text-slate-300">
+                  <label htmlFor="requires_evidence" className="text-sm text-slate-600">
                     Require evidence upload
                   </label>
                 </div>

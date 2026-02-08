@@ -314,7 +314,7 @@ export default function FrameworkUploadPage() {
               ? 'border-primary-500 bg-primary-500/10 shadow-lg shadow-primary-500/10'
               : selectedFile
               ? 'border-emerald-500 bg-emerald-500/10'
-              : 'border-slate-600 hover:border-primary-500/50 hover:bg-slate-800/50'
+              : 'border-slate-300 hover:border-primary-500/50 hover:bg-white/50'
           }`}
         >
           <input
@@ -329,7 +329,7 @@ export default function FrameworkUploadPage() {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-emerald-500/20">
                 <File className="h-8 w-8 text-emerald-400" />
               </div>
-              <p className="text-lg font-medium text-white">{selectedFile.name}</p>
+              <p className="text-lg font-medium text-slate-800">{selectedFile.name}</p>
               <p className="mt-1 text-sm text-slate-400">{formatFileSize(selectedFile.size)}</p>
               <button
                 onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
@@ -341,13 +341,13 @@ export default function FrameworkUploadPage() {
           ) : (
             <div className="text-center">
               <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl transition-colors ${
-                isDragging ? 'bg-primary-500/20' : 'bg-slate-800 group-hover:bg-slate-700'
+                isDragging ? 'bg-primary-500/20' : 'bg-white group-hover:bg-slate-200'
               }`}>
                 <CloudUpload className={`h-8 w-8 transition-colors ${
                   isDragging ? 'text-primary-400' : 'text-slate-400 group-hover:text-primary-400'
                 }`} />
               </div>
-              <p className="text-lg font-medium text-white">
+              <p className="text-lg font-medium text-slate-800">
                 {isDragging ? 'Drop your file here' : 'Drag and drop a file here'}
               </p>
               <p className="mt-1 text-sm text-slate-400">or click to browse</p>
@@ -420,7 +420,7 @@ export default function FrameworkUploadPage() {
           </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-between border-t border-slate-700/50 pt-6">
+        <div className="mt-6 flex items-center justify-between border-t border-slate-200 pt-6">
           <p className="text-sm text-slate-400">
             <span className="text-rose-400">*</span> Required field
           </p>
@@ -478,11 +478,11 @@ export default function FrameworkUploadPage() {
         ) : (
           <div className="divide-y divide-slate-700/50">
             {frameworks.map((framework) => (
-              <div key={framework.id} className="p-4 transition-colors hover:bg-slate-800/30 first:rounded-t-lg last:rounded-b-lg">
+              <div key={framework.id} className="p-4 transition-colors hover:bg-white/30 first:rounded-t-lg last:rounded-b-lg">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <h3 className="text-base font-semibold text-white truncate">{framework.name}</h3>
+                      <h3 className="text-base font-semibold text-slate-800 truncate">{framework.name}</h3>
                       {getStatusBadge(framework.upload_status)}
                       {framework.framework_type && (
                         <span className="badge-neutral">
@@ -523,7 +523,7 @@ export default function FrameworkUploadPage() {
                     {framework.upload_status === 'parsed' && framework.parsed_controls_count > 0 && !framework.published_framework_id && (
                       <button
                         onClick={() => openPublishModal(framework)}
-                        className="btn bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500 focus:ring-indigo-500"
+                        className="btn bg-indigo-600 px-3 py-1.5 text-sm text-slate-800 hover:bg-indigo-500 focus:ring-indigo-500"
                       >
                         <Send className="h-4 w-4" />
                         Publish to Frameworks
@@ -541,7 +541,7 @@ export default function FrameworkUploadPage() {
                       <button
                         onClick={() => extractTextMutation.mutate(framework.id)}
                         disabled={extractTextMutation.isPending}
-                        className="btn bg-cyan-600 px-3 py-1.5 text-sm text-white hover:bg-cyan-500 focus:ring-cyan-500 disabled:opacity-50"
+                        className="btn bg-cyan-600 px-3 py-1.5 text-sm text-slate-800 hover:bg-cyan-500 focus:ring-cyan-500 disabled:opacity-50"
                       >
                         {extractTextMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -577,7 +577,7 @@ export default function FrameworkUploadPage() {
                     <button
                       onClick={() => handleDelete(framework)}
                       disabled={deleteMutation.isPending}
-                      className="btn-secondary btn-sm hover:bg-rose-600 hover:border-rose-600 hover:text-white"
+                      className="btn-secondary btn-sm hover:bg-rose-600 hover:border-rose-600 hover:text-slate-900"
                     >
                       <Trash2 className="h-4 w-4" />
                       Delete
@@ -589,7 +589,7 @@ export default function FrameworkUploadPage() {
                   <div className="mt-4">
                     <button
                       onClick={() => setExpandedTextPreview(expandedTextPreview === framework.id ? null : framework.id)}
-                      className="flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors"
+                      className="flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-slate-900 transition-colors"
                     >
                       {expandedTextPreview === framework.id ? (
                         <ChevronUp className="h-4 w-4" />
@@ -599,7 +599,7 @@ export default function FrameworkUploadPage() {
                       Extracted Text Preview
                     </button>
                     {expandedTextPreview === framework.id && (
-                      <div className="mt-3 max-h-64 overflow-y-auto rounded-lg bg-slate-900/50 border border-slate-700/50 p-4 text-sm text-slate-300 scrollbar-thin">
+                      <div className="mt-3 max-h-64 overflow-y-auto rounded-lg bg-slate-50/50 border border-slate-200 p-4 text-sm text-slate-600 scrollbar-thin">
                         <pre className="whitespace-pre-wrap font-mono text-xs">{textPreviews[framework.id]}</pre>
                         {textPreviews[framework.id].length >= 2000 && (
                           <p className="mt-3 text-xs text-slate-500 italic">...text truncated for preview</p>
@@ -616,15 +616,15 @@ export default function FrameworkUploadPage() {
 
       {publishModalOpen && frameworkToPublish && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl bg-slate-800 border border-slate-700 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
+          <div className="w-full max-w-lg rounded-xl bg-white border border-slate-200 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-white">Publish to Frameworks</h3>
+                <h3 className="text-lg font-semibold text-slate-800">Publish to Frameworks</h3>
                 <p className="text-sm text-slate-400 mt-0.5">Add "{frameworkToPublish.name}" to the main frameworks library</p>
               </div>
               <button
                 onClick={() => setPublishModalOpen(false)}
-                className="text-slate-400 hover:text-white transition-colors"
+                className="text-slate-400 hover:text-slate-900 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -694,15 +694,15 @@ export default function FrameworkUploadPage() {
                       type="checkbox"
                       checked={publishFormData.is_mandatory}
                       onChange={(e) => setPublishFormData({ ...publishFormData, is_mandatory: e.target.checked })}
-                      className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                      className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
                     />
-                    <span className="text-sm text-slate-300">Mandatory compliance</span>
+                    <span className="text-sm text-slate-600">Mandatory compliance</span>
                   </label>
                 </div>
               </div>
               
-              <div className="rounded-lg bg-slate-900/50 border border-slate-700/50 p-4 mt-4">
-                <h4 className="text-sm font-medium text-white mb-2">What will be created:</h4>
+              <div className="rounded-lg bg-slate-50/50 border border-slate-200 p-4 mt-4">
+                <h4 className="text-sm font-medium text-slate-800 mb-2">What will be created:</h4>
                 <ul className="text-sm text-slate-400 space-y-1">
                   <li>• New framework entry in the Frameworks section</li>
                   <li>• {frameworkToPublish.parsed_controls_count} controls organized by domain/category</li>
@@ -718,7 +718,7 @@ export default function FrameworkUploadPage() {
               )}
             </div>
             
-            <div className="flex items-center justify-end gap-3 border-t border-slate-700 px-6 py-4">
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button
                 onClick={() => setPublishModalOpen(false)}
                 className="btn-secondary"

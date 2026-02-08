@@ -17,7 +17,7 @@ const variantStyles: Record<MetricBadgeVariant, { bg: string; text: string; bord
   default: {
     bg: 'bg-slate-500/10',
     text: 'text-slate-300',
-    border: 'border-slate-600',
+    border: 'border-slate-300',
   },
   success: {
     bg: 'bg-success-500/10',

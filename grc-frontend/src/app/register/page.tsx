@@ -142,7 +142,7 @@ export default function RegisterPage() {
   };
 
   const validateStep2 = () => {
-    if (!formData.organizationName) return 'Organization name is required';
+    if (!formData.organizationName) return 'Company name is required';
     if (!formData.industry) return 'Please select an industry';
     if (!formData.companySize) return 'Please select a company size';
     return null;
@@ -268,14 +268,14 @@ export default function RegisterPage() {
                 ? 'bg-green-600 text-white'
                 : s === step
                 ? 'bg-primary-600 text-white'
-                : 'bg-slate-700 text-slate-400'
+                : 'bg-slate-300 text-slate-500'
             }`}
           >
             {s < step ? <Check size={16} /> : s}
           </div>
           {s < 4 && (
             <div
-              className={`h-0.5 w-8 ${s < step ? 'bg-green-600' : 'bg-slate-700'}`}
+              className={`h-0.5 w-8 ${s < step ? 'bg-green-600' : 'bg-slate-300'}`}
             />
           )}
         </div>
@@ -285,10 +285,10 @@ export default function RegisterPage() {
 
   const renderStep1 = () => (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-white">Account Details</h2>
+      <h2 className="text-lg font-semibold text-slate-800">Account Details</h2>
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+        <label htmlFor="email" className="block text-sm font-medium text-slate-600">
           Email address
         </label>
         <input
@@ -297,7 +297,7 @@ export default function RegisterPage() {
           value={formData.email}
           onChange={(e) => updateFormData('email', e.target.value)}
           onBlur={() => markTouched('email')}
-          className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           placeholder="you@company.com"
         />
         {touched.email && formData.email && (
@@ -314,7 +314,7 @@ export default function RegisterPage() {
       </div>
 
       <div>
-        <label htmlFor="displayName" className="block text-sm font-medium text-slate-300">
+        <label htmlFor="displayName" className="block text-sm font-medium text-slate-600">
           Full name
         </label>
         <input
@@ -322,13 +322,13 @@ export default function RegisterPage() {
           type="text"
           value={formData.displayName}
           onChange={(e) => updateFormData('displayName', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           placeholder="John Doe"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+        <label htmlFor="password" className="block text-sm font-medium text-slate-600">
           Password
         </label>
         <div className="relative">
@@ -337,13 +337,13 @@ export default function RegisterPage() {
             type={showPassword ? 'text' : 'password'}
             value={formData.password}
             onChange={(e) => updateFormData('password', e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 pr-10 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 pr-10 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             placeholder="••••••••"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-300"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600"
           >
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
@@ -356,7 +356,7 @@ export default function RegisterPage() {
                   <div
                     key={i}
                     className={`h-full flex-1 rounded ${
-                      i <= passwordStrength ? passwordStrengthLabel.color : 'bg-slate-600'
+                      i <= passwordStrength ? passwordStrengthLabel.color : 'bg-slate-300'
                     }`}
                   />
                 ))}
@@ -370,7 +370,7 @@ export default function RegisterPage() {
       </div>
 
       <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-300">
+        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-600">
           Confirm password
         </label>
         <div className="relative">
@@ -379,13 +379,13 @@ export default function RegisterPage() {
             type={showConfirmPassword ? 'text' : 'password'}
             value={formData.confirmPassword}
             onChange={(e) => updateFormData('confirmPassword', e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 pr-10 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 pr-10 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             placeholder="••••••••"
           />
           <button
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-300"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600"
           >
             {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
@@ -399,24 +399,24 @@ export default function RegisterPage() {
 
   const renderStep2 = () => (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-white">Organization Details</h2>
+      <h2 className="text-lg font-semibold text-slate-800">Company Details</h2>
 
       <div>
-        <label htmlFor="organizationName" className="block text-sm font-medium text-slate-300">
-          Organization name <span className="text-red-400">*</span>
+        <label htmlFor="organizationName" className="block text-sm font-medium text-slate-600">
+          Company name <span className="text-red-400">*</span>
         </label>
         <input
           id="organizationName"
           type="text"
           value={formData.organizationName}
           onChange={(e) => updateFormData('organizationName', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           placeholder="Acme Corporation"
         />
       </div>
 
       <div>
-        <label htmlFor="legalEntityName" className="block text-sm font-medium text-slate-300">
+        <label htmlFor="legalEntityName" className="block text-sm font-medium text-slate-600">
           Legal entity name <span className="text-slate-500">(optional)</span>
         </label>
         <input
@@ -424,20 +424,20 @@ export default function RegisterPage() {
           type="text"
           value={formData.legalEntityName}
           onChange={(e) => updateFormData('legalEntityName', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           placeholder="Acme Corporation Ltd."
         />
       </div>
 
       <div>
-        <label htmlFor="industry" className="block text-sm font-medium text-slate-300">
+        <label htmlFor="industry" className="block text-sm font-medium text-slate-600">
           Industry <span className="text-red-400">*</span>
         </label>
         <select
           id="industry"
           value={formData.industry}
           onChange={(e) => updateFormData('industry', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         >
           <option value="">Select industry</option>
           {INDUSTRIES.map((industry) => (
@@ -449,14 +449,14 @@ export default function RegisterPage() {
       </div>
 
       <div>
-        <label htmlFor="companySize" className="block text-sm font-medium text-slate-300">
+        <label htmlFor="companySize" className="block text-sm font-medium text-slate-600">
           Company size <span className="text-red-400">*</span>
         </label>
         <select
           id="companySize"
           value={formData.companySize}
           onChange={(e) => updateFormData('companySize', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         >
           <option value="">Select company size</option>
           {COMPANY_SIZES.map((size) => (
@@ -471,17 +471,17 @@ export default function RegisterPage() {
 
   const renderStep3 = () => (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-white">Compliance Profile</h2>
+      <h2 className="text-lg font-semibold text-slate-800">Compliance Profile</h2>
 
       <div>
-        <label htmlFor="geography" className="block text-sm font-medium text-slate-300">
+        <label htmlFor="geography" className="block text-sm font-medium text-slate-600">
           Geography <span className="text-red-400">*</span>
         </label>
         <select
           id="geography"
           value={formData.geography}
           onChange={(e) => updateFormData('geography', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         >
           <option value="">Select geography</option>
           {GEOGRAPHIES.map((geo) => (
@@ -493,34 +493,34 @@ export default function RegisterPage() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-300">
+        <label className="block text-sm font-medium text-slate-600">
           Regulatory scope <span className="text-red-400">*</span>
         </label>
-        <p className="mb-2 text-xs text-slate-400">Select all that apply</p>
+        <p className="mb-2 text-xs text-slate-500">Select all that apply</p>
         <div className="grid grid-cols-2 gap-2">
           {REGULATORY_SCOPES.map((scope) => (
             <label
               key={scope}
               className={`flex cursor-pointer items-center gap-2 rounded-lg border p-3 transition-colors ${
                 formData.regulatoryScope.includes(scope)
-                  ? 'border-primary-500 bg-primary-900/30'
-                  : 'border-slate-600 bg-slate-700 hover:border-slate-500'
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-slate-300 bg-white hover:border-slate-400'
               }`}
             >
               <input
                 type="checkbox"
                 checked={formData.regulatoryScope.includes(scope)}
                 onChange={() => toggleRegulatoryScope(scope)}
-                className="h-4 w-4 rounded border-slate-500 bg-slate-600 text-primary-600 focus:ring-primary-500"
+                className="h-4 w-4 rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500"
               />
-              <span className="text-sm text-white">{scope}</span>
+              <span className="text-sm text-slate-800">{scope}</span>
             </label>
           ))}
         </div>
       </div>
 
       <div>
-        <label htmlFor="primaryContactPhone" className="block text-sm font-medium text-slate-300">
+        <label htmlFor="primaryContactPhone" className="block text-sm font-medium text-slate-600">
           Primary contact phone <span className="text-slate-500">(optional)</span>
         </label>
         <input
@@ -528,7 +528,7 @@ export default function RegisterPage() {
           type="tel"
           value={formData.primaryContactPhone}
           onChange={(e) => updateFormData('primaryContactPhone', e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           placeholder="+1 (555) 123-4567"
         />
       </div>
@@ -537,74 +537,74 @@ export default function RegisterPage() {
 
   const renderStep4 = () => (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-white">Review & Submit</h2>
+      <h2 className="text-lg font-semibold text-slate-800">Review & Submit</h2>
 
-      <div className="space-y-4 rounded-lg bg-slate-800 p-4">
+      <div className="space-y-4 rounded-lg bg-slate-50 p-4">
         <div>
-          <h3 className="text-sm font-medium text-slate-400">Account Details</h3>
+          <h3 className="text-sm font-medium text-slate-500">Account Details</h3>
           <div className="mt-2 space-y-1 text-sm">
-            <p className="text-white">
-              <span className="text-slate-400">Email:</span> {formData.email}
+            <p className="text-slate-800">
+              <span className="text-slate-500">Email:</span> {formData.email}
             </p>
-            <p className="text-white">
-              <span className="text-slate-400">Name:</span> {formData.displayName}
+            <p className="text-slate-800">
+              <span className="text-slate-500">Name:</span> {formData.displayName}
             </p>
           </div>
         </div>
 
-        <div className="border-t border-slate-700 pt-4">
-          <h3 className="text-sm font-medium text-slate-400">Organization Details</h3>
+        <div className="border-t border-slate-200 pt-4">
+          <h3 className="text-sm font-medium text-slate-500">Company Details</h3>
           <div className="mt-2 space-y-1 text-sm">
-            <p className="text-white">
-              <span className="text-slate-400">Organization:</span> {formData.organizationName}
+            <p className="text-slate-800">
+              <span className="text-slate-500">Company:</span> {formData.organizationName}
             </p>
             {formData.legalEntityName && (
-              <p className="text-white">
-                <span className="text-slate-400">Legal Entity:</span> {formData.legalEntityName}
+              <p className="text-slate-800">
+                <span className="text-slate-500">Legal Entity:</span> {formData.legalEntityName}
               </p>
             )}
-            <p className="text-white">
-              <span className="text-slate-400">Industry:</span> {formData.industry}
+            <p className="text-slate-800">
+              <span className="text-slate-500">Industry:</span> {formData.industry}
             </p>
-            <p className="text-white">
-              <span className="text-slate-400">Company Size:</span> {formData.companySize} employees
+            <p className="text-slate-800">
+              <span className="text-slate-500">Company Size:</span> {formData.companySize} employees
             </p>
           </div>
         </div>
 
-        <div className="border-t border-slate-700 pt-4">
-          <h3 className="text-sm font-medium text-slate-400">Compliance Profile</h3>
+        <div className="border-t border-slate-200 pt-4">
+          <h3 className="text-sm font-medium text-slate-500">Compliance Profile</h3>
           <div className="mt-2 space-y-1 text-sm">
-            <p className="text-white">
-              <span className="text-slate-400">Geography:</span> {formData.geography}
+            <p className="text-slate-800">
+              <span className="text-slate-500">Geography:</span> {formData.geography}
             </p>
-            <p className="text-white">
-              <span className="text-slate-400">Regulatory Scope:</span>{' '}
+            <p className="text-slate-800">
+              <span className="text-slate-500">Regulatory Scope:</span>{' '}
               {formData.regulatoryScope.join(', ')}
             </p>
             {formData.primaryContactPhone && (
-              <p className="text-white">
-                <span className="text-slate-400">Phone:</span> {formData.primaryContactPhone}
+              <p className="text-slate-800">
+                <span className="text-slate-500">Phone:</span> {formData.primaryContactPhone}
               </p>
             )}
           </div>
         </div>
       </div>
 
-      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-600 bg-slate-700 p-4">
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-300 bg-white p-4">
         <input
           type="checkbox"
           checked={formData.termsAccepted}
           onChange={(e) => updateFormData('termsAccepted', e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-slate-500 bg-slate-600 text-primary-600 focus:ring-primary-500"
+          className="mt-0.5 h-4 w-4 rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500"
         />
-        <span className="text-sm text-slate-300">
+        <span className="text-sm text-slate-600">
           I agree to the{' '}
-          <a href="#" className="text-primary-400 hover:text-primary-300">
+          <a href="#" className="text-primary-600 hover:text-primary-700">
             Terms of Service
           </a>{' '}
           and{' '}
-          <a href="#" className="text-primary-400 hover:text-primary-300">
+          <a href="#" className="text-primary-600 hover:text-primary-700">
             Privacy Policy
           </a>
         </span>
@@ -613,19 +613,17 @@ export default function RegisterPage() {
   );
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4 py-8">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8">
       <div className="w-full max-w-lg">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-600">
-            <Shield className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-white">ComplyVerse</h1>
-          <p className="mt-2 text-slate-400">Create your organization account</p>
+          <Shield className="mx-auto h-10 w-10 text-primary-600" />
+          <h1 className="text-2xl font-bold text-slate-900">ComplyVerse</h1>
+          <p className="mt-2 text-slate-500">Create your company account</p>
         </div>
 
         {renderStepIndicator()}
 
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-6">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-card p-6">
           {error && (
             <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-900/50 p-3 text-red-400">
               <AlertCircle size={18} />
@@ -643,7 +641,7 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={handleBack}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 font-medium text-white hover:bg-slate-600"
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium text-slate-800 hover:bg-slate-50"
               >
                 <ArrowLeft size={18} />
                 Back
@@ -678,9 +676,9 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <p className="mt-6 text-center text-sm text-slate-400">
+        <p className="mt-6 text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <Link href="/login" className="text-primary-400 hover:text-primary-300">
+          <Link href="/login" className="text-primary-600 hover:text-primary-700">
             Sign in
           </Link>
         </p>

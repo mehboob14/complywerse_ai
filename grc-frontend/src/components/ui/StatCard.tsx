@@ -24,29 +24,29 @@ export interface StatCardProps {
 
 const variantStyles: Record<StatCardVariant, { icon: string; border: string; glow: string }> = {
   default: {
-    icon: 'bg-primary-500/20 text-primary-400',
-    border: 'border-slate-700',
-    glow: 'hover:border-primary-500/50 hover:shadow-glow-sm',
+    icon: 'text-primary-600',
+    border: 'border-slate-200',
+    glow: 'hover:shadow-card-hover hover:border-slate-300',
   },
   success: {
-    icon: 'bg-success-500/20 text-success-400',
-    border: 'border-slate-700',
-    glow: 'hover:border-success-500/50 hover:shadow-[0_0_10px_-3px_rgba(34,197,94,0.3)]',
+    icon: 'text-success-600',
+    border: 'border-slate-200',
+    glow: 'hover:shadow-card-hover hover:border-slate-300',
   },
   warning: {
-    icon: 'bg-warning-500/20 text-warning-400',
-    border: 'border-slate-700',
-    glow: 'hover:border-warning-500/50 hover:shadow-[0_0_10px_-3px_rgba(245,158,11,0.3)]',
+    icon: 'text-warning-600',
+    border: 'border-slate-200',
+    glow: 'hover:shadow-card-hover hover:border-slate-300',
   },
   danger: {
-    icon: 'bg-danger-500/20 text-danger-400',
-    border: 'border-slate-700',
-    glow: 'hover:border-danger-500/50 hover:shadow-[0_0_10px_-3px_rgba(239,68,68,0.3)]',
+    icon: 'text-danger-600',
+    border: 'border-slate-200',
+    glow: 'hover:shadow-card-hover hover:border-slate-300',
   },
   info: {
-    icon: 'bg-info-500/20 text-info-400',
-    border: 'border-slate-700',
-    glow: 'hover:border-info-500/50 hover:shadow-[0_0_10px_-3px_rgba(6,182,212,0.3)]',
+    icon: 'text-info-600',
+    border: 'border-slate-200',
+    glow: 'hover:shadow-card-hover hover:border-slate-300',
   },
 };
 
@@ -68,17 +68,17 @@ export function StatCard({
     return (
       <div
         className={clsx(
-          'rounded-xl border bg-surface-800 p-4 animate-pulse',
+          'rounded-xl border bg-white p-4 animate-pulse',
           styles.border,
           className
         )}
       >
         <div className="flex items-start gap-3">
-          <div className="h-10 w-10 rounded-lg bg-slate-700" />
+          <div className="h-10 w-10 rounded-lg bg-slate-200" />
           <div className="flex-1 space-y-2">
-            <div className="h-4 w-20 rounded bg-slate-700" />
-            <div className="h-7 w-16 rounded bg-slate-700" />
-            <div className="h-3 w-24 rounded bg-slate-700" />
+            <div className="h-4 w-20 rounded bg-slate-200" />
+            <div className="h-7 w-16 rounded bg-slate-200" />
+            <div className="h-3 w-24 rounded bg-slate-200" />
           </div>
         </div>
       </div>
@@ -91,7 +91,7 @@ export function StatCard({
     <Component
       onClick={onClick}
       className={clsx(
-        'rounded-xl border bg-surface-800 p-4 text-left transition-all duration-200',
+        'rounded-xl border bg-white p-4 text-left transition-all duration-200',
         styles.border,
         styles.glow,
         isClickable && 'cursor-pointer active:scale-[0.98]',
@@ -106,9 +106,9 @@ export function StatCard({
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-400 truncate">{title}</p>
+          <p className="text-sm font-medium text-slate-500 truncate">{title}</p>
           <div className="flex items-baseline gap-2 mt-1">
-            <p className="text-2xl font-bold text-white">{value}</p>
+            <p className="text-2xl font-bold text-slate-900">{value}</p>
             {trend && (
               <TrendIndicator
                 direction={trend.direction}

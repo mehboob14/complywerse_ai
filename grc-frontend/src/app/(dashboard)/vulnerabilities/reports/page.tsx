@@ -109,7 +109,7 @@ export default function VulnerabilityReportsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Vulnerability Reports</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Vulnerability Reports</h1>
           <p className="mt-1 text-slate-400">Upload and manage vulnerability scan reports</p>
         </div>
         <div>
@@ -140,9 +140,9 @@ export default function VulnerabilityReportsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <table className="w-full">
-          <thead className="bg-slate-900/50">
+          <thead className="bg-slate-50/50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Report</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Uploaded</th>
@@ -165,14 +165,14 @@ export default function VulnerabilityReportsPage() {
               </tr>
             ) : (
               reports.map((report) => (
-                <tr key={report.id} className="hover:bg-slate-700/50 transition-colors">
+                <tr key={report.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-slate-700 p-2">
+                      <div className="rounded-lg bg-slate-200 p-2">
                         <FileText className="h-5 w-5 text-slate-400" />
                       </div>
                       <div>
-                        <p className="font-medium text-white">{report.name}</p>
+                        <p className="font-medium text-slate-800">{report.name}</p>
                         {report.file_name && (
                           <p className="text-xs text-slate-400">{report.file_name}</p>
                         )}
@@ -180,12 +180,12 @@ export default function VulnerabilityReportsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 text-sm text-slate-300">
+                    <div className="flex items-center gap-1.5 text-sm text-slate-600">
                       <Calendar size={14} className="text-slate-400" />
                       {new Date(report.uploaded_at).toLocaleDateString()}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm font-medium text-white">
+                  <td className="px-4 py-3 text-sm font-medium text-slate-800">
                     {report.total_vulnerabilities}
                   </td>
                   <td className="px-4 py-3">
@@ -213,14 +213,14 @@ export default function VulnerabilityReportsPage() {
                       <button
                         onClick={() => analyzeMutation.mutate(report.id)}
                         disabled={analyzeMutation.isPending}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-purple-400 hover:bg-slate-700 transition-colors"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-primary-600 hover:bg-slate-200 transition-colors"
                         title="AI Analyze"
                       >
                         <Sparkles size={16} />
                       </button>
                       <button
                         onClick={() => setDeleteConfirm(report.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-200 transition-colors"
                         title="Delete"
                       >
                         <Trash2 size={16} />
@@ -236,9 +236,9 @@ export default function VulnerabilityReportsPage() {
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-xl">
-            <h2 className="text-xl font-bold text-white mb-4">Delete Report</h2>
-            <p className="text-slate-300 mb-6">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-bold text-slate-800 mb-4">Delete Report</h2>
+            <p className="text-slate-600 mb-6">
               Are you sure you want to delete this report? This will also delete all vulnerabilities imported from this report.
             </p>
             <div className="flex justify-end gap-3">

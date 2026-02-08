@@ -62,7 +62,7 @@ interface BreachesResponse {
 }
 
 const RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string; borderColor: string }[] = [
-  { value: 'strategic', label: 'Strategic', color: 'text-purple-400', bgColor: 'bg-purple-500/20', borderColor: 'border-purple-500' },
+  { value: 'strategic', label: 'Strategic', color: 'text-primary-600', bgColor: 'bg-primary-500/20', borderColor: 'border-primary-500' },
   { value: 'operational', label: 'Operational', color: 'text-blue-400', bgColor: 'bg-blue-500/20', borderColor: 'border-blue-500' },
   { value: 'financial', label: 'Financial', color: 'text-green-400', bgColor: 'bg-green-500/20', borderColor: 'border-green-500' },
   { value: 'compliance', label: 'Compliance', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20', borderColor: 'border-yellow-500' },
@@ -202,15 +202,15 @@ export default function RiskAppetitePage() {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-xl font-semibold text-white">Risk Appetite Management</h2>
+          <h2 className="text-xl font-semibold text-slate-800">Risk Appetite Management</h2>
           <p className="text-sm text-slate-400">Configure risk appetite levels and monitor tolerance breaches</p>
         </div>
 
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-700">
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-200">
             <Database className="h-8 w-8 text-slate-400" />
           </div>
-          <h3 className="text-lg font-semibold text-white mb-2">No Appetite Configurations Found</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-2">No Appetite Configurations Found</h3>
           <p className="text-sm text-slate-400 mb-6">
             Get started by seeding default risk appetite configurations for all risk categories.
           </p>
@@ -237,7 +237,7 @@ export default function RiskAppetitePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-white">Risk Appetite Management</h2>
+          <h2 className="text-xl font-semibold text-slate-800">Risk Appetite Management</h2>
           <p className="text-sm text-slate-400">Configure risk appetite levels and monitor tolerance breaches</p>
         </div>
         <div className="flex items-center gap-3">
@@ -266,14 +266,14 @@ export default function RiskAppetitePage() {
           return (
             <div
               key={config.id}
-              className={`rounded-xl border border-slate-700 bg-slate-800 overflow-hidden`}
+              className={`rounded-xl border border-slate-200 bg-white overflow-hidden`}
             >
               <div className={`px-4 py-3 ${catStyle.bgColor} border-b ${catStyle.borderColor}`}>
                 <div className="flex items-center justify-between">
                   <h3 className={`font-semibold ${catStyle.color}`}>{catStyle.label}</h3>
                   <button
                     onClick={() => setEditingId(editingId === config.id ? null : config.id)}
-                    className="p-1 rounded hover:bg-slate-700/50 text-slate-300 hover:text-white transition-colors"
+                    className="p-1 rounded hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition-colors"
                   >
                     <Edit2 className="h-4 w-4" />
                   </button>
@@ -290,7 +290,7 @@ export default function RiskAppetitePage() {
                 
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Tolerance Threshold</span>
-                  <span className="text-white font-medium">{getConfigValue(config, 'tolerance_threshold') || '-'}</span>
+                  <span className="text-slate-800 font-medium">{getConfigValue(config, 'tolerance_threshold') || '-'}</span>
                 </div>
                 
                 <div className="flex items-center justify-between">
@@ -332,13 +332,13 @@ export default function RiskAppetitePage() {
               return (
                 <div
                   key={breach.risk_id}
-                  className="flex items-center justify-between rounded-lg border border-red-500/30 bg-slate-800 p-4"
+                  className="flex items-center justify-between rounded-lg border border-red-500/30 bg-white p-4"
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex flex-col">
                       <Link
                         href={`/erm/risks?id=${breach.risk_id}`}
-                        className="text-white font-medium hover:text-primary-400 flex items-center gap-1"
+                        className="text-slate-800 font-medium hover:text-primary-400 flex items-center gap-1"
                       >
                         {breach.risk_title}
                         <ExternalLink className="h-3 w-3" />
@@ -353,7 +353,7 @@ export default function RiskAppetitePage() {
                       <p className="font-medium">
                         <span className="text-red-400">{breach.current_score}</span>
                         <span className="text-slate-500"> / </span>
-                        <span className="text-slate-300">{breach.tolerance}</span>
+                        <span className="text-slate-600">{breach.tolerance}</span>
                       </p>
                     </div>
                     <div className="text-center">
@@ -388,11 +388,11 @@ export default function RiskAppetitePage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-700">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200">
           <div className="flex items-center gap-3">
             <TrendingUp className="h-5 w-5 text-primary-400" />
-            <h3 className="text-lg font-semibold text-white">Risk Appetite Configuration</h3>
+            <h3 className="text-lg font-semibold text-slate-800">Risk Appetite Configuration</h3>
           </div>
           <p className="text-sm text-slate-400 mt-1">Configure appetite levels, thresholds, and escalation settings for each risk category</p>
         </div>
@@ -400,7 +400,7 @@ export default function RiskAppetitePage() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-700">
+              <tr className="border-b border-slate-200">
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Category</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Appetite Level</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Tolerance Threshold</th>
@@ -412,7 +412,7 @@ export default function RiskAppetitePage() {
               {appetiteConfigs.map(config => {
                 const catStyle = getCategoryStyle(config.category);
                 return (
-                  <tr key={config.id} className="hover:bg-slate-700/30">
+                  <tr key={config.id} className="hover:bg-slate-200/30">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <div className={`w-3 h-3 rounded-full ${catStyle.bgColor} ${catStyle.borderColor} border`} />
@@ -423,7 +423,7 @@ export default function RiskAppetitePage() {
                       <select
                         value={getConfigValue(config, 'appetite_level') as string}
                         onChange={(e) => handleConfigChange(config.id, 'appetite_level', e.target.value)}
-                        className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+                        className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
                       >
                         {APPETITE_LEVELS.map(level => (
                           <option key={level.value} value={level.value}>{level.label}</option>
@@ -437,11 +437,11 @@ export default function RiskAppetitePage() {
                         max="25"
                         value={getConfigValue(config, 'tolerance_threshold') as number}
                         onChange={(e) => handleConfigChange(config.id, 'tolerance_threshold', parseFloat(e.target.value) || 0)}
-                        className="w-24 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+                        className="w-24 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
                       />
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-slate-300">
+                      <span className="text-sm text-slate-600">
                         {config.escalation_owner?.full_name || config.escalation_owner?.email || 'Not assigned'}
                       </span>
                     </td>

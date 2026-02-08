@@ -60,7 +60,7 @@ interface DocumentMappings {
 
 const DOCUMENT_TYPES = [
   { value: '', label: 'All Types' },
-  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-500/20' },
   { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
   { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-green-400', bgColor: 'bg-green-500/20' },
   { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
@@ -225,13 +225,13 @@ export default function GovernanceMappingsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-white">Policy-Control Mappings</h2>
+          <h2 className="text-xl font-semibold text-slate-800">Policy-Control Mappings</h2>
           <p className="text-sm text-slate-400">Link governance documents to controls</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-sm">
             <span className="text-slate-400">Documents:</span>
-            <span className="font-semibold text-white">{coverageSummary.totalDocs}</span>
+            <span className="font-semibold text-slate-800">{coverageSummary.totalDocs}</span>
           </div>
           {selectedDocumentId && (
             <div className="flex items-center gap-2 text-sm">
@@ -249,14 +249,14 @@ export default function GovernanceMappingsPage() {
           return (
             <div
               key={type}
-              className="rounded-lg border border-slate-700/50 bg-slate-800/50 p-4 hover:bg-slate-700/50 transition-all"
+              className="rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 transition-all"
             >
               <div className="flex items-center gap-3">
                 <div className={`rounded-lg ${style.bgColor} p-2.5`}>
                   <Icon className={`h-5 w-5 ${style.color}`} />
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-white">{count}</p>
+                  <p className="text-xl font-bold text-slate-800">{count}</p>
                   <p className="text-xs text-slate-400 capitalize">{type}s</p>
                 </div>
               </div>
@@ -283,13 +283,13 @@ export default function GovernanceMappingsPage() {
                   placeholder="Search documents..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800 pl-10 pr-4 py-2 text-sm text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-200 bg-white pl-10 pr-4 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 {DOCUMENT_TYPES.map((type) => (
                   <option key={type.value} value={type.value}>
@@ -320,14 +320,14 @@ export default function GovernanceMappingsPage() {
                     className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
                       isSelected
                         ? 'border-primary-500 bg-primary-500/10'
-                        : 'border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/50 hover:border-slate-600'
+                        : 'border-slate-200 bg-white/50 hover:bg-slate-50 hover:border-slate-300'
                     }`}
                   >
                     <div className={`rounded-lg ${typeStyle.bgColor} p-2`}>
                       <Icon className={`h-4 w-4 ${typeStyle.color}`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-white truncate">{doc.title}</p>
+                      <p className="font-medium text-slate-800 truncate">{doc.title}</p>
                       <div className="flex items-center gap-2 mt-1">
                         {doc.document_code && (
                           <span className="text-xs text-slate-400">{doc.document_code}</span>
@@ -390,13 +390,13 @@ export default function GovernanceMappingsPage() {
               {mappingsData?.control_links?.map((link) => (
                 <div
                   key={link.id}
-                  className="flex items-center gap-3 rounded-lg border border-slate-700/50 bg-slate-800/50 p-3 hover:bg-slate-700/50 transition-all"
+                  className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white/50 p-3 hover:bg-slate-50 transition-all"
                 >
                   <div className="rounded-lg bg-emerald-500/20 p-2">
                     <Shield className="h-4 w-4 text-emerald-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-white">{link.control_code}</p>
+                    <p className="font-medium text-slate-800">{link.control_code}</p>
                     <p className="text-sm text-slate-400 truncate">{link.control_name}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-xs px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400 capitalize">
@@ -424,10 +424,10 @@ export default function GovernanceMappingsPage() {
 
       {showLinkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl mx-4">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-slate-50 p-6 shadow-2xl mx-4">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-white">Link Control</h3>
+                <h3 className="text-lg font-semibold text-slate-800">Link Control</h3>
                 <p className="text-sm text-slate-400">
                   Search and select a control to link to "{selectedDocument?.title}"
                 </p>
@@ -438,7 +438,7 @@ export default function GovernanceMappingsPage() {
                   setControlSearchTerm('');
                   setLinkNotes('');
                 }}
-                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                className="p-2 text-slate-400 hover:text-slate-900 rounded-lg hover:bg-white"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -452,18 +452,18 @@ export default function GovernanceMappingsPage() {
                   placeholder="Search controls by code or name..."
                   value={controlSearchTerm}
                   onChange={(e) => setControlSearchTerm(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   autoFocus
                 />
               </div>
 
               <div className="flex gap-4">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Link Type</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Link Type</label>
                   <select
                     value={selectedLinkType}
                     onChange={(e) => setSelectedLinkType(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   >
                     {LINK_TYPES.map((type) => (
                       <option key={type.value} value={type.value}>
@@ -473,18 +473,18 @@ export default function GovernanceMappingsPage() {
                   </select>
                 </div>
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Notes (optional)</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Notes (optional)</label>
                   <input
                     type="text"
                     placeholder="Add notes..."
                     value={linkNotes}
                     onChange={(e) => setLinkNotes(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
               </div>
 
-              <div className="border border-slate-700 rounded-lg max-h-64 overflow-y-auto">
+              <div className="border border-slate-200 rounded-lg max-h-64 overflow-y-auto">
                 {controlsLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
@@ -502,13 +502,13 @@ export default function GovernanceMappingsPage() {
                         key={control.id}
                         onClick={() => handleLinkControl(control.id)}
                         disabled={linkMutation.isPending}
-                        className="w-full flex items-center gap-3 p-3 text-left hover:bg-slate-800 transition-all disabled:opacity-50"
+                        className="w-full flex items-center gap-3 p-3 text-left hover:bg-white transition-all disabled:opacity-50"
                       >
                         <div className="rounded-lg bg-primary-500/20 p-2">
                           <Shield className="h-4 w-4 text-primary-400" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-white">{control.code}</p>
+                          <p className="font-medium text-slate-800">{control.code}</p>
                           <p className="text-sm text-slate-400 truncate">{control.name}</p>
                           {control.domain && (
                             <p className="text-xs text-slate-500 mt-0.5">{control.domain}</p>
@@ -528,14 +528,14 @@ export default function GovernanceMappingsPage() {
               )}
             </div>
 
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700">
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200">
               <button
                 onClick={() => {
                   setShowLinkModal(false);
                   setControlSearchTerm('');
                   setLinkNotes('');
                 }}
-                className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white rounded-lg hover:bg-slate-800 transition-all"
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 rounded-lg hover:bg-white transition-all"
               >
                 Cancel
               </button>

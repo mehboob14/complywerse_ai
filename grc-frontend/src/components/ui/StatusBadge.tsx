@@ -114,9 +114,9 @@ const statusConfig: Record<string, {
     label: 'Inactive',
   },
   accepted: {
-    bg: 'bg-purple-500/20',
-    text: 'text-purple-400',
-    border: 'border-purple-500/30',
+    bg: 'bg-primary-500/20',
+    text: 'text-primary-600',
+    border: 'border-primary-500/30',
     icon: CheckCircle,
     label: 'Accepted',
   },

@@ -93,7 +93,7 @@ const PRIORITIES = [
 ];
 
 const DOMAIN_COLORS: Record<string, { color: string; bgColor: string }> = {
-  Governance: { color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  Governance: { color: 'text-primary-600', bgColor: 'bg-primary-500/20' },
   Risk: { color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
   Security: { color: 'text-red-400', bgColor: 'bg-red-500/20' },
   'Access Control': { color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
@@ -298,13 +298,13 @@ export default function ParsedControlsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-        <label className="mb-2 block text-sm font-medium text-slate-300">Select Framework</label>
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <label className="mb-2 block text-sm font-medium text-slate-600">Select Framework</label>
         <div className="relative">
           <select
             value={effectiveFrameworkId || ''}
             onChange={(e) => setSelectedFrameworkId(e.target.value ? parseInt(e.target.value) : null)}
-            className="w-full appearance-none rounded-lg border border-slate-600 bg-slate-700 px-4 py-2.5 pr-10 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full appearance-none rounded-lg border border-slate-300 bg-slate-200 px-4 py-2.5 pr-10 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           >
             {parsedFrameworks.map((framework) => (
               <option key={framework.id} value={framework.id}>
@@ -317,34 +317,34 @@ export default function ParsedControlsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/20 p-2">
               <FileText className="h-5 w-5 text-blue-400" />
             </div>
             <div>
               <p className="text-sm text-slate-400">Total Controls</p>
-              <p className="text-2xl font-bold text-white">{stats.total}</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
             </div>
           </div>
         </div>
         
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/20 p-2">
               <CheckCircle className="h-5 w-5 text-green-400" />
             </div>
             <div>
               <p className="text-sm text-slate-400">Verified</p>
-              <p className="text-2xl font-bold text-white">{stats.verified}</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.verified}</p>
             </div>
           </div>
         </div>
         
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 md:col-span-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-purple-500/20 p-2">
-              <Shield className="h-5 w-5 text-purple-400" />
+            <div className="rounded-lg bg-primary-500/20 p-2">
+              <Shield className="h-5 w-5 text-primary-600" />
             </div>
             <div className="flex-1">
               <p className="mb-2 text-sm text-slate-400">By Domain</p>
@@ -372,11 +372,11 @@ export default function ParsedControlsPage() {
       </div>
 
       {effectiveFrameworkId && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-            <Sparkles className="h-5 w-5 text-purple-400" />
+            <Sparkles className="h-5 w-5 text-primary-600" />
             <div>
-              <h3 className="text-sm font-medium text-white">AI Evidence Requirements</h3>
+              <h3 className="text-sm font-medium text-slate-800">AI Evidence Requirements</h3>
               <p className="text-xs text-slate-400">Generate evidence requirements for all controls using AI</p>
             </div>
           </div>
@@ -384,7 +384,7 @@ export default function ParsedControlsPage() {
             <button
               onClick={() => generateEvidenceRequirementsMutation.mutate(effectiveFrameworkId)}
               disabled={generatingEvidence || generateEvidenceRequirementsMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {generatingEvidence ? (
                 <>
@@ -400,7 +400,7 @@ export default function ParsedControlsPage() {
             </button>
             <Link
               href="/evidence-requirements"
-              className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600 transition-colors"
             >
               <FileCheck className="h-4 w-4" />
               View Requirements
@@ -423,7 +423,7 @@ export default function ParsedControlsPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -432,7 +432,7 @@ export default function ParsedControlsPage() {
               placeholder="Search by title, description, or ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
           </div>
           
@@ -442,7 +442,7 @@ export default function ParsedControlsPage() {
             <select
               value={domainFilter}
               onChange={(e) => setDomainFilter(e.target.value)}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               <option value="all">All Domains</option>
               {DOMAINS.map((domain) => (
@@ -453,7 +453,7 @@ export default function ParsedControlsPage() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               <option value="all">All Categories</option>
               {uniqueCategories.map((category) => (
@@ -464,7 +464,7 @@ export default function ParsedControlsPage() {
             <select
               value={verifiedFilter}
               onChange={(e) => setVerifiedFilter(e.target.value)}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               <option value="all">All Status</option>
               <option value="verified">Verified</option>
@@ -474,9 +474,9 @@ export default function ParsedControlsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800">
-        <div className="border-b border-slate-700 p-4">
-          <h2 className="text-lg font-semibold text-white">
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 p-4">
+          <h2 className="text-lg font-semibold text-slate-800">
             Parsed Controls
             {controlsData?.framework_name && (
               <span className="ml-2 text-sm font-normal text-slate-400">
@@ -501,7 +501,7 @@ export default function ParsedControlsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-slate-700 bg-slate-900/50">
+              <thead className="border-b border-slate-200 bg-slate-50/50">
                 <tr>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
                     Control ID
@@ -542,11 +542,11 @@ export default function ParsedControlsPage() {
                   const confidenceColor = getConfidenceColor(control.ai_confidence);
                   
                   return (
-                    <tr key={control.id} className="hover:bg-slate-700/50">
-                      <td className="whitespace-nowrap px-4 py-3 text-sm font-mono text-slate-300">
+                    <tr key={control.id} className="hover:bg-slate-50">
+                      <td className="whitespace-nowrap px-4 py-3 text-sm font-mono text-slate-600">
                         {control.control_id}
                       </td>
-                      <td className="max-w-xs truncate px-4 py-3 text-sm text-white">
+                      <td className="max-w-xs truncate px-4 py-3 text-sm text-slate-800">
                         {control.title}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
@@ -598,14 +598,14 @@ export default function ParsedControlsPage() {
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => setViewingControl(control)}
-                            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-600 hover:text-white"
+                            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-600 hover:text-slate-900"
                             title="View"
                           >
                             <Eye className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleEditControl(control)}
-                            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-600 hover:text-white"
+                            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-600 hover:text-slate-900"
                             title="Edit"
                           >
                             <Edit2 className="h-4 w-4" />
@@ -616,7 +616,7 @@ export default function ParsedControlsPage() {
                             className={`rounded p-1 transition-colors ${
                               control.is_verified
                                 ? 'cursor-not-allowed text-green-500'
-                                : 'text-slate-400 hover:bg-green-600 hover:text-white'
+                                : 'text-slate-400 hover:bg-green-600 hover:text-slate-900'
                             }`}
                             title={control.is_verified ? 'Verified' : 'Verify'}
                           >
@@ -635,12 +635,12 @@ export default function ParsedControlsPage() {
 
       {viewingControl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-700 p-4">
-              <h3 className="text-lg font-semibold text-white">Control Details</h3>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-lg font-semibold text-slate-800">Control Details</h3>
               <button
                 onClick={() => setViewingControl(null)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -648,22 +648,22 @@ export default function ParsedControlsPage() {
             <div className="space-y-4 p-4">
               <div>
                 <span className="text-sm text-slate-400">Control ID</span>
-                <p className="font-mono text-white">{viewingControl.control_id}</p>
+                <p className="font-mono text-slate-800">{viewingControl.control_id}</p>
               </div>
               <div>
                 <span className="text-sm text-slate-400">Title</span>
-                <p className="text-white">{viewingControl.title}</p>
+                <p className="text-slate-800">{viewingControl.title}</p>
               </div>
               {viewingControl.description && (
                 <div>
                   <span className="text-sm text-slate-400">Description</span>
-                  <p className="text-slate-300">{viewingControl.description}</p>
+                  <p className="text-slate-600">{viewingControl.description}</p>
                 </div>
               )}
               {viewingControl.full_text && (
                 <div>
                   <span className="text-sm text-slate-400">Full Text</span>
-                  <p className="rounded-lg bg-slate-900 p-3 text-sm text-slate-300">
+                  <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
                     {viewingControl.full_text}
                   </p>
                 </div>
@@ -671,19 +671,19 @@ export default function ParsedControlsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <span className="text-sm text-slate-400">Domain</span>
-                  <p className="text-white">{viewingControl.domain || '-'}</p>
+                  <p className="text-slate-800">{viewingControl.domain || '-'}</p>
                 </div>
                 <div>
                   <span className="text-sm text-slate-400">Category</span>
-                  <p className="text-white">{viewingControl.category || '-'}</p>
+                  <p className="text-slate-800">{viewingControl.category || '-'}</p>
                 </div>
                 <div>
                   <span className="text-sm text-slate-400">Mandatory</span>
-                  <p className="text-white">{viewingControl.is_mandatory ? 'Yes' : 'No'}</p>
+                  <p className="text-slate-800">{viewingControl.is_mandatory ? 'Yes' : 'No'}</p>
                 </div>
                 <div>
                   <span className="text-sm text-slate-400">Priority</span>
-                  <p className="capitalize text-white">{viewingControl.priority}</p>
+                  <p className="capitalize text-slate-800">{viewingControl.priority}</p>
                 </div>
               </div>
               {viewingControl.evidence_mappings.length > 0 && (
@@ -709,42 +709,42 @@ export default function ParsedControlsPage() {
 
       {editingControl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-700 p-4">
-              <h3 className="text-lg font-semibold text-white">Edit Control</h3>
+          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-lg font-semibold text-slate-800">Edit Control</h3>
               <button
                 onClick={() => setEditingControl(null)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="space-y-4 p-4">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-300">Title</label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-600">Title</label>
                 <input
                   type="text"
                   value={editFormData.title}
                   onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-300">Description</label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-600">Description</label>
                 <textarea
                   value={editFormData.description}
                   onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
                   rows={4}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-300">Domain</label>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-600">Domain</label>
                   <select
                     value={editFormData.domain}
                     onChange={(e) => setEditFormData({ ...editFormData, domain: e.target.value })}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   >
                     <option value="">Select Domain</option>
                     {DOMAINS.map((domain) => (
@@ -753,22 +753,22 @@ export default function ParsedControlsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-300">Category</label>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-600">Category</label>
                   <input
                     type="text"
                     value={editFormData.category}
                     onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-300">Priority</label>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-600">Priority</label>
                   <select
                     value={editFormData.priority}
                     onChange={(e) => setEditFormData({ ...editFormData, priority: e.target.value })}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   >
                     {PRIORITIES.map((priority) => (
                       <option key={priority.value} value={priority.value}>{priority.label}</option>
@@ -776,14 +776,14 @@ export default function ParsedControlsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-300">Is Mandatory</label>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-600">Is Mandatory</label>
                   <button
                     type="button"
                     onClick={() => setEditFormData({ ...editFormData, is_mandatory: !editFormData.is_mandatory })}
                     className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 ${
                       editFormData.is_mandatory
                         ? 'border-green-500 bg-green-500/20 text-green-400'
-                        : 'border-slate-600 bg-slate-700 text-slate-300'
+                        : 'border-slate-300 bg-slate-200 text-slate-600'
                     }`}
                   >
                     <span>{editFormData.is_mandatory ? 'Yes' : 'No'}</span>
@@ -799,7 +799,7 @@ export default function ParsedControlsPage() {
               </div>
               {editingControl.evidence_mappings.length > 0 && (
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-300">Expected Evidence Types</label>
+                  <label className="mb-2 block text-sm font-medium text-slate-600">Expected Evidence Types</label>
                   <div className="flex flex-wrap gap-2">
                     {editingControl.evidence_mappings.map((em) => (
                       <span
@@ -813,10 +813,10 @@ export default function ParsedControlsPage() {
                 </div>
               )}
             </div>
-            <div className="flex justify-end gap-3 border-t border-slate-700 p-4">
+            <div className="flex justify-end gap-3 border-t border-slate-200 p-4">
               <button
                 onClick={() => setEditingControl(null)}
-                className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700"
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-200"
               >
                 Cancel
               </button>

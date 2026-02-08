@@ -46,7 +46,7 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
 const TYPE_COLORS: Record<string, { bg: string; text: string; fill: string }> = {
   policy: { bg: 'bg-blue-500/20', text: 'text-blue-400', fill: '#3b82f6' },
   standard: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', fill: '#10b981' },
-  procedure: { bg: 'bg-purple-500/20', text: 'text-purple-400', fill: '#a855f7' },
+  procedure: { bg: 'bg-primary-500/20', text: 'text-primary-600', fill: '#a855f7' },
   guideline: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', fill: '#06b6d4' },
   charter: { bg: 'bg-amber-500/20', text: 'text-amber-400', fill: '#f59e0b' },
   framework: { bg: 'bg-rose-500/20', text: 'text-rose-400', fill: '#f43f5e' },
@@ -86,9 +86,9 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
         className="relative h-36 w-36 rounded-full"
         style={{ background: getConicGradient() }}
       >
-        <div className="absolute inset-4 rounded-full bg-slate-800 flex items-center justify-center">
+        <div className="absolute inset-4 rounded-full bg-white flex items-center justify-center">
           <div className="text-center">
-            <p className="text-2xl font-bold text-white">{total}</p>
+            <p className="text-2xl font-bold text-slate-800">{total}</p>
             <p className="text-xs text-slate-400">Total</p>
           </div>
         </div>
@@ -97,8 +97,8 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
         {segments.filter(s => s.value > 0).map((seg, idx) => (
           <div key={idx} className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-full" style={{ backgroundColor: seg.color }}></div>
-            <span className="text-sm text-slate-300 flex-1">{seg.label}</span>
-            <span className="text-sm font-medium text-white">{seg.value}</span>
+            <span className="text-sm text-slate-600 flex-1">{seg.label}</span>
+            <span className="text-sm font-medium text-slate-800">{seg.value}</span>
           </div>
         ))}
       </div>
@@ -298,7 +298,7 @@ export default function GovernanceDashboardPage() {
       name: 'Compliance Coverage',
       value: `${complianceRate}%`,
       icon: Shield,
-      iconColor: 'text-purple-400',
+      iconColor: 'text-primary-600',
       bgColor: 'from-purple-500/20 to-purple-600/10',
       description: 'Documents linked to controls/frameworks',
     },
@@ -353,7 +353,7 @@ export default function GovernanceDashboardPage() {
           <Link
             key={stat.name}
             href={stat.href}
-            className="stat-card group hover:border-slate-600 transition-all duration-200 hover:shadow-xl cursor-pointer"
+            className="stat-card group hover:border-slate-300 transition-all duration-200 hover:shadow-xl cursor-pointer"
           >
             <div className="flex items-start justify-between mb-4">
               <div className={`rounded-xl bg-gradient-to-br ${stat.bgColor} p-3`}>
@@ -371,14 +371,14 @@ export default function GovernanceDashboardPage() {
         {secondaryKpis.map((stat) => (
           <div
             key={stat.name}
-            className="stat-card hover:border-slate-600 transition-all duration-200"
+            className="stat-card hover:border-slate-300 transition-all duration-200"
           >
             <div className="flex items-start justify-between mb-3">
               <div className={`rounded-xl bg-gradient-to-br ${stat.bgColor} p-2.5`}>
                 <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
               </div>
             </div>
-            <p className="text-2xl font-bold text-white">{stat.value}</p>
+            <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
             <p className="text-sm text-slate-400">{stat.name}</p>
             <p className="text-xs text-slate-500 mt-1">{stat.description}</p>
           </div>
@@ -395,39 +395,39 @@ export default function GovernanceDashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Link
             href="/governance/approvals"
-            className="flex items-center gap-4 rounded-lg border border-slate-700/50 bg-slate-800/50 p-4 hover:bg-slate-700/50 hover:border-amber-500/50 transition-all duration-200 group"
+            className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 hover:border-amber-500/50 transition-all duration-200 group"
           >
             <div className="rounded-lg bg-amber-500/20 p-3 group-hover:bg-amber-500/30 transition-colors">
               <Eye className="h-5 w-5 text-amber-400" />
             </div>
             <div>
-              <p className="font-medium text-white">View Pending Approvals</p>
+              <p className="font-medium text-slate-800">View Pending Approvals</p>
               <p className="text-sm text-slate-400">{pendingCount} items awaiting action</p>
             </div>
           </Link>
           
           <Link
             href="/governance/reviews"
-            className="flex items-center gap-4 rounded-lg border border-slate-700/50 bg-slate-800/50 p-4 hover:bg-slate-700/50 hover:border-rose-500/50 transition-all duration-200 group"
+            className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 hover:border-rose-500/50 transition-all duration-200 group"
           >
             <div className="rounded-lg bg-rose-500/20 p-3 group-hover:bg-rose-500/30 transition-colors">
               <AlertTriangle className="h-5 w-5 text-rose-400" />
             </div>
             <div>
-              <p className="font-medium text-white">View Overdue Reviews</p>
+              <p className="font-medium text-slate-800">View Overdue Reviews</p>
               <p className="text-sm text-slate-400">{overdueCount} reviews overdue</p>
             </div>
           </Link>
           
           <Link
             href="/governance/documents?action=upload"
-            className="flex items-center gap-4 rounded-lg border border-slate-700/50 bg-slate-800/50 p-4 hover:bg-slate-700/50 hover:border-primary-500/50 transition-all duration-200 group"
+            className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 hover:border-primary-500/50 transition-all duration-200 group"
           >
             <div className="rounded-lg bg-primary-500/20 p-3 group-hover:bg-primary-500/30 transition-colors">
               <Upload className="h-5 w-5 text-primary-400" />
             </div>
             <div>
-              <p className="font-medium text-white">Upload New Document</p>
+              <p className="font-medium text-slate-800">Upload New Document</p>
               <p className="text-sm text-slate-400">Add policies, standards & more</p>
             </div>
           </Link>
@@ -493,9 +493,9 @@ export default function GovernanceDashboardPage() {
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <span className={`h-3 w-3 rounded-full ${STATUS_COLORS[key]}`}></span>
-                      <span className="text-sm text-slate-300">{label}</span>
+                      <span className="text-sm text-slate-600">{label}</span>
                     </span>
-                    <span className="text-sm font-semibold text-white">{count}</span>
+                    <span className="text-sm font-semibold text-slate-800">{count}</span>
                   </div>
                   <div className="progress-bar">
                     <div
@@ -531,13 +531,13 @@ export default function GovernanceDashboardPage() {
               return (
                 <div
                   key={key}
-                  className="flex items-center gap-3 rounded-lg border border-slate-700/50 bg-slate-800/50 p-4 hover:bg-slate-700/50 transition-all duration-200"
+                  className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 transition-all duration-200"
                 >
                   <div className={`rounded-lg ${colors.bg} p-2.5`}>
                     <Icon className={`h-5 w-5 ${colors.text}`} />
                   </div>
                   <div>
-                    <p className="text-xl font-bold text-white">{count}</p>
+                    <p className="text-xl font-bold text-slate-800">{count}</p>
                     <p className="text-xs text-slate-400">{label}</p>
                   </div>
                 </div>
@@ -574,14 +574,14 @@ export default function GovernanceDashboardPage() {
               {recentlyPublished?.documents?.slice(0, 5).map((doc: any) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-700/50 bg-slate-800/50 p-3 hover:bg-slate-700/50 transition-all duration-200"
+                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/50 p-3 hover:bg-slate-50 transition-all duration-200"
                 >
                   <div className="flex items-center gap-3">
                     <div className="rounded-lg bg-emerald-500/20 p-2">
                       <CheckCircle className="h-4 w-4 text-emerald-400" />
                     </div>
                     <div>
-                      <p className="font-medium text-white text-sm">{doc.title}</p>
+                      <p className="font-medium text-slate-800 text-sm">{doc.title}</p>
                       <p className="text-xs text-slate-400">
                         <span className="capitalize">{doc.doc_type}</span> • {doc.document_code}
                       </p>

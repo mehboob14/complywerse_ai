@@ -61,7 +61,7 @@ export function FilterBar({
               value={searchValue}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-lg border border-slate-600 bg-surface-800 py-2 pl-10 pr-4 text-sm text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors"
+              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors"
               aria-label={searchPlaceholder}
             />
             {searchValue && (
@@ -81,7 +81,7 @@ export function FilterBar({
             <select
               value={filter.value}
               onChange={(e) => filter.onChange(e.target.value)}
-              className="appearance-none rounded-lg border border-slate-600 bg-surface-800 py-2 pl-3 pr-8 text-sm text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors cursor-pointer"
+              className="appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors cursor-pointer"
               aria-label={filter.label}
             >
               {filter.options.map((option) => (

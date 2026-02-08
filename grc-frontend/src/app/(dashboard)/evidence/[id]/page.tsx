@@ -499,7 +499,7 @@ export default function EvidenceDetailPage() {
       <div className="flex items-start gap-4">
         <Link
           href="/evidence"
-          className="mt-1 rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+          className="mt-1 rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -509,7 +509,7 @@ export default function EvidenceDetailPage() {
               <TypeIcon className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">{evidence.name}</h1>
+              <h1 className="text-2xl font-bold text-slate-800">{evidence.name}</h1>
               <p className="text-slate-400">{evidence.description || 'No description'}</p>
             </div>
           </div>
@@ -524,14 +524,14 @@ export default function EvidenceDetailPage() {
             {statusStyle.label}
           </span>
           {evidence.quality_score !== null && (
-            <span className={`rounded-full ${getQualityScoreColor(evidence.quality_score)} px-3 py-1 text-sm text-white`}>
+            <span className={`rounded-full ${getQualityScoreColor(evidence.quality_score)} px-3 py-1 text-sm text-slate-800`}>
               Quality: {Math.round(evidence.quality_score)}%
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-white hover:bg-slate-600"
+            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-slate-800 hover:bg-slate-600"
             title="Edit Evidence"
           >
             <Edit className="h-4 w-4" />
@@ -584,7 +584,7 @@ export default function EvidenceDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="mb-3 flex items-center gap-2 text-slate-400">
             <Calendar className="h-4 w-4" />
             <span className="text-sm font-medium">Collection & Expiry</span>
@@ -592,11 +592,11 @@ export default function EvidenceDetailPage() {
           <div className="space-y-2">
             <div>
               <span className="text-xs text-slate-500">Collected</span>
-              <p className="text-white">{formatDate(evidence.collection_date)}</p>
+              <p className="text-slate-800">{formatDate(evidence.collection_date)}</p>
             </div>
             <div>
               <span className="text-xs text-slate-500">Expires</span>
-              <p className={`${evidence.is_stale ? 'text-red-400' : daysRemaining !== null && daysRemaining <= 30 ? 'text-yellow-400' : 'text-white'}`}>
+              <p className={`${evidence.is_stale ? 'text-red-400' : daysRemaining !== null && daysRemaining <= 30 ? 'text-yellow-400' : 'text-slate-800'}`}>
                 {formatDate(evidence.expiry_date)}
               </p>
             </div>
@@ -608,7 +608,7 @@ export default function EvidenceDetailPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="mb-3 flex items-center gap-2 text-slate-400">
             <ScanText className="h-4 w-4" />
             <span className="text-sm font-medium">OCR Status</span>
@@ -639,7 +639,7 @@ export default function EvidenceDetailPage() {
           )}
         </div>
 
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="mb-3 flex items-center gap-2 text-slate-400">
             <Brain className="h-4 w-4" />
             <span className="text-sm font-medium">Quality Score</span>
@@ -650,7 +650,7 @@ export default function EvidenceDetailPage() {
                 {Math.round(evidence.quality_score)}%
               </div>
               <div className="mt-2">
-                <div className="h-2 w-full rounded-full bg-slate-700">
+                <div className="h-2 w-full rounded-full bg-slate-200">
                   <div 
                     className={`h-2 rounded-full transition-all ${getQualityScoreColor(evidence.quality_score)}`}
                     style={{ width: `${evidence.quality_score}%` }}
@@ -677,7 +677,7 @@ export default function EvidenceDetailPage() {
           )}
         </div>
 
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="mb-3 flex items-center gap-2 text-slate-400">
             <FileText className="h-4 w-4" />
             <span className="text-sm font-medium">File Info</span>
@@ -685,15 +685,15 @@ export default function EvidenceDetailPage() {
           <div className="space-y-2">
             <div>
               <span className="text-xs text-slate-500">Filename</span>
-              <p className="truncate text-sm text-white">{evidence.file_name || 'No file'}</p>
+              <p className="truncate text-sm text-slate-800">{evidence.file_name || 'No file'}</p>
             </div>
             <div>
               <span className="text-xs text-slate-500">Type</span>
-              <p className="text-sm text-white">{evidence.file_type || 'Unknown'}</p>
+              <p className="text-sm text-slate-800">{evidence.file_type || 'Unknown'}</p>
             </div>
             <div>
               <span className="text-xs text-slate-500">Version</span>
-              <p className="text-sm text-white">v{evidence.version}</p>
+              <p className="text-sm text-slate-800">v{evidence.version}</p>
             </div>
           </div>
         </div>
@@ -742,7 +742,7 @@ export default function EvidenceDetailPage() {
                   </button>
                   <button
                     onClick={() => setReviewAction(null)}
-                    className="rounded-lg bg-slate-700 px-3 py-2 text-white hover:bg-slate-600"
+                    className="rounded-lg bg-slate-200 px-3 py-2 text-slate-800 hover:bg-slate-600"
                   >
                     Cancel
                   </button>
@@ -754,7 +754,7 @@ export default function EvidenceDetailPage() {
                     value={rejectComments}
                     onChange={(e) => setRejectComments(e.target.value)}
                     placeholder="Rejection comments..."
-                    className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white placeholder-slate-400 focus:border-red-500 focus:outline-none"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-red-500 focus:outline-none"
                   />
                   <button
                     onClick={() => reviewMutation.mutate({ action: 'reject', comments: rejectComments })}
@@ -766,7 +766,7 @@ export default function EvidenceDetailPage() {
                   </button>
                   <button
                     onClick={() => { setReviewAction(null); setRejectComments(''); }}
-                    className="rounded-lg bg-slate-700 px-3 py-2 text-white hover:bg-slate-600"
+                    className="rounded-lg bg-slate-200 px-3 py-2 text-slate-800 hover:bg-slate-600"
                   >
                     Cancel
                   </button>
@@ -777,7 +777,7 @@ export default function EvidenceDetailPage() {
         </div>
       )}
 
-      <div className="border-b border-slate-700">
+      <div className="border-b border-slate-200">
         <nav className="flex gap-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -788,7 +788,7 @@ export default function EvidenceDetailPage() {
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-400'
-                    : 'border-transparent text-slate-400 hover:text-white'
+                    : 'border-transparent text-slate-400 hover:text-slate-900'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -799,7 +799,7 @@ export default function EvidenceDetailPage() {
         </nav>
       </div>
 
-      <div className="rounded-lg border border-slate-700 bg-slate-800 p-6">
+      <div className="rounded-lg border border-slate-200 bg-white p-6">
         {activeTab === 'overview' && (
           <OverviewTab evidence={evidence} formatDate={formatDate} formatDateTime={formatDateTime} />
         )}
@@ -869,31 +869,31 @@ function OverviewTab({
     <div className="grid gap-6 md:grid-cols-2">
       <div className="space-y-6">
         <div>
-          <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-white">
+          <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-800">
             <Info className="h-5 w-5 text-primary-400" />
             Basic Information
           </h3>
-          <div className="space-y-3 rounded-lg bg-slate-900 p-4">
+          <div className="space-y-3 rounded-lg bg-slate-50 p-4">
             <div>
               <span className="text-sm text-slate-400">Description</span>
-              <p className="text-white">{evidence.description || 'No description provided'}</p>
+              <p className="text-slate-800">{evidence.description || 'No description provided'}</p>
             </div>
             <div>
               <span className="text-sm text-slate-400">Source System</span>
-              <p className="text-white">{evidence.source_system || 'Not specified'}</p>
+              <p className="text-slate-800">{evidence.source_system || 'Not specified'}</p>
             </div>
             <div>
               <span className="text-sm text-slate-400">Uploaded By</span>
-              <p className="text-white">{evidence.uploader_name || 'Unknown'}</p>
+              <p className="text-slate-800">{evidence.uploader_name || 'Unknown'}</p>
             </div>
             <div>
               <span className="text-sm text-slate-400">Uploaded At</span>
-              <p className="text-white">{formatDateTime(evidence.uploaded_at)}</p>
+              <p className="text-slate-800">{formatDateTime(evidence.uploaded_at)}</p>
             </div>
             {evidence.content_summary && (
               <div>
                 <span className="text-sm text-slate-400">Content Summary</span>
-                <p className="text-white">{evidence.content_summary}</p>
+                <p className="text-slate-800">{evidence.content_summary}</p>
               </div>
             )}
           </div>
@@ -901,7 +901,7 @@ function OverviewTab({
 
         {evidence.review_comments && (
           <div>
-            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-white">
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-800">
               <AlertCircle className="h-5 w-5 text-yellow-400" />
               Review Comments
             </h3>
@@ -916,16 +916,16 @@ function OverviewTab({
       </div>
 
       <div>
-        <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-white">
+        <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-800">
           <History className="h-5 w-5 text-primary-400" />
           Version History
         </h3>
         {evidence.versions && evidence.versions.length > 0 ? (
           <div className="space-y-2">
             {evidence.versions.map((version) => (
-              <div key={version.id} className="rounded-lg bg-slate-900 p-3">
+              <div key={version.id} className="rounded-lg bg-slate-50 p-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-white">Version {version.version_number}</span>
+                  <span className="font-medium text-slate-800">Version {version.version_number}</span>
                   <span className="text-sm text-slate-400">{formatDateTime(version.created_at)}</span>
                 </div>
                 {version.changes && (
@@ -935,7 +935,7 @@ function OverviewTab({
             ))}
           </div>
         ) : (
-          <div className="rounded-lg bg-slate-900 p-4 text-center text-slate-400">
+          <div className="rounded-lg bg-slate-50 p-4 text-center text-slate-400">
             <History className="mx-auto mb-2 h-8 w-8 text-slate-600" />
             <p>No version history available</p>
           </div>
@@ -963,7 +963,7 @@ function OCRTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
           <ScanText className="h-5 w-5 text-primary-400" />
           OCR Extracted Content
         </h3>
@@ -989,19 +989,19 @@ function OCRTab({
       </div>
 
       {evidence.ocr_status === 'completed' && content ? (
-        <div className="max-h-[600px] overflow-auto rounded-lg bg-slate-900 p-4">
-          <pre className="whitespace-pre-wrap font-mono text-sm text-slate-300">{content}</pre>
+        <div className="max-h-[600px] overflow-auto rounded-lg bg-slate-50 p-4">
+          <pre className="whitespace-pre-wrap font-mono text-sm text-slate-600">{content}</pre>
         </div>
       ) : evidence.ocr_status === 'processing' ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Loader2 className="mb-4 h-12 w-12 animate-spin text-blue-400" />
-          <p className="text-lg font-medium text-white">Processing OCR...</p>
+          <p className="text-lg font-medium text-slate-800">Processing OCR...</p>
           <p className="text-slate-400">This may take a moment</p>
         </div>
       ) : evidence.ocr_status === 'failed' ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <XCircle className="mb-4 h-12 w-12 text-red-400" />
-          <p className="text-lg font-medium text-white">OCR Processing Failed</p>
+          <p className="text-lg font-medium text-slate-800">OCR Processing Failed</p>
           <p className="text-slate-400">Try re-processing the document</p>
           <button
             onClick={onProcessOCR}
@@ -1015,13 +1015,13 @@ function OCRTab({
       ) : evidence.ocr_status === 'not_applicable' ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <FileText className="mb-4 h-12 w-12 text-slate-600" />
-          <p className="text-lg font-medium text-white">OCR Not Applicable</p>
+          <p className="text-lg font-medium text-slate-800">OCR Not Applicable</p>
           <p className="text-slate-400">This file type does not support OCR extraction</p>
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <ScanText className="mb-4 h-12 w-12 text-slate-600" />
-          <p className="text-lg font-medium text-white">No OCR Content Yet</p>
+          <p className="text-lg font-medium text-slate-800">No OCR Content Yet</p>
           <p className="text-slate-400">Process the document to extract text content</p>
           <button
             onClick={onProcessOCR}
@@ -1130,7 +1130,7 @@ function AssessmentTab({
             {value.toFixed(0)}%
           </span>
         </div>
-        <div className="h-3 w-full rounded-full bg-slate-700">
+        <div className="h-3 w-full rounded-full bg-slate-200">
           <div 
             className={`h-3 rounded-full transition-all ${color}`}
             style={{ width: `${value}%` }}
@@ -1144,7 +1144,7 @@ function AssessmentTab({
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <Brain className="mb-4 h-12 w-12 text-slate-600" />
-        <p className="text-lg font-medium text-white">No AI Assessment Yet</p>
+        <p className="text-lg font-medium text-slate-800">No AI Assessment Yet</p>
         <p className="text-slate-400">
           {evidence.ocr_status !== 'completed' 
             ? 'Process OCR first, then run the AI assessment'
@@ -1168,7 +1168,7 @@ function AssessmentTab({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
           <Brain className="h-5 w-5 text-primary-400" />
           AI Quality Assessment
         </h3>
@@ -1191,7 +1191,7 @@ function AssessmentTab({
 
       <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-r from-slate-900 to-cyan-900/20 p-4">
         <div className="flex items-center justify-between mb-4">
-          <h4 className="flex items-center gap-2 font-medium text-white">
+          <h4 className="flex items-center gap-2 font-medium text-slate-800">
             <Cpu className="h-5 w-5 text-cyan-400" />
             AI Explainability Panel
           </h4>
@@ -1209,7 +1209,7 @@ function AssessmentTab({
               <button
                 onClick={onLock}
                 disabled={isLocking}
-                className="flex items-center gap-2 rounded-lg bg-slate-600 px-3 py-1.5 text-sm text-white hover:bg-slate-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-slate-600 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-500 disabled:opacity-50"
               >
                 {isLocking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                 Lock Assessment
@@ -1219,34 +1219,34 @@ function AssessmentTab({
         </div>
 
         <div className="grid gap-4 md:grid-cols-4 mb-4">
-          <div className="rounded-lg bg-slate-800/50 p-3">
+          <div className="rounded-lg bg-white/50 p-3">
             <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
               <Cpu className="h-3 w-3" />
               Model Version
             </div>
-            <p className="text-sm font-medium text-white">{assessment?.model_version || '-'}</p>
+            <p className="text-sm font-medium text-slate-800">{assessment?.model_version || '-'}</p>
           </div>
-          <div className="rounded-lg bg-slate-800/50 p-3">
+          <div className="rounded-lg bg-white/50 p-3">
             <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
               <FileCode className="h-3 w-3" />
               Prompt Version
             </div>
-            <p className="text-sm font-medium text-white">{assessment?.prompt_version || '-'}</p>
+            <p className="text-sm font-medium text-slate-800">{assessment?.prompt_version || '-'}</p>
           </div>
-          <div className="rounded-lg bg-slate-800/50 p-3">
+          <div className="rounded-lg bg-white/50 p-3">
             <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
               <Hash className="h-3 w-3" />
               Content Hash
             </div>
             <p className="text-sm font-mono text-cyan-400">{truncateHash(assessment?.content_hash || null)}</p>
           </div>
-          <div className="rounded-lg bg-slate-800/50 p-3">
+          <div className="rounded-lg bg-white/50 p-3">
             <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
               <Clock className="h-3 w-3" />
               Assessment Mode
             </div>
             <div className="flex items-center gap-2">
-              <p className="text-sm font-medium text-white">{assessment?.assessment_mode || '-'}</p>
+              <p className="text-sm font-medium text-slate-800">{assessment?.assessment_mode || '-'}</p>
               {assessment?.is_locked && (
                 <span className="flex items-center gap-1 rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-400 border border-yellow-500/30">
                   <Lock className="h-3 w-3" />
@@ -1274,16 +1274,16 @@ function AssessmentTab({
 
         {((clauseMappings && clauseMappings.length > 0) || (assessment?.clause_mappings && assessment.clause_mappings.length > 0)) && (
           <div className="mt-4">
-            <h5 className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-3">
+            <h5 className="flex items-center gap-2 text-sm font-medium text-slate-600 mb-3">
               <Shield className="h-4 w-4 text-primary-400" />
               Clause-Level Mappings ({(clauseMappings || assessment?.clause_mappings || []).length})
             </h5>
             <div className="space-y-2">
               {(clauseMappings || assessment?.clause_mappings || []).map((clause, index) => (
-                <div key={index} className="rounded-lg border border-slate-700 bg-slate-800/50 overflow-hidden">
+                <div key={index} className="rounded-lg border border-slate-200 bg-white/50 overflow-hidden">
                   <button
                     onClick={() => toggleClause(index)}
-                    className="w-full flex items-center justify-between p-3 hover:bg-slate-700/50 transition-colors"
+                    className="w-full flex items-center justify-between p-3 hover:bg-slate-50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       {expandedClauses.has(index) ? (
@@ -1296,7 +1296,7 @@ function AssessmentTab({
                         <span className="text-slate-500">|</span>
                         <span className="text-sm text-blue-400">{clause.control_id}</span>
                         <span className="text-slate-500">|</span>
-                        <span className="text-sm text-slate-300">{clause.clause_reference}</span>
+                        <span className="text-sm text-slate-600">{clause.clause_reference}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -1305,7 +1305,7 @@ function AssessmentTab({
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium border ${
                           clause.match_type === 'explicit' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
                           clause.match_type === 'implicit' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
-                          'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                          'bg-primary-500/20 text-primary-600 border-primary-500/30'
                         }`}>
                           {clause.match_type.charAt(0).toUpperCase() + clause.match_type.slice(1)}
                         </span>
@@ -1324,7 +1324,7 @@ function AssessmentTab({
                         {clause.coverage_type}
                       </span>
                       <div className="flex items-center gap-2 min-w-[100px]">
-                        <div className="h-2 flex-1 rounded-full bg-slate-700">
+                        <div className="h-2 flex-1 rounded-full bg-slate-200">
                           <div 
                             className={`h-2 rounded-full transition-all ${
                               clause.confidence >= 80 ? 'bg-green-500' : 
@@ -1339,28 +1339,28 @@ function AssessmentTab({
                     </div>
                   </button>
                   {expandedClauses.has(index) && (
-                    <div className="border-t border-slate-700 p-4 space-y-3">
+                    <div className="border-t border-slate-200 p-4 space-y-3">
                       <div>
                         <h6 className="text-xs text-slate-400 mb-1">Control Title</h6>
-                        <p className="text-sm text-white">{clause.control_title}</p>
+                        <p className="text-sm text-slate-800">{clause.control_title}</p>
                       </div>
                       <div>
                         <h6 className="text-xs text-slate-400 mb-1">Matching Rationale</h6>
-                        <p className="text-sm text-slate-300">{clause.matching_rationale}</p>
+                        <p className="text-sm text-slate-600">{clause.matching_rationale}</p>
                       </div>
                       {/* Intent Analysis - AI explanation of how evidence satisfies control intent */}
                       {clause.intent_analysis && (
-                        <div className="rounded-lg bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-500/20 p-3">
-                          <h6 className="flex items-center gap-1 text-xs text-purple-300 mb-1">
+                        <div className="rounded-lg bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-primary-500/20 p-3">
+                          <h6 className="flex items-center gap-1 text-xs text-primary-500 mb-1">
                             <Brain className="h-3 w-3" />
                             Intent Analysis
                           </h6>
-                          <p className="text-sm text-slate-300">{clause.intent_analysis}</p>
+                          <p className="text-sm text-slate-600">{clause.intent_analysis}</p>
                         </div>
                       )}
                       {/* Cross-Framework Equivalents */}
                       {clause.cross_framework_equivalents && clause.cross_framework_equivalents.length > 0 && (
-                        <div className="rounded-lg bg-slate-800/50 border border-slate-600/50 p-3">
+                        <div className="rounded-lg bg-white/50 border border-slate-300/50 p-3">
                           <h6 className="flex items-center gap-1 text-xs text-slate-400 mb-2">
                             <Link2 className="h-3 w-3" />
                             Equivalent Controls in Other Frameworks
@@ -1379,11 +1379,11 @@ function AssessmentTab({
                           <Quote className="h-3 w-3" />
                           Matched Text Excerpt
                         </h6>
-                        <blockquote className="border-l-4 border-cyan-500 bg-slate-900 pl-4 py-2 rounded-r-lg">
+                        <blockquote className="border-l-4 border-cyan-500 bg-slate-50 pl-4 py-2 rounded-r-lg">
                           <p className="text-sm text-cyan-300 italic">&quot;{clause.matched_text_excerpt}&quot;</p>
                         </blockquote>
                       </div>
-                      <div className="pt-2 border-t border-slate-700">
+                      <div className="pt-2 border-t border-slate-200">
                         {isClauseLinked(clause) ? (
                           <div className="flex items-center gap-2 text-green-400">
                             <CheckCircle className="h-4 w-4" />
@@ -1423,17 +1423,17 @@ function AssessmentTab({
 
         {assessment?.matched_text_excerpts && assessment.matched_text_excerpts.length > 0 && (
           <div className="mt-4">
-            <h5 className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-3">
+            <h5 className="flex items-center gap-2 text-sm font-medium text-slate-600 mb-3">
               <FileText className="h-4 w-4 text-cyan-400" />
               Matched Text Excerpts ({assessment.matched_text_excerpts.length})
             </h5>
             <div className="space-y-2">
               {assessment.matched_text_excerpts.map((excerpt, index) => (
-                <div key={index} className="rounded-lg bg-slate-800/50 p-3 border border-slate-700">
+                <div key={index} className="rounded-lg bg-white/50 p-3 border border-slate-200">
                   <div className="flex items-start gap-3">
                     <Quote className="h-4 w-4 text-slate-500 mt-0.5 shrink-0" />
                     <div className="flex-1">
-                      <p className="text-sm text-slate-300 italic">&quot;{excerpt.text}&quot;</p>
+                      <p className="text-sm text-slate-600 italic">&quot;{excerpt.text}&quot;</p>
                       <p className="text-xs text-cyan-400 mt-1">Relevance: {excerpt.relevance}</p>
                     </div>
                   </div>
@@ -1445,22 +1445,22 @@ function AssessmentTab({
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <div className="space-y-4 rounded-lg bg-slate-900 p-4">
-          <h4 className="font-medium text-white">Quality Scores</h4>
+        <div className="space-y-4 rounded-lg bg-slate-50 p-4">
+          <h4 className="font-medium text-slate-800">Quality Scores</h4>
           <ScoreBar label="Relevance" score={data.relevance_score} color="bg-blue-500" />
           <ScoreBar label="Adequacy" score={data.adequacy_score} color="bg-green-500" />
-          <ScoreBar label="Audit Readiness" score={data.audit_readiness} color="bg-purple-500" />
+          <ScoreBar label="Audit Readiness" score={data.audit_readiness} color="bg-primary-500" />
           <ScoreBar label="Confidence" score={data.confidence_score} color="bg-cyan-500" />
         </div>
 
-        <div className="space-y-4 rounded-lg bg-slate-900 p-4">
-          <h4 className="font-medium text-white">Content Summary</h4>
-          <p className="text-slate-300">{data.content_summary || 'No summary available'}</p>
+        <div className="space-y-4 rounded-lg bg-slate-50 p-4">
+          <h4 className="font-medium text-slate-800">Content Summary</h4>
+          <p className="text-slate-600">{data.content_summary || 'No summary available'}</p>
         </div>
       </div>
 
       <div className="rounded-lg bg-gradient-to-r from-primary-900/50 to-blue-900/50 border border-primary-500/30 p-4">
-        <h4 className="mb-3 flex items-center gap-2 font-medium text-white">
+        <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-800">
           <ShieldCheck className="h-5 w-5 text-primary-400" />
           Applicable Compliance Frameworks
         </h4>
@@ -1469,20 +1469,20 @@ function AssessmentTab({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-600/50">
-                <th className="pb-3 pr-4 font-medium text-slate-300 w-1/3">
+              <tr className="border-b border-slate-300/50">
+                <th className="pb-3 pr-4 font-medium text-slate-600 w-1/3">
                   <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-primary-400" />
                     AI-Detected Frameworks
                   </div>
                 </th>
-                <th className="pb-3 px-4 font-medium text-slate-300 w-1/3">
+                <th className="pb-3 px-4 font-medium text-slate-600 w-1/3">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-blue-400" />
                     Linked Controls
                   </div>
                 </th>
-                <th className="pb-3 pl-4 font-medium text-slate-300 w-1/3">
+                <th className="pb-3 pl-4 font-medium text-slate-600 w-1/3">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-green-400" />
                     Associated Assets
@@ -1509,7 +1509,7 @@ function AssessmentTab({
                     );
                   })()}
                 </td>
-                <td className="py-3 px-4 align-top border-l border-slate-700/30">
+                <td className="py-3 px-4 align-top border-l border-slate-200/30">
                   {controlsData?.by_framework && controlsData.by_framework.length > 0 ? (
                     <div className="space-y-3">
                       {controlsData.by_framework.map((framework) => (
@@ -1537,7 +1537,7 @@ function AssessmentTab({
                     <span className="text-slate-500 text-sm">No linked controls</span>
                   )}
                 </td>
-                <td className="py-3 pl-4 align-top border-l border-slate-700/30">
+                <td className="py-3 pl-4 align-top border-l border-slate-200/30">
                   {assetsData?.links && assetsData.links.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {assetsData.links.slice(0, 6).map((link) => (
@@ -1565,32 +1565,32 @@ function AssessmentTab({
           </table>
         </div>
         
-        <div className="mt-4 pt-3 border-t border-slate-700/30 flex items-center gap-6 text-xs text-slate-400">
+        <div className="mt-4 pt-3 border-t border-slate-200/30 flex items-center gap-6 text-xs text-slate-400">
           <span className="flex items-center gap-1.5">
             <Shield className="h-3.5 w-3.5 text-primary-400" />
-            <span className="font-medium text-slate-300">{(assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks)?.length || 0}</span> frameworks detected
+            <span className="font-medium text-slate-600">{(assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks)?.length || 0}</span> frameworks detected
           </span>
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
-            <span className="font-medium text-slate-300">{controlsData?.total_mappings || 0}</span> controls linked
+            <span className="font-medium text-slate-600">{controlsData?.total_mappings || 0}</span> controls linked
           </span>
           <span className="flex items-center gap-1.5">
             <Building2 className="h-3.5 w-3.5 text-green-400" />
-            <span className="font-medium text-slate-300">{assetsData?.total || 0}</span> assets associated
+            <span className="font-medium text-slate-600">{assetsData?.total || 0}</span> assets associated
           </span>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        <div className="rounded-lg bg-slate-900 p-4">
-          <h4 className="mb-3 flex items-center gap-2 font-medium text-white">
+        <div className="rounded-lg bg-slate-50 p-4">
+          <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-800">
             <Shield className="h-4 w-4 text-blue-400" />
             Detected Controls
           </h4>
           {(assessment?.detected_controls || (data as AIAssessment)?.gap_analysis?.detected_controls)?.length ? (
             <ul className="space-y-1">
               {((assessment?.detected_controls || (data as AIAssessment)?.gap_analysis?.detected_controls) || []).map((control, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
                   <CheckCircle className="mt-0.5 h-3 w-3 shrink-0 text-green-400" />
                   {control}
                 </li>
@@ -1601,15 +1601,15 @@ function AssessmentTab({
           )}
         </div>
 
-        <div className="rounded-lg bg-slate-900 p-4">
-          <h4 className="mb-3 flex items-center gap-2 font-medium text-white">
+        <div className="rounded-lg bg-slate-50 p-4">
+          <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-800">
             <AlertTriangle className="h-4 w-4 text-yellow-400" />
             Compliance Gaps
           </h4>
           {(assessment?.compliance_gaps || (data as AIAssessment)?.gap_analysis?.gaps)?.length ? (
             <ul className="space-y-1">
               {((assessment?.compliance_gaps || (data as AIAssessment)?.gap_analysis?.gaps) || []).map((gap, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-yellow-400" />
                   {gap}
                 </li>
@@ -1620,15 +1620,15 @@ function AssessmentTab({
           )}
         </div>
 
-        <div className="rounded-lg bg-slate-900 p-4">
-          <h4 className="mb-3 flex items-center gap-2 font-medium text-white">
+        <div className="rounded-lg bg-slate-50 p-4">
+          <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-800">
             <Info className="h-4 w-4 text-primary-400" />
             Recommendations
           </h4>
           {(assessment?.recommendations || (data as AIAssessment)?.gap_analysis?.recommendations)?.length ? (
             <ul className="space-y-1">
               {((assessment?.recommendations || (data as AIAssessment)?.gap_analysis?.recommendations) || []).map((rec, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
                   <Info className="mt-0.5 h-3 w-3 shrink-0 text-primary-400" />
                   {rec}
                 </li>
@@ -1665,7 +1665,7 @@ function ControlsTab({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
           <Shield className="h-5 w-5 text-primary-400" />
           Linked Controls ({totalControls})
         </h3>
@@ -1678,7 +1678,7 @@ function ControlsTab({
       {totalControls === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Shield className="mb-4 h-12 w-12 text-slate-600" />
-          <p className="text-lg font-medium text-white">No Linked Controls</p>
+          <p className="text-lg font-medium text-slate-800">No Linked Controls</p>
           <p className="text-slate-400">Link this evidence to compliance controls</p>
         </div>
       ) : (
@@ -1688,18 +1688,18 @@ function ControlsTab({
               <h4 className="mb-3 text-sm font-medium text-slate-400">Normalized Controls</h4>
               <div className="space-y-2">
                 {controlsData.normalized_controls.map((mapping) => (
-                  <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
+                  <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
                     <div className="flex items-center gap-3">
                       <ShieldCheck className="h-5 w-5 text-primary-400" />
                       <div>
                         <span className="text-sm font-medium text-primary-400">{mapping.normalized_control?.code}</span>
-                        <p className="text-white">{mapping.normalized_control?.name}</p>
+                        <p className="text-slate-800">{mapping.normalized_control?.name}</p>
                       </div>
                     </div>
                     <button
                       onClick={() => onUnlink(mapping.id)}
                       disabled={isUnlinking}
-                      className="rounded p-2 text-slate-400 hover:bg-slate-700 hover:text-red-400"
+                      className="rounded p-2 text-slate-400 hover:bg-slate-200 hover:text-red-400"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1716,18 +1716,18 @@ function ControlsTab({
               </h4>
               <div className="space-y-2">
                 {framework.controls.map((mapping) => (
-                  <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
+                  <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
                     <div className="flex items-center gap-3">
                       <Shield className="h-5 w-5 text-blue-400" />
                       <div>
                         <span className="text-sm font-medium text-blue-400">{mapping.framework_control?.code}</span>
-                        <p className="text-white">{mapping.framework_control?.name}</p>
+                        <p className="text-slate-800">{mapping.framework_control?.name}</p>
                       </div>
                     </div>
                     <button
                       onClick={() => onUnlink(mapping.id)}
                       disabled={isUnlinking}
-                      className="rounded p-2 text-slate-400 hover:bg-slate-700 hover:text-red-400"
+                      className="rounded p-2 text-slate-400 hover:bg-slate-200 hover:text-red-400"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1776,9 +1776,9 @@ function CrossLinksTab({
     children: React.ReactNode;
     addButton?: React.ReactNode;
   }) => (
-    <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h4 className="flex items-center gap-2 font-medium text-white">
+        <h4 className="flex items-center gap-2 font-medium text-slate-800">
           <Icon className={`h-5 w-5 ${iconColor}`} />
           {title} ({count})
         </h4>
@@ -1791,7 +1791,7 @@ function CrossLinksTab({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
           <Link2 className="h-5 w-5 text-primary-400" />
           Cross-Module Links ({links.total_links})
         </h3>
@@ -1812,15 +1812,15 @@ function CrossLinksTab({
           {links.risks.links.length > 0 ? (
             <div className="space-y-2">
               {links.risks.links.map((link) => (
-                <div key={link.id} className="flex items-center justify-between rounded bg-slate-800 p-2">
+                <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-red-400" />
-                    <Link href={`/risks/${link.risk_id}`} className="text-sm text-white hover:text-primary-400">
+                    <Link href={`/risks/${link.risk_id}`} className="text-sm text-slate-800 hover:text-primary-400">
                       {link.risk?.title || `Risk #${link.risk_id}`}
                     </Link>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link href={`/risks/${link.risk_id}`} className="text-slate-400 hover:text-white">
+                    <Link href={`/risks/${link.risk_id}`} className="text-slate-400 hover:text-slate-900">
                       <ExternalLink className="h-4 w-4" />
                     </Link>
                     <button
@@ -1853,15 +1853,15 @@ function CrossLinksTab({
           {links.assets.links.length > 0 ? (
             <div className="space-y-2">
               {links.assets.links.map((link) => (
-                <div key={link.id} className="flex items-center justify-between rounded bg-slate-800 p-2">
+                <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-blue-400" />
-                    <Link href={`/assets/${link.asset_id}`} className="text-sm text-white hover:text-primary-400">
+                    <Link href={`/assets/${link.asset_id}`} className="text-sm text-slate-800 hover:text-primary-400">
                       {link.asset?.name || `Asset #${link.asset_id}`}
                     </Link>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link href={`/assets/${link.asset_id}`} className="text-slate-400 hover:text-white">
+                    <Link href={`/assets/${link.asset_id}`} className="text-slate-400 hover:text-slate-900">
                       <ExternalLink className="h-4 w-4" />
                     </Link>
                     <button
@@ -1894,10 +1894,10 @@ function CrossLinksTab({
           {links.incidents.links.length > 0 ? (
             <div className="space-y-2">
               {links.incidents.links.map((link) => (
-                <div key={link.id} className="flex items-center justify-between rounded bg-slate-800 p-2">
+                <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-orange-400" />
-                    <span className="text-sm text-white">
+                    <span className="text-sm text-slate-800">
                       {link.incident?.title || `Incident #${link.incident_id}`}
                     </span>
                   </div>
@@ -1922,7 +1922,7 @@ function CrossLinksTab({
         <LinkSection 
           title="Policy Statements" 
           icon={FileText} 
-          iconColor="text-purple-400"
+          iconColor="text-primary-600"
           count={links.policy_statements.total}
           addButton={
             <button className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300">
@@ -1933,12 +1933,12 @@ function CrossLinksTab({
           {links.policy_statements.links.length > 0 ? (
             <div className="space-y-2">
               {links.policy_statements.links.map((link) => (
-                <div key={link.id} className="flex items-center justify-between rounded bg-slate-800 p-2">
+                <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
                   <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-purple-400" />
+                    <FileText className="h-4 w-4 text-primary-600" />
                     <div>
-                      <span className="text-xs text-purple-400">{link.policy_statement?.statement_code}</span>
-                      <p className="text-sm text-white">{link.policy_statement?.statement_summary || 'Policy Statement'}</p>
+                      <span className="text-xs text-primary-600">{link.policy_statement?.statement_code}</span>
+                      <p className="text-sm text-slate-800">{link.policy_statement?.statement_summary || 'Policy Statement'}</p>
                     </div>
                   </div>
                 </div>

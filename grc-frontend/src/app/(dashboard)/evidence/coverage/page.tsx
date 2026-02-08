@@ -218,7 +218,7 @@ export default function EvidenceCoverageDashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Evidence Coverage Dashboard</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Evidence Coverage Dashboard</h1>
           <p className="text-slate-400">Monitor evidence coverage across frameworks and controls</p>
         </div>
         <div className="flex items-center gap-3">
@@ -227,7 +227,7 @@ export default function EvidenceCoverageDashboardPage() {
             <select
               value={selectedFrameworkId || ''}
               onChange={(e) => setSelectedFrameworkId(e.target.value ? Number(e.target.value) : null)}
-              className="appearance-none rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-10 text-white focus:border-primary-500 focus:outline-none"
+              className="appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-10 text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Frameworks</option>
               {coverage?.frameworks.map(fw => (
@@ -324,20 +324,20 @@ export default function EvidenceCoverageDashboardPage() {
         ) : !coverage?.frameworks.length ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <BarChart3 className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-white">No framework data available</h3>
+            <h3 className="text-lg font-medium text-slate-800">No framework data available</h3>
             <p className="mt-1 text-slate-400">Add frameworks and controls to see coverage</p>
           </div>
         ) : (
           <div className="space-y-4">
             {coverage.frameworks.map(fw => (
-              <div key={fw.framework_id} className="rounded-lg border border-slate-700 p-4">
+              <div key={fw.framework_id} className="rounded-lg border border-slate-200 p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-700">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-200">
                       <Shield className="h-5 w-5 text-slate-400" />
                     </div>
                     <div>
-                      <h3 className="font-medium text-white">{fw.framework_code}</h3>
+                      <h3 className="font-medium text-slate-800">{fw.framework_code}</h3>
                       <p className="text-xs text-slate-400">{fw.framework_name}</p>
                     </div>
                   </div>
@@ -353,7 +353,7 @@ export default function EvidenceCoverageDashboardPage() {
                   </div>
                 </div>
                 
-                <div className="mb-2 h-3 w-full overflow-hidden rounded-full bg-slate-700">
+                <div className="mb-2 h-3 w-full overflow-hidden rounded-full bg-slate-200">
                   <div
                     className={`h-full transition-all ${getCoverageColor(fw.coverage_percentage)}`}
                     style={{ width: `${fw.coverage_percentage}%` }}
@@ -374,8 +374,8 @@ export default function EvidenceCoverageDashboardPage() {
                     >
                       {ctrl.code}
                       {hoveredCell?.controlId === ctrl.id && hoveredCell?.frameworkId === fw.framework_id && (
-                        <div className="absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-3 py-2 text-xs shadow-lg border border-slate-700">
-                          <p className="font-medium text-white">{ctrl.name}</p>
+                        <div className="absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-50 px-3 py-2 text-xs shadow-lg border border-slate-200">
+                          <p className="font-medium text-slate-800">{ctrl.name}</p>
                           <p className={ctrl.has_evidence ? 'text-green-400' : 'text-red-400'}>
                             {ctrl.has_evidence ? 'Has Evidence' : 'Missing Evidence'}
                           </p>
@@ -412,7 +412,7 @@ export default function EvidenceCoverageDashboardPage() {
               </div>
             ) : (
               <table className="w-full">
-                <thead className="sticky top-0 bg-slate-800">
+                <thead className="sticky top-0 bg-white">
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-400">Framework</th>
                     <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-400">Control</th>
@@ -421,14 +421,14 @@ export default function EvidenceCoverageDashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {filteredOrphanControls.slice(0, 10).map(ctrl => (
-                    <tr key={`${ctrl.frameworkId}-${ctrl.id}`} className="hover:bg-slate-700/50">
+                    <tr key={`${ctrl.frameworkId}-${ctrl.id}`} className="hover:bg-slate-50">
                       <td className="px-4 py-2">
-                        <span className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                        <span className="rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
                           {ctrl.frameworkCode}
                         </span>
                       </td>
                       <td className="px-4 py-2">
-                        <p className="text-sm font-medium text-white">{ctrl.code}</p>
+                        <p className="text-sm font-medium text-slate-800">{ctrl.code}</p>
                         <p className="text-xs text-slate-400 truncate max-w-xs">{ctrl.name}</p>
                       </td>
                       <td className="px-4 py-2 text-right">
@@ -443,7 +443,7 @@ export default function EvidenceCoverageDashboardPage() {
               </table>
             )}
             {filteredOrphanControls.length > 10 && (
-              <div className="border-t border-slate-700 p-3 text-center">
+              <div className="border-t border-slate-200 p-3 text-center">
                 <span className="text-sm text-slate-400">
                   Showing 10 of {filteredOrphanControls.length} controls
                 </span>
@@ -482,7 +482,7 @@ export default function EvidenceCoverageDashboardPage() {
                         <AlertTriangle className="h-4 w-4 text-red-400" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">{item.name}</p>
+                        <p className="text-sm font-medium text-slate-800">{item.name}</p>
                         <p className="text-xs text-red-400">
                           {item.expiry_date 
                             ? `${getDaysOverdue(item.expiry_date)} days overdue`
@@ -531,7 +531,7 @@ export default function EvidenceCoverageDashboardPage() {
               </div>
             ) : (
               <table className="w-full">
-                <thead className="sticky top-0 bg-slate-800">
+                <thead className="sticky top-0 bg-white">
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-400">Evidence</th>
                     <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-400">Expiry</th>
@@ -543,13 +543,13 @@ export default function EvidenceCoverageDashboardPage() {
                     const daysRemaining = getDaysRemaining(item.expiry_date);
                     const status = getExpiryStatusStyle(daysRemaining);
                     return (
-                      <tr key={item.id} className="hover:bg-slate-700/50">
+                      <tr key={item.id} className="hover:bg-slate-50">
                         <td className="px-4 py-2">
-                          <p className="text-sm font-medium text-white">{item.name}</p>
+                          <p className="text-sm font-medium text-slate-800">{item.name}</p>
                           <p className="text-xs text-slate-400 capitalize">{item.evidence_type?.replace(/_/g, ' ') || 'Unknown'}</p>
                         </td>
                         <td className="px-4 py-2">
-                          <p className="text-sm text-slate-300">
+                          <p className="text-sm text-slate-600">
                             {new Date(item.expiry_date).toLocaleDateString()}
                           </p>
                           <p className="text-xs text-slate-400">{daysRemaining} days remaining</p>
@@ -596,7 +596,7 @@ export default function EvidenceCoverageDashboardPage() {
                   <div key={item.id} className="flex items-center justify-between rounded-lg border border-orange-500/20 bg-orange-500/5 p-3">
                     <div className="flex items-center gap-3">
                       <div className="relative">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-slate-700">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-slate-200">
                           <span className="text-sm font-bold text-orange-400">
                             {item.quality_score?.toFixed(0) || 0}%
                           </span>
@@ -624,7 +624,7 @@ export default function EvidenceCoverageDashboardPage() {
                         </svg>
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">{item.name}</p>
+                        <p className="text-sm font-medium text-slate-800">{item.name}</p>
                         <p className="text-xs text-slate-400">
                           Last assessed: {item.uploaded_at ? new Date(item.uploaded_at).toLocaleDateString() : 'Never'}
                         </p>
@@ -633,7 +633,7 @@ export default function EvidenceCoverageDashboardPage() {
                     <button
                       onClick={() => reassessMutation.mutate(item.id)}
                       disabled={reassessMutation.isPending}
-                      className="inline-flex items-center gap-1 rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-orange-600 disabled:opacity-50"
                     >
                       <RefreshCw size={12} className={reassessMutation.isPending ? 'animate-spin' : ''} />
                       Re-assess
@@ -643,7 +643,7 @@ export default function EvidenceCoverageDashboardPage() {
               </div>
             )}
             {lowQualityEvidence && lowQualityEvidence.length > 5 && (
-              <div className="border-t border-slate-700 p-3 text-center">
+              <div className="border-t border-slate-200 p-3 text-center">
                 <span className="text-sm text-slate-400">
                   Showing 5 of {lowQualityEvidence.length} items
                 </span>
@@ -653,11 +653,11 @@ export default function EvidenceCoverageDashboardPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+      <div className="rounded-lg border border-slate-200 bg-white/50 p-4">
         <div className="flex items-start gap-3">
           <Info className="h-5 w-5 text-slate-400 mt-0.5" />
           <div>
-            <h4 className="text-sm font-medium text-white">Coverage Legend</h4>
+            <h4 className="text-sm font-medium text-slate-800">Coverage Legend</h4>
             <div className="mt-2 flex flex-wrap gap-4 text-xs">
               <div className="flex items-center gap-2">
                 <div className="h-3 w-3 rounded bg-green-500"></div>

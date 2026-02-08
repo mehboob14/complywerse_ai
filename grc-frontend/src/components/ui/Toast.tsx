@@ -76,7 +76,7 @@ export function Toast({ id, title, message, type, duration = 5000, onDismiss }: 
   return (
     <div
       className={clsx(
-        'pointer-events-auto w-80 rounded-lg border bg-surface-800 p-4 shadow-elevated transition-all duration-300',
+        'pointer-events-auto w-80 rounded-lg border bg-white p-4 shadow-elevated transition-all duration-300',
         styles.bg,
         styles.border,
         isVisible && !isLeaving ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'

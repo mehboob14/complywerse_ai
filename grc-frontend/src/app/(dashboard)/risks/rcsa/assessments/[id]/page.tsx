@@ -425,12 +425,12 @@ export default function AssessmentDetailPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/risks/rcsa/assessments"
-          className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white"
+          className="p-2 rounded-lg hover:bg-slate-200 text-slate-500 hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-white">{assessment.campaign_name}</h1>
+          <h1 className="text-2xl font-semibold text-slate-800">{assessment.campaign_name}</h1>
           <div className="flex items-center gap-4 mt-1">
             <span className="flex items-center gap-1.5 text-slate-400">
               <Building2 className="h-4 w-4" />
@@ -490,19 +490,19 @@ export default function AssessmentDetailPage() {
       {/* Reject Modal */}
       {showRejectModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md mx-4 border border-slate-700">
-            <h3 className="text-lg font-medium text-white mb-4">Reject Assessment</h3>
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 border border-slate-200">
+            <h3 className="text-lg font-medium text-slate-800 mb-4">Reject Assessment</h3>
             <p className="text-slate-400 text-sm mb-4">Please provide a reason for rejecting this assessment. This will be shared with the assessor.</p>
             <textarea
               value={reviewComments}
               onChange={(e) => setReviewComments(e.target.value)}
               placeholder="Enter rejection reason..."
-              className="w-full h-32 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+              className="w-full h-32 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-500 focus:border-primary-500 focus:outline-none"
             />
             <div className="flex justify-end gap-3 mt-4">
               <button
                 onClick={() => setShowRejectModal(false)}
-                className="px-4 py-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+                className="px-4 py-2 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-600 transition-colors"
               >
                 Cancel
               </button>
@@ -527,24 +527,24 @@ export default function AssessmentDetailPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-400">Progress</span>
-            <span className="text-sm font-medium text-white">{answeredCount} of {totalQuestions} questions answered ({Math.round((answeredCount / Math.max(totalQuestions, 1)) * 100)}%)</span>
+            <span className="text-sm font-medium text-slate-800">{answeredCount} of {totalQuestions} questions answered ({Math.round((answeredCount / Math.max(totalQuestions, 1)) * 100)}%)</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 text-xs rounded-lg ${viewMode === 'list' ? 'bg-primary-500 text-white' : 'bg-slate-700 text-slate-400'}`}
+              className={`px-3 py-1.5 text-xs rounded-lg ${viewMode === 'list' ? 'bg-primary-500 text-white' : 'bg-slate-200 text-slate-500'}`}
             >
               List View
             </button>
             <button
               onClick={() => setViewMode('step')}
-              className={`px-3 py-1.5 text-xs rounded-lg ${viewMode === 'step' ? 'bg-primary-500 text-white' : 'bg-slate-700 text-slate-400'}`}
+              className={`px-3 py-1.5 text-xs rounded-lg ${viewMode === 'step' ? 'bg-primary-500 text-white' : 'bg-slate-200 text-slate-500'}`}
             >
               Step View
             </button>
           </div>
         </div>
-        <div className="mt-2 h-2 bg-slate-700 rounded-full overflow-hidden">
+        <div className="mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
           <div
             className="h-full bg-primary-500 rounded-full transition-all duration-300"
             style={{ width: `${(answeredCount / Math.max(totalQuestions, 1)) * 100}%` }}
@@ -557,14 +557,14 @@ export default function AssessmentDetailPage() {
               <button
                 onClick={goToPrevQuestion}
                 disabled={currentQuestionIndex === 0}
-                className="p-1.5 rounded-lg bg-slate-700 text-slate-400 hover:text-white disabled:opacity-50"
+                className="p-1.5 rounded-lg bg-slate-200 text-slate-500 hover:text-slate-900 disabled:opacity-50"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 onClick={goToNextQuestion}
                 disabled={currentQuestionIndex === totalQuestions - 1}
-                className="p-1.5 rounded-lg bg-slate-700 text-slate-400 hover:text-white disabled:opacity-50"
+                className="p-1.5 rounded-lg bg-slate-200 text-slate-500 hover:text-slate-900 disabled:opacity-50"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -586,17 +586,17 @@ export default function AssessmentDetailPage() {
           <div className="flex items-start justify-between gap-4 mb-6">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-medium px-2 py-1 bg-slate-700 rounded text-slate-300">
+                <span className="text-xs font-medium px-2 py-1 bg-slate-200 rounded text-slate-600">
                   {currentQuestion.section}
                 </span>
                 <span className="text-xs text-slate-500">Question {currentQuestionIndex + 1}</span>
               </div>
-              <p className="text-xl text-white font-medium">
+              <p className="text-xl text-slate-800 font-medium">
                 {currentQuestion.question_text}
                 {currentQuestion.is_required && <span className="text-red-400 ml-1">*</span>}
               </p>
               {currentQuestion.guidance && (
-                <p className="text-sm text-slate-400 mt-3 flex items-start gap-1.5 bg-slate-700/30 p-3 rounded-lg">
+                <p className="text-sm text-slate-400 mt-3 flex items-start gap-1.5 bg-slate-200/30 p-3 rounded-lg">
                   <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                   {currentQuestion.guidance}
                 </p>
@@ -627,7 +627,7 @@ export default function AssessmentDetailPage() {
                         className={`p-4 rounded-xl border-2 font-medium transition-all text-center ${
                           isSelected 
                             ? colorClass
-                            : 'border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-500 hover:bg-slate-700'
+                            : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400 hover:bg-slate-200'
                         }`}
                       >
                         <span className="flex flex-col items-center gap-2">
@@ -654,7 +654,7 @@ export default function AssessmentDetailPage() {
                         className={`w-full p-3 rounded-lg text-left border-2 transition-all ${
                           (responses[currentQuestion.id] || {}).likelihood === opt.value
                             ? 'border-primary-500 bg-primary-500/20 text-primary-400'
-                            : 'border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-500'
+                            : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
                         }`}
                       >
                         {opt.label}
@@ -673,7 +673,7 @@ export default function AssessmentDetailPage() {
                         className={`w-full p-3 rounded-lg text-left border-2 transition-all ${
                           (responses[currentQuestion.id] || {}).impact === opt.value
                             ? 'border-primary-500 bg-primary-500/20 text-primary-400'
-                            : 'border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-500'
+                            : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
                         }`}
                       >
                         {opt.label}
@@ -692,7 +692,7 @@ export default function AssessmentDetailPage() {
                   className={`flex-1 p-4 rounded-xl border-2 font-medium transition-all ${
                     (responses[currentQuestion.id] || {}).yes_no_value === true
                       ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
-                      : 'border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-500'
+                      : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
                   }`}
                 >
                   {(responses[currentQuestion.id] || {}).yes_no_value === true && <CheckCircle className="h-5 w-5 mx-auto mb-2" />}
@@ -704,7 +704,7 @@ export default function AssessmentDetailPage() {
                   className={`flex-1 p-4 rounded-xl border-2 font-medium transition-all ${
                     (responses[currentQuestion.id] || {}).yes_no_value === false
                       ? 'border-rose-500 bg-rose-500/20 text-rose-400'
-                      : 'border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-500'
+                      : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
                   }`}
                 >
                   {(responses[currentQuestion.id] || {}).yes_no_value === false && <CheckCircle className="h-5 w-5 mx-auto mb-2" />}
@@ -724,7 +724,7 @@ export default function AssessmentDetailPage() {
             )}
 
             {/* Evidence Upload in Step View */}
-            <div className="mt-6 pt-6 border-t border-slate-700">
+            <div className="mt-6 pt-6 border-t border-slate-200">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm text-slate-400 flex items-center gap-2">
                   <FileText className="h-4 w-4" />
@@ -754,10 +754,10 @@ export default function AssessmentDetailPage() {
               {(evidenceFiles[currentQuestion.id] || []).length > 0 ? (
                 <div className="space-y-2">
                   {evidenceFiles[currentQuestion.id].map(file => (
-                    <div key={file.id} className="flex items-center justify-between p-2 bg-slate-700/50 rounded-lg">
+                    <div key={file.id} className="flex items-center justify-between p-2 bg-slate-200/50 rounded-lg">
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-primary-400" />
-                        <span className="text-sm text-white">{file.filename}</span>
+                        <span className="text-sm text-slate-800">{file.filename}</span>
                         <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
                       </div>
                       {isEditable && (
@@ -778,7 +778,7 @@ export default function AssessmentDetailPage() {
           </div>
 
           {/* Step Navigation */}
-          <div className="mt-8 pt-6 border-t border-slate-700 flex items-center justify-between">
+          <div className="mt-8 pt-6 border-t border-slate-200 flex items-center justify-between">
             <button
               onClick={goToPrevQuestion}
               disabled={currentQuestionIndex === 0}
@@ -818,9 +818,9 @@ export default function AssessmentDetailPage() {
           <div key={section} className="card overflow-hidden">
             <button
               onClick={() => toggleSection(section)}
-              className="w-full flex items-center justify-between p-4 bg-slate-800/50 hover:bg-slate-800"
+              className="w-full flex items-center justify-between p-4 bg-white/50 hover:bg-white"
             >
-              <h3 className="text-lg font-medium text-white">{section}</h3>
+              <h3 className="text-lg font-medium text-slate-800">{section}</h3>
               {expandedSections.has(section) ? (
                 <ChevronUp className="h-5 w-5 text-slate-400" />
               ) : (
@@ -839,7 +839,7 @@ export default function AssessmentDetailPage() {
                     <div key={question.id} className={`p-4 ${hasError ? 'bg-red-900/10' : ''}`}>
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div className="flex-1">
-                          <p className="text-white font-medium">
+                          <p className="text-slate-800 font-medium">
                             {question.question_text}
                             {question.is_required && <span className="text-red-400 ml-1">*</span>}
                           </p>
@@ -854,19 +854,19 @@ export default function AssessmentDetailPage() {
                           <div className="relative">
                             <button
                               onClick={() => setShowAISuggestions(prev => ({ ...prev, [question.id]: !prev[question.id] }))}
-                              className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                              className="p-2 rounded-lg bg-primary-500/20 text-primary-600 hover:bg-primary-500/30"
                               title="AI Suggestion"
                             >
                               <Sparkles className="h-4 w-4" />
                             </button>
                             {showAISuggestions[question.id] && (
-                              <div className="absolute right-0 top-10 z-10 w-80 p-4 rounded-lg bg-slate-700 border border-slate-600 shadow-xl">
+                              <div className="absolute right-0 top-10 z-10 w-80 p-4 rounded-lg bg-slate-200 border border-slate-300 shadow-xl">
                                 <div className="flex items-center gap-2 mb-2">
-                                  <Sparkles className="h-4 w-4 text-purple-400" />
-                                  <span className="text-sm font-medium text-white">AI Suggestion</span>
+                                  <Sparkles className="h-4 w-4 text-primary-600" />
+                                  <span className="text-sm font-medium text-slate-800">AI Suggestion</span>
                                   <span className="text-xs text-slate-400">({Math.round(aiSuggestion.confidence * 100)}% confidence)</span>
                                 </div>
-                                <p className="text-sm text-slate-300 mb-3">{aiSuggestion.reasoning}</p>
+                                <p className="text-sm text-slate-600 mb-3">{aiSuggestion.reasoning}</p>
                                 <button
                                   onClick={() => acceptAISuggestion(question.id)}
                                   className="w-full btn-primary text-sm py-1.5"
@@ -935,7 +935,7 @@ export default function AssessmentDetailPage() {
                                     className={`px-4 py-2.5 rounded-lg border-2 font-medium transition-all ${
                                       isSelected 
                                         ? colorClass
-                                        : 'border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-500 hover:bg-slate-700'
+                                        : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400 hover:bg-slate-200'
                                     } ${!isEditable ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                                   >
                                     <span className="flex items-center gap-2">
@@ -966,7 +966,7 @@ export default function AssessmentDetailPage() {
                                 disabled={!isEditable}
                                 className="w-4 h-4 text-primary-500"
                               />
-                              <span className="text-white">Yes</span>
+                              <span className="text-slate-800">Yes</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input
@@ -977,7 +977,7 @@ export default function AssessmentDetailPage() {
                                 disabled={!isEditable}
                                 className="w-4 h-4 text-primary-500"
                               />
-                              <span className="text-white">No</span>
+                              <span className="text-slate-800">No</span>
                             </label>
                           </div>
                         )}
@@ -994,7 +994,7 @@ export default function AssessmentDetailPage() {
                       </div>
 
                       {/* Evidence Upload Section */}
-                      <div className="mt-4 pt-4 border-t border-slate-700">
+                      <div className="mt-4 pt-4 border-t border-slate-200">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-sm text-slate-400 flex items-center gap-2">
                             <FileText className="h-4 w-4" />
@@ -1024,10 +1024,10 @@ export default function AssessmentDetailPage() {
                         {(evidenceFiles[question.id] || []).length > 0 ? (
                           <div className="space-y-2">
                             {evidenceFiles[question.id].map(file => (
-                              <div key={file.id} className="flex items-center justify-between p-2 bg-slate-700/50 rounded-lg">
+                              <div key={file.id} className="flex items-center justify-between p-2 bg-slate-200/50 rounded-lg">
                                 <div className="flex items-center gap-2">
                                   <FileText className="h-4 w-4 text-primary-400" />
-                                  <span className="text-sm text-white">{file.filename}</span>
+                                  <span className="text-sm text-slate-800">{file.filename}</span>
                                   <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
                                 </div>
                                 {isEditable && (
@@ -1048,8 +1048,8 @@ export default function AssessmentDetailPage() {
 
                       {/* AI Suggestion Toggle */}
                       {question.ai_suggestion_enabled && isEditable && (
-                        <div className="mt-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                          <div className="flex items-center gap-2 text-purple-400">
+                        <div className="mt-4 p-3 bg-primary-500/10 border border-primary-500/30 rounded-lg">
+                          <div className="flex items-center gap-2 text-primary-600">
                             <Lightbulb className="h-4 w-4" />
                             <span className="text-sm font-medium">AI Assistance Available</span>
                           </div>

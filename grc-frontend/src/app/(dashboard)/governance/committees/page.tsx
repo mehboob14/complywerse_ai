@@ -42,7 +42,7 @@ interface DashboardData {
 }
 
 const COMMITTEE_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  board: { label: 'Board', bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  board: { label: 'Board', bg: 'bg-primary-500/20', text: 'text-primary-600' },
   risk_committee: { label: 'Risk Committee', bg: 'bg-rose-500/20', text: 'text-rose-400' },
   audit_committee: { label: 'Audit Committee', bg: 'bg-blue-500/20', text: 'text-blue-400' },
   compliance_committee: { label: 'Compliance Committee', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
@@ -162,7 +162,7 @@ export default function CommitteesPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-white">Board & Committee Management</h1>
+            <h1 className="text-2xl font-semibold text-slate-800">Board & Committee Management</h1>
             <p className="text-slate-400 mt-1">Manage committees, meetings, and oversight actions</p>
           </div>
           <div className="flex items-center gap-3">
@@ -185,7 +185,7 @@ export default function CommitteesPage() {
               <Users className="h-6 w-6 text-primary-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.total_committees || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.total_committees || 0}</p>
               <p className="text-sm text-slate-400">Total Committees</p>
             </div>
           </div>
@@ -197,7 +197,7 @@ export default function CommitteesPage() {
               <Calendar className="h-6 w-6 text-cyan-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.upcoming_meetings || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.upcoming_meetings || 0}</p>
               <p className="text-sm text-slate-400">Upcoming Meetings</p>
             </div>
           </div>
@@ -209,7 +209,7 @@ export default function CommitteesPage() {
               <CheckSquare className="h-6 w-6 text-amber-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.open_actions || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.open_actions || 0}</p>
               <p className="text-sm text-slate-400">Open Actions</p>
             </div>
           </div>
@@ -221,7 +221,7 @@ export default function CommitteesPage() {
               <AlertCircle className="h-6 w-6 text-rose-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{dashboard?.overdue_actions || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.overdue_actions || 0}</p>
               <p className="text-sm text-slate-400">Overdue Actions</p>
             </div>
           </div>
@@ -263,7 +263,7 @@ export default function CommitteesPage() {
                     <Users className="h-5 w-5 text-primary-400" />
                   </div>
                   <div>
-                    <h3 className="text-white font-medium">{committee.name}</h3>
+                    <h3 className="text-slate-800 font-medium">{committee.name}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${typeStyle.bg} ${typeStyle.text}`}>
                       {typeStyle.label}
                     </span>
@@ -286,28 +286,28 @@ export default function CommitteesPage() {
                 {committee.chair_name && (
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">Chair:</span>
-                    <span className="text-slate-300">{committee.chair_name}</span>
+                    <span className="text-slate-600">{committee.chair_name}</span>
                   </div>
                 )}
                 {committee.secretary_name && (
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">Secretary:</span>
-                    <span className="text-slate-300">{committee.secretary_name}</span>
+                    <span className="text-slate-600">{committee.secretary_name}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500">Members:</span>
-                  <span className="text-slate-300">{committee.member_count}</span>
+                  <span className="text-slate-600">{committee.member_count}</span>
                 </div>
                 {committee.meeting_frequency && (
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">Meeting Frequency:</span>
-                    <span className="text-slate-300 capitalize">{committee.meeting_frequency.replace('_', ' ')}</span>
+                    <span className="text-slate-600 capitalize">{committee.meeting_frequency.replace('_', ' ')}</span>
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 pt-4 border-t border-slate-700">
+              <div className="flex items-center gap-2 pt-4 border-t border-slate-200">
                 <Link
                   href={`/governance/committees/${committee.id}`}
                   className="btn-primary flex-1 flex items-center justify-center gap-2 text-sm"
@@ -334,17 +334,17 @@ export default function CommitteesPage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-700">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Create New Committee</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
+              <h2 className="text-xl font-semibold text-slate-800">Create New Committee</h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Committee Name *</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Committee Name *</label>
                 <input
                   type="text"
                   value={formData.name}
@@ -355,7 +355,7 @@ export default function CommitteesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -365,7 +365,7 @@ export default function CommitteesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Committee Type *</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Committee Type *</label>
                 <select
                   value={formData.committee_type}
                   onChange={(e) => setFormData({ ...formData, committee_type: e.target.value })}
@@ -380,7 +380,7 @@ export default function CommitteesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Chair ID</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Chair ID</label>
                   <input
                     type="number"
                     value={formData.chair_id}
@@ -390,7 +390,7 @@ export default function CommitteesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Secretary ID</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Secretary ID</label>
                   <input
                     type="number"
                     value={formData.secretary_id}
@@ -402,7 +402,7 @@ export default function CommitteesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Meeting Frequency</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Meeting Frequency</label>
                 <select
                   value={formData.meeting_frequency}
                   onChange={(e) => setFormData({ ...formData, meeting_frequency: e.target.value })}

@@ -269,7 +269,7 @@ export default function ERMOverviewPage() {
           variant="danger"
           onClick={() => window.location.href = '/erm/risks'}
         />
-        <div className="rounded-xl border border-slate-700 bg-surface-800 p-4 hover:border-primary-500/50 hover:shadow-glow-sm transition-all">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-500/50 hover:shadow-glow-sm transition-all">
           <div className="flex items-center gap-4">
             <ProgressRing
               percentage={avgRiskScore.percentage}
@@ -280,12 +280,12 @@ export default function ERMOverviewPage() {
             />
             <div>
               <p className="text-sm font-medium text-slate-400">Avg Risk Score</p>
-              <p className="text-2xl font-bold text-white">{avgRiskScore.value.toFixed(1)}</p>
+              <p className="text-2xl font-bold text-slate-800">{avgRiskScore.value.toFixed(1)}</p>
               <p className="text-xs text-slate-500">out of 25</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-surface-800 p-4 hover:border-success-500/50 hover:shadow-[0_0_10px_-3px_rgba(34,197,94,0.3)] transition-all">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 hover:border-success-500/50 hover:shadow-[0_0_10px_-3px_rgba(34,197,94,0.3)] transition-all">
           <div className="flex items-center gap-4">
             <ProgressRing
               percentage={mitigationProgress.percentage}
@@ -295,7 +295,7 @@ export default function ERMOverviewPage() {
             />
             <div>
               <p className="text-sm font-medium text-slate-400">Mitigation Progress</p>
-              <p className="text-2xl font-bold text-white">{mitigationProgress.percentage}%</p>
+              <p className="text-2xl font-bold text-slate-800">{mitigationProgress.percentage}%</p>
               <p className="text-xs text-slate-500">{mitigationProgress.completed}/{mitigationProgress.total} complete</p>
             </div>
           </div>
@@ -315,7 +315,7 @@ export default function ERMOverviewPage() {
                 className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                   heatmapType === 'inherent'
                     ? 'bg-primary-500 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    : 'bg-slate-200 text-slate-600 hover:bg-slate-600'
                 }`}
               >
                 Inherent
@@ -325,7 +325,7 @@ export default function ERMOverviewPage() {
                 className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                   heatmapType === 'residual'
                     ? 'bg-primary-500 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    : 'bg-slate-200 text-slate-600 hover:bg-slate-600'
                 }`}
               >
                 Residual
@@ -360,14 +360,14 @@ export default function ERMOverviewPage() {
                           onMouseEnter={() => setHoveredCell({ likelihood, impact })}
                           onMouseLeave={() => setHoveredCell(null)}
                         >
-                          <span className={`font-bold ${cellData.count > 0 ? 'text-white text-lg' : 'text-white/50 text-sm'}`}>
+                          <span className={`font-bold ${cellData.count > 0 ? 'text-slate-800 text-lg' : 'text-slate-800/50 text-sm'}`}>
                             {cellData.count || '-'}
                           </span>
                           
                           {isHovered && cellData.count > 0 && (
                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 min-w-[200px] max-w-[280px]">
-                              <div className="bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-3">
-                                <div className="text-xs font-semibold text-white mb-2 border-b border-slate-600 pb-2">
+                              <div className="bg-white border border-slate-300 rounded-lg shadow-xl p-3">
+                                <div className="text-xs font-semibold text-slate-800 mb-2 border-b border-slate-300 pb-2">
                                   L{likelihood} × I{impact} = Score {likelihood * impact}
                                 </div>
                                 <div className="space-y-1.5 max-h-32 overflow-y-auto">
@@ -375,7 +375,7 @@ export default function ERMOverviewPage() {
                                     <Link
                                       key={risk.id}
                                       href={`/erm/risks`}
-                                      className="block text-xs text-slate-300 hover:text-primary-400 truncate"
+                                      className="block text-xs text-slate-600 hover:text-primary-400 truncate"
                                     >
                                       • {risk.title}
                                     </Link>
@@ -411,7 +411,7 @@ export default function ERMOverviewPage() {
               Likelihood →
             </div>
             
-            <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-slate-700">
+            <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-slate-200">
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-emerald-500" />
                 <span className="text-xs text-slate-400">Low (1-4)</span>
@@ -477,7 +477,7 @@ export default function ERMOverviewPage() {
                     kri.current_status === 'red' ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'
                   }`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{kri.name}</p>
+                    <p className="text-sm font-medium text-slate-800 truncate">{kri.name}</p>
                     <p className="text-xs text-slate-400">
                       {kri.current_value}{kri.unit || ''} / {kri.amber_threshold}
                     </p>
@@ -558,13 +558,13 @@ export default function ERMOverviewPage() {
             </div>
           )}
           
-          <div className="mt-4 pt-4 border-t border-slate-700">
+          <div className="mt-4 pt-4 border-t border-slate-200">
             <div className="flex flex-wrap gap-3">
               {categoryData.slice(0, 5).map((cat) => (
                 <div key={cat.category} className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded" style={{ backgroundColor: cat.color }} />
                   <span className="text-xs text-slate-400">
-                    {cat.label}: <span className="text-white font-medium">{cat.count}</span>
+                    {cat.label}: <span className="text-slate-800 font-medium">{cat.count}</span>
                   </span>
                 </div>
               ))}
@@ -586,9 +586,9 @@ export default function ERMOverviewPage() {
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-slate-400">Overall Progress</span>
-              <span className="text-sm font-medium text-white">{mitigationProgress.completed}/{mitigationProgress.total}</span>
+              <span className="text-sm font-medium text-slate-800">{mitigationProgress.completed}/{mitigationProgress.total}</span>
             </div>
-            <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-primary-500 to-primary-400 rounded-full transition-all duration-500"
                 style={{ width: `${mitigationProgress.percentage}%` }}
@@ -611,7 +611,7 @@ export default function ERMOverviewPage() {
                     <Clock className="h-4 w-4 text-rose-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{action.title}</p>
+                    <p className="text-sm font-medium text-slate-800 truncate">{action.title}</p>
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                       {action.owner_name && (
                         <span className="flex items-center gap-1">
@@ -660,12 +660,12 @@ export default function ERMOverviewPage() {
               {recentIncidents.map((incident: any) => (
                 <div
                   key={incident.id}
-                  className="flex items-center gap-3 rounded-lg border border-slate-700/50 bg-slate-800/30 p-3 hover:border-slate-600 hover:bg-slate-800/50 transition-all"
+                  className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white/30 p-3 hover:border-slate-300 hover:bg-white/50 transition-all"
                 >
                   <div className={`rounded-lg p-2 ${
                     incident.severity === 'critical' ? 'bg-rose-500/20' :
                     incident.severity === 'high' ? 'bg-orange-500/20' :
-                    incident.severity === 'medium' ? 'bg-amber-500/20' : 'bg-slate-700/50'
+                    incident.severity === 'medium' ? 'bg-amber-500/20' : 'bg-slate-200/50'
                   }`}>
                     <AlertCircle className={`h-4 w-4 ${
                       incident.severity === 'critical' ? 'text-rose-400' :
@@ -674,7 +674,7 @@ export default function ERMOverviewPage() {
                     }`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{incident.title}</p>
+                    <p className="text-sm font-medium text-slate-800 truncate">{incident.title}</p>
                     <p className="text-xs text-slate-400">
                       {new Date(incident.incident_date).toLocaleDateString()}
                       {incident.risk_title && ` • ${incident.risk_title}`}
@@ -721,12 +721,12 @@ export default function ERMOverviewPage() {
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2">
                       <div className={`w-3 h-3 rounded bg-${item.color}-500`} />
-                      <span className="text-sm text-slate-300">{item.label}</span>
+                      <span className="text-sm text-slate-600">{item.label}</span>
                       <span className="text-xs text-slate-500">({item.range})</span>
                     </div>
-                    <span className="text-sm font-semibold text-white">{item.count}</span>
+                    <span className="text-sm font-semibold text-slate-800">{item.count}</span>
                   </div>
-                  <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                     <div
                       className={`h-full bg-${item.color}-500 rounded-full transition-all duration-500`}
                       style={{ width: `${percentage}%` }}
@@ -737,14 +737,14 @@ export default function ERMOverviewPage() {
             })}
           </div>
           
-          <div className="mt-6 pt-4 border-t border-slate-700">
+          <div className="mt-6 pt-4 border-t border-slate-200">
             <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-3 rounded-lg bg-slate-800/50">
-                <p className="text-2xl font-bold text-white">{dashboard?.avg_inherent_score?.toFixed(1) || '0.0'}</p>
+              <div className="text-center p-3 rounded-lg bg-white/50">
+                <p className="text-2xl font-bold text-slate-800">{dashboard?.avg_inherent_score?.toFixed(1) || '0.0'}</p>
                 <p className="text-xs text-slate-400">Avg Inherent Score</p>
               </div>
-              <div className="text-center p-3 rounded-lg bg-slate-800/50">
-                <p className="text-2xl font-bold text-white">{dashboard?.avg_residual_score?.toFixed(1) || '0.0'}</p>
+              <div className="text-center p-3 rounded-lg bg-white/50">
+                <p className="text-2xl font-bold text-slate-800">{dashboard?.avg_residual_score?.toFixed(1) || '0.0'}</p>
                 <p className="text-xs text-slate-400">Avg Residual Score</p>
               </div>
             </div>
@@ -762,7 +762,7 @@ export default function ERMOverviewPage() {
               <AlertTriangle className="h-5 w-5 text-primary-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-white group-hover:text-primary-300 transition-colors truncate">Risk Register</p>
+              <p className="font-semibold text-slate-800 group-hover:text-primary-300 transition-colors truncate">Risk Register</p>
               <p className="text-xs text-slate-400">Manage all risks</p>
             </div>
             <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-primary-400 transition-colors" />
@@ -778,7 +778,7 @@ export default function ERMOverviewPage() {
               <Activity className="h-5 w-5 text-cyan-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-white group-hover:text-cyan-300 transition-colors truncate">KRIs</p>
+              <p className="font-semibold text-slate-800 group-hover:text-cyan-300 transition-colors truncate">KRIs</p>
               <p className="text-xs text-slate-400">Monitor indicators</p>
             </div>
             <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-cyan-400 transition-colors" />
@@ -794,7 +794,7 @@ export default function ERMOverviewPage() {
               <Target className="h-5 w-5 text-emerald-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-white group-hover:text-emerald-300 transition-colors truncate">Mitigations</p>
+              <p className="font-semibold text-slate-800 group-hover:text-emerald-300 transition-colors truncate">Mitigations</p>
               <p className="text-xs text-slate-400">Track actions</p>
             </div>
             <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-emerald-400 transition-colors" />
@@ -803,17 +803,17 @@ export default function ERMOverviewPage() {
 
         <Link
           href="/erm/reports"
-          className="card group hover:border-purple-500/30 transition-all duration-200"
+          className="card group hover:border-primary-500/30 transition-all duration-200"
         >
           <div className="flex items-center gap-4">
             <div className="rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-3 group-hover:from-purple-500/30 group-hover:to-purple-600/20 transition-all">
-              <BarChart3 className="h-5 w-5 text-purple-400" />
+              <BarChart3 className="h-5 w-5 text-primary-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-white group-hover:text-purple-300 transition-colors truncate">Reports</p>
+              <p className="font-semibold text-slate-800 group-hover:text-primary-500 transition-colors truncate">Reports</p>
               <p className="text-xs text-slate-400">Analytics</p>
             </div>
-            <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-purple-400 transition-colors" />
+            <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-primary-600 transition-colors" />
           </div>
         </Link>
       </div>

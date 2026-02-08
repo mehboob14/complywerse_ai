@@ -122,13 +122,13 @@ export default function SLAConfigPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">SLA Configuration</h1>
+        <h1 className="text-2xl font-bold text-slate-800">SLA Configuration</h1>
         <p className="mt-1 text-slate-400">Configure remediation SLA timeframes by severity</p>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <table className="w-full">
-          <thead className="bg-slate-900/50">
+          <thead className="bg-slate-50/50">
             <tr>
               <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Severity
@@ -154,7 +154,7 @@ export default function SLAConfigPage() {
               const isEditing = editingId === config?.id;
 
               return (
-                <tr key={severity} className="hover:bg-slate-700/50 transition-colors">
+                <tr key={severity} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${style.bg} ${style.text} capitalize`}>
                       {severity}
@@ -171,7 +171,7 @@ export default function SLAConfigPage() {
                           min="1"
                         />
                       ) : (
-                        <span className="text-white font-medium">{config.remediation_days} days</span>
+                        <span className="text-slate-800 font-medium">{config.remediation_days} days</span>
                       )
                     ) : (
                       <span className="text-slate-500">Not configured</span>
@@ -189,7 +189,7 @@ export default function SLAConfigPage() {
                           placeholder="Days before"
                         />
                       ) : (
-                        <span className="text-slate-300">
+                        <span className="text-slate-600">
                           {config.notification_days ? `${config.notification_days} days before` : '-'}
                         </span>
                       )
@@ -209,7 +209,7 @@ export default function SLAConfigPage() {
                           placeholder="Days after"
                         />
                       ) : (
-                        <span className="text-slate-300">
+                        <span className="text-slate-600">
                           {config.escalation_days ? `${config.escalation_days} days after` : '-'}
                         </span>
                       )
@@ -224,14 +224,14 @@ export default function SLAConfigPage() {
                           <button
                             onClick={handleSave}
                             disabled={updateMutation.isPending}
-                            className="p-1.5 rounded-lg text-green-400 hover:bg-slate-700 transition-colors"
+                            className="p-1.5 rounded-lg text-green-400 hover:bg-slate-200 transition-colors"
                             title="Save"
                           >
                             <Save size={16} />
                           </button>
                           <button
                             onClick={handleCancel}
-                            className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-700 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-200 transition-colors"
                             title="Cancel"
                           >
                             <X size={16} />
@@ -240,7 +240,7 @@ export default function SLAConfigPage() {
                       ) : (
                         <button
                           onClick={() => handleEdit(config)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-primary-400 hover:bg-slate-700 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-primary-400 hover:bg-slate-200 transition-colors"
                           title="Edit"
                         >
                           <Edit2 size={16} />
@@ -263,26 +263,26 @@ export default function SLAConfigPage() {
         </table>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800 p-6">
-        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
           <Clock className="h-5 w-5 text-primary-400" />
           SLA Guidelines
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="p-4 rounded-lg bg-slate-700/50">
-            <h3 className="font-medium text-white mb-2">Remediation Days</h3>
+          <div className="p-4 rounded-lg bg-slate-200/50">
+            <h3 className="font-medium text-slate-800 mb-2">Remediation Days</h3>
             <p className="text-sm text-slate-400">
               Maximum time allowed to remediate vulnerabilities of this severity before they are considered overdue.
             </p>
           </div>
-          <div className="p-4 rounded-lg bg-slate-700/50">
-            <h3 className="font-medium text-white mb-2">Notification Days</h3>
+          <div className="p-4 rounded-lg bg-slate-200/50">
+            <h3 className="font-medium text-slate-800 mb-2">Notification Days</h3>
             <p className="text-sm text-slate-400">
               Number of days before the due date to send reminder notifications to assignees.
             </p>
           </div>
-          <div className="p-4 rounded-lg bg-slate-700/50">
-            <h3 className="font-medium text-white mb-2">Escalation Days</h3>
+          <div className="p-4 rounded-lg bg-slate-200/50">
+            <h3 className="font-medium text-slate-800 mb-2">Escalation Days</h3>
             <p className="text-sm text-slate-400">
               Number of days after the due date to escalate overdue vulnerabilities to management.
             </p>

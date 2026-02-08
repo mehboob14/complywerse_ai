@@ -26,7 +26,7 @@ type CategoryFilter = 'all' | 'policies' | 'procedures' | 'standards' | 'guideli
 const CATEGORIES = [
   { value: 'policies', label: 'Policies', color: 'bg-blue-500' },
   { value: 'procedures', label: 'Procedures', color: 'bg-green-500' },
-  { value: 'standards', label: 'Standards', color: 'bg-purple-500' },
+  { value: 'standards', label: 'Standards', color: 'bg-primary-500' },
   { value: 'guidelines', label: 'Guidelines', color: 'bg-orange-500' },
 ];
 
@@ -70,13 +70,13 @@ export default function DocumentsPage() {
         );
       case 'archived':
         return (
-          <span className="flex items-center gap-1 rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-400">
+          <span className="flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-400">
             <XCircle size={12} /> Archived
           </span>
         );
       default:
         return (
-          <span className="flex items-center gap-1 rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-400">
+          <span className="flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-400">
             <FileText size={12} /> Draft
           </span>
         );
@@ -86,7 +86,7 @@ export default function DocumentsPage() {
   const getCategoryBadge = (docType: string) => {
     const category = CATEGORIES.find(c => c.value === docType);
     return (
-      <span className={`rounded px-2 py-0.5 text-xs text-white ${category?.color || 'bg-slate-600'}`}>
+      <span className={`rounded px-2 py-0.5 text-xs text-slate-800 ${category?.color || 'bg-slate-600'}`}>
         {category?.label || docType || 'Other'}
       </span>
     );
@@ -124,7 +124,7 @@ export default function DocumentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Document Library</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Document Library</h1>
           <p className="text-slate-400">Manage policies, procedures, and documentation</p>
         </div>
         <button
@@ -144,7 +144,7 @@ export default function DocumentsPage() {
             placeholder="Search documents..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
 
@@ -153,7 +153,7 @@ export default function DocumentsPage() {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
-            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Categories</option>
             {CATEGORIES.map(cat => (
@@ -167,7 +167,7 @@ export default function DocumentsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Status</option>
             <option value="draft">Draft</option>
@@ -178,25 +178,25 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-700">
+      <div className="overflow-hidden rounded-lg border border-slate-200">
         <table className="w-full">
-          <thead className="bg-slate-800">
+          <thead className="bg-white">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Document</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 md:table-cell">Category</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 lg:table-cell">Versions</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Status</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-slate-300">Actions</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Document</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 md:table-cell">Category</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 lg:table-cell">Versions</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700">
             {filteredDocuments?.map((doc: Document) => (
-              <tr key={doc.id} className="bg-slate-800/50 hover:bg-slate-700/50">
+              <tr key={doc.id} className="bg-white/50 hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <FileText className="h-5 w-5 text-primary-400" />
                     <div>
-                      <p className="font-medium text-white">{doc.title}</p>
+                      <p className="font-medium text-slate-800">{doc.title}</p>
                       <p className="text-sm text-slate-400 line-clamp-1">{doc.description}</p>
                     </div>
                   </div>
@@ -215,7 +215,7 @@ export default function DocumentsPage() {
                 </td>
                 <td className="px-4 py-3">{getStatusBadge(doc.status)}</td>
                 <td className="px-4 py-3 text-right">
-                  <button className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white">
+                  <button className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-900">
                     <Download size={18} />
                   </button>
                 </td>
@@ -228,7 +228,7 @@ export default function DocumentsPage() {
       {(!filteredDocuments || filteredDocuments.length === 0) && (
         <div className="card flex flex-col items-center justify-center py-12 text-center">
           <FileText className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-white">No documents found</h3>
+          <h3 className="text-lg font-medium text-slate-800">No documents found</h3>
           <p className="mt-1 text-slate-400">Upload your first document to get started</p>
         </div>
       )}
@@ -279,42 +279,42 @@ function UploadModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-lg bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-lg bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Upload Document</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">Upload Document</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300">Title</label>
+            <label className="block text-sm font-medium text-slate-600">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300">Description</label>
+            <label className="block text-sm font-medium text-slate-600">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
               rows={3}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300">Category</label>
+            <label className="block text-sm font-medium text-slate-600">Category</label>
             <select
               value={documentType}
               onChange={(e) => setDocumentType(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               {CATEGORIES.map(cat => (
                 <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -323,8 +323,8 @@ function UploadModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300">File</label>
-            <div className="mt-1 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-600 p-6">
+            <label className="block text-sm font-medium text-slate-600">File</label>
+            <div className="mt-1 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-300 p-6">
               <div className="text-center">
                 <Upload className="mx-auto h-8 w-8 text-slate-400" />
                 <label className="mt-2 block cursor-pointer text-sm text-primary-400 hover:text-primary-300">
@@ -344,7 +344,7 @@ function UploadModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-200"
             >
               Cancel
             </button>
@@ -372,10 +372,10 @@ function VersionHistoryModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-lg bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-lg bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Version History</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-lg font-semibold text-slate-800">Version History</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -385,16 +385,16 @@ function VersionHistoryModal({
             document.versions.map((version) => (
               <div 
                 key={version.id}
-                className="flex items-center justify-between rounded-lg bg-slate-700/50 p-3"
+                className="flex items-center justify-between rounded-lg bg-slate-200/50 p-3"
               >
                 <div>
-                  <p className="font-medium text-white">v{version.version_number}</p>
+                  <p className="font-medium text-slate-800">v{version.version_number}</p>
                   <p className="text-sm text-slate-400">{version.changes_summary || 'No changes noted'}</p>
                   <p className="text-xs text-slate-500">
                     {new Date(version.created_at).toLocaleString()}
                   </p>
                 </div>
-                <button className="rounded p-1 text-slate-400 hover:bg-slate-600 hover:text-white">
+                <button className="rounded p-1 text-slate-400 hover:bg-slate-600 hover:text-slate-900">
                   <Download size={16} />
                 </button>
               </div>
@@ -407,7 +407,7 @@ function VersionHistoryModal({
         <div className="mt-4 flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-200"
           >
             Close
           </button>

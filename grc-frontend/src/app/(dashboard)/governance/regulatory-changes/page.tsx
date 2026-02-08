@@ -81,7 +81,7 @@ const PRIORITY_OPTIONS = [
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
   identified: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: FileText },
   under_assessment: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: Clock },
-  implementation: { bg: 'bg-purple-500/20', text: 'text-purple-400', icon: AlertCircle },
+  implementation: { bg: 'bg-primary-500/20', text: 'text-primary-600', icon: AlertCircle },
   completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
   not_applicable: { bg: 'bg-slate-500/20', text: 'text-slate-400', icon: FileText },
 };
@@ -224,7 +224,7 @@ export default function RegulatoryChangesPage() {
       name: 'In Implementation',
       value: dashboard?.by_status?.implementation || 0,
       icon: AlertCircle,
-      iconColor: 'text-purple-400',
+      iconColor: 'text-primary-600',
       bgColor: 'from-purple-500/20 to-purple-600/10',
     },
     {
@@ -245,7 +245,7 @@ export default function RegulatoryChangesPage() {
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-xl border border-slate-700 bg-slate-800 p-5">
+            <div key={i} className="rounded-xl border border-slate-200 bg-white p-5">
               <div className="skeleton h-12 w-12 rounded-xl mb-4" />
               <div className="skeleton h-8 w-20 mb-2" />
               <div className="skeleton h-4 w-32" />
@@ -260,7 +260,7 @@ export default function RegulatoryChangesPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Regulatory Change Management</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Regulatory Change Management</h1>
           <p className="text-slate-400 mt-1">Track and manage regulatory changes and their implementation</p>
         </div>
         <button
@@ -276,21 +276,21 @@ export default function RegulatoryChangesPage() {
         {stats.map((stat) => (
           <div
             key={stat.name}
-            className="rounded-xl border border-slate-700 bg-slate-800 p-5"
+            className="rounded-xl border border-slate-200 bg-white p-5"
           >
             <div className="flex items-start justify-between mb-4">
               <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${stat.bgColor}`}>
                 <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
               </div>
             </div>
-            <p className="text-3xl font-bold text-white">{stat.value}</p>
+            <p className="text-3xl font-bold text-slate-800">{stat.value}</p>
             <p className="text-sm text-slate-400 mt-1">{stat.name}</p>
           </div>
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800">
-        <div className="flex flex-col gap-4 border-b border-slate-700 p-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-col gap-4 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
             <input
@@ -298,7 +298,7 @@ export default function RegulatoryChangesPage() {
               placeholder="Search changes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 pl-10 pr-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 pl-10 pr-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
           </div>
 
@@ -307,7 +307,7 @@ export default function RegulatoryChangesPage() {
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               {SOURCE_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -316,7 +316,7 @@ export default function RegulatoryChangesPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               {STATUS_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -325,7 +325,7 @@ export default function RegulatoryChangesPage() {
             <select
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none"
             >
               {PRIORITY_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -343,7 +343,7 @@ export default function RegulatoryChangesPage() {
             </div>
           ) : (
             <table className="w-full">
-              <thead className="bg-slate-900/50">
+              <thead className="bg-slate-50/50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Change</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">Source</th>
@@ -361,14 +361,14 @@ export default function RegulatoryChangesPage() {
                   const StatusIcon = statusStyle.icon;
 
                   return (
-                    <tr key={change.id} className="hover:bg-slate-700/50 transition-colors">
+                    <tr key={change.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-4">
                         <div className="flex items-start gap-3">
                           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary-500/20">
                             <FileWarning className="h-5 w-5 text-primary-400" />
                           </div>
                           <div className="min-w-0">
-                            <Link href={`/governance/regulatory-changes/${change.id}`} className="font-medium text-white hover:text-primary-400">
+                            <Link href={`/governance/regulatory-changes/${change.id}`} className="font-medium text-slate-800 hover:text-primary-400">
                               {change.title}
                             </Link>
                             {change.reference_number && (
@@ -380,7 +380,7 @@ export default function RegulatoryChangesPage() {
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
                           <Building2 className="h-4 w-4 text-slate-400" />
-                          <span className="text-sm text-slate-300">{change.source}</span>
+                          <span className="text-sm text-slate-600">{change.source}</span>
                         </div>
                       </td>
                       <td className="px-4 py-4">
@@ -394,7 +394,7 @@ export default function RegulatoryChangesPage() {
                           {change.priority}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-300">
+                      <td className="px-4 py-4 text-sm text-slate-600">
                         {change.effective_date ? new Date(change.effective_date).toLocaleDateString() : '-'}
                       </td>
                       <td className="px-4 py-4">
@@ -411,7 +411,7 @@ export default function RegulatoryChangesPage() {
                         <div className="flex items-center gap-2">
                           <Link
                             href={`/governance/regulatory-changes/${change.id}`}
-                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
                             title="View details"
                           >
                             <Eye className="h-4 w-4" />
@@ -437,12 +437,12 @@ export default function RegulatoryChangesPage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">New Regulatory Change</h2>
+              <h2 className="text-xl font-semibold text-slate-800">New Regulatory Change</h2>
               <button
                 onClick={() => { setIsModalOpen(false); resetForm(); }}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -450,24 +450,24 @@ export default function RegulatoryChangesPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Title *</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Title *</label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   required
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                   placeholder="Enter change title"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Source *</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Source *</label>
                   <select
                     value={formData.source}
                     onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
                   >
                     {SOURCE_OPTIONS.filter(o => o.value).map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -475,11 +475,11 @@ export default function RegulatoryChangesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Priority *</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Priority *</label>
                   <select
                     value={formData.priority}
                     onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
                   >
                     {PRIORITY_OPTIONS.filter(o => o.value).map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -490,22 +490,22 @@ export default function RegulatoryChangesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Regulatory Body</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Regulatory Body</label>
                   <input
                     type="text"
                     value={formData.regulatory_body}
                     onChange={(e) => setFormData({ ...formData, regulatory_body: e.target.value })}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                     placeholder="e.g., Federal Reserve"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Reference Number</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Reference Number</label>
                   <input
                     type="text"
                     value={formData.reference_number}
                     onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                     placeholder="e.g., REG-2025-001"
                   />
                 </div>
@@ -513,52 +513,52 @@ export default function RegulatoryChangesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Publication Date</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Publication Date</label>
                   <input
                     type="date"
                     value={formData.publication_date}
                     onChange={(e) => setFormData({ ...formData, publication_date: e.target.value })}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Effective Date</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Effective Date</label>
                   <input
                     type="date"
                     value={formData.effective_date}
                     onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-slate-800 focus:border-primary-500 focus:outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
                   placeholder="Describe the regulatory change..."
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Impact Summary</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Impact Summary</label>
                 <textarea
                   value={formData.impact_summary}
                   onChange={(e) => setFormData({ ...formData, impact_summary: e.target.value })}
                   rows={2}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
                   placeholder="Summarize the potential impact..."
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-700">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => { setIsModalOpen(false); resetForm(); }}
-                  className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors"
+                  className="rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600 transition-colors"
                 >
                   Cancel
                 </button>

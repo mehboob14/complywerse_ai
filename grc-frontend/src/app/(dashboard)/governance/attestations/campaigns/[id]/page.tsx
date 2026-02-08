@@ -65,7 +65,7 @@ const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string; icon: Re
   pending: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
   completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
   overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
-  escalated: { bg: 'bg-purple-500/20', text: 'text-purple-400', icon: AlertTriangle },
+  escalated: { bg: 'bg-primary-500/20', text: 'text-primary-600', icon: AlertTriangle },
 };
 
 export default function CampaignDetailPage() {
@@ -156,13 +156,13 @@ export default function CampaignDetailPage() {
   if (error || !campaign) {
     return (
       <div className="space-y-8">
-        <Link href="/governance/attestations/campaigns" className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+        <Link href="/governance/attestations/campaigns" className="inline-flex items-center gap-2 text-slate-400 hover:text-slate-900 transition-colors">
           <ArrowLeft className="h-4 w-4" />
           Back to Campaigns
         </Link>
         <div className="card p-12 text-center">
           <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-white mb-2">Campaign Not Found</h2>
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">Campaign Not Found</h2>
           <p className="text-slate-400 mb-6">The campaign you're looking for doesn't exist or you don't have access to it.</p>
           <Link href="/governance/attestations/campaigns" className="btn-primary inline-flex items-center gap-2">
             <ArrowLeft className="h-4 w-4" />
@@ -181,12 +181,12 @@ export default function CampaignDetailPage() {
     <div className="space-y-8">
       <div className="page-header">
         <div className="flex items-center gap-4 mb-4">
-          <Link href="/governance/attestations/campaigns" className="text-slate-400 hover:text-white">
+          <Link href="/governance/attestations/campaigns" className="text-slate-400 hover:text-slate-900">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-white">{campaign.name}</h1>
+              <h1 className="text-2xl font-semibold text-slate-800">{campaign.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
                 {campaign.status}
               </span>
@@ -228,17 +228,17 @@ export default function CampaignDetailPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
           <div className="card p-4">
             <p className="text-slate-400 text-sm">Type</p>
-            <p className="text-white font-medium capitalize">{campaign.attestation_type.replace('_', ' ')}</p>
+            <p className="text-slate-800 font-medium capitalize">{campaign.attestation_type.replace('_', ' ')}</p>
           </div>
           <div className="card p-4">
             <p className="text-slate-400 text-sm">Duration</p>
-            <p className="text-white font-medium text-sm">
+            <p className="text-slate-800 font-medium text-sm">
               {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-slate-400 text-sm">Total Requests</p>
-            <p className="text-white font-medium">{campaign.total_requests}</p>
+            <p className="text-slate-800 font-medium">{campaign.total_requests}</p>
           </div>
           <div className="card p-4">
             <p className="text-slate-400 text-sm">Completed</p>
@@ -251,13 +251,13 @@ export default function CampaignDetailPage() {
           <div className="card p-4">
             <p className="text-slate-400 text-sm">Progress</p>
             <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary-500 rounded-full"
                   style={{ width: `${campaign.progress}%` }}
                 />
               </div>
-              <span className="text-white font-medium text-sm">{campaign.progress}%</span>
+              <span className="text-slate-800 font-medium text-sm">{campaign.progress}%</span>
             </div>
           </div>
         </div>
@@ -265,13 +265,13 @@ export default function CampaignDetailPage() {
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-white flex items-center gap-2">
+          <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
             <FileCheck className="h-5 w-5 text-primary-400" />
             Attestation Statement
           </h3>
         </div>
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-          <p className="text-slate-300">{campaign.attestation_text}</p>
+        <div className="bg-white/50 rounded-lg p-4 border border-slate-200">
+          <p className="text-slate-600">{campaign.attestation_text}</p>
         </div>
         {campaign.requires_evidence && (
           <p className="text-sm text-amber-400 mt-2 flex items-center gap-1.5">
@@ -283,7 +283,7 @@ export default function CampaignDetailPage() {
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-white flex items-center gap-2">
+          <h3 className="text-lg font-medium text-slate-800 flex items-center gap-2">
             <Users className="h-5 w-5 text-primary-400" />
             Attestation Requests ({filteredRequests.length})
           </h3>
@@ -314,13 +314,13 @@ export default function CampaignDetailPage() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-700">
+              <tr className="border-b border-slate-200">
                 <th className="text-left py-3 px-4">
                   <input
                     type="checkbox"
                     checked={selectedRequests.length === filteredRequests.length && filteredRequests.length > 0}
                     onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                    className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
                   />
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">User</th>
@@ -337,20 +337,20 @@ export default function CampaignDetailPage() {
                 const StatusIcon = rstyle.icon;
 
                 return (
-                  <tr key={request.id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                  <tr key={request.id} className="border-b border-slate-200 hover:bg-white/50">
                     <td className="py-3 px-4">
                       <input
                         type="checkbox"
                         checked={selectedRequests.includes(request.id)}
                         onChange={(e) => handleSelectRequest(request.id, e.target.checked)}
-                        className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                        className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
                       />
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-slate-400" />
                         <div>
-                          <p className="text-white font-medium">{request.user_name}</p>
+                          <p className="text-slate-800 font-medium">{request.user_name}</p>
                           <p className="text-xs text-slate-500">{request.user_email}</p>
                         </div>
                       </div>
@@ -410,7 +410,7 @@ export default function CampaignDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-medium text-slate-800 mb-4 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-primary-400" />
             Status Summary
           </h3>
@@ -422,7 +422,7 @@ export default function CampaignDetailPage() {
                 <div key={status} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <StatusIcon className={`h-4 w-4 ${style.text}`} />
-                    <span className="text-slate-300 capitalize">{status}</span>
+                    <span className="text-slate-600 capitalize">{status}</span>
                   </div>
                   <span className={`font-medium ${style.text}`}>{count}</span>
                 </div>
@@ -432,18 +432,18 @@ export default function CampaignDetailPage() {
         </div>
 
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-medium text-slate-800 mb-4 flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-amber-400" />
             Pending Actions
           </h3>
           {pendingRequests.length > 0 ? (
             <div className="space-y-3">
               {pendingRequests.slice(0, 5).map((request) => (
-                <div key={request.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                <div key={request.id} className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
                   <div className="flex items-center gap-3">
                     <User className="h-4 w-4 text-slate-400" />
                     <div>
-                      <p className="text-white text-sm">{request.user_name}</p>
+                      <p className="text-slate-800 text-sm">{request.user_name}</p>
                       <p className="text-xs text-slate-500">{request.department}</p>
                     </div>
                   </div>

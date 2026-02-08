@@ -71,7 +71,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   remediated: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Remediated' },
   verified: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Verified' },
   closed: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Closed' },
-  accepted: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Risk Accepted' },
+  accepted: { bg: 'bg-primary-500/20', text: 'text-primary-600', label: 'Risk Accepted' },
   false_positive: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'False Positive' },
 };
 
@@ -204,18 +204,18 @@ export default function VulnerabilitiesPage() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-5">
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/20 p-2">
               <Bug className="h-5 w-5 text-blue-400" />
             </div>
             <div>
               <p className="text-sm text-slate-400">Total</p>
-              <p className="text-2xl font-bold text-white">{dashboard?.total || 0}</p>
+              <p className="text-2xl font-bold text-slate-800">{dashboard?.total || 0}</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-red-500/20 p-2">
               <AlertCircle className="h-5 w-5 text-red-400" />
@@ -226,7 +226,7 @@ export default function VulnerabilitiesPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-orange-500/20 p-2">
               <AlertCircle className="h-5 w-5 text-orange-400" />
@@ -237,7 +237,7 @@ export default function VulnerabilitiesPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-yellow-500/20 p-2">
               <AlertCircle className="h-5 w-5 text-yellow-400" />
@@ -248,7 +248,7 @@ export default function VulnerabilitiesPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/20 p-2">
               <Bug className="h-5 w-5 text-green-400" />
@@ -263,7 +263,7 @@ export default function VulnerabilitiesPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Vulnerability Register</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Vulnerability Register</h1>
           <p className="mt-1 text-slate-400">Track and manage security vulnerabilities</p>
         </div>
         <div className="flex items-center gap-3">
@@ -324,16 +324,16 @@ export default function VulnerabilitiesPage() {
         </select>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <table className="w-full">
-          <thead className="bg-slate-900/50">
+          <thead className="bg-slate-50/50">
             <tr>
               <th className="px-4 py-3 text-left">
                 <input
                   type="checkbox"
                   checked={filteredVulnerabilities.length > 0 && selectedVulnIds.size === filteredVulnerabilities.length}
                   onChange={handleSelectAll}
-                  className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                  className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
                 />
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">ID</th>
@@ -358,18 +358,18 @@ export default function VulnerabilitiesPage() {
                 const severityStyle = getSeverityStyle(vuln.severity);
                 const statusStyle = getStatusStyle(vuln.status);
                 return (
-                  <tr key={vuln.id} className={`hover:bg-slate-700/50 transition-colors ${selectedVulnIds.has(vuln.id) ? 'bg-primary-500/10' : ''}`}>
+                  <tr key={vuln.id} className={`hover:bg-slate-50 transition-colors ${selectedVulnIds.has(vuln.id) ? 'bg-primary-500/10' : ''}`}>
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
                         checked={selectedVulnIds.has(vuln.id)}
                         onChange={() => handleSelectVuln(vuln.id)}
-                        className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                        className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
                       />
                     </td>
-                    <td className="px-4 py-3 text-sm font-mono text-slate-300">VULN-{vuln.id}</td>
+                    <td className="px-4 py-3 text-sm font-mono text-slate-600">VULN-{vuln.id}</td>
                     <td className="px-4 py-3">
-                      <Link href={`/vulnerabilities/${vuln.id}`} className="text-white hover:text-primary-400 font-medium">
+                      <Link href={`/vulnerabilities/${vuln.id}`} className="text-slate-800 hover:text-primary-400 font-medium">
                         {vuln.title}
                       </Link>
                       {vuln.affected_component && (
@@ -389,7 +389,7 @@ export default function VulnerabilitiesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-sm">
-                        {vuln.cve_id && <span className="text-slate-300">{vuln.cve_id}</span>}
+                        {vuln.cve_id && <span className="text-slate-600">{vuln.cve_id}</span>}
                         {vuln.cve_id && vuln.cwe_id && <span className="text-slate-500"> / </span>}
                         {vuln.cwe_id && <span className="text-slate-400">{vuln.cwe_id}</span>}
                         {!vuln.cve_id && !vuln.cwe_id && <span className="text-slate-500">-</span>}
@@ -397,7 +397,7 @@ export default function VulnerabilitiesPage() {
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {vuln.due_date ? (
-                        <div className="flex items-center gap-1.5 text-slate-300">
+                        <div className="flex items-center gap-1.5 text-slate-600">
                           <Calendar size={14} className="text-slate-400" />
                           {new Date(vuln.due_date).toLocaleDateString()}
                         </div>
@@ -407,7 +407,7 @@ export default function VulnerabilitiesPage() {
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {vuln.assigned_user_name ? (
-                        <div className="flex items-center gap-1.5 text-slate-300">
+                        <div className="flex items-center gap-1.5 text-slate-600">
                           <User size={14} className="text-slate-400" />
                           {vuln.assigned_user_name}
                         </div>
@@ -430,10 +430,10 @@ export default function VulnerabilitiesPage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white">Add Vulnerability</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
+              <h2 className="text-xl font-bold text-slate-800">Add Vulnerability</h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
@@ -445,16 +445,16 @@ export default function VulnerabilitiesPage() {
               className="space-y-4"
             >
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Title *</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Title *</label>
                 <input type="text" name="title" required className="input-field w-full" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
                 <textarea name="description" rows={3} className="input-field w-full" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Severity *</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Severity *</label>
                   <select name="severity" required className="input-field w-full">
                     <option value="critical">Critical</option>
                     <option value="high">High</option>
@@ -464,32 +464,32 @@ export default function VulnerabilitiesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">CVSS Score</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">CVSS Score</label>
                   <input type="number" name="cvss_score" step="0.1" min="0" max="10" className="input-field w-full" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">CVE ID</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">CVE ID</label>
                   <input type="text" name="cve_id" placeholder="CVE-2024-XXXX" className="input-field w-full" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">CWE ID</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">CWE ID</label>
                   <input type="text" name="cwe_id" placeholder="CWE-XXX" className="input-field w-full" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Affected Component</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Affected Component</label>
                   <input type="text" name="affected_component" className="input-field w-full" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Affected Host</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Affected Host</label>
                   <input type="text" name="affected_host" className="input-field w-full" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Due Date</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Due Date</label>
                 <input type="date" name="due_date" className="input-field w-full" />
               </div>
               <div className="flex justify-end gap-3 pt-4">
@@ -507,10 +507,10 @@ export default function VulnerabilitiesPage() {
 
       {showBulkAssignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white">Bulk Assign to Department</h2>
-              <button onClick={() => setShowBulkAssignModal(false)} className="text-slate-400 hover:text-white">
+              <h2 className="text-xl font-bold text-slate-800">Bulk Assign to Department</h2>
+              <button onClick={() => setShowBulkAssignModal(false)} className="text-slate-400 hover:text-slate-900">
                 <X size={20} />
               </button>
             </div>
@@ -531,7 +531,7 @@ export default function VulnerabilitiesPage() {
               className="space-y-4"
             >
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Department *</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Department *</label>
                 <select name="department_id" required className="input-field w-full">
                   <option value="">Select a department</option>
                   {departments?.map((dept) => (
@@ -540,7 +540,7 @@ export default function VulnerabilitiesPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Priority</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Priority</label>
                 <select name="priority" className="input-field w-full" defaultValue="medium">
                   <option value="high">High</option>
                   <option value="medium">Medium</option>
@@ -548,7 +548,7 @@ export default function VulnerabilitiesPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Notes</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Notes</label>
                 <textarea name="notes" rows={2} className="input-field w-full" placeholder="Optional notes for the assignment..." />
               </div>
               <div className="flex justify-end gap-3 pt-2">

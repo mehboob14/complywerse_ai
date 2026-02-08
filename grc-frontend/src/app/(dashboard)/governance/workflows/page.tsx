@@ -71,7 +71,7 @@ interface StepApprover {
 const DOC_TYPE_STYLES: Record<string, { label: string; color: string; bgColor: string }> = {
   policy: { label: 'Policy', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
   procedure: { label: 'Procedure', color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  standard: { label: 'Standard', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  standard: { label: 'Standard', color: 'text-primary-600', bgColor: 'bg-primary-500/20' },
   guideline: { label: 'Guideline', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
   template: { label: 'Template', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
   other: { label: 'Other', color: 'text-slate-400', bgColor: 'bg-slate-500/20' },
@@ -147,31 +147,31 @@ function ApprovalModal({ isOpen, onClose, onConfirm, title, actionType, isLoadin
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">
+          <h3 className="text-lg font-semibold text-slate-800">
             {actionType === 'approve' ? 'Approve Document' : 'Reject Document'}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
-        <p className="mb-4 text-sm text-slate-300">
+        <p className="mb-4 text-sm text-slate-600">
           {actionType === 'approve'
             ? `You are about to approve "${title}".`
             : `You are about to reject "${title}". Please provide a reason.`}
         </p>
 
         <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-slate-300">
+          <label className="mb-1 block text-sm font-medium text-slate-600">
             Comments {actionType === 'reject' && <span className="text-red-400">*</span>}
           </label>
           <textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}
             placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
-            className="h-24 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="h-24 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
           {actionType === 'reject' && !comments.trim() && (
             <p className="mt-1 text-xs text-red-400">Comments are required when rejecting</p>
@@ -182,14 +182,14 @@ function ApprovalModal({ isOpen, onClose, onConfirm, title, actionType, isLoadin
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="rounded-lg border border-slate-600 px-4 py-2 font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+            className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={isLoading || (actionType === 'reject' && !comments.trim())}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-white disabled:opacity-50 ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-slate-800 disabled:opacity-50 ${
               actionType === 'approve'
                 ? 'bg-green-600 hover:bg-green-700'
                 : 'bg-red-600 hover:bg-red-700'
@@ -249,19 +249,19 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-800 p-6 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 max-h-[90vh] overflow-y-auto">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">
+          <h3 className="text-lg font-semibold text-slate-800">
             {template ? 'Edit Template' : 'New Workflow Template'}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">
+            <label className="mb-1 block text-sm font-medium text-slate-600">
               Name <span className="text-red-400">*</span>
             </label>
             <input
@@ -269,23 +269,23 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               required
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="e.g., Policy Approval Workflow"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Description</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="h-20 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="h-20 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Describe the workflow template..."
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-300">Document Types</label>
+            <label className="mb-2 block text-sm font-medium text-slate-600">Document Types</label>
             <div className="flex flex-wrap gap-2">
               {DOC_TYPES_OPTIONS.map(option => (
                 <label
@@ -293,7 +293,7 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
                   className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
                     formData.doc_types.includes(option.value)
                       ? 'border-primary-500 bg-primary-500/20 text-primary-400'
-                      : 'border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      : 'border-slate-300 bg-slate-200 text-slate-600 hover:bg-slate-600'
                   }`}
                 >
                   <input
@@ -308,8 +308,8 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
             </div>
           </div>
 
-          <div className="space-y-3 rounded-lg border border-slate-600 bg-slate-700/50 p-4">
-            <h4 className="text-sm font-medium text-slate-300">Settings</h4>
+          <div className="space-y-3 rounded-lg border border-slate-300 bg-slate-200/50 p-4">
+            <h4 className="text-sm font-medium text-slate-600">Settings</h4>
             
             <label className="flex items-center gap-3 cursor-pointer">
               <input
@@ -318,7 +318,7 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
                 onChange={(e) => setFormData(prev => ({ ...prev, allow_skip: e.target.checked }))}
                 className="h-4 w-4 rounded border-slate-500 bg-slate-600 text-primary-500 focus:ring-primary-500"
               />
-              <span className="text-sm text-slate-300">Allow steps to be skipped</span>
+              <span className="text-sm text-slate-600">Allow steps to be skipped</span>
             </label>
 
             <label className="flex items-center gap-3 cursor-pointer">
@@ -328,7 +328,7 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
                 onChange={(e) => setFormData(prev => ({ ...prev, require_all_approvers: e.target.checked }))}
                 className="h-4 w-4 rounded border-slate-500 bg-slate-600 text-primary-500 focus:ring-primary-500"
               />
-              <span className="text-sm text-slate-300">Require all approvers</span>
+              <span className="text-sm text-slate-600">Require all approvers</span>
             </label>
 
             <label className="flex items-center gap-3 cursor-pointer">
@@ -338,7 +338,7 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
                 onChange={(e) => setFormData(prev => ({ ...prev, auto_publish_on_complete: e.target.checked }))}
                 className="h-4 w-4 rounded border-slate-500 bg-slate-600 text-primary-500 focus:ring-primary-500"
               />
-              <span className="text-sm text-slate-300">Auto-publish on workflow completion</span>
+              <span className="text-sm text-slate-600">Auto-publish on workflow completion</span>
             </label>
           </div>
 
@@ -347,7 +347,7 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
               type="button"
               onClick={onClose}
               disabled={isLoading}
-              className="rounded-lg border border-slate-600 px-4 py-2 font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+              className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -405,19 +405,19 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">
+          <h3 className="text-lg font-semibold text-slate-800">
             {step ? 'Edit Step' : 'Add Workflow Step'}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">
+            <label className="mb-1 block text-sm font-medium text-slate-600">
               Step Name <span className="text-red-400">*</span>
             </label>
             <input
@@ -425,17 +425,17 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               required
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="e.g., Manager Review"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Step Type</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Step Type</label>
             <select
               value={formData.step_type}
               onChange={(e) => setFormData(prev => ({ ...prev, step_type: e.target.value }))}
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {STEP_TYPES.map(type => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -444,11 +444,11 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Approval Mode</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Approval Mode</label>
             <select
               value={formData.approval_mode}
               onChange={(e) => setFormData(prev => ({ ...prev, approval_mode: e.target.value }))}
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {APPROVAL_MODES.map(mode => (
                 <option key={mode.value} value={mode.value}>{mode.label}</option>
@@ -457,7 +457,7 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Timeout (days)</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Timeout (days)</label>
             <input
               type="number"
               value={formData.timeout_days ?? ''}
@@ -466,7 +466,7 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
                 timeout_days: e.target.value ? parseInt(e.target.value) : null 
               }))}
               min="1"
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Optional timeout in days"
             />
           </div>
@@ -478,7 +478,7 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
               onChange={(e) => setFormData(prev => ({ ...prev, is_required: e.target.checked }))}
               className="h-4 w-4 rounded border-slate-500 bg-slate-600 text-primary-500 focus:ring-primary-500"
             />
-            <span className="text-sm text-slate-300">This step is required</span>
+            <span className="text-sm text-slate-600">This step is required</span>
           </label>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -486,7 +486,7 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
               type="button"
               onClick={onClose}
               disabled={isLoading}
-              className="rounded-lg border border-slate-600 px-4 py-2 font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+              className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -774,20 +774,20 @@ export default function GovernanceWorkflowsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Approval Workflows</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Approval Workflows</h1>
           <p className="mt-1 text-sm text-slate-400">
             Manage document approvals, workflow templates, and review pending requests
           </p>
         </div>
       </div>
 
-      <div className="flex gap-2 border-b border-slate-700 pb-2">
+      <div className="flex gap-2 border-b border-slate-200 pb-2">
         <button
           onClick={() => { setMainTab('approvals'); setSelectedTemplate(null); }}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
             mainTab === 'approvals'
               ? 'bg-primary-600 text-white'
-              : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+              : 'text-slate-400 hover:bg-slate-200 hover:text-slate-900'
           }`}
         >
           <FileCheck size={18} />
@@ -798,7 +798,7 @@ export default function GovernanceWorkflowsPage() {
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
             mainTab === 'templates'
               ? 'bg-primary-600 text-white'
-              : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+              : 'text-slate-400 hover:bg-slate-200 hover:text-slate-900'
           }`}
         >
           <Settings size={18} />
@@ -809,57 +809,57 @@ export default function GovernanceWorkflowsPage() {
       {mainTab === 'approvals' && (
         <>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-yellow-500/20 p-2">
                   <Clock className="h-5 w-5 text-yellow-400" />
                 </div>
                 <div>
                   <p className="text-sm text-slate-400">Pending Approvals</p>
-                  <p className="text-2xl font-bold text-white">{dashboard?.pending_my_approval || 0}</p>
+                  <p className="text-2xl font-bold text-slate-800">{dashboard?.pending_my_approval || 0}</p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-green-500/20 p-2">
                   <CheckCircle className="h-5 w-5 text-green-400" />
                 </div>
                 <div>
                   <p className="text-sm text-slate-400">Approved Today</p>
-                  <p className="text-2xl font-bold text-white">{dashboard?.approved_today || 0}</p>
+                  <p className="text-2xl font-bold text-slate-800">{dashboard?.approved_today || 0}</p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-red-500/20 p-2">
                   <XCircle className="h-5 w-5 text-red-400" />
                 </div>
                 <div>
                   <p className="text-sm text-slate-400">Rejected Today</p>
-                  <p className="text-2xl font-bold text-white">{dashboard?.rejected_today || 0}</p>
+                  <p className="text-2xl font-bold text-slate-800">{dashboard?.rejected_today || 0}</p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-orange-500/20 p-2">
                   <AlertTriangle className="h-5 w-5 text-orange-400" />
                 </div>
                 <div>
                   <p className="text-sm text-slate-400">Overdue</p>
-                  <p className="text-2xl font-bold text-white">{dashboard?.overdue || 0}</p>
+                  <p className="text-2xl font-bold text-slate-800">{dashboard?.overdue || 0}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-700 bg-slate-800">
-            <div className="border-b border-slate-700">
+          <div className="rounded-xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-200">
               <nav className="flex gap-1 p-2">
                 {(['pending', 'approved', 'rejected', 'all'] as ApprovalTabType[]).map((tab) => (
                   <button
@@ -868,7 +868,7 @@ export default function GovernanceWorkflowsPage() {
                     className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                       activeTab === tab
                         ? 'bg-primary-600 text-white'
-                        : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                        : 'text-slate-400 hover:bg-slate-200 hover:text-slate-900'
                     }`}
                   >
                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -945,14 +945,14 @@ export default function GovernanceWorkflowsPage() {
       )}
 
       {mainTab === 'templates' && !selectedTemplate && (
-        <div className="rounded-xl border border-slate-700 bg-slate-800">
-          <div className="flex items-center justify-between border-b border-slate-700 p-4">
-            <h2 className="text-lg font-semibold text-white">Workflow Templates</h2>
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-200 p-4">
+            <h2 className="text-lg font-semibold text-slate-800">Workflow Templates</h2>
             <div className="flex gap-2">
               <button
                 onClick={() => seedDefaultsMutation.mutate()}
                 disabled={seedDefaultsMutation.isPending}
-                className="flex items-center gap-2 rounded-lg border border-purple-500/50 px-4 py-2 text-sm font-medium text-purple-400 hover:bg-purple-500/10 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg border border-primary-500/50 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-500/10 disabled:opacity-50"
               >
                 {seedDefaultsMutation.isPending ? (
                   <Loader2 size={16} className="animate-spin" />
@@ -981,13 +981,13 @@ export default function GovernanceWorkflowsPage() {
                 {templates.map((template) => (
                   <div
                     key={template.id}
-                    className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800/50 p-4 hover:bg-slate-700/50 transition-colors"
+                    className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 transition-colors"
                   >
                     <div className="flex-1 cursor-pointer" onClick={() => setSelectedTemplate(template)}>
                       <div className="flex items-center gap-3">
                         <Layers className="h-5 w-5 text-primary-400" />
                         <div>
-                          <h3 className="font-medium text-white">{template.name}</h3>
+                          <h3 className="font-medium text-slate-800">{template.name}</h3>
                           {template.description && (
                             <p className="text-sm text-slate-400">{template.description}</p>
                           )}
@@ -1020,7 +1020,7 @@ export default function GovernanceWorkflowsPage() {
                     <div className="flex items-center gap-2 ml-4">
                       <button
                         onClick={(e) => { e.stopPropagation(); setEditingTemplate(template); setTemplateModalOpen(true); }}
-                        className="rounded p-2 text-slate-400 hover:bg-slate-600 hover:text-white transition-colors"
+                        className="rounded p-2 text-slate-400 hover:bg-slate-600 hover:text-slate-900 transition-colors"
                         title="Edit"
                       >
                         <Edit2 size={16} />
@@ -1053,17 +1053,17 @@ export default function GovernanceWorkflowsPage() {
       )}
 
       {mainTab === 'templates' && selectedTemplate && (
-        <div className="rounded-xl border border-slate-700 bg-slate-800">
-          <div className="flex items-center justify-between border-b border-slate-700 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-200 p-4">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setSelectedTemplate(null)}
-                className="rounded p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                className="rounded p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
               >
                 <ArrowLeft size={20} />
               </button>
               <div>
-                <h2 className="text-lg font-semibold text-white">{selectedTemplate.name}</h2>
+                <h2 className="text-lg font-semibold text-slate-800">{selectedTemplate.name}</h2>
                 {selectedTemplate.description && (
                   <p className="text-sm text-slate-400">{selectedTemplate.description}</p>
                 )}
@@ -1106,12 +1106,12 @@ export default function GovernanceWorkflowsPage() {
               )}
               {selectedTemplate.auto_publish_on_complete && (
                 <span className="flex items-center gap-1">
-                  <CheckCircle size={14} className="text-purple-400" /> Auto-publish
+                  <CheckCircle size={14} className="text-primary-600" /> Auto-publish
                 </span>
               )}
             </div>
 
-            <h3 className="mb-3 text-sm font-medium text-slate-300">Workflow Steps</h3>
+            <h3 className="mb-3 text-sm font-medium text-slate-600">Workflow Steps</h3>
 
             {templateDetailLoading ? (
               <div className="flex h-32 items-center justify-center">
@@ -1124,20 +1124,20 @@ export default function GovernanceWorkflowsPage() {
                   .map((step, idx, arr) => (
                     <div
                       key={step.id}
-                      className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-800/50 p-3"
+                      className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white/50 p-3"
                     >
                       <div className="flex flex-col gap-1">
                         <button
                           onClick={() => handleMoveStep(step, 'up')}
                           disabled={idx === 0 || reorderStepsMutation.isPending}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-600 hover:text-white disabled:opacity-30 transition-colors"
+                          className="rounded p-1 text-slate-400 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-30 transition-colors"
                         >
                           <ChevronUp size={14} />
                         </button>
                         <button
                           onClick={() => handleMoveStep(step, 'down')}
                           disabled={idx === arr.length - 1 || reorderStepsMutation.isPending}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-600 hover:text-white disabled:opacity-30 transition-colors"
+                          className="rounded p-1 text-slate-400 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-30 transition-colors"
                         >
                           <ChevronDown size={14} />
                         </button>
@@ -1149,7 +1149,7 @@ export default function GovernanceWorkflowsPage() {
                       
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-white">{step.name}</span>
+                          <span className="font-medium text-slate-800">{step.name}</span>
                           <span className={`rounded px-2 py-0.5 text-xs ${
                             step.step_type === 'approval' ? 'bg-green-500/20 text-green-400' :
                             step.step_type === 'review' ? 'bg-blue-500/20 text-blue-400' :
@@ -1157,7 +1157,7 @@ export default function GovernanceWorkflowsPage() {
                           }`}>
                             {STEP_TYPES.find(t => t.value === step.step_type)?.label || step.step_type}
                           </span>
-                          <span className="rounded bg-slate-600 px-2 py-0.5 text-xs text-slate-300">
+                          <span className="rounded bg-slate-600 px-2 py-0.5 text-xs text-slate-600">
                             {APPROVAL_MODES.find(m => m.value === step.approval_mode)?.label || step.approval_mode}
                           </span>
                           {step.timeout_days && (
@@ -1177,7 +1177,7 @@ export default function GovernanceWorkflowsPage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => { setEditingStep(step); setStepModalOpen(true); }}
-                          className="rounded p-2 text-slate-400 hover:bg-slate-600 hover:text-white transition-colors"
+                          className="rounded p-2 text-slate-400 hover:bg-slate-600 hover:text-slate-900 transition-colors"
                         >
                           <Edit2 size={14} />
                         </button>
@@ -1196,7 +1196,7 @@ export default function GovernanceWorkflowsPage() {
                   ))}
               </div>
             ) : (
-              <div className="flex h-32 flex-col items-center justify-center rounded-lg border border-dashed border-slate-600 text-slate-400">
+              <div className="flex h-32 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 text-slate-400">
                 <p className="text-sm">No steps configured</p>
                 <p className="text-xs">Click "Add Step" to create workflow steps</p>
               </div>
@@ -1249,14 +1249,14 @@ function ApprovalCard({ item, onApprove, onReject, isOverdue }: ApprovalCardProp
       className={`rounded-lg border p-4 ${
         isOverdue
           ? 'border-red-500/50 bg-red-500/5'
-          : 'border-slate-700 bg-slate-800/50'
+          : 'border-slate-200 bg-white/50'
       }`}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-slate-400" />
-            <h4 className="font-medium text-white">{item.document_title}</h4>
+            <h4 className="font-medium text-slate-800">{item.document_title}</h4>
             {item.document_code && (
               <span className="text-sm text-slate-400">({item.document_code})</span>
             )}

@@ -80,7 +80,7 @@ interface ReviewListResponse {
 }
 
 const DOCUMENT_TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; bgColor: string; label: string }> = {
-  policy: { icon: BookOpen, color: 'text-purple-400', bgColor: 'bg-purple-500/20', label: 'Policy' },
+  policy: { icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-500/20', label: 'Policy' },
   standard: { icon: FileCheck, color: 'text-blue-400', bgColor: 'bg-blue-500/20', label: 'Standard' },
   procedure: { icon: ClipboardList, color: 'text-green-400', bgColor: 'bg-green-500/20', label: 'Procedure' },
   guideline: { icon: Lightbulb, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20', label: 'Guideline' },
@@ -316,19 +316,19 @@ export default function ReviewCalendarPage() {
           <div className="flex items-center gap-3 mb-1">
             <Link
               href="/governance/reviews"
-              className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors"
+              className="flex items-center gap-1 text-slate-400 hover:text-slate-900 transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="text-sm">Back to Reviews</span>
             </Link>
           </div>
-          <h1 className="text-2xl font-bold text-white">Review Calendar</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Review Calendar</h1>
           <p className="text-slate-400">Visual overview of upcoming document reviews</p>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-red-500/30 bg-slate-800 p-4">
+        <div className="rounded-xl border border-red-500/30 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-red-500/20 p-2">
               <AlertTriangle className="h-5 w-5 text-red-400" />
@@ -342,7 +342,7 @@ export default function ReviewCalendarPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-yellow-500/30 bg-slate-800 p-4">
+        <div className="rounded-xl border border-yellow-500/30 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-yellow-500/20 p-2">
               <Clock className="h-5 w-5 text-yellow-400" />
@@ -360,7 +360,7 @@ export default function ReviewCalendarPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-green-500/30 bg-slate-800 p-4">
+        <div className="rounded-xl border border-green-500/30 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/20 p-2">
               <CheckCircle className="h-5 w-5 text-green-400" />
@@ -375,24 +375,24 @@ export default function ReviewCalendarPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-700 p-4">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-200 p-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <button
                 onClick={navigateToPreviousMonth}
-                className="rounded-lg bg-slate-700 p-2 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
+                className="rounded-lg bg-slate-200 p-2 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
               <button
                 onClick={navigateToNextMonth}
-                className="rounded-lg bg-slate-700 p-2 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
+                className="rounded-lg bg-slate-200 p-2 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
             </div>
-            <h2 className="text-xl font-semibold text-white">
+            <h2 className="text-xl font-semibold text-slate-800">
               {MONTHS[currentMonth]} {currentYear}
             </h2>
           </div>
@@ -414,7 +414,7 @@ export default function ReviewCalendarPage() {
             </div>
             <button
               onClick={navigateToToday}
-              className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
+              className="rounded-lg bg-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
             >
               Today
             </button>
@@ -448,9 +448,9 @@ export default function ReviewCalendarPage() {
                     onClick={() => handleDateClick(day)}
                     className={`
                       min-h-[80px] rounded-lg border p-2 transition-all
-                      ${day.isCurrentMonth ? 'bg-slate-900/50' : 'bg-slate-900/20'}
-                      ${day.isToday ? 'border-primary-500 ring-1 ring-primary-500/50' : 'border-slate-700/50'}
-                      ${hasDocuments ? 'cursor-pointer hover:bg-slate-700/50' : ''}
+                      ${day.isCurrentMonth ? 'bg-slate-50/50' : 'bg-slate-50/20'}
+                      ${day.isToday ? 'border-primary-500 ring-1 ring-primary-500/50' : 'border-slate-200'}
+                      ${hasDocuments ? 'cursor-pointer hover:bg-slate-50' : ''}
                       ${selectedDate && day.date.toDateString() === selectedDate.toDateString() ? 'ring-2 ring-primary-400' : ''}
                     `}
                   >
@@ -458,7 +458,7 @@ export default function ReviewCalendarPage() {
                       day.isCurrentMonth 
                         ? day.isToday 
                           ? 'text-primary-400' 
-                          : 'text-white'
+                          : 'text-slate-800'
                         : 'text-slate-600'
                     }`}>
                       {day.date.getDate()}
@@ -471,10 +471,10 @@ export default function ReviewCalendarPage() {
                           return (
                             <div
                               key={docIndex}
-                              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-xs truncate border ${getStatusBorderColor(status)} bg-slate-800/80`}
+                              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-xs truncate border ${getStatusBorderColor(status)} bg-white/80`}
                             >
                               <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusColor(status)}`}></span>
-                              <span className="truncate text-slate-300">{doc.title}</span>
+                              <span className="truncate text-slate-600">{doc.title}</span>
                             </div>
                           );
                         })}
@@ -494,14 +494,14 @@ export default function ReviewCalendarPage() {
       </div>
 
       {selectedDate && selectedDateDocuments.length > 0 && (
-        <div className="rounded-xl border border-primary-500/30 bg-slate-800 p-4">
+        <div className="rounded-xl border border-primary-500/30 bg-white p-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-lg font-semibold text-slate-800">
               Reviews for {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </h3>
             <button
               onClick={() => setSelectedDate(null)}
-              className="text-sm text-slate-400 hover:text-white"
+              className="text-sm text-slate-400 hover:text-slate-900"
             >
               Clear selection
             </button>
@@ -516,14 +516,14 @@ export default function ReviewCalendarPage() {
                 <div
                   key={doc.id}
                   onClick={() => handleDocumentClick(doc.id)}
-                  className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-colors hover:bg-slate-700/50 ${getStatusBorderColor(status)} bg-slate-900/50`}
+                  className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-colors hover:bg-slate-50 ${getStatusBorderColor(status)} bg-slate-50/50`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`rounded-lg p-2 ${typeConfig.bgColor}`}>
                       <TypeIcon className={`h-4 w-4 ${typeConfig.color}`} />
                     </div>
                     <div>
-                      <p className="font-medium text-white">{doc.title}</p>
+                      <p className="font-medium text-slate-800">{doc.title}</p>
                       <p className="text-sm text-slate-400">
                         {typeConfig.label} {doc.owner_name && `• ${doc.owner_name}`}
                       </p>
@@ -538,10 +538,10 @@ export default function ReviewCalendarPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-red-500/30 bg-slate-800 overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-slate-700 p-4">
+        <div className="rounded-xl border border-red-500/30 bg-white overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-slate-200 p-4">
             <AlertTriangle className="h-5 w-5 text-red-400" />
-            <h3 className="text-lg font-semibold text-white">Overdue Reviews</h3>
+            <h3 className="text-lg font-semibold text-slate-800">Overdue Reviews</h3>
             <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400">
               {overdueDocuments.length}
             </span>
@@ -568,14 +568,14 @@ export default function ReviewCalendarPage() {
                     <div
                       key={doc.id}
                       onClick={() => handleDocumentClick(doc.id)}
-                      className="flex items-center justify-between rounded-lg border border-red-500/30 bg-slate-900/50 p-3 cursor-pointer transition-colors hover:bg-slate-700/50"
+                      className="flex items-center justify-between rounded-lg border border-red-500/30 bg-slate-50/50 p-3 cursor-pointer transition-colors hover:bg-slate-50"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`rounded-lg p-2 ${typeConfig.bgColor} flex-shrink-0`}>
                           <TypeIcon className={`h-4 w-4 ${typeConfig.color}`} />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-white truncate">{doc.title}</p>
+                          <p className="font-medium text-slate-800 truncate">{doc.title}</p>
                           <p className="text-xs text-slate-400">
                             Due: {formatDate(doc.next_review_date || '')}
                           </p>
@@ -593,10 +593,10 @@ export default function ReviewCalendarPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-green-500/30 bg-slate-800 overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-slate-700 p-4">
+        <div className="rounded-xl border border-green-500/30 bg-white overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-slate-200 p-4">
             <CalendarIcon className="h-5 w-5 text-green-400" />
-            <h3 className="text-lg font-semibold text-white">Upcoming Reviews</h3>
+            <h3 className="text-lg font-semibold text-slate-800">Upcoming Reviews</h3>
             <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
               {upcomingDocuments.length}
             </span>
@@ -624,16 +624,16 @@ export default function ReviewCalendarPage() {
                     <div
                       key={doc.id}
                       onClick={() => handleDocumentClick(doc.id)}
-                      className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-colors hover:bg-slate-700/50 ${
+                      className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-colors hover:bg-slate-50 ${
                         isDueSoon ? 'border-yellow-500/30' : 'border-green-500/30'
-                      } bg-slate-900/50`}
+                      } bg-slate-50/50`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`rounded-lg p-2 ${typeConfig.bgColor} flex-shrink-0`}>
                           <TypeIcon className={`h-4 w-4 ${typeConfig.color}`} />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-white truncate">{doc.title}</p>
+                          <p className="font-medium text-slate-800 truncate">{doc.title}</p>
                           <p className="text-xs text-slate-400">
                             Due: {formatDate(doc.next_review_date || '')}
                           </p>

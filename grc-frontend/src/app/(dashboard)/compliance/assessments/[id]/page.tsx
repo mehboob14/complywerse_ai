@@ -437,7 +437,7 @@ export default function AssessmentDetailPage() {
             <p className="text-sm font-medium">AI Recommendation Error</p>
             <p className="text-xs text-red-300">{aiError}</p>
           </div>
-          <button onClick={() => setAiError(null)} className="text-red-300 hover:text-white">
+          <button onClick={() => setAiError(null)} className="text-red-300 hover:text-slate-900">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -445,7 +445,7 @@ export default function AssessmentDetailPage() {
       <div className="flex items-start gap-4">
         <Link
           href="/compliance/assessments"
-          className="mt-1 rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+          className="mt-1 rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -455,7 +455,7 @@ export default function AssessmentDetailPage() {
               <FileText className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">{assessment.name}</h1>
+              <h1 className="text-2xl font-bold text-slate-800">{assessment.name}</h1>
               <p className="text-slate-400">
                 {assessment.assessment_type.replace(/_/g, ' ')} • {assessment.file_name}
               </p>
@@ -537,7 +537,7 @@ export default function AssessmentDetailPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="flex-1">
-                  <div className="h-4 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-4 bg-slate-200 rounded-full overflow-hidden">
                     <div
                       className={`h-full ${getScoreBarColor(assessment.overall_score)} transition-all`}
                       style={{ width: `${assessment.overall_score || 0}%` }}
@@ -562,7 +562,7 @@ export default function AssessmentDetailPage() {
             {assessment.source && (
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">Source</span>
-                <span className="text-white">{assessment.source}</span>
+                <span className="text-slate-800">{assessment.source}</span>
               </div>
             )}
             {assessment.assessor && (
@@ -570,7 +570,7 @@ export default function AssessmentDetailPage() {
                 <span className="text-slate-400">Assessor</span>
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-slate-500" />
-                  <span className="text-white">{assessment.assessor}</span>
+                  <span className="text-slate-800">{assessment.assessor}</span>
                 </div>
               </div>
             )}
@@ -579,13 +579,13 @@ export default function AssessmentDetailPage() {
                 <span className="text-slate-400">Due Date</span>
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-slate-500" />
-                  <span className="text-white">{formatDate(assessment.due_date)}</span>
+                  <span className="text-slate-800">{formatDate(assessment.due_date)}</span>
                 </div>
               </div>
             )}
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Created</span>
-              <span className="text-white">{formatDate(assessment.created_at)}</span>
+              <span className="text-slate-800">{formatDate(assessment.created_at)}</span>
             </div>
           </div>
         </div>
@@ -625,11 +625,11 @@ export default function AssessmentDetailPage() {
               return (
                 <div
                   key={domain}
-                  className="border border-slate-700 rounded-lg overflow-hidden"
+                  className="border border-slate-200 rounded-lg overflow-hidden"
                 >
                   <button
                     onClick={() => toggleDomain(domain)}
-                    className="w-full flex items-center justify-between p-4 bg-slate-800/50 hover:bg-slate-800 transition-colors"
+                    className="w-full flex items-center justify-between p-4 bg-white/50 hover:bg-white transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       {isExpanded ? (
@@ -637,12 +637,12 @@ export default function AssessmentDetailPage() {
                       ) : (
                         <ChevronRight className="h-5 w-5 text-slate-400" />
                       )}
-                      <span className="font-medium text-white">{domain}</span>
+                      <span className="font-medium text-slate-800">{domain}</span>
                       <span className="text-sm text-slate-500">({items.length} items)</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 min-w-[100px]">
-                        <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                           <div
                             className={`h-full ${getScoreBarColor(domainPercentage)} transition-all`}
                             style={{ width: `${domainPercentage}%` }}
@@ -666,50 +666,50 @@ export default function AssessmentDetailPage() {
                         const aiRecommendation = parseAIRecommendation(item.ai_evidence_recommendation);
 
                         return (
-                          <div key={item.id} className="bg-slate-900/30">
+                          <div key={item.id} className="bg-slate-50/30">
                             <div className="p-4">
                               <div className="flex items-start gap-4">
                                 <span className="text-sm font-mono text-slate-500 mt-1">
                                   {item.item_number}
                                 </span>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-white mb-2">{item.control_description}</p>
+                                  <p className="text-slate-800 mb-2">{item.control_description}</p>
 
                                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
                                     {item.gaps_identified && (
-                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                      <div className="bg-white/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-500 mb-1">Gaps Identified</p>
-                                        <p className="text-sm text-slate-300">{item.gaps_identified}</p>
+                                        <p className="text-sm text-slate-600">{item.gaps_identified}</p>
                                       </div>
                                     )}
                                     {item.proposed_solution && (
-                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                      <div className="bg-white/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-500 mb-1">Proposed Solution</p>
-                                        <p className="text-sm text-slate-300">{item.proposed_solution}</p>
+                                        <p className="text-sm text-slate-600">{item.proposed_solution}</p>
                                       </div>
                                     )}
                                     {item.responsible_party && (
-                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                      <div className="bg-white/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-500 mb-1">Responsible Party</p>
-                                        <p className="text-sm text-slate-300">{item.responsible_party}</p>
+                                        <p className="text-sm text-slate-600">{item.responsible_party}</p>
                                       </div>
                                     )}
                                     {item.timeline && (
-                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                      <div className="bg-white/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-500 mb-1">Timeline</p>
-                                        <p className="text-sm text-slate-300">{item.timeline}</p>
+                                        <p className="text-sm text-slate-600">{item.timeline}</p>
                                       </div>
                                     )}
                                     {item.priority && (
-                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                      <div className="bg-white/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-500 mb-1">Priority</p>
-                                        <p className="text-sm text-slate-300 capitalize">{item.priority}</p>
+                                        <p className="text-sm text-slate-600 capitalize">{item.priority}</p>
                                       </div>
                                     )}
                                     {item.remarks && (
-                                      <div className="bg-slate-800/50 rounded-lg p-3">
+                                      <div className="bg-white/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-500 mb-1">Remarks</p>
-                                        <p className="text-sm text-slate-300">{item.remarks}</p>
+                                        <p className="text-sm text-slate-600">{item.remarks}</p>
                                       </div>
                                     )}
                                   </div>
@@ -774,7 +774,7 @@ export default function AssessmentDetailPage() {
                                       <button
                                         onClick={() => handleGenerateAIRecommendation(item.id)}
                                         disabled={generatingAIForItem === item.id}
-                                        className={`btn-ghost btn-sm ${aiRecommendation ? 'text-purple-400' : ''}`}
+                                        className={`btn-ghost btn-sm ${aiRecommendation ? 'text-primary-600' : ''}`}
                                         title="AI Suggest Evidence"
                                       >
                                         {generatingAIForItem === item.id ? (
@@ -790,24 +790,24 @@ export default function AssessmentDetailPage() {
                             </div>
 
                             {isEvidenceExpanded && (
-                              <div className="mx-4 mb-4 bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-4">
+                              <div className="mx-4 mb-4 bg-white/50 border border-slate-200 rounded-lg p-4 space-y-4">
                                 {aiRecommendation && (
                                   <div className="space-y-3">
                                     <div className="flex items-center gap-2">
-                                      <Sparkles className="h-4 w-4 text-purple-400" />
-                                      <h4 className="text-sm font-medium text-purple-400">AI Evidence Recommendations</h4>
+                                      <Sparkles className="h-4 w-4 text-primary-600" />
+                                      <h4 className="text-sm font-medium text-primary-600">AI Evidence Recommendations</h4>
                                       {item.ai_recommendation_generated_at && (
                                         <span className="text-xs text-slate-500">
                                           Generated {formatDateTime(item.ai_recommendation_generated_at)}
                                         </span>
                                       )}
                                     </div>
-                                    <p className="text-sm text-slate-300">{aiRecommendation.summary}</p>
+                                    <p className="text-sm text-slate-600">{aiRecommendation.summary}</p>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                       {aiRecommendation.recommendations.map((rec, idx) => (
-                                        <div key={idx} className="bg-slate-900/50 rounded-lg p-3">
+                                        <div key={idx} className="bg-slate-50/50 rounded-lg p-3">
                                           <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium text-white">{rec.evidence_type}</span>
+                                            <span className="text-sm font-medium text-slate-800">{rec.evidence_type}</span>
                                             <span className={`text-xs px-2 py-0.5 rounded ${
                                               rec.priority === 'high' ? 'bg-rose-500/20 text-rose-400' :
                                               rec.priority === 'medium' ? 'bg-amber-500/20 text-amber-400' :
@@ -850,7 +850,7 @@ export default function AssessmentDetailPage() {
 
                                 {currentItemEvidence.length > 0 && (
                                   <div className="space-y-3">
-                                    <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                    <h4 className="text-sm font-medium text-slate-600 flex items-center gap-2">
                                       <Paperclip className="h-4 w-4" />
                                       Uploaded Evidence ({currentItemEvidence.length})
                                     </h4>
@@ -858,12 +858,12 @@ export default function AssessmentDetailPage() {
                                       {currentItemEvidence.map((ev) => {
                                         const evStatusStyle = EVIDENCE_STATUS_STYLES[ev.status] || EVIDENCE_STATUS_STYLES.draft;
                                         return (
-                                          <div key={ev.id} className="bg-slate-900/50 rounded-lg p-3">
+                                          <div key={ev.id} className="bg-slate-50/50 rounded-lg p-3">
                                             <div className="flex items-start justify-between">
                                               <div className="flex-1">
                                                 <div className="flex items-center gap-2">
                                                   <FileText className="h-4 w-4 text-slate-400" />
-                                                  <span className="text-sm font-medium text-white">
+                                                  <span className="text-sm font-medium text-slate-800">
                                                     {ev.evidence?.name || 'Evidence'}
                                                   </span>
                                                   <span className={`badge ${evStatusStyle.bg} ${evStatusStyle.text} text-xs`}>
@@ -934,7 +934,7 @@ export default function AssessmentDetailPage() {
                                               )}
                                             </div>
                                             {ev.approval_history && ev.approval_history.length > 0 && (
-                                              <div className="mt-2 pt-2 border-t border-slate-700">
+                                              <div className="mt-2 pt-2 border-t border-slate-200">
                                                 <p className="text-xs text-slate-500 mb-1">Approval History</p>
                                                 <div className="space-y-1">
                                                   {ev.approval_history.map((history) => (
@@ -965,8 +965,8 @@ export default function AssessmentDetailPage() {
                                   </div>
                                 )}
 
-                                <div className="space-y-3 pt-2 border-t border-slate-700">
-                                  <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                <div className="space-y-3 pt-2 border-t border-slate-200">
+                                  <h4 className="text-sm font-medium text-slate-600 flex items-center gap-2">
                                     <FileUp className="h-4 w-4" />
                                     Upload New Evidence
                                   </h4>

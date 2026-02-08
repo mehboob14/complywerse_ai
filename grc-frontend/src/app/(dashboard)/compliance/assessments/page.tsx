@@ -400,7 +400,7 @@ export default function AssessmentsPage() {
                     <td>
                       <Link
                         href={`/compliance/assessments/${assessment.id}`}
-                        className="font-medium text-white hover:text-primary-400 transition-colors"
+                        className="font-medium text-slate-800 hover:text-primary-400 transition-colors"
                       >
                         {assessment.name}
                       </Link>
@@ -423,7 +423,7 @@ export default function AssessmentsPage() {
                     </td>
                     <td>
                       <div className="flex items-center gap-2 min-w-[120px]">
-                        <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                           <div
                             className={`h-full ${getScoreBarColor(assessment.overall_score)} transition-all`}
                             style={{ width: `${assessment.overall_score || 0}%` }}
@@ -510,10 +510,10 @@ export default function AssessmentsPage() {
 
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-slate-700">
+          <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
               <div>
-                <h2 className="text-lg font-semibold text-white">Upload Assessment</h2>
+                <h2 className="text-lg font-semibold text-slate-800">Upload Assessment</h2>
                 <p className="text-sm text-slate-400">
                   Upload an Excel or CSV file with assessment data
                 </p>
@@ -614,7 +614,7 @@ export default function AssessmentsPage() {
 
               <div>
                 <label className="label">Assessment File *</label>
-                <div className="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center hover:border-slate-500 transition-colors">
+                <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-slate-400 transition-colors">
                   <input
                     type="file"
                     accept=".xlsx,.xls,.csv"
@@ -625,7 +625,7 @@ export default function AssessmentsPage() {
                   <label htmlFor="file-upload" className="cursor-pointer">
                     <Upload className="h-8 w-8 text-slate-500 mx-auto mb-2" />
                     {uploadFile ? (
-                      <p className="text-white">{uploadFile.name}</p>
+                      <p className="text-slate-800">{uploadFile.name}</p>
                     ) : (
                       <>
                         <p className="text-slate-400">Click to upload or drag and drop</p>
@@ -637,7 +637,7 @@ export default function AssessmentsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-700">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
               <button
                 onClick={() => {
                   setIsUploadModalOpen(false);
@@ -666,9 +666,9 @@ export default function AssessmentsPage() {
 
       {deleteModalOpen && assessmentToDelete && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-slate-700">
-              <h2 className="text-lg font-semibold text-white">Delete Assessment</h2>
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-800">Delete Assessment</h2>
               <button
                 onClick={() => {
                   setDeleteModalOpen(false);
@@ -692,7 +692,7 @@ export default function AssessmentsPage() {
                   <AlertCircle className="h-5 w-5 text-rose-400" />
                 </div>
                 <div>
-                  <p className="text-white">Are you sure you want to delete this assessment?</p>
+                  <p className="text-slate-800">Are you sure you want to delete this assessment?</p>
                   <p className="text-sm text-slate-400 mt-1">
                     <strong>{assessmentToDelete.name}</strong>
                   </p>
@@ -703,7 +703,7 @@ export default function AssessmentsPage() {
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-700">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
               <button
                 onClick={() => {
                   setDeleteModalOpen(false);

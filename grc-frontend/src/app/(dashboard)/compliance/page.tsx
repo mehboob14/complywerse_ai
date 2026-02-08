@@ -216,7 +216,7 @@ export default function ComplianceOverviewPage() {
         {statCards.map((stat) => (
           <div
             key={stat.name}
-            className="stat-card group hover:border-slate-600 transition-all duration-200 hover:shadow-xl"
+            className="stat-card group hover:border-slate-300 transition-all duration-200 hover:shadow-xl"
           >
             <div className="flex items-start justify-between mb-4">
               <div className={`rounded-xl bg-gradient-to-br ${stat.bgColor} p-3`}>
@@ -253,7 +253,7 @@ export default function ComplianceOverviewPage() {
                     <span className={`text-sm font-medium ${style.text}`}>{label}</span>
                     <span className="text-sm text-slate-400">{count} ({percentage}%)</span>
                   </div>
-                  <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                     <div
                       className={`h-full ${style.bg.replace('/20', '')} transition-all duration-500`}
                       style={{ width: `${percentage}%` }}
@@ -275,10 +275,10 @@ export default function ComplianceOverviewPage() {
           <div className="space-y-3">
             {Object.entries(summary?.by_category || {}).slice(0, 6).map(([category, count]) => (
               <div key={category} className="flex items-center justify-between group">
-                <span className="text-sm text-slate-300 group-hover:text-white transition-colors capitalize">
+                <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors capitalize">
                   {category.replace(/_/g, ' ')}
                 </span>
-                <span className="text-base font-semibold text-white">{count as number}</span>
+                <span className="text-base font-semibold text-slate-800">{count as number}</span>
               </div>
             ))}
             {Object.keys(summary?.by_category || {}).length === 0 && (
@@ -307,10 +307,10 @@ export default function ComplianceOverviewPage() {
               overdueItems.map((item: any) => (
                 <div
                   key={item.compliance_id}
-                  className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-700/50 transition-colors"
+                  className="flex items-center justify-between p-3 bg-white/50 rounded-lg hover:bg-slate-50 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">
+                    <p className="text-sm font-medium text-slate-800 truncate">
                       {item.statement_code || 'No Code'}
                     </p>
                     <p className="text-xs text-slate-400 truncate">
@@ -355,10 +355,10 @@ export default function ComplianceOverviewPage() {
                 return (
                   <div
                     key={stmt.id}
-                    className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-700/50 transition-colors"
+                    className="flex items-center justify-between p-3 bg-white/50 rounded-lg hover:bg-slate-50 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">
+                      <p className="text-sm font-medium text-slate-800 truncate">
                         {stmt.statement_code || 'No Code'}
                       </p>
                       <p className="text-xs text-slate-400 truncate">
@@ -413,22 +413,22 @@ export default function ComplianceOverviewPage() {
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl font-bold text-white">{summary?.compliance_score?.toFixed(0) || compliantPercent}%</span>
+              <span className="text-2xl font-bold text-slate-800">{summary?.compliance_score?.toFixed(0) || compliantPercent}%</span>
             </div>
           </div>
           <div className="flex-1">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-slate-400">Assessed</p>
-                <p className="text-xl font-semibold text-white">{summary?.statistics?.assessed_count || 0}</p>
+                <p className="text-xl font-semibold text-slate-800">{summary?.statistics?.assessed_count || 0}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-400">Mandatory</p>
-                <p className="text-xl font-semibold text-white">{summary?.statistics?.mandatory_count || 0}</p>
+                <p className="text-xl font-semibold text-slate-800">{summary?.statistics?.mandatory_count || 0}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-400">Active</p>
-                <p className="text-xl font-semibold text-white">{summary?.statistics?.active_count || 0}</p>
+                <p className="text-xl font-semibold text-slate-800">{summary?.statistics?.active_count || 0}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-400">Compliance Rate</p>
@@ -483,7 +483,7 @@ export default function ComplianceOverviewPage() {
             {aiResult.message && aiResult.total_gaps_analyzed === 0 && (
               <div className="text-center py-8">
                 <CheckCircle className="h-12 w-12 text-emerald-400 mx-auto mb-3" />
-                <p className="text-slate-300">{aiResult.message}</p>
+                <p className="text-slate-600">{aiResult.message}</p>
               </div>
             )}
 
@@ -521,7 +521,7 @@ export default function ComplianceOverviewPage() {
                 {aiResult.summary.key_themes && aiResult.summary.key_themes.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {aiResult.summary.key_themes.map((theme, idx) => (
-                      <span key={idx} className="px-3 py-1 bg-slate-700 text-slate-300 text-sm rounded-full">
+                      <span key={idx} className="px-3 py-1 bg-slate-200 text-slate-600 text-sm rounded-full">
                         {theme}
                       </span>
                     ))}
@@ -540,7 +540,7 @@ export default function ComplianceOverviewPage() {
                         <div key={idx} className="flex items-start gap-3">
                           <Lightbulb className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
                           <div>
-                            <p className="text-sm text-white">{win.gap_description}</p>
+                            <p className="text-sm text-slate-800">{win.gap_description}</p>
                             <p className="text-xs text-slate-400 mt-1">{win.recommendation}</p>
                           </div>
                         </div>
@@ -551,7 +551,7 @@ export default function ComplianceOverviewPage() {
 
                 {/* Prioritized Gaps List */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-600 flex items-center gap-2">
                     <Target className="h-4 w-4 text-primary-400" />
                     Prioritized Gaps ({aiResult.prioritized_gaps.length})
                   </h3>
@@ -561,43 +561,43 @@ export default function ComplianceOverviewPage() {
                     return (
                       <div
                         key={gap.rank}
-                        className={`p-4 bg-slate-800/50 border ${impactStyle.border} rounded-lg`}
+                        className={`p-4 bg-white/50 border ${impactStyle.border} rounded-lg`}
                       >
                         <div
                           className="flex items-start justify-between cursor-pointer"
                           onClick={() => toggleGapExpand(gap.rank)}
                         >
                           <div className="flex items-start gap-3 flex-1">
-                            <div className="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center">
-                              <span className="text-sm font-bold text-white">#{gap.rank}</span>
+                            <div className="flex-shrink-0 w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
+                              <span className="text-sm font-bold text-slate-800">#{gap.rank}</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-medium text-white">{gap.control_title}</h4>
+                                <h4 className="font-medium text-slate-800">{gap.control_title}</h4>
                                 <span className={`badge ${impactStyle.bg} ${impactStyle.text}`}>
                                   {gap.business_impact}
                                 </span>
-                                <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-700 rounded">
+                                <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-200 rounded">
                                   {gap.gap_type.replace('_', ' ')}
                                 </span>
                               </div>
                               <p className="text-sm text-slate-400 mt-1">{gap.framework_name}</p>
                             </div>
                           </div>
-                          <button className="text-slate-400 hover:text-white p-1">
+                          <button className="text-slate-400 hover:text-slate-900 p-1">
                             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </button>
                         </div>
 
                         {isExpanded && (
-                          <div className="mt-4 pt-4 border-t border-slate-700 space-y-4">
+                          <div className="mt-4 pt-4 border-t border-slate-200 space-y-4">
                             <div>
                               <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Impact Reasoning</p>
-                              <p className="text-sm text-slate-300">{gap.impact_reasoning}</p>
+                              <p className="text-sm text-slate-600">{gap.impact_reasoning}</p>
                             </div>
                             <div>
                               <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Regulatory Risk</p>
-                              <p className="text-sm text-slate-300">{gap.regulatory_risk}</p>
+                              <p className="text-sm text-slate-600">{gap.regulatory_risk}</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                               <div>
@@ -612,7 +612,7 @@ export default function ComplianceOverviewPage() {
                               </div>
                               <div>
                                 <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Deadline</p>
-                                <span className="text-sm text-white">{gap.deadline_recommendation}</span>
+                                <span className="text-sm text-slate-800">{gap.deadline_recommendation}</span>
                               </div>
                             </div>
                             {gap.suggested_actions && gap.suggested_actions.length > 0 && (
@@ -620,7 +620,7 @@ export default function ComplianceOverviewPage() {
                                 <p className="text-xs font-semibold text-slate-400 uppercase mb-2">Suggested Actions</p>
                                 <ul className="space-y-1">
                                   {gap.suggested_actions.map((action, idx) => (
-                                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-300">
+                                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
                                       <span className="text-primary-400">•</span>
                                       {action}
                                     </li>

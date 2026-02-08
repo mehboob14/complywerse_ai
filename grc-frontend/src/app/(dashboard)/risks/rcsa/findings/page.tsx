@@ -86,16 +86,16 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Link to {type === 'risk' ? 'Risk' : 'Control'}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h3 className="text-lg font-semibold text-slate-800">Link to {type === 'risk' ? 'Risk' : 'Control'}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
         <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-slate-300">
+          <label className="mb-1 block text-sm font-medium text-slate-600">
             {type === 'risk' ? 'Risk' : 'Internal Control'} ID <span className="text-red-400">*</span>
           </label>
           <input
@@ -103,7 +103,7 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
             value={entityId}
             onChange={(e) => setEntityId(e.target.value)}
             placeholder={`Enter ${type} ID...`}
-            className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400"
+            className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400"
           />
         </div>
 
@@ -111,7 +111,7 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="rounded-lg border border-slate-600 px-4 py-2 font-medium text-slate-300 hover:bg-slate-700"
+            className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-600 hover:bg-slate-200"
           >
             Cancel
           </button>
@@ -154,10 +154,10 @@ function CreateActionModal({ isOpen, onClose, onConfirm, findingTitle, isLoading
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6">
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Create Mitigation Action</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h3 className="text-lg font-semibold text-slate-800">Create Mitigation Action</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -166,7 +166,7 @@ function CreateActionModal({ isOpen, onClose, onConfirm, findingTitle, isLoading
 
         <div className="space-y-4 mb-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">
+            <label className="mb-1 block text-sm font-medium text-slate-600">
               Action Title <span className="text-red-400">*</span>
             </label>
             <input
@@ -174,25 +174,25 @@ function CreateActionModal({ isOpen, onClose, onConfirm, findingTitle, isLoading
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter action title..."
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Description</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe the action..."
-              className="h-24 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white placeholder-slate-400"
+              className="h-24 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800 placeholder-slate-400"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Due Date</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Due Date</label>
             <input
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-800"
             />
           </div>
         </div>
@@ -320,7 +320,7 @@ export default function RCSAFindingsPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-white">RCSA Findings</h1>
+            <h1 className="text-2xl font-semibold text-slate-800">RCSA Findings</h1>
             <p className="text-slate-400 mt-1">Track and manage findings from risk assessments</p>
           </div>
         </div>
@@ -364,7 +364,7 @@ export default function RCSAFindingsPage() {
       <div className="card overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-slate-700 bg-slate-800/50">
+            <tr className="border-b border-slate-200 bg-white/50">
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Title</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Severity</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Status</th>
@@ -381,16 +381,16 @@ export default function RCSAFindingsPage() {
               const isOverdue = finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed';
               
               return (
-                <tr key={finding.id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                <tr key={finding.id} className="border-b border-slate-200 hover:bg-white/50">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className={`h-4 w-4 ${severityStyle.text}`} />
-                      <span className="text-white font-medium">{finding.title}</span>
+                      <span className="text-slate-800 font-medium">{finding.title}</span>
                     </div>
                     {(finding.linked_risk_id || finding.linked_control_id) && (
                       <div className="flex items-center gap-2 mt-1">
                         {finding.linked_risk_id && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 flex items-center gap-1">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary-500/20 text-primary-600 flex items-center gap-1">
                             <Target className="h-3 w-3" />
                             Risk #{finding.linked_risk_id}
                           </span>
@@ -415,16 +415,16 @@ export default function RCSAFindingsPage() {
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex items-center gap-2 text-slate-300">
+                    <div className="flex items-center gap-2 text-slate-600">
                       <Building2 className="h-4 w-4 text-slate-500" />
                       {finding.business_unit}
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-slate-300">
+                  <td className="py-3 px-4 text-slate-600">
                     {formatDate(finding.created_at)}
                   </td>
                   <td className="py-3 px-4">
-                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-400' : 'text-slate-300'}`}>
+                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-400' : 'text-slate-600'}`}>
                       <Calendar className="h-4 w-4" />
                       {formatDate(finding.due_date)}
                     </div>
@@ -433,14 +433,14 @@ export default function RCSAFindingsPage() {
                     <div className="flex items-center gap-1">
                       <Link
                         href={`/risks/rcsa/findings/${finding.id}`}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-200"
                         title="View Details"
                       >
                         <Eye className="h-4 w-4" />
                       </Link>
                       <button
                         onClick={() => { setSelectedFinding(finding); setModalType('risk'); }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-purple-400 hover:bg-purple-500/20"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-primary-600 hover:bg-primary-500/20"
                         title="Link to Risk"
                       >
                         <Target className="h-4 w-4" />
@@ -470,7 +470,7 @@ export default function RCSAFindingsPage() {
         {filteredFindings.length === 0 && (
           <div className="p-12 text-center">
             <AlertTriangle className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-white mb-2">No Findings Found</h3>
+            <h3 className="text-lg font-medium text-slate-800 mb-2">No Findings Found</h3>
             <p className="text-slate-400">
               {searchTerm || severityFilter || statusFilter
                 ? 'No findings match your filters'

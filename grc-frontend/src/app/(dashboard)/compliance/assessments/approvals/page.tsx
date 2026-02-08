@@ -180,12 +180,12 @@ export default function PendingApprovalsPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/compliance/assessments"
-          className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+          className="rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-white">Pending Approvals</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Pending Approvals</h1>
           <p className="text-slate-400">
             Evidence submissions awaiting your review
           </p>
@@ -195,7 +195,7 @@ export default function PendingApprovalsPage() {
       {(!pendingApprovals || pendingApprovals.length === 0) ? (
         <div className="card p-12 text-center">
           <CheckCircle className="mx-auto h-12 w-12 text-emerald-400 mb-4" />
-          <h3 className="text-lg font-semibold text-white mb-2">All Caught Up!</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-2">All Caught Up!</h3>
           <p className="text-slate-400">You have no pending evidence approvals.</p>
         </div>
       ) : (
@@ -210,7 +210,7 @@ export default function PendingApprovalsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <Paperclip className="h-5 w-5 text-primary-400" />
-                      <h3 className="font-semibold text-white">{approval.evidence.name}</h3>
+                      <h3 className="font-semibold text-slate-800">{approval.evidence.name}</h3>
                       <span className={`badge ${statusStyle.bg} ${statusStyle.text}`}>
                         {statusStyle.label} (Tier {approval.current_tier})
                       </span>
@@ -229,18 +229,18 @@ export default function PendingApprovalsPage() {
                       </div>
                       <div>
                         <p className="text-slate-400 mb-1">Control/Requirement</p>
-                        <p className="text-white text-xs line-clamp-2">
+                        <p className="text-slate-800 text-xs line-clamp-2">
                           {approval.assessment_item.item_number && `${approval.assessment_item.item_number}: `}
                           {approval.assessment_item.control_description || 'N/A'}
                         </p>
                       </div>
                       <div>
                         <p className="text-slate-400 mb-1">File</p>
-                        <p className="text-white">{approval.evidence.file_name}</p>
+                        <p className="text-slate-800">{approval.evidence.file_name}</p>
                       </div>
                       <div>
                         <p className="text-slate-400 mb-1">Submitted</p>
-                        <p className="text-white flex items-center gap-2">
+                        <p className="text-slate-800 flex items-center gap-2">
                           <User className="h-4 w-4" />
                           {approval.submitter?.full_name || 'Unknown'} • {formatDate(approval.submitted_at)}
                         </p>
@@ -286,10 +286,10 @@ export default function PendingApprovalsPage() {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-4 pt-4 border-t border-slate-700">
+                  <div className="mt-4 pt-4 border-t border-slate-200">
                     {actionType && (
-                      <div className="mb-4 p-4 bg-slate-800/50 rounded-lg">
-                        <p className="text-sm text-slate-300 mb-2">
+                      <div className="mb-4 p-4 bg-white/50 rounded-lg">
+                        <p className="text-sm text-slate-600 mb-2">
                           {actionType === 'reject' ? 'Reason for rejection:' : 'Comments for return:'}
                         </p>
                         <textarea
@@ -324,7 +324,7 @@ export default function PendingApprovalsPage() {
 
                     {approval.approval_history && approval.approval_history.length > 0 ? (
                       <div>
-                        <h4 className="text-sm font-medium text-slate-300 mb-3">Approval History</h4>
+                        <h4 className="text-sm font-medium text-slate-600 mb-3">Approval History</h4>
                         <div className="space-y-3">
                           {approval.approval_history.map((entry) => (
                             <div key={entry.id} className="flex items-start gap-3 text-sm">
@@ -335,7 +335,7 @@ export default function PendingApprovalsPage() {
                                 'bg-blue-400'
                               }`} />
                               <div className="flex-1">
-                                <p className="text-white">
+                                <p className="text-slate-800">
                                   <span className="font-medium">{entry.performer?.full_name || 'Unknown'}</span>
                                   {' '}
                                   <span className="text-slate-400">

@@ -10,8 +10,8 @@ export default function AdminPage() {
 
   const adminSections = [
     {
-      title: 'Organization Profile',
-      description: 'View and manage your organization settings and information',
+      title: 'Company Profile',
+      description: 'View and manage your company settings and information',
       href: '/admin/organization',
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -55,7 +55,7 @@ export default function AdminPage() {
     <div className="space-y-6">
       <PageHeader
         title="Administration"
-        subtitle="Manage your organization, users, roles, and permissions"
+        subtitle="Manage your company, users, roles, and permissions"
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -63,17 +63,17 @@ export default function AdminPage() {
           <Link
             key={section.href}
             href={section.href}
-            className="bg-slate-800 border border-slate-700 rounded-lg p-6 hover:border-purple-500 hover:bg-slate-700/50 transition-all group"
+            className="bg-white border border-slate-200 rounded-xl p-6 hover:border-primary-300 hover:shadow-card-hover transition-all group shadow-card"
           >
             <div className="flex items-start space-x-4">
-              <div className="text-purple-400 group-hover:text-purple-300 transition-colors">
+              <div className="text-primary-600 group-hover:text-primary-700 transition-colors">
                 {section.icon}
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white group-hover:text-purple-300 transition-colors">
+                <h3 className="text-lg font-semibold text-slate-800 group-hover:text-primary-700 transition-colors">
                   {section.title}
                 </h3>
-                <p className="text-sm text-slate-400 mt-1">
+                <p className="text-sm text-slate-500 mt-1">
                   {section.description}
                 </p>
               </div>

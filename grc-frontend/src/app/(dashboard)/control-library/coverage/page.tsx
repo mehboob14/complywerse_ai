@@ -405,17 +405,17 @@ export default function CoverageMatrixPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Compliance Coverage Matrix</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Compliance Coverage Matrix</h1>
           <p className="text-slate-400">Evidence coverage across frameworks and categories</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex rounded-lg border border-slate-700 overflow-hidden">
+          <div className="flex rounded-lg border border-slate-200 overflow-hidden">
             <button
               onClick={() => setViewMode('heatmap')}
               className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewMode === 'heatmap' 
                   ? 'bg-primary-600 text-white' 
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
+                  : 'bg-white text-slate-400 hover:text-slate-900'
               }`}
             >
               <Grid3X3 className="h-4 w-4 inline mr-1" />
@@ -426,7 +426,7 @@ export default function CoverageMatrixPage() {
               className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewMode === 'chart' 
                   ? 'bg-primary-600 text-white' 
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
+                  : 'bg-white text-slate-400 hover:text-slate-900'
               }`}
             >
               <BarChart3 className="h-4 w-4 inline mr-1" />
@@ -447,10 +447,10 @@ export default function CoverageMatrixPage() {
               Export
             </button>
             {showExportMenu && (
-              <div className="absolute right-0 top-full z-10 mt-2 w-40 rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-lg">
+              <div className="absolute right-0 top-full z-10 mt-2 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
                 <button
                   onClick={() => exportMutation.mutate()}
-                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700"
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-200"
                 >
                   <FileText className="h-4 w-4" />
                   Export as CSV
@@ -490,7 +490,7 @@ export default function CoverageMatrixPage() {
           variant="info"
           subtitle="Total uploaded"
         />
-        <div className="rounded-xl border border-slate-700 bg-surface-800 p-4 flex items-center justify-center">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-center justify-center">
           <ProgressRing
             percentage={summaryStats?.overallCoverage || 0}
             size={80}
@@ -528,7 +528,7 @@ export default function CoverageMatrixPage() {
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
                   selectedFrameworkIds.length === 0 || selectedFrameworkIds.includes(row.id)
                     ? 'bg-primary-600 text-white'
-                    : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                    : 'bg-slate-200 text-slate-500 hover:bg-slate-600'
                 }`}
               >
                 {row.code}
@@ -584,7 +584,7 @@ export default function CoverageMatrixPage() {
           <div className="card">
             <div className="card-header">
               <h2 className="card-title flex items-center gap-2">
-                <Layers className="h-5 w-5 text-purple-400" />
+                <Layers className="h-5 w-5 text-primary-600" />
                 Coverage Distribution
               </h2>
             </div>
@@ -645,7 +645,7 @@ export default function CoverageMatrixPage() {
           {!filteredHeatmapData?.rows?.length ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <BarChart3 className="mb-4 h-12 w-12 text-slate-600" />
-              <h3 className="text-lg font-medium text-white">No coverage data available</h3>
+              <h3 className="text-lg font-medium text-slate-800">No coverage data available</h3>
               <p className="mt-1 text-slate-400">Add frameworks and evidence to see the coverage matrix</p>
             </div>
           ) : (
@@ -674,7 +674,7 @@ export default function CoverageMatrixPage() {
                         <div key={`row-${rowIdx}`} className="flex items-center gap-2 p-2">
                           <Shield className="h-4 w-4 text-slate-400" />
                           <div className="truncate">
-                            <span className="font-medium text-white text-sm">{row.code}</span>
+                            <span className="font-medium text-slate-800 text-sm">{row.code}</span>
                           </div>
                         </div>
                         {filteredHeatmapData.values[rowIdx]?.map((cell, colIdx) => (
@@ -698,13 +698,13 @@ export default function CoverageMatrixPage() {
                               }
                               className={`w-full h-12 rounded flex items-center justify-center transition-all hover:ring-2 hover:ring-primary-500 ${getCoverageColor(cell.value)}`}
                             >
-                              <span className="text-xs font-bold text-white drop-shadow-md">
+                              <span className="text-xs font-bold text-slate-800 drop-shadow-md">
                                 {cell.value}%
                               </span>
                             </button>
                             {hoveredCell?.row === rowIdx && hoveredCell?.col === colIdx && (
-                              <div className="absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-3 py-2 text-xs shadow-lg border border-slate-700">
-                                <p className="font-medium text-white">{row.code} × {filteredHeatmapData.columns[colIdx]}</p>
+                              <div className="absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-50 px-3 py-2 text-xs shadow-lg border border-slate-200">
+                                <p className="font-medium text-slate-800">{row.code} × {filteredHeatmapData.columns[colIdx]}</p>
                                 <p className={getCoverageTextColor(cell.value)}>
                                   {cell.value}% Coverage
                                 </p>
@@ -721,7 +721,7 @@ export default function CoverageMatrixPage() {
                 </div>
               </div>
 
-              <div className="mt-6 flex items-center justify-center gap-6 border-t border-slate-700 pt-4">
+              <div className="mt-6 flex items-center justify-center gap-6 border-t border-slate-200 pt-4">
                 <div className="flex items-center gap-2">
                   <Info className="h-4 w-4 text-slate-400" />
                   <span className="text-xs text-slate-400">Legend:</span>
@@ -757,17 +757,17 @@ export default function CoverageMatrixPage() {
           </div>
           <div className="space-y-2">
             {byFrameworkData.frameworks.map((fw) => (
-              <div key={fw.framework_id} className="rounded-lg border border-slate-700 overflow-hidden">
+              <div key={fw.framework_id} className="rounded-lg border border-slate-200 overflow-hidden">
                 <button
                   onClick={() => setExpandedFramework(expandedFramework === fw.framework_id ? null : fw.framework_id)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-slate-700/50 transition-colors"
+                  className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-700">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-200">
                       <Shield className="h-5 w-5 text-slate-400" />
                     </div>
                     <div className="text-left">
-                      <p className="font-medium text-white">{fw.framework_code}</p>
+                      <p className="font-medium text-slate-800">{fw.framework_code}</p>
                       <p className="text-xs text-slate-400">{fw.framework_name}</p>
                     </div>
                   </div>
@@ -791,15 +791,15 @@ export default function CoverageMatrixPage() {
                   </div>
                 </button>
                 {expandedFramework === fw.framework_id && (
-                  <div className="border-t border-slate-700 p-4 bg-slate-800/50">
-                    <h4 className="text-sm font-medium text-slate-300 mb-3">Coverage by Category</h4>
+                  <div className="border-t border-slate-200 p-4 bg-white/50">
+                    <h4 className="text-sm font-medium text-slate-600 mb-3">Coverage by Category</h4>
                     <div className="space-y-2">
                       {fw.by_category.map((cat, idx) => (
                         <div key={idx} className="flex items-center gap-3">
                           <span className="text-sm text-slate-400 w-40 truncate" title={cat.category_name}>
                             {cat.category_name}
                           </span>
-                          <div className="flex-1 h-2 overflow-hidden rounded-full bg-slate-700">
+                          <div className="flex-1 h-2 overflow-hidden rounded-full bg-slate-200">
                             <div
                               className={`h-full transition-all ${getCoverageColor(cat.coverage_percent)}`}
                               style={{ width: `${cat.coverage_percent}%` }}
@@ -824,24 +824,24 @@ export default function CoverageMatrixPage() {
 
       {selectedCell && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-700 p-4">
+          <div className="w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4">
               <div>
-                <h3 className="text-lg font-semibold text-white">
+                <h3 className="text-lg font-semibold text-slate-800">
                   {selectedCell.frameworkCode} × {selectedCell.category}
                 </h3>
                 <p className="text-sm text-slate-400">Coverage Details</p>
               </div>
               <button
                 onClick={closeModal}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="p-6 overflow-y-auto max-h-[60vh]">
               <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="rounded-lg bg-slate-800 p-4 text-center">
+                <div className="rounded-lg bg-white p-4 text-center">
                   <ProgressRing
                     percentage={selectedCell.coverage}
                     size={60}
@@ -849,11 +849,11 @@ export default function CoverageMatrixPage() {
                   />
                   <p className="text-xs text-slate-400 mt-2">Coverage</p>
                 </div>
-                <div className="rounded-lg bg-slate-800 p-4 text-center">
+                <div className="rounded-lg bg-white p-4 text-center">
                   <p className="text-2xl font-bold text-green-400">{selectedCell.controlsWithEvidence}</p>
                   <p className="text-xs text-slate-400">With Evidence</p>
                 </div>
-                <div className="rounded-lg bg-slate-800 p-4 text-center">
+                <div className="rounded-lg bg-white p-4 text-center">
                   <p className="text-2xl font-bold text-red-400">
                     {selectedCell.controlsTotal - selectedCell.controlsWithEvidence}
                   </p>
@@ -862,7 +862,7 @@ export default function CoverageMatrixPage() {
               </div>
 
               <div className="mb-4">
-                <div className="h-3 w-full overflow-hidden rounded-full bg-slate-700">
+                <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200">
                   <div
                     className={`h-full transition-all ${getCoverageColor(selectedCell.coverage)}`}
                     style={{ width: `${selectedCell.coverage}%` }}
@@ -876,7 +876,7 @@ export default function CoverageMatrixPage() {
                 </div>
               ) : frameworkDetail?.uncovered_control_list && frameworkDetail.uncovered_control_list.length > 0 ? (
                 <div>
-                  <h4 className="text-sm font-medium text-slate-300 mb-3">
+                  <h4 className="text-sm font-medium text-slate-600 mb-3">
                     Uncovered Controls ({frameworkDetail.uncovered_control_list.length})
                   </h4>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -886,12 +886,12 @@ export default function CoverageMatrixPage() {
                       .map((ctrl) => (
                         <div
                           key={ctrl.id}
-                          className="flex items-center justify-between rounded-lg border border-slate-700 p-3 hover:border-slate-600"
+                          className="flex items-center justify-between rounded-lg border border-slate-200 p-3 hover:border-slate-300"
                         >
                           <div className="flex items-center gap-3">
                             <XCircle className="h-4 w-4 text-red-400" />
                             <div>
-                              <p className="text-sm font-medium text-white">{ctrl.code}</p>
+                              <p className="text-sm font-medium text-slate-800">{ctrl.code}</p>
                               <p className="text-xs text-slate-400 truncate max-w-md">{ctrl.name}</p>
                             </div>
                           </div>
@@ -906,11 +906,11 @@ export default function CoverageMatrixPage() {
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <CheckCircle className="mb-3 h-10 w-10 text-green-400" />
-                  <p className="text-slate-300">All controls in this category have evidence!</p>
+                  <p className="text-slate-600">All controls in this category have evidence!</p>
                 </div>
               )}
             </div>
-            <div className="border-t border-slate-700 p-4 flex justify-end gap-3">
+            <div className="border-t border-slate-200 p-4 flex justify-end gap-3">
               <button onClick={closeModal} className="btn-ghost">
                 Close
               </button>

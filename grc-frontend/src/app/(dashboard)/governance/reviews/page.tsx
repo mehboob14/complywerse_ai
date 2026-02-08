@@ -64,7 +64,7 @@ interface ReviewStatistics {
 
 const DOCUMENT_TYPES = [
   { value: '', label: 'All Types' },
-  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-500/20' },
   { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
   { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-green-400', bgColor: 'bg-green-500/20' },
   { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
@@ -198,7 +198,7 @@ export default function GovernanceReviewsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Document Reviews</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Document Reviews</h1>
           <p className="text-slate-400">Track and complete document review schedules</p>
         </div>
         <a
@@ -211,21 +211,21 @@ export default function GovernanceReviewsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-primary-500/20 p-3">
               <Calendar className="h-6 w-6 text-primary-400" />
             </div>
             <div>
               <p className="text-sm text-slate-400">Upcoming (30 days)</p>
-              <p className="text-3xl font-bold text-white">
+              <p className="text-3xl font-bold text-slate-800">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.due_next_30_days || 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-red-500/30 bg-slate-800 p-5">
+        <div className="rounded-xl border border-red-500/30 bg-white p-5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-red-500/20 p-3">
               <AlertTriangle className="h-6 w-6 text-red-400" />
@@ -239,21 +239,21 @@ export default function GovernanceReviewsPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/20 p-3">
               <CheckCircle className="h-6 w-6 text-green-400" />
             </div>
             <div>
               <p className="text-sm text-slate-400">Completed This Month</p>
-              <p className="text-3xl font-bold text-white">
+              <p className="text-3xl font-bold text-slate-800">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.by_status?.on_track || 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-amber-500/30 bg-slate-800 p-5">
+        <div className="rounded-xl border border-amber-500/30 bg-white p-5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-amber-500/20 p-3">
               <Clock className="h-6 w-6 text-amber-400" />
@@ -268,8 +268,8 @@ export default function GovernanceReviewsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-800">
-        <div className="flex flex-col gap-4 border-b border-slate-700 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2 overflow-x-auto">
             {tabs.map((tab) => (
               <button
@@ -278,7 +278,7 @@ export default function GovernanceReviewsPage() {
                 className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.key
                     ? 'bg-primary-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    : 'bg-slate-200 text-slate-600 hover:bg-slate-600'
                 }`}
               >
                 {tab.label}
@@ -298,7 +298,7 @@ export default function GovernanceReviewsPage() {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {DOCUMENT_TYPES.map(type => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -332,10 +332,10 @@ export default function GovernanceReviewsPage() {
                 return (
                   <div
                     key={doc.id}
-                    className={`rounded-lg border p-4 transition-colors hover:bg-slate-700/50 ${
+                    className={`rounded-lg border p-4 transition-colors hover:bg-slate-50 ${
                       doc.is_overdue
                         ? 'border-red-500/50 bg-red-500/5'
-                        : 'border-slate-700 bg-slate-900/50'
+                        : 'border-slate-200 bg-slate-50/50'
                     }`}
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -346,7 +346,7 @@ export default function GovernanceReviewsPage() {
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-medium text-white truncate">{doc.title}</h3>
+                            <h3 className="font-medium text-slate-800 truncate">{doc.title}</h3>
                             {doc.is_overdue && (
                               <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400">
                                 Overdue
@@ -373,7 +373,7 @@ export default function GovernanceReviewsPage() {
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
                             <p className="text-slate-500 text-xs">Next Review</p>
-                            <p className="text-slate-300">{formatDate(doc.next_review_date)}</p>
+                            <p className="text-slate-600">{formatDate(doc.next_review_date)}</p>
                           </div>
                           <div>
                             <p className="text-slate-500 text-xs">Status</p>
@@ -381,11 +381,11 @@ export default function GovernanceReviewsPage() {
                           </div>
                           <div>
                             <p className="text-slate-500 text-xs">Last Reviewed</p>
-                            <p className="text-slate-300">{formatDate(doc.last_reviewed_at)}</p>
+                            <p className="text-slate-600">{formatDate(doc.last_reviewed_at)}</p>
                           </div>
                           <div>
                             <p className="text-slate-500 text-xs">Cycle</p>
-                            <p className="text-slate-300">{doc.review_cycle_months} months</p>
+                            <p className="text-slate-600">{doc.review_cycle_months} months</p>
                           </div>
                         </div>
 
@@ -416,8 +416,8 @@ export default function GovernanceReviewsPage() {
       </div>
 
       {statistics && Object.keys(statistics.by_doc_type).length > 0 && (
-        <div className="rounded-xl border border-slate-700 bg-slate-800 p-5">
-          <h3 className="mb-4 text-lg font-semibold text-white">Reviews by Document Type</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <h3 className="mb-4 text-lg font-semibold text-slate-800">Reviews by Document Type</h3>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Object.entries(statistics.by_doc_type).map(([docType, data]) => {
               const typeStyle = getTypeStyle(docType);
@@ -426,19 +426,19 @@ export default function GovernanceReviewsPage() {
               return (
                 <div
                   key={docType}
-                  className="rounded-lg border border-slate-700 bg-slate-900/50 p-4"
+                  className="rounded-lg border border-slate-200 bg-slate-50/50 p-4"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <div className={`rounded-lg p-2 ${typeStyle.bgColor}`}>
                       <TypeIcon className={`h-4 w-4 ${typeStyle.color}`} />
                     </div>
-                    <span className="font-medium text-white">{typeStyle.label}</span>
+                    <span className="font-medium text-slate-800">{typeStyle.label}</span>
                   </div>
                   
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-slate-400">Total</span>
-                      <span className="text-sm font-medium text-white">{data.total}</span>
+                      <span className="text-sm font-medium text-slate-800">{data.total}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-slate-400">Overdue</span>

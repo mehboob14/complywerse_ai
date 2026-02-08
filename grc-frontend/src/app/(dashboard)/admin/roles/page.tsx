@@ -201,7 +201,7 @@ export default function RolesManagementPage() {
       header: 'Role',
       accessor: (role: AdminRole) => (
         <div>
-          <div className="font-medium text-white flex items-center gap-2">
+          <div className="font-medium text-slate-800 flex items-center gap-2">
             {role.name}
             {role.is_system_role && (
               <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs">
@@ -218,13 +218,13 @@ export default function RolesManagementPage() {
     {
       header: 'Users',
       accessor: (role: AdminRole) => (
-        <span className="text-slate-300">{role.user_count}</span>
+        <span className="text-slate-600">{role.user_count}</span>
       ),
     },
     {
       header: 'Permissions',
       accessor: (role: AdminRole) => (
-        <span className="text-slate-300">{role.permissions.length}</span>
+        <span className="text-slate-600">{role.permissions.length}</span>
       ),
     },
     {
@@ -233,7 +233,7 @@ export default function RolesManagementPage() {
         <div className="flex space-x-2">
           <button
             onClick={() => handleEdit(role)}
-            className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-white rounded text-sm"
+            className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-slate-800 rounded text-sm"
           >
             {role.is_system_role ? 'View' : 'Edit'}
           </button>
@@ -253,7 +253,7 @@ export default function RolesManagementPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
       </div>
     );
   }
@@ -277,21 +277,21 @@ export default function RolesManagementPage() {
       <div className="flex justify-end">
         <button
           onClick={handleCreate}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors"
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors"
         >
           + Create Role
         </button>
       </div>
 
-      <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
         <DataTable data={roles} columns={columns} />
       </div>
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-slate-800 border border-slate-700 rounded-lg w-full max-w-4xl my-8">
-            <div className="p-6 border-b border-slate-700">
-              <h2 className="text-lg font-semibold text-white">
+          <div className="bg-white border border-slate-200 rounded-lg w-full max-w-4xl my-8">
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-800">
                 {editingRole ? (editingRole.is_system_role ? 'View Role' : 'Edit Role') : 'Create Role'}
               </h2>
             </div>
@@ -307,7 +307,7 @@ export default function RolesManagementPage() {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, name: e.target.value }))
                     }
-                    className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500"
                     required
                     disabled={editingRole?.is_system_role}
                   />
@@ -322,7 +322,7 @@ export default function RolesManagementPage() {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, description: e.target.value }))
                     }
-                    className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:border-primary-500"
                     disabled={editingRole?.is_system_role}
                   />
                 </div>
@@ -332,11 +332,11 @@ export default function RolesManagementPage() {
                 <label className="block text-sm font-medium text-slate-400 mb-4">
                   Permissions Matrix
                 </label>
-                <div className="border border-slate-700 rounded-lg overflow-hidden max-h-96 overflow-y-auto">
+                <div className="border border-slate-200 rounded-lg overflow-hidden max-h-96 overflow-y-auto">
                   {permissionMatrix.map((module) => (
-                    <div key={module.module} className="border-b border-slate-700 last:border-b-0">
+                    <div key={module.module} className="border-b border-slate-200 last:border-b-0">
                       <div
-                        className="flex items-center justify-between p-4 bg-slate-900 cursor-pointer hover:bg-slate-800"
+                        className="flex items-center justify-between p-4 bg-slate-50 cursor-pointer hover:bg-white"
                         onClick={() => toggleModuleExpand(module.module)}
                       >
                         <div className="flex items-center space-x-3">
@@ -350,10 +350,10 @@ export default function RolesManagementPage() {
                               e.stopPropagation();
                               toggleAllModulePermissions(module, e.target.checked);
                             }}
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-purple-500 focus:ring-purple-500"
+                            className="w-4 h-4 rounded border-slate-300 bg-slate-50 text-primary-600 focus:ring-primary-500"
                             disabled={editingRole?.is_system_role}
                           />
-                          <span className="font-medium text-white">{module.display_name}</span>
+                          <span className="font-medium text-slate-800">{module.display_name}</span>
                         </div>
                         <svg
                           className={`w-5 h-5 text-slate-400 transition-transform ${
@@ -368,10 +368,10 @@ export default function RolesManagementPage() {
                       </div>
 
                       {expandedModules.has(module.module) && (
-                        <div className="bg-slate-800/50 p-4">
+                        <div className="bg-white/50 p-4">
                           {module.submodules.map((sub) => (
                             <div key={sub.name} className="mb-4 last:mb-0">
-                              <div className="text-sm font-medium text-slate-300 mb-2">
+                              <div className="text-sm font-medium text-slate-600 mb-2">
                                 {sub.display_name}
                               </div>
                               <div className="flex flex-wrap gap-2">
@@ -383,8 +383,8 @@ export default function RolesManagementPage() {
                                       key={action}
                                       className={`flex items-center space-x-2 px-3 py-1.5 rounded cursor-pointer transition-colors ${
                                         isSelected
-                                          ? 'bg-purple-500/30 border border-purple-500'
-                                          : 'bg-slate-700 border border-slate-600 hover:border-slate-500'
+                                          ? 'bg-primary-500/30 border border-primary-500'
+                                          : 'bg-slate-200 border border-slate-300 hover:border-slate-400'
                                       }`}
                                     >
                                       <input
@@ -396,7 +396,7 @@ export default function RolesManagementPage() {
                                       />
                                       <span
                                         className={`text-sm ${
-                                          isSelected ? 'text-purple-300' : 'text-slate-300'
+                                          isSelected ? 'text-primary-500' : 'text-slate-600'
                                         }`}
                                       >
                                         {action.replace('_', ' ')}
@@ -414,7 +414,7 @@ export default function RolesManagementPage() {
                 </div>
               </div>
 
-              <div className="flex justify-between items-center pt-4 border-t border-slate-700">
+              <div className="flex justify-between items-center pt-4 border-t border-slate-200">
                 <div className="text-sm text-slate-400">
                   {formData.permission_names.length} permission(s) selected
                 </div>
@@ -422,7 +422,7 @@ export default function RolesManagementPage() {
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm"
+                    className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-slate-800 rounded-lg text-sm"
                   >
                     {editingRole?.is_system_role ? 'Close' : 'Cancel'}
                   </button>
@@ -430,7 +430,7 @@ export default function RolesManagementPage() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm disabled:opacity-50"
+                      className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm disabled:opacity-50"
                     >
                       {saving ? 'Saving...' : editingRole ? 'Update Role' : 'Create Role'}
                     </button>

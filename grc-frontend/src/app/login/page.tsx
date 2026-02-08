@@ -7,7 +7,6 @@ import { Shield, LogIn, AlertCircle, Building2 } from 'lucide-react';
 function getTenantSlug(): string | null {
   if (typeof window === 'undefined') return null;
   
-  // Check URL query param first (for links from registration)
   const urlParams = new URLSearchParams(window.location.search);
   const urlTenant = urlParams.get('tenant');
   if (urlTenant) {
@@ -15,7 +14,6 @@ function getTenantSlug(): string | null {
     return urlTenant;
   }
   
-  // Then check localStorage (persisted from previous session)
   return localStorage.getItem('tenant_slug');
 }
 
@@ -44,7 +42,6 @@ export default function LoginPage() {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       
-      // Add tenant slug header if we have one
       if (tenantSlug) {
         headers['X-Tenant-Slug'] = tenantSlug;
       }
@@ -59,7 +56,6 @@ export default function LoginPage() {
       if (response.ok) {
         const data = await response.json();
         
-        // Store tenant info if returned (for organization users)
         if (data.tenant) {
           localStorage.setItem('tenant_slug', data.tenant.slug || data.tenant.subdomain || '');
           localStorage.setItem('tenant_name', data.tenant.name || '');
@@ -87,47 +83,47 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-600">
-            <Shield className="h-8 w-8 text-white" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center">
+            <Shield className="h-10 w-10 text-primary-600" />
           </div>
-          <h1 className="text-2xl font-bold text-white">ComplyVerse</h1>
-          <p className="mt-2 text-slate-400">Sign in to your account</p>
+          <h1 className="text-2xl font-semibold text-slate-900">ComplyVerse</h1>
+          <p className="mt-2 text-slate-500">Sign in to your account</p>
         </div>
 
         {tenantSlug && (
-          <div className="mb-4 rounded-lg border border-primary-600/30 bg-primary-900/20 p-4">
+          <div className="mb-4 rounded-lg border border-primary-200 bg-primary-50 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Building2 className="h-5 w-5 text-primary-400" />
+                <Building2 className="h-5 w-5 text-primary-600" />
                 <div>
-                  <p className="text-sm text-slate-400">Signing in to</p>
-                  <p className="font-medium text-white">{tenantName || tenantSlug}</p>
+                  <p className="text-sm text-slate-500">Signing in to</p>
+                  <p className="font-medium text-slate-800">{tenantName || tenantSlug}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={clearTenantContext}
-                className="text-xs text-slate-400 hover:text-white underline"
+                className="text-xs text-primary-600 hover:text-primary-700 underline"
               >
-                Switch org
+                Switch company
               </button>
             </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="card space-y-6">
+        <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white p-8 shadow-card space-y-6">
           {error && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-900/50 p-3 text-red-400">
+            <div className="flex items-center gap-2 rounded-lg bg-rose-50 border border-rose-200 p-3 text-rose-700">
               <AlertCircle size={18} />
               <span className="text-sm">{error}</span>
             </div>
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="email" className="block text-sm font-medium text-slate-700">
               Email address
             </label>
             <input
@@ -135,14 +131,14 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               placeholder="you@example.com"
               required
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="password" className="block text-sm font-medium text-slate-700">
               Password
             </label>
             <input
@@ -150,8 +146,8 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              placeholder="••••••••"
+              className="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              placeholder="Enter your password"
               required
             />
           </div>
@@ -159,7 +155,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
           >
             {isLoading ? (
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -172,10 +168,10 @@ export default function LoginPage() {
           </button>
 
           <div className="mt-6 text-center">
-            <p className="text-slate-400">
-              Don't have an account?{' '}
-              <a href="/register" className="text-primary-400 hover:text-primary-300 font-medium">
-                Register your organization
+            <p className="text-slate-500">
+              Don&apos;t have an account?{' '}
+              <a href="/register" className="text-primary-600 hover:text-primary-700 font-medium">
+                Register your company
               </a>
             </p>
           </div>
