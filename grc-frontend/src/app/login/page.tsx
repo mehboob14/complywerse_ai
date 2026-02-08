@@ -61,7 +61,7 @@ export default function LoginPage() {
         
         // Store tenant info if returned (for organization users)
         if (data.tenant) {
-          localStorage.setItem('tenant_slug', data.tenant.slug || '');
+          localStorage.setItem('tenant_slug', data.tenant.slug || data.tenant.subdomain || '');
           localStorage.setItem('tenant_name', data.tenant.name || '');
           localStorage.setItem('tenant_id', String(data.tenant.id || ''));
         }

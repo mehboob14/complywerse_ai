@@ -225,7 +225,7 @@ export default function RegisterPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.tenant) {
-          localStorage.setItem('tenant_slug', data.tenant.slug);
+          localStorage.setItem('tenant_slug', data.tenant.subdomain || data.tenant.slug);
           localStorage.setItem('tenant_subdomain', data.tenant.subdomain || data.tenant.slug);
           localStorage.setItem('tenant_name', data.tenant.name);
           localStorage.setItem('tenant_id', String(data.tenant.id));

@@ -208,7 +208,7 @@ def login(
     # If subdomain provided, authenticate against that tenant's schema only
     if subdomain:
         tenant = db.query(Tenant).filter(
-            Tenant.subdomain == subdomain,
+            (Tenant.subdomain == subdomain) | (Tenant.slug == subdomain),
             Tenant.is_active == True
         ).first()
         
