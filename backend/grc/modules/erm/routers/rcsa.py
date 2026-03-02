@@ -7,7 +7,7 @@ import json
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, subqueryload
 from sqlalchemy import func, and_, or_
 
 try:
@@ -21,6 +21,185 @@ try:
     client = OpenAI()
 except Exception:
     client = None
+
+EVIDENCE_KEYWORD_MAP = {
+    "mfa_authentication": {
+        "keywords": ["mfa", "multi-factor", "multifactor", "authentication", "two-factor", "2fa", "login", "privileged account", "remote access", "access control", "identity"],
+        "suggestion": "Demonstrate that strong authentication controls are enforced by providing configuration evidence, access reviews, and policy documentation.",
+        "evidence": [
+            {"evidence_type": "MFA Configuration Evidence", "description": "Screenshots or exports showing MFA is enabled and enforced across systems", "example_files": ["mfa-config-screenshot.png", "azure-ad-mfa-policy.pdf"]},
+            {"evidence_type": "Access Control Policy", "description": "Formal policy defining authentication requirements and access control standards", "example_files": ["access-control-policy.pdf", "authentication-standard.docx"]},
+            {"evidence_type": "Privileged Account Inventory", "description": "List of privileged accounts with MFA status and last review date", "example_files": ["privileged-accounts.xlsx", "admin-account-review.pdf"]},
+            {"evidence_type": "Access Review Records", "description": "Periodic user access review results and recertification evidence", "example_files": ["access-review-q4.xlsx", "user-recertification.pdf"]},
+        ],
+    },
+    "patching_vulnerability": {
+        "keywords": ["patch", "patching", "vulnerability", "vulnerabilities", "update", "updates", "cve", "remediation", "security update", "critical vulnerability"],
+        "suggestion": "Provide evidence of timely patch deployment, vulnerability scanning, and remediation tracking for critical systems.",
+        "evidence": [
+            {"evidence_type": "Patch Management Report", "description": "Report showing patch deployment status, timelines, and compliance rates", "example_files": ["patch-status-report.xlsx", "wsus-deployment-summary.pdf"]},
+            {"evidence_type": "Vulnerability Scan Results", "description": "Latest vulnerability scan output showing identified and remediated vulnerabilities", "example_files": ["nessus-scan-results.pdf", "qualys-report.xlsx"]},
+            {"evidence_type": "Remediation Tracker", "description": "Tracking document for open vulnerabilities with target remediation dates", "example_files": ["remediation-tracker.xlsx", "vuln-remediation-plan.pdf"]},
+            {"evidence_type": "Patch Policy Document", "description": "Formal patch management policy with SLAs for critical/high/medium patches", "example_files": ["patch-management-policy.pdf", "vulnerability-management-sop.docx"]},
+        ],
+    },
+    "training_awareness": {
+        "keywords": ["training", "awareness", "security awareness", "phishing", "education", "e-learning", "employee training", "staff training", "cyber awareness"],
+        "suggestion": "Demonstrate that security awareness training is delivered regularly with completion tracking and effectiveness measurement.",
+        "evidence": [
+            {"evidence_type": "Training Completion Records", "description": "Report showing employee training completion rates and dates", "example_files": ["training-completion-report.xlsx", "lms-completion-extract.pdf"]},
+            {"evidence_type": "Training Material / Curriculum", "description": "Course content, slides, or syllabus for the security awareness program", "example_files": ["security-awareness-slides.pdf", "training-curriculum.docx"]},
+            {"evidence_type": "Phishing Simulation Results", "description": "Results from phishing simulation campaigns showing click rates and improvements", "example_files": ["phishing-sim-results.pdf", "knowbe4-report.xlsx"]},
+            {"evidence_type": "Training Attendance Records", "description": "Sign-in sheets or attendance logs from training sessions", "example_files": ["training-attendance.xlsx", "session-sign-in-sheet.pdf"]},
+        ],
+    },
+    "backup_dr": {
+        "keywords": ["backup", "disaster recovery", "bcp", "business continuity", "recovery", "restore", "rto", "rpo", "failover", "data recovery"],
+        "suggestion": "Provide evidence of regular backup verification, disaster recovery testing, and documented recovery objectives.",
+        "evidence": [
+            {"evidence_type": "Backup Verification Report", "description": "Reports confirming successful backup completion and restore testing", "example_files": ["backup-verification-report.pdf", "restore-test-results.xlsx"]},
+            {"evidence_type": "DR Test Results", "description": "Documentation from disaster recovery exercises including RTO/RPO metrics", "example_files": ["dr-test-report.pdf", "failover-test-results.docx"]},
+            {"evidence_type": "BCP / DR Plan", "description": "Current business continuity or disaster recovery plan document", "example_files": ["bcp-plan-v3.pdf", "disaster-recovery-plan.docx"]},
+            {"evidence_type": "Backup Configuration Evidence", "description": "Screenshots or exports showing backup schedules, retention, and scope", "example_files": ["backup-schedule-config.png", "backup-policy-settings.pdf"]},
+        ],
+    },
+    "encryption_data_protection": {
+        "keywords": ["encryption", "encrypt", "data protection", "dlp", "data loss", "data classification", "sensitive data", "pii", "cryptograph", "key management", "data at rest", "data in transit"],
+        "suggestion": "Demonstrate that encryption and data protection controls are in place with proper key management and classification.",
+        "evidence": [
+            {"evidence_type": "Encryption Configuration Evidence", "description": "Screenshots or settings showing encryption for data at rest and in transit", "example_files": ["tls-config-screenshot.png", "disk-encryption-status.pdf"]},
+            {"evidence_type": "Data Classification Inventory", "description": "Inventory of data assets with classification levels and protection requirements", "example_files": ["data-classification-inventory.xlsx", "data-asset-register.pdf"]},
+            {"evidence_type": "Key Management Records", "description": "Key rotation schedules, access controls, and lifecycle management evidence", "example_files": ["key-rotation-log.xlsx", "kms-access-policy.pdf"]},
+            {"evidence_type": "DLP Policy & Reports", "description": "Data loss prevention policy and recent DLP incident/alert reports", "example_files": ["dlp-policy.pdf", "dlp-incident-report.xlsx"]},
+        ],
+    },
+    "logging_monitoring": {
+        "keywords": ["logging", "monitoring", "siem", "log", "logs", "alert", "alerting", "detection", "security monitoring", "audit trail", "audit log", "event management"],
+        "suggestion": "Provide evidence that security events are logged, monitored, and that alerts are reviewed and actioned in a timely manner.",
+        "evidence": [
+            {"evidence_type": "SIEM Dashboard / Configuration", "description": "Screenshots of SIEM dashboards showing log sources, alert rules, and coverage", "example_files": ["siem-dashboard.png", "splunk-config-summary.pdf"]},
+            {"evidence_type": "Log Retention Configuration", "description": "Evidence of log retention policies and storage configuration", "example_files": ["log-retention-policy.pdf", "log-storage-config.png"]},
+            {"evidence_type": "Alert Review Records", "description": "Records showing security alerts are reviewed and investigated", "example_files": ["alert-review-log.xlsx", "soc-triage-report.pdf"]},
+            {"evidence_type": "Monitoring Coverage Report", "description": "Report showing which systems and events are covered by monitoring", "example_files": ["monitoring-coverage-matrix.xlsx", "log-source-inventory.pdf"]},
+        ],
+    },
+    "firewall_network": {
+        "keywords": ["firewall", "network security", "network segmentation", "ids", "ips", "intrusion", "perimeter", "dmz", "network access", "port", "traffic"],
+        "suggestion": "Demonstrate that network security controls are properly configured, reviewed, and tested through rule reviews and penetration testing.",
+        "evidence": [
+            {"evidence_type": "Firewall Rule Review", "description": "Recent firewall rule review showing approved rules and cleanup actions", "example_files": ["firewall-rule-review.xlsx", "fw-rule-audit-report.pdf"]},
+            {"evidence_type": "Network Architecture Diagram", "description": "Current network diagrams showing segmentation, DMZ, and security zones", "example_files": ["network-diagram.pdf", "security-zone-architecture.vsdx"]},
+            {"evidence_type": "Penetration Test Report", "description": "Recent penetration test findings and remediation status", "example_files": ["pentest-report.pdf", "external-pentest-findings.docx"]},
+            {"evidence_type": "IDS/IPS Configuration", "description": "Intrusion detection/prevention system configuration and alert tuning evidence", "example_files": ["ids-config-export.pdf", "ips-rule-policy.png"]},
+        ],
+    },
+    "change_management": {
+        "keywords": ["change management", "change control", "change request", "cab", "change advisory", "release management", "deployment", "rollback"],
+        "suggestion": "Provide evidence that changes follow a formal approval process with proper documentation, testing, and rollback procedures.",
+        "evidence": [
+            {"evidence_type": "Change Request Records", "description": "Sample change requests showing approval workflow and implementation details", "example_files": ["change-requests-log.xlsx", "sample-cr-approval.pdf"]},
+            {"evidence_type": "CAB Meeting Minutes", "description": "Change Advisory Board meeting minutes documenting change review decisions", "example_files": ["cab-meeting-minutes.pdf", "cab-decisions-log.xlsx"]},
+            {"evidence_type": "Change Management Policy", "description": "Formal change management policy and standard operating procedure", "example_files": ["change-management-policy.pdf", "change-control-sop.docx"]},
+        ],
+    },
+    "vendor_third_party": {
+        "keywords": ["vendor", "third party", "third-party", "outsourcing", "supplier", "contractor", "service provider", "sla", "soc2", "soc 2", "supply chain"],
+        "suggestion": "Demonstrate that third-party risks are assessed, monitored, and that vendor compliance is verified through audits and SLA tracking.",
+        "evidence": [
+            {"evidence_type": "Vendor Risk Assessment", "description": "Completed risk assessments for critical third-party vendors", "example_files": ["vendor-risk-assessment.xlsx", "critical-vendor-review.pdf"]},
+            {"evidence_type": "Third-Party Audit Reports", "description": "SOC 2, ISO 27001, or other audit reports from key vendors", "example_files": ["vendor-soc2-report.pdf", "supplier-iso27001-cert.pdf"]},
+            {"evidence_type": "SLA Performance Reports", "description": "Service level agreement performance tracking and compliance reports", "example_files": ["sla-performance-report.xlsx", "vendor-scorecard.pdf"]},
+            {"evidence_type": "Vendor Contracts / Agreements", "description": "Contracts with security clauses, data processing agreements, or NDAs", "example_files": ["vendor-dpa.pdf", "service-agreement.docx"]},
+        ],
+    },
+    "incident_response": {
+        "keywords": ["incident", "breach", "incident response", "forensic", "tabletop", "escalation", "security incident", "data breach", "cyber incident"],
+        "suggestion": "Provide evidence of incident response preparedness including plans, testing, and post-incident review processes.",
+        "evidence": [
+            {"evidence_type": "Incident Response Plan", "description": "Current incident response plan with roles, escalation paths, and procedures", "example_files": ["incident-response-plan.pdf", "ir-playbook.docx"]},
+            {"evidence_type": "Incident Post-Mortem Reports", "description": "Post-incident review reports with root cause analysis and lessons learned", "example_files": ["incident-postmortem.pdf", "root-cause-analysis.docx"]},
+            {"evidence_type": "Tabletop Exercise Records", "description": "Documentation from incident response tabletop exercises and drills", "example_files": ["tabletop-exercise-report.pdf", "ir-drill-results.docx"]},
+            {"evidence_type": "Incident Log", "description": "Log of security incidents with classification, response times, and resolution", "example_files": ["security-incident-log.xlsx", "incident-tracker.pdf"]},
+        ],
+    },
+    "policy_governance": {
+        "keywords": ["policy", "policies", "governance", "compliance framework", "regulatory", "regulation", "standard", "iso", "nist", "governance framework"],
+        "suggestion": "Provide evidence that governance policies are documented, approved, communicated, and regularly reviewed.",
+        "evidence": [
+            {"evidence_type": "Policy Documents", "description": "Approved policy documents with version control and review dates", "example_files": ["information-security-policy.pdf", "acceptable-use-policy.docx"]},
+            {"evidence_type": "Governance Committee Minutes", "description": "Minutes from governance/risk committee meetings showing oversight activities", "example_files": ["governance-committee-minutes.pdf", "risk-committee-report.docx"]},
+            {"evidence_type": "Policy Acknowledgment Records", "description": "Evidence that staff have read and acknowledged relevant policies", "example_files": ["policy-acknowledgment-log.xlsx", "staff-sign-off-records.pdf"]},
+        ],
+    },
+    "physical_security": {
+        "keywords": ["physical security", "physical access", "data center", "cctv", "badge", "visitor", "facility", "building security", "server room", "environmental"],
+        "suggestion": "Demonstrate that physical access controls are in place with monitoring, access logs, and environmental safeguards.",
+        "evidence": [
+            {"evidence_type": "Physical Access Logs", "description": "Badge/swipe access logs for secure areas and data centers", "example_files": ["access-log-export.xlsx", "datacenter-access-log.pdf"]},
+            {"evidence_type": "CCTV / Surveillance Records", "description": "Evidence that surveillance systems are operational and footage is retained", "example_files": ["cctv-coverage-map.pdf", "surveillance-retention-policy.docx"]},
+            {"evidence_type": "Visitor Management Records", "description": "Visitor sign-in logs and escort procedures documentation", "example_files": ["visitor-log.xlsx", "visitor-management-procedure.pdf"]},
+            {"evidence_type": "Environmental Monitoring Reports", "description": "Temperature, humidity, and fire suppression monitoring evidence", "example_files": ["environmental-monitoring-report.pdf", "ups-maintenance-log.xlsx"]},
+        ],
+    },
+    "asset_inventory": {
+        "keywords": ["asset", "inventory", "cmdb", "configuration management", "hardware", "software inventory", "it asset", "asset management", "end of life", "eol"],
+        "suggestion": "Provide evidence of a maintained IT asset inventory with classification, ownership, and lifecycle tracking.",
+        "evidence": [
+            {"evidence_type": "IT Asset Inventory", "description": "Current inventory of hardware and software assets with classification and ownership", "example_files": ["it-asset-inventory.xlsx", "cmdb-export.csv"]},
+            {"evidence_type": "Asset Lifecycle Records", "description": "Records showing asset procurement, deployment, and decommissioning", "example_files": ["asset-lifecycle-tracker.xlsx", "eol-hardware-list.pdf"]},
+            {"evidence_type": "Software License Records", "description": "Software license inventory with compliance status and renewal dates", "example_files": ["software-license-inventory.xlsx", "license-compliance-report.pdf"]},
+        ],
+    },
+}
+
+
+def get_question_specific_evidence(question_text: str, question_type: str = "", risk_category: str = "", control_objective: str = ""):
+    text_lower = (question_text or "").lower()
+    context_lower = f"{text_lower} {(risk_category or '').lower()} {(control_objective or '').lower()}"
+
+    best_match = None
+    best_score = 0
+
+    for category_key, category_data in EVIDENCE_KEYWORD_MAP.items():
+        score = 0
+        for keyword in category_data["keywords"]:
+            if keyword in context_lower:
+                score += len(keyword)
+        if score > best_score:
+            best_score = score
+            best_match = category_key
+
+    if best_match:
+        matched = EVIDENCE_KEYWORD_MAP[best_match]
+        return matched["suggestion"], matched["evidence"][:4]
+
+    if question_type == "risk_rating":
+        return (
+            f"Assess the likelihood and impact based on historical data, current controls, and industry benchmarks.",
+            [
+                {"evidence_type": "Risk Register Extract", "description": "Current risk register showing identified risks and ratings", "example_files": ["risk-register.xlsx", "risk-register-extract.pdf"]},
+                {"evidence_type": "Risk Assessment Report", "description": "Formal risk assessment documenting methodology and findings", "example_files": ["risk-assessment-report.pdf", "annual-risk-review.docx"]},
+                {"evidence_type": "Historical Incident Records", "description": "Records of past incidents and losses related to this risk area", "example_files": ["incident-log.xlsx", "loss-event-database.csv"]},
+            ],
+        )
+    elif question_type == "control_rating":
+        return (
+            f"Evaluate the design and operating effectiveness of controls through testing evidence and audit results.",
+            [
+                {"evidence_type": "Control Testing Results", "description": "Results from control testing and walkthroughs", "example_files": ["control-test-results.xlsx", "walkthrough-evidence.pdf"]},
+                {"evidence_type": "Internal Audit Report", "description": "Internal audit findings related to this control area", "example_files": ["internal-audit-report.pdf", "audit-findings-summary.docx"]},
+                {"evidence_type": "Process Documentation", "description": "Documented procedures and process flows", "example_files": ["process-flowchart.pdf", "standard-operating-procedure.docx"]},
+            ],
+        )
+    else:
+        return (
+            f"Provide relevant documentation demonstrating compliance with this requirement.",
+            [
+                {"evidence_type": "Supporting Documentation", "description": "Relevant documents supporting your response", "example_files": ["supporting-doc.pdf", "evidence-package.zip"]},
+                {"evidence_type": "Process Evidence", "description": "Screenshots or exports demonstrating process execution", "example_files": ["process-screenshot.png", "system-export.xlsx"]},
+                {"evidence_type": "Compliance Records", "description": "Records demonstrating compliance with requirements", "example_files": ["compliance-checklist.xlsx", "attestation-record.pdf"]},
+            ],
+        )
 
 from ....models import (
     RCSATemplate, RCSAQuestion, RCSACampaign, RCSAAssessment,
@@ -39,7 +218,7 @@ from ....schemas import (
     RCSAApprovalTierCreate, RCSAApprovalTierResponse, RCSAApprovalHistoryResponse,
     RCSAApprovalAction, RCSADelegateAction, RCSABUAssignRequest,
     RCSADashboardSummary, RCSAFindingsBySeverity, RCSABUProgress, RCSAAISuggestionResponse,
-    MessageResponse
+    EvidenceRecommendation, MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -414,43 +593,224 @@ async def upload_template(
     
     content = await file.read()
     
+    ALL_HEADER_KEYWORDS = [
+        'question_text', 'question text', 'question', 'assessment question',
+        'control question', 'checklist item', 'requirement', 'statement',
+        'assessment item', 'risk question', 'control description',
+        'assessment criteria', 'criteria', 'assessment',
+        'section', 'domain', 'control area', 'risk area',
+        'control domain', 'pillar', 'control category', 'risk domain', 'process area',
+        'question_type', 'question type', 'response type', 'answer type',
+        'risk_category', 'risk category', 'risk type', 'risk classification',
+        'control_objective', 'control objective', 'objective',
+        'control name', 'control id', 'control ref',
+        'guidance_text', 'guidance text', 'guidance', 'help text',
+        'is_required', 'is required', 'mandatory',
+        'risk id', 'risk_id', 'id', 'ref', 'reference', 'sr', 'sr.', 's.no', 'no.',
+        'likelihood', 'impact', 'rating', 'score', 'risk rating', 'control rating',
+        'control effectiveness', 'effectiveness', 'residual risk', 'inherent risk',
+        'owner', 'risk owner', 'control owner', 'responsible', 'responsibility',
+        'status', 'action', 'mitigation', 'treatment', 'response',
+        'finding', 'observation', 'gap', 'weakness', 'issue',
+        'evidence', 'testing', 'test result', 'result',
+        'frequency', 'last review', 'next review', 'due date',
+        'notes', 'remarks', 'comment', 'comments', 'description', 'details',
+    ]
+    
+    HEADER_MAP = {
+        'question_text': [
+            'question_text', 'question text', 'question', 'assessment question',
+            'control question', 'checklist item', 'requirement', 'statement',
+            'assessment item', 'risk question', 'control description',
+            'assessment criteria', 'criteria', 'assessment',
+            'finding', 'observation', 'risk description', 'risk statement',
+        ],
+        'section': [
+            'section', 'domain', 'category', 'area', 'control area', 'risk area',
+            'group', 'topic', 'control domain', 'function', 'pillar', 'theme',
+            'control category', 'risk domain', 'process area', 'department',
+        ],
+        'risk_id': [
+            'risk id', 'risk_id', 'id', 'ref', 'reference', 'sr', 'sr.', 's.no',
+            'no.', 'control id', 'control_id', 'item no', 'item_no', 'serial',
+        ],
+        'question_type': [
+            'question_type', 'question type', 'type', 'response type', 'answer type',
+        ],
+        'risk_category': [
+            'risk_category', 'risk category', 'risk type', 'risk classification',
+        ],
+        'control_objective': [
+            'control_objective', 'control objective', 'objective', 'control',
+            'control name', 'control ref',
+        ],
+        'guidance_text': [
+            'guidance_text', 'guidance text', 'guidance', 'help text', 'notes',
+            'explanation', 'details', 'additional info',
+            'additional information', 'hint', 'comment', 'remarks',
+        ],
+        'is_required': [
+            'is_required', 'is required', 'required', 'mandatory',
+        ],
+    }
+    
+    METADATA_LABELS = {
+        'business unit', 'business unit:', 'period', 'period:', 'date', 'date:',
+        'prepared by', 'prepared by:', 'reviewed by', 'reviewed by:',
+        'approved by', 'approved by:', 'department', 'department:',
+        'version', 'version:', 'status', 'status:', 'template', 'template:',
+        'organization', 'organization:', 'company', 'company:',
+    }
+    
+    def score_row_as_header(row_values):
+        if not row_values:
+            return 0
+        non_empty = [str(v).strip().lower() for v in row_values if v is not None and str(v).strip()]
+        if len(non_empty) < 2:
+            return 0
+        matches = 0
+        for val in non_empty:
+            for kw in ALL_HEADER_KEYWORDS:
+                if val == kw or val.replace('_', ' ') == kw:
+                    matches += 1
+                    break
+        return matches
+    
+    def find_header_row(all_rows):
+        best_row_idx = 0
+        best_score = 0
+        for idx, row in enumerate(all_rows):
+            s = score_row_as_header(row)
+            if s > best_score:
+                best_score = s
+                best_row_idx = idx
+        return best_row_idx if best_score >= 2 else 0
+    
+    def normalize_headers(raw_headers):
+        header_mapping = {}
+        normalized = [str(h).strip().lower() if h else '' for h in raw_headers]
+        for field, aliases in HEADER_MAP.items():
+            for alias in aliases:
+                for idx, nh in enumerate(normalized):
+                    if nh == alias and idx not in header_mapping.values():
+                        header_mapping[field] = idx
+                        break
+                if field in header_mapping:
+                    break
+        if 'question_text' not in header_mapping:
+            longest_text_col = -1
+            longest_avg = 0
+            for idx, nh in enumerate(normalized):
+                if nh and idx not in header_mapping.values():
+                    if longest_text_col == -1:
+                        longest_text_col = idx
+            if longest_text_col >= 0:
+                header_mapping['question_text'] = longest_text_col
+        return header_mapping
+    
+    def is_metadata_row(row_values):
+        if not row_values:
+            return True
+        first_val = str(row_values[0]).strip().lower() if row_values[0] else ''
+        if first_val in METADATA_LABELS or first_val.rstrip(':') in METADATA_LABELS:
+            return True
+        non_empty = [v for v in row_values if v is not None and str(v).strip()]
+        if len(non_empty) <= 1 and first_val and not any(c.isdigit() for c in first_val[:5]):
+            if len(first_val) < 30 and ':' in first_val:
+                return True
+        return False
+    
+    def extract_row(row_values, header_mapping):
+        def get_val(field):
+            idx = header_mapping.get(field)
+            if idx is not None and idx < len(row_values):
+                val = row_values[idx]
+                return str(val).strip() if val is not None else ''
+            return ''
+        return get_val
+    
+    def build_questions(data_rows, header_mapping):
+        questions = []
+        q_order = 0
+        for row_values in data_rows:
+            if is_metadata_row(row_values):
+                continue
+            get_val = extract_row(row_values, header_mapping)
+            q_text = get_val('question_text')
+            if not q_text:
+                non_empty_vals = [str(v).strip() for v in row_values if v is not None and str(v).strip()]
+                for val in non_empty_vals:
+                    if len(val) > 10:
+                        q_text = val
+                        break
+            if not q_text:
+                continue
+            section_val = get_val('section')
+            risk_id_val = get_val('risk_id')
+            if risk_id_val and not section_val:
+                section_val = risk_id_val
+            questions.append(RCSAQuestionCreate(
+                section=section_val,
+                question_order=q_order,
+                question_text=q_text,
+                question_type=get_val('question_type') or 'risk_rating',
+                is_required=get_val('is_required').lower() in ('true', 'yes', '1', 'mandatory', ''),
+                risk_category=get_val('risk_category') or None,
+                control_objective=get_val('control_objective') or None,
+                guidance_text=get_val('guidance_text') or None
+            ))
+            q_order += 1
+        return questions
+    
     try:
         if file.filename.endswith('.csv'):
             import csv
             from io import StringIO
             csv_content = content.decode('utf-8')
-            reader = csv.DictReader(StringIO(csv_content))
-            questions = []
-            for i, row in enumerate(reader):
-                questions.append(RCSAQuestionCreate(
-                    section=row.get('section', ''),
-                    question_order=i,
-                    question_text=row.get('question_text', row.get('question', '')),
-                    question_type=row.get('question_type', 'risk_rating'),
-                    is_required=row.get('is_required', 'true').lower() == 'true',
-                    risk_category=row.get('risk_category', None),
-                    control_objective=row.get('control_objective', None),
-                    guidance_text=row.get('guidance_text', None)
-                ))
+            reader = csv.reader(StringIO(csv_content))
+            all_rows = list(reader)
+            if not all_rows:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty CSV file")
+            header_idx = find_header_row(all_rows)
+            raw_headers = all_rows[header_idx]
+            header_mapping = normalize_headers(raw_headers)
+            data_rows = all_rows[header_idx + 1:]
+            questions = build_questions(data_rows, header_mapping)
         else:
             wb = openpyxl.load_workbook(BytesIO(content))
-            ws = wb.active
-            headers = [cell.value for cell in ws[1]]
-            questions = []
-            for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
-                if not row[0]:
-                    continue
-                row_dict = dict(zip(headers, row))
-                questions.append(RCSAQuestionCreate(
-                    section=row_dict.get('section', ''),
-                    question_order=i,
-                    question_text=row_dict.get('question_text', row_dict.get('question', '')),
-                    question_type=row_dict.get('question_type', 'risk_rating'),
-                    is_required=str(row_dict.get('is_required', 'true')).lower() == 'true',
-                    risk_category=row_dict.get('risk_category', None),
-                    control_objective=row_dict.get('control_objective', None),
-                    guidance_text=row_dict.get('guidance_text', None)
-                ))
+            question_sheet_names = [
+                'questions', 'questionnaire', 'assessment questionnaire',
+                'assessment questions', 'survey', 'checklist', 'rcsa',
+                'rcsa questions', 'self assessment', 'self-assessment',
+            ]
+            ws = None
+            for sheet_name in wb.sheetnames:
+                if sheet_name.strip().lower() in question_sheet_names:
+                    ws = wb[sheet_name]
+                    break
+            if ws is None:
+                for sheet_name in wb.sheetnames:
+                    sn_lower = sheet_name.strip().lower()
+                    for qsn in question_sheet_names:
+                        if qsn in sn_lower or sn_lower in qsn:
+                            ws = wb[sheet_name]
+                            break
+                    if ws is not None:
+                        break
+            if ws is None:
+                ws = wb.active
+            all_rows = []
+            for row in ws.iter_rows(values_only=True):
+                all_rows.append(list(row))
+            if not all_rows:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty Excel file")
+            header_idx = find_header_row(all_rows)
+            raw_headers = all_rows[header_idx]
+            header_mapping = normalize_headers(raw_headers)
+            data_rows = all_rows[header_idx + 1:]
+            questions = build_questions(data_rows, header_mapping)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to parse file: {str(e)}")
     
@@ -579,7 +939,7 @@ def list_campaigns(
     
     query = db.query(RCSACampaign).options(
         joinedload(RCSACampaign.template),
-        joinedload(RCSACampaign.assessments)
+        subqueryload(RCSACampaign.assessments)
     ).filter(RCSACampaign.tenant_id.in_(user_tenants))
     
     if tenant_id:
@@ -657,6 +1017,107 @@ def get_campaign(
         assessment_count=len(campaign.assessments),
         completed_count=sum(1 for a in campaign.assessments if a.status == "approved")
     )
+
+
+@router.get("/campaigns/{campaign_id}/detail")
+def get_campaign_detail(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    campaign = db.query(RCSACampaign).options(
+        joinedload(RCSACampaign.template),
+        joinedload(RCSACampaign.assessments).joinedload(RCSAAssessment.business_unit),
+        joinedload(RCSACampaign.assessments).joinedload(RCSAAssessment.assessor),
+        joinedload(RCSACampaign.assessments).joinedload(RCSAAssessment.findings)
+    ).filter(
+        RCSACampaign.id == campaign_id,
+        RCSACampaign.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    
+    assessments_data = []
+    total_findings = 0
+    risk_scores = []
+    control_scores = []
+    completed_count = 0
+    
+    for a in campaign.assessments:
+        findings_count = len(a.findings) if a.findings else 0
+        total_findings += findings_count
+        
+        progress = 0
+        if a.status == "approved":
+            progress = 100
+            completed_count += 1
+        elif a.status == "submitted" or a.status == "under_review":
+            progress = 100
+        elif a.status == "in_progress":
+            total_responses = db.query(func.count(RCSAResponse.id)).filter(
+                RCSAResponse.assessment_id == a.id
+            ).scalar() or 0
+            total_questions = 0
+            if campaign.template:
+                total_questions = db.query(func.count(RCSAQuestion.id)).filter(
+                    RCSAQuestion.template_id == campaign.template_id
+                ).scalar() or 0
+            progress = int((total_responses / total_questions * 100) if total_questions > 0 else 0)
+        
+        if a.overall_risk_score is not None:
+            risk_scores.append(a.overall_risk_score)
+        if a.overall_control_score is not None:
+            control_scores.append(a.overall_control_score)
+        
+        assessment_data = {
+            "id": a.id,
+            "business_unit_id": a.business_unit_id,
+            "business_unit_name": a.business_unit.name if a.business_unit else "Unknown",
+            "assessor_id": a.assessor_id,
+            "assessor_name": a.assessor.display_name or a.assessor.username if a.assessor else None,
+            "assessor_email": a.assessor.email if a.assessor else None,
+            "status": a.status,
+            "progress": progress,
+            "risk_score": a.overall_risk_score,
+            "control_score": a.overall_control_score,
+            "findings_count": findings_count,
+            "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
+            "reviewed_at": a.completed_at.isoformat() if a.completed_at else None,
+        }
+        assessments_data.append(assessment_data)
+    
+    assigned_units = len(campaign.assessments)
+    overall_progress = int((completed_count / assigned_units * 100) if assigned_units > 0 else 0)
+    pending_assessments = sum(1 for a in campaign.assessments if a.status in ["not_started", "in_progress"])
+    
+    avg_risk = round(sum(risk_scores) / len(risk_scores), 2) if risk_scores else None
+    avg_control = round(sum(control_scores) / len(control_scores), 2) if control_scores else None
+    
+    return {
+        "id": campaign.id,
+        "tenant_id": campaign.tenant_id,
+        "name": campaign.name,
+        "description": campaign.description,
+        "template_id": campaign.template_id,
+        "template_name": campaign.template.name if campaign.template else None,
+        "status": campaign.status,
+        "period": campaign.period_label or campaign.period_type,
+        "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
+        "end_date": campaign.due_date.isoformat() if campaign.due_date else None,
+        "progress": overall_progress,
+        "assigned_units": assigned_units,
+        "completed_units": completed_count,
+        "pending_assessments": pending_assessments,
+        "assessments": assessments_data,
+        "total_findings": total_findings,
+        "avg_risk_score": avg_risk,
+        "avg_control_score": avg_control,
+        "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
+        "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
+    }
 
 
 @router.post("/campaigns", response_model=RCSACampaignResponse, status_code=status.HTTP_201_CREATED)
@@ -828,6 +1289,23 @@ def activate_campaign(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Campaign can only be activated from draft status")
     
     db_campaign.status = "active"
+    
+    existing_assessments = db.query(RCSAAssessment).filter(
+        RCSAAssessment.campaign_id == campaign_id
+    ).count()
+    
+    if existing_assessments == 0:
+        business_units = db.query(BusinessUnit).filter(
+            BusinessUnit.tenant_id == db_campaign.tenant_id
+        ).all()
+        for bu in business_units:
+            assessment = RCSAAssessment(
+                tenant_id=db_campaign.tenant_id,
+                campaign_id=campaign_id,
+                business_unit_id=bu.id
+            )
+            db.add(assessment)
+    
     db.commit()
     db.refresh(db_campaign)
     
@@ -958,6 +1436,7 @@ def list_assessments(
     business_unit_id: Optional[int] = None,
     status_filter: Optional[str] = None,
     assessor_id: Optional[int] = None,
+    mine: Optional[bool] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -975,6 +1454,8 @@ def list_assessments(
         joinedload(RCSAAssessment.findings)
     ).filter(RCSAAssessment.tenant_id.in_(user_tenants))
     
+    if mine:
+        query = query.filter(RCSAAssessment.assessor_id == current_user.id)
     if campaign_id:
         query = query.filter(RCSAAssessment.campaign_id == campaign_id)
     if business_unit_id:
@@ -1074,6 +1555,7 @@ def get_assessment_detail(
     current_user: GRCUser = Depends(require_auth)
 ):
     """Get detailed assessment with questions and responses for the assessment form"""
+    from ....models import RCSAResponseEvidence
     user_tenants = get_user_tenants(current_user, db)
     
     assessment = db.query(RCSAAssessment).options(
@@ -1109,7 +1591,7 @@ def get_assessment_detail(
             guidance=q.guidance_text,
             question_type=q.question_type,
             is_required=q.is_required,
-            sequence=q.sequence or 0,
+            sequence=q.question_order or 0,
             question_order=q.question_order or 0,
             ai_suggestion_enabled=q.ai_suggestion_enabled or False,
             risk_category=q.risk_category,
@@ -1385,24 +1867,21 @@ def get_ai_suggestions(
     suggestions = []
     
     for question in template.questions:
-        if not question.ai_suggestion_enabled:
-            continue
         
         existing_response = db.query(RCSAResponse).filter(
             RCSAResponse.assessment_id == assessment_id,
             RCSAResponse.question_id == question.id
         ).first()
         
-        if existing_response and existing_response.response_value:
-            continue
-        
         suggestion_text = ""
         confidence = 0.0
         gaps = []
         
+        evidence_recs = []
+        
         if client:
             try:
-                prompt = f"""You are an enterprise risk management expert. Generate a suggestion for the following RCSA question.
+                prompt = f"""You are an enterprise GRC expert. For the following RCSA assessment question, suggest what specific types of evidence the user should upload to demonstrate compliance.
 
 Business Unit: {bu_name}
 Question: {question.question_text}
@@ -1410,11 +1889,12 @@ Question Type: {question.question_type}
 Risk Category: {question.risk_category or 'General'}
 Control Objective: {question.control_objective or 'Not specified'}
 
-Provide a professional, concise suggestion for how to respond to this question.
-Also identify any potential gaps or areas of concern.
+Provide:
+1. A concise suggestion for how to respond
+2. 2-4 specific evidence types the user should upload, with descriptions and example file names
 
 Format your response as JSON:
-{{"suggestion": "your suggestion", "confidence": 0.8, "gaps": ["gap1", "gap2"]}}"""
+{{"suggestion": "your suggestion text", "confidence": 0.85, "gaps": ["gap1"], "evidence_recommendations": [{{"evidence_type": "Policy Document", "description": "Formal policy covering this control area", "example_files": ["access-control-policy.pdf", "security-policy-v2.docx"]}}, ...]}}"""
 
                 response = client.chat.completions.create(
                     model="gpt-4o",
@@ -1426,16 +1906,18 @@ Format your response as JSON:
                 suggestion_text = result.get("suggestion", "")
                 confidence = result.get("confidence", 0.7)
                 gaps = result.get("gaps", [])
+                evidence_recs = result.get("evidence_recommendations", [])
             except Exception:
-                suggestion_text = f"Consider reviewing controls and risks related to {question.risk_category or 'this area'}."
+                suggestion_text, evidence_recs = get_question_specific_evidence(
+                    question.question_text, question.question_type,
+                    question.risk_category, question.control_objective
+                )
                 confidence = 0.5
         else:
-            if question.question_type == "risk_rating":
-                suggestion_text = f"For {bu_name}, assess the likelihood and impact of risks in {question.risk_category or 'this area'} based on historical data and current controls."
-            elif question.question_type == "control_rating":
-                suggestion_text = f"Evaluate the design and operating effectiveness of controls related to {question.control_objective or 'this control objective'}."
-            else:
-                suggestion_text = f"Provide a detailed response based on {bu_name}'s current practices."
+            suggestion_text, evidence_recs = get_question_specific_evidence(
+                question.question_text, question.question_type,
+                question.risk_category, question.control_objective
+            )
             confidence = 0.5
         
         suggestions.append(RCSAAISuggestionResponse(
@@ -1443,7 +1925,8 @@ Format your response as JSON:
             suggestion=suggestion_text,
             confidence=confidence,
             reasoning=f"Based on {bu_name}'s operational context",
-            gaps_detected=gaps
+            gaps_detected=gaps,
+            evidence_recommendations=evidence_recs
         ))
     
     return suggestions
@@ -2195,7 +2678,8 @@ def get_dashboard_summary(
         return RCSADashboardSummary(
             total_campaigns=0, active_campaigns=0, total_assessments=0,
             completed_assessments=0, pending_approval=0, overdue_assessments=0,
-            completion_rate=0.0, avg_risk_score=None, avg_control_score=None
+            completion_rate=0.0, avg_risk_score=None, avg_control_score=None,
+            pending_assessments=0, open_findings=0
         )
     
     campaign_query = db.query(RCSACampaign).filter(RCSACampaign.tenant_id.in_(user_tenants))
@@ -2226,6 +2710,13 @@ def get_dashboard_summary(
     risk_scores = [a.overall_risk_score for a in assessments if a.overall_risk_score]
     control_scores = [a.overall_control_score for a in assessments if a.overall_control_score]
     
+    pending_assessments = sum(1 for a in assessments if a.status in ["not_started", "in_progress"])
+    
+    finding_query = db.query(RCSAFinding).filter(RCSAFinding.tenant_id.in_(user_tenants))
+    if tenant_id:
+        finding_query = finding_query.filter(RCSAFinding.tenant_id == tenant_id)
+    open_findings = finding_query.filter(RCSAFinding.status.in_(["open", "in_progress"])).count()
+    
     return RCSADashboardSummary(
         total_campaigns=total_campaigns,
         active_campaigns=active_campaigns,
@@ -2235,7 +2726,9 @@ def get_dashboard_summary(
         overdue_assessments=overdue_count,
         completion_rate=round(completion_rate, 1),
         avg_risk_score=round(sum(risk_scores) / len(risk_scores), 2) if risk_scores else None,
-        avg_control_score=round(sum(control_scores) / len(control_scores), 2) if control_scores else None
+        avg_control_score=round(sum(control_scores) / len(control_scores), 2) if control_scores else None,
+        pending_assessments=pending_assessments,
+        open_findings=open_findings
     )
 
 
@@ -2339,6 +2832,50 @@ def get_business_unit_progress(
         )
         for bu_id, stats in bu_stats.items()
     ]
+
+
+@router.get("/dashboard/recent-campaigns")
+def get_recent_campaigns(
+    tenant_id: Optional[int] = None,
+    limit: int = 5,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    
+    query = db.query(RCSACampaign).options(
+        joinedload(RCSACampaign.template),
+        subqueryload(RCSACampaign.assessments)
+    ).filter(RCSACampaign.tenant_id.in_(user_tenants))
+    
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        query = query.filter(RCSACampaign.tenant_id == tenant_id)
+    
+    campaigns = query.order_by(RCSACampaign.updated_at.desc()).limit(limit).all()
+    
+    result = []
+    for c in campaigns:
+        assigned_units = len(c.assessments)
+        completed_units = sum(1 for a in c.assessments if a.status == "approved")
+        progress = int((completed_units / assigned_units * 100) if assigned_units > 0 else 0)
+        
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "template_name": c.template.name if c.template else None,
+            "status": c.status,
+            "period": c.period_label or c.period_type,
+            "start_date": c.start_date.isoformat() if c.start_date else None,
+            "end_date": c.due_date.isoformat() if c.due_date else None,
+            "progress": progress,
+            "assigned_units": assigned_units,
+            "completed_units": completed_units,
+        })
+    
+    return result
 
 
 # RCSA Evidence Upload Endpoints

@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { complianceApi, evidenceApi } from '@/lib/api';
+import { complianceApi, evidenceApi, governanceApi } from '@/lib/api';
+
 import {
   FileText,
   Search,
@@ -117,18 +118,18 @@ const CONTROL_PRIORITY_OPTIONS = [
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  compliant: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Compliant' },
-  partially_compliant: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Partially Compliant' },
-  non_compliant: { bg: 'bg-rose-50', text: 'text-rose-600', label: 'Non-Compliant' },
-  not_assessed: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Not Assessed' },
-  not_applicable: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Not Applicable' },
+  compliant: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Compliant' },
+  partially_compliant: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Partially Compliant' },
+  non_compliant: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Non-Compliant' },
+  not_assessed: { bg: 'bg-gray-50', text: 'text-gray-700', label: 'Not Assessed' },
+  not_applicable: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Not Applicable' },
 };
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
-  critical: { bg: 'bg-rose-50', text: 'text-rose-600' },
-  high: { bg: 'bg-orange-50', text: 'text-orange-600' },
-  medium: { bg: 'bg-amber-50', text: 'text-amber-600' },
-  low: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  critical: { bg: 'bg-rose-50', text: 'text-rose-700' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-700' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-700' },
+  low: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
 };
 
 export default function PolicyStatementsPage() {
@@ -136,6 +137,7 @@ export default function PolicyStatementsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [documentFilter, setDocumentFilter] = useState('');
   const [page, setPage] = useState(0);
   const [pageSize] = useState(10);
   const [selectedStatement, setSelectedStatement] = useState<StatementDetail | null>(null);
@@ -158,7 +160,7 @@ export default function PolicyStatementsPage() {
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['compliance-statements', statusFilter, priorityFilter, categoryFilter, page, pageSize],
+    queryKey: ['compliance-statements', statusFilter, priorityFilter, categoryFilter, documentFilter, page, pageSize],
     queryFn: async () => {
       const params: Record<string, any> = {
         skip: page * pageSize,
@@ -167,10 +169,21 @@ export default function PolicyStatementsPage() {
       if (statusFilter) params.compliance_status = statusFilter;
       if (priorityFilter) params.priority = priorityFilter;
       if (categoryFilter) params.category = categoryFilter;
+      if (documentFilter) params.document_id = Number(documentFilter);
       const response = await complianceApi.statements.getAll(params);
       return response.data;
     },
   });
+
+  const { data: documentsData } = useQuery({
+    queryKey: ['governance-documents', 'compliance-statements'],
+    queryFn: async () => {
+      const response = await governanceApi.getDocuments({ limit: 500 });
+      if (Array.isArray(response.data)) return response.data;
+      return (response.data as any)?.items || [];
+    },
+  });
+  const documents = documentsData || [];
 
   const { data: evidenceList } = useQuery({
     queryKey: ['evidence-list'],
@@ -314,10 +327,10 @@ export default function PolicyStatementsPage() {
 
   if (error) {
     return (
-      <div className="card">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <div className="flex flex-col items-center justify-center py-12">
           <AlertCircle className="h-12 w-12 text-rose-600 mb-4" />
-          <p className="text-slate-600">Failed to load policy statements</p>
+          <p className="text-gray-600">Failed to load policy statements</p>
         </div>
       </div>
     );
@@ -326,12 +339,12 @@ export default function PolicyStatementsPage() {
   return (
     <div className="space-y-6">
       {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-500/30 rounded-lg p-4 flex items-center gap-3">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-center gap-3">
           <CheckCircle className="h-5 w-5 text-emerald-600" />
-          <p className="text-emerald-300">{successMessage}</p>
+          <p className="text-emerald-700">{successMessage}</p>
           <button
             onClick={() => setSuccessMessage(null)}
-            className="ml-auto text-emerald-600 hover:text-emerald-300"
+            className="ml-auto text-emerald-600 hover:text-emerald-700"
           >
             <X className="h-4 w-4" />
           </button>
@@ -340,29 +353,41 @@ export default function PolicyStatementsPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-600" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
             placeholder="Search statements..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10"
+            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black placeholder-gray-400"
           />
         </div>
         <div className="flex flex-wrap gap-2">
           {selectedStatementIds.length > 0 && (
             <button
               onClick={() => setIsConvertModalOpen(true)}
-              className="btn-primary flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
             >
               <Shield className="h-4 w-4" />
               Convert to Controls ({selectedStatementIds.length})
             </button>
           )}
           <select
+            value={documentFilter}
+            onChange={(e) => { setDocumentFilter(e.target.value); setPage(0); }}
+            className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[180px]"
+          >
+            <option value="">All Documents</option>
+            {documents.map((doc: any) => (
+              <option key={doc.id} value={String(doc.id)}>
+                {doc.title || doc.document_code || `Document ${doc.id}`}
+              </option>
+            ))}
+          </select>
+          <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-            className="select min-w-[150px]"
+            className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[150px]"
           >
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -371,7 +396,7 @@ export default function PolicyStatementsPage() {
           <select
             value={priorityFilter}
             onChange={(e) => { setPriorityFilter(e.target.value); setPage(0); }}
-            className="select min-w-[130px]"
+            className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[130px]"
           >
             {PRIORITY_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -381,7 +406,7 @@ export default function PolicyStatementsPage() {
             <select
               value={categoryFilter}
               onChange={(e) => { setCategoryFilter(e.target.value); setPage(0); }}
-              className="select min-w-[130px]"
+              className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[130px]"
             >
               <option value="">All Categories</option>
               {categories.map((cat: string) => (
@@ -392,115 +417,117 @@ export default function PolicyStatementsPage() {
         </div>
       </div>
 
-      <div className="table-container">
-        <table className="table">
-          <thead>
-            <tr>
-              <th className="w-12">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={handleSelectAll}
-                  className="rounded border-slate-300 bg-white text-primary-500"
-                />
-              </th>
-              <th>Code</th>
-              <th>Statement</th>
-              <th>Document</th>
-              <th>Category</th>
-              <th>Priority</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={8} className="text-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-600" />
-                </td>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-12">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={handleSelectAll}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Code</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Statement</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Document</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Category</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Priority</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
               </tr>
-            ) : filteredStatements.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="text-center py-8">
-                  <FileText className="h-12 w-12 text-slate-500 mx-auto mb-3" />
-                  <p className="text-slate-600">No policy statements found</p>
-                </td>
-              </tr>
-            ) : (
-              filteredStatements.map((stmt: Statement) => {
-                const statusStyle = STATUS_STYLES[stmt.compliance_status] || STATUS_STYLES.not_assessed;
-                const priorityStyle = PRIORITY_STYLES[stmt.priority || 'medium'] || PRIORITY_STYLES.medium;
-                const isSelected = selectedStatementIds.includes(stmt.id);
-                return (
-                  <tr key={stmt.id} className={isSelected ? 'bg-primary-50' : ''}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleToggleStatement(stmt.id)}
-                        className="rounded border-slate-300 bg-white text-primary-500"
-                      />
-                    </td>
-                    <td className="font-mono text-xs">{stmt.statement_code || '-'}</td>
-                    <td className="max-w-xs">
-                      <p className="truncate text-sm">
-                        {stmt.statement_summary || stmt.statement_text?.slice(0, 80) + '...' || '-'}
-                      </p>
-                    </td>
-                    <td>
-                      <span className="text-sm text-slate-600">{stmt.document_title || '-'}</span>
-                    </td>
-                    <td>
-                      <span className="text-sm capitalize">{stmt.category?.replace(/_/g, ' ') || '-'}</span>
-                    </td>
-                    <td>
-                      <span className={`badge ${priorityStyle.bg} ${priorityStyle.text} capitalize`}>
-                        {stmt.priority || 'medium'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge ${statusStyle.bg} ${statusStyle.text}`}>
-                        {statusStyle.label}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        onClick={() => handleOpenModal(stmt.id)}
-                        className="btn-ghost btn-sm"
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+                  </td>
+                </tr>
+              ) : filteredStatements.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-8">
+                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-600">No policy statements found</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredStatements.map((stmt: Statement) => {
+                  const statusStyle = STATUS_STYLES[stmt.compliance_status] || STATUS_STYLES.not_assessed;
+                  const priorityStyle = PRIORITY_STYLES[stmt.priority || 'medium'] || PRIORITY_STYLES.medium;
+                  const isSelected = selectedStatementIds.includes(stmt.id);
+                  return (
+                    <tr key={stmt.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50' : 'bg-white'}`}>
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleStatement(stmt.id)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-700">{stmt.statement_code || '-'}</td>
+                      <td className="px-4 py-3 max-w-xs">
+                        <p className="truncate text-sm text-black">
+                          {stmt.statement_summary || stmt.statement_text?.slice(0, 80) + '...' || '-'}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-gray-600">{stmt.document_title || '-'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm capitalize text-gray-700">{stmt.category?.replace(/_/g, ' ') || '-'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 text-xs font-medium rounded capitalize ${priorityStyle.bg} ${priorityStyle.text}`}>
+                          {stmt.priority || 'medium'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 text-xs font-medium rounded ${statusStyle.bg} ${statusStyle.text}`}>
+                          {statusStyle.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => handleOpenModal(stmt.id)}
+                          className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="View Details"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-600">
+        <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <p className="text-sm text-gray-600">
             Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, total)} of {total} statements
           </p>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(Math.max(0, page - 1))}
               disabled={page === 0}
-              className="btn-secondary btn-sm"
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-sm text-slate-600">
+            <span className="text-sm text-gray-600">
               Page {page + 1} of {totalPages}
             </span>
             <button
               onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
               disabled={page >= totalPages - 1}
-              className="btn-secondary btn-sm"
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -510,30 +537,30 @@ export default function PolicyStatementsPage() {
 
       {isConvertModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+          <div className="bg-white rounded-xl w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div>
                 <h2 className="text-lg font-semibold text-black">Convert to Internal Controls</h2>
-                <p className="text-sm text-slate-600">Create controls from {selectedStatementIds.length} selected statement(s)</p>
+                <p className="text-sm text-gray-600">Create controls from {selectedStatementIds.length} selected statement(s)</p>
               </div>
-              <button onClick={() => setIsConvertModalOpen(false)} className="btn-ghost btn-sm">
+              <button onClick={() => setIsConvertModalOpen(false)} className="p-2 text-gray-500 hover:text-black hover:bg-gray-100 rounded-lg transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="p-6 space-y-6">
-              <div className="bg-slate-50 rounded-lg p-4">
-                <p className="text-sm text-slate-600">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-gray-700">
                   <span className="font-semibold text-black">{selectedStatementIds.length}</span> statement(s) will be converted to internal controls.
                 </p>
               </div>
 
               <div>
-                <label className="label">Category (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category (Optional)</label>
                 <select
                   value={convertForm.category}
                   onChange={(e) => setConvertForm({ ...convertForm, category: e.target.value })}
-                  className="select"
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                 >
                   {CONTROL_CATEGORY_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -542,11 +569,11 @@ export default function PolicyStatementsPage() {
               </div>
 
               <div>
-                <label className="label">Priority (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Priority (Optional)</label>
                 <select
                   value={convertForm.priority}
                   onChange={(e) => setConvertForm({ ...convertForm, priority: e.target.value })}
-                  className="select"
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                 >
                   {CONTROL_PRIORITY_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -555,14 +582,14 @@ export default function PolicyStatementsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
-              <button onClick={() => setIsConvertModalOpen(false)} className="btn-secondary">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+              <button onClick={() => setIsConvertModalOpen(false)} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">
                 Cancel
               </button>
               <button
                 onClick={handleConvertToControls}
                 disabled={convertMutation.isPending}
-                className="btn-primary flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
               >
                 {convertMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -578,42 +605,42 @@ export default function PolicyStatementsPage() {
 
       {isModalOpen && selectedStatement && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div>
                 <h2 className="text-lg font-semibold text-black">Statement Details</h2>
-                <p className="text-sm text-slate-600">{selectedStatement.statement_code}</p>
+                <p className="text-sm text-gray-600">{selectedStatement.statement_code}</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="btn-ghost btn-sm">
+              <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-500 hover:text-black hover:bg-gray-100 rounded-lg transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="p-6 space-y-6">
               <div>
-                <label className="label">Statement Text</label>
-                <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-600">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Statement Text</label>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700">
                   {selectedStatement.statement_text || 'No text available'}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Document</label>
-                  <p className="text-sm text-slate-600">{selectedStatement.document_title || '-'}</p>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Document</label>
+                  <p className="text-sm text-black">{selectedStatement.document_title || '-'}</p>
                 </div>
                 <div>
-                  <label className="label">Category</label>
-                  <p className="text-sm text-slate-600 capitalize">{selectedStatement.category?.replace(/_/g, ' ') || '-'}</p>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <p className="text-sm text-black capitalize">{selectedStatement.category?.replace(/_/g, ' ') || '-'}</p>
                 </div>
               </div>
 
               <div>
-                <label className="label">Compliance Status</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Compliance Status</label>
                 <select
                   value={complianceForm.compliance_status}
                   onChange={(e) => setComplianceForm({ ...complianceForm, compliance_status: e.target.value })}
-                  className="select"
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                 >
                   {STATUS_OPTIONS.filter(o => o.value).map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -622,41 +649,41 @@ export default function PolicyStatementsPage() {
               </div>
 
               <div>
-                <label className="label">Findings</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Findings</label>
                 <textarea
                   value={complianceForm.findings}
                   onChange={(e) => setComplianceForm({ ...complianceForm, findings: e.target.value })}
-                  className="input min-h-[100px]"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
                   placeholder="Document your findings..."
                 />
               </div>
 
               <div>
-                <label className="label">Remediation Notes</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Remediation Notes</label>
                 <textarea
                   value={complianceForm.remediation_notes}
                   onChange={(e) => setComplianceForm({ ...complianceForm, remediation_notes: e.target.value })}
-                  className="input min-h-[80px]"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[80px]"
                   placeholder="Remediation plan..."
                 />
               </div>
 
               <div>
-                <label className="label">Next Assessment Date</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Next Assessment Date</label>
                 <input
                   type="date"
                   value={complianceForm.next_assessment_date}
                   onChange={(e) => setComplianceForm({ ...complianceForm, next_assessment_date: e.target.value })}
-                  className="input"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="label flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
                   <LinkIcon className="h-4 w-4" />
                   Link Evidence
                 </label>
-                <div className="space-y-2 max-h-40 overflow-y-auto bg-slate-50 rounded-lg p-3">
+                <div className="space-y-2 max-h-40 overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
                   {(evidenceList || []).map((ev: any) => (
                     <label key={ev.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-2 rounded">
                       <input
@@ -669,25 +696,25 @@ export default function PolicyStatementsPage() {
                             setEvidenceToLink(evidenceToLink.filter(id => id !== ev.id));
                           }
                         }}
-                        className="rounded border-slate-300 bg-white text-primary-500"
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="text-sm text-slate-600">{ev.name}</span>
+                      <span className="text-sm text-gray-700">{ev.name}</span>
                     </label>
                   ))}
                   {(!evidenceList || evidenceList.length === 0) && (
-                    <p className="text-sm text-slate-500 text-center py-2">No evidence available</p>
+                    <p className="text-sm text-gray-500 text-center py-2">No evidence available</p>
                   )}
                 </div>
               </div>
 
               {selectedStatement.evidence && selectedStatement.evidence.length > 0 && (
                 <div>
-                  <label className="label">Linked Evidence</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Linked Evidence</label>
                   <div className="space-y-2">
                     {selectedStatement.evidence.map((ev) => (
-                      <div key={ev.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg">
+                      <div key={ev.id} className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 p-2 rounded-lg">
                         <CheckCircle className="h-4 w-4 text-emerald-600" />
-                        <span className="text-sm text-slate-600">{ev.name}</span>
+                        <span className="text-sm text-gray-700">{ev.name}</span>
                       </div>
                     ))}
                   </div>
@@ -695,14 +722,14 @@ export default function PolicyStatementsPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
-              <button onClick={() => setIsModalOpen(false)} className="btn-secondary">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+              <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">
                 Cancel
               </button>
               <button
                 onClick={handleSaveCompliance}
                 disabled={updateComplianceMutation.isPending}
-                className="btn-primary"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
               >
                 {updateComplianceMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

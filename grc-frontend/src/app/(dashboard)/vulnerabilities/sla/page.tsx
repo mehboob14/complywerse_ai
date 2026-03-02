@@ -29,7 +29,7 @@ const SEVERITY_STYLES: Record<string, { bg: string; text: string }> = {
   high: { bg: 'bg-orange-50', text: 'text-orange-600' },
   medium: { bg: 'bg-yellow-50', text: 'text-yellow-600' },
   low: { bg: 'bg-blue-50', text: 'text-blue-600' },
-  info: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  info: { bg: 'bg-[var(--color-subtle)]', text: 'text-[var(--color-text-secondary)]' },
 };
 
 const DEFAULT_SLA: Record<string, number> = {
@@ -122,39 +122,39 @@ export default function SLAConfigPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-black">SLA Configuration</h1>
-        <p className="mt-1 text-slate-600">Configure remediation SLA timeframes by severity</p>
+        <h1 className="text-2xl font-bold cw-text-default">SLA Configuration</h1>
+        <p className="mt-1 cw-text-muted">Configure remediation SLA timeframes by severity</p>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="cw-card overflow-hidden">
         <table className="w-full">
-          <thead className="bg-slate-50/50">
+          <thead className="bg-[var(--color-subtle)]">
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
                 Severity
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
                 Remediation Days
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
                 Notification Days
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
                 Escalation Days
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700">
+          <tbody className="divide-y divide-[var(--color-border)]">
             {SEVERITY_ORDER.map((severity) => {
               const config = getSLAForSeverity(severity);
               const style = SEVERITY_STYLES[severity];
               const isEditing = editingId === config?.id;
 
               return (
-                <tr key={severity} className="hover:bg-slate-50 transition-colors">
+                <tr key={severity} className="hover:bg-[var(--color-hover)] transition-colors">
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${style.bg} ${style.text} capitalize`}>
                       {severity}
@@ -171,10 +171,10 @@ export default function SLAConfigPage() {
                           min="1"
                         />
                       ) : (
-                        <span className="text-black font-medium">{config.remediation_days} days</span>
+                        <span className="cw-text-default font-medium">{config.remediation_days} days</span>
                       )
                     ) : (
-                      <span className="text-slate-500">Not configured</span>
+                      <span className="cw-text-muted">Not configured</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
@@ -189,12 +189,12 @@ export default function SLAConfigPage() {
                           placeholder="Days before"
                         />
                       ) : (
-                        <span className="text-slate-600">
+                        <span className="cw-text-muted">
                           {config.notification_days ? `${config.notification_days} days before` : '-'}
                         </span>
                       )
                     ) : (
-                      <span className="text-slate-500">-</span>
+                      <span className="cw-text-muted">-</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
@@ -209,12 +209,12 @@ export default function SLAConfigPage() {
                           placeholder="Days after"
                         />
                       ) : (
-                        <span className="text-slate-600">
+                        <span className="cw-text-muted">
                           {config.escalation_days ? `${config.escalation_days} days after` : '-'}
                         </span>
                       )
                     ) : (
-                      <span className="text-slate-500">-</span>
+                      <span className="cw-text-muted">-</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
@@ -224,14 +224,14 @@ export default function SLAConfigPage() {
                           <button
                             onClick={handleSave}
                             disabled={updateMutation.isPending}
-                            className="p-1.5 rounded-lg text-green-600 hover:bg-slate-200 transition-colors"
+                            className="p-1.5 rounded-lg text-green-600 hover:bg-[var(--color-hover)] transition-colors"
                             title="Save"
                           >
                             <Save size={16} />
                           </button>
                           <button
                             onClick={handleCancel}
-                            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors"
+                            className="p-1.5 rounded-lg cw-text-muted hover:bg-[var(--color-hover)] transition-colors"
                             title="Cancel"
                           >
                             <X size={16} />
@@ -240,7 +240,7 @@ export default function SLAConfigPage() {
                       ) : (
                         <button
                           onClick={() => handleEdit(config)}
-                          className="p-1.5 rounded-lg text-slate-600 hover:text-primary-600 hover:bg-slate-200 transition-colors"
+                          className="p-1.5 rounded-lg cw-text-muted hover:text-[var(--color-primary)] hover:bg-[var(--color-hover)] transition-colors"
                           title="Edit"
                         >
                           <Edit2 size={16} />
@@ -263,27 +263,27 @@ export default function SLAConfigPage() {
         </table>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+      <div className="cw-card p-6">
+        <h2 className="text-lg font-semibold cw-text-default mb-4 flex items-center gap-2">
           <Clock className="h-5 w-5 text-primary-600" />
           SLA Guidelines
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="p-4 rounded-lg bg-slate-200/50">
-            <h3 className="font-medium text-black mb-2">Remediation Days</h3>
-            <p className="text-sm text-slate-600">
+          <div className="p-4 rounded-lg bg-[var(--color-subtle)]">
+            <h3 className="font-medium cw-text-default mb-2">Remediation Days</h3>
+            <p className="text-sm cw-text-muted">
               Maximum time allowed to remediate vulnerabilities of this severity before they are considered overdue.
             </p>
           </div>
-          <div className="p-4 rounded-lg bg-slate-200/50">
-            <h3 className="font-medium text-black mb-2">Notification Days</h3>
-            <p className="text-sm text-slate-600">
+          <div className="p-4 rounded-lg bg-[var(--color-subtle)]">
+            <h3 className="font-medium cw-text-default mb-2">Notification Days</h3>
+            <p className="text-sm cw-text-muted">
               Number of days before the due date to send reminder notifications to assignees.
             </p>
           </div>
-          <div className="p-4 rounded-lg bg-slate-200/50">
-            <h3 className="font-medium text-black mb-2">Escalation Days</h3>
-            <p className="text-sm text-slate-600">
+          <div className="p-4 rounded-lg bg-[var(--color-subtle)]">
+            <h3 className="font-medium cw-text-default mb-2">Escalation Days</h3>
+            <p className="text-sm cw-text-muted">
               Number of days after the due date to escalate overdue vulnerabilities to management.
             </p>
           </div>

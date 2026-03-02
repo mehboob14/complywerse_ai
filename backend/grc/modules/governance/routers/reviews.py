@@ -7,9 +7,10 @@ from sqlalchemy import or_, and_, func, extract
 from pydantic import BaseModel
 
 from ....models import (
-    GovernanceDocument, DocumentReviewer, DocumentAuditLog, GRCUser, get_db
+    GovernanceDocument, DocumentReviewer, DocumentAuditLog, GRCUser, get_db, GovernanceActionReview
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..action_logger import update_action_review_status
 
 router = APIRouter(prefix="/reviews", tags=["Governance - Reviews"])
 
@@ -27,6 +28,11 @@ class UpdateReviewCycleRequest(BaseModel):
 class SkipReviewRequest(BaseModel):
     reason: str
     reschedule_months: Optional[int] = None
+
+
+class UpdateActionReviewRequest(BaseModel):
+    review_status: str  # pending_review, in_review, approved, rejected, archived
+    review_notes: Optional[str] = None
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -674,4 +680,326 @@ def get_review_history(
         "total": total,
         "skip": skip,
         "limit": limit
+    }
+
+@router.get("/governance-actions/pending")
+def get_pending_governance_actions(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    action_type: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get pending governance action reviews for current user's tenants"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    query = db.query(GovernanceActionReview).filter(
+        GovernanceActionReview.tenant_id.in_(user_tenants),
+        GovernanceActionReview.review_status == "pending_review"
+    )
+    
+    if action_type:
+        query = query.filter(GovernanceActionReview.action_type == action_type)
+    
+    if entity_type:
+        query = query.filter(GovernanceActionReview.entity_type == entity_type)
+    
+    total = query.count()
+    reviews = query.order_by(GovernanceActionReview.action_date.desc()).offset(skip).limit(limit).all()
+    
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "items": [
+            {
+                "id": review.id,
+                "action_type": review.action_type,
+                "action_description": review.action_description,
+                "entity_type": review.entity_type,
+                "entity_id": review.entity_id,
+                "review_status": review.review_status,
+                "action_user_id": review.action_user_id,
+                "action_user_name": review.action_user.display_name if review.action_user else None,
+                "action_date": review.action_date.isoformat(),
+                "action_metadata": review.action_metadata,
+                "review_notes": review.review_notes,
+                "reviewer_id": review.reviewer_id,
+                "reviewer_name": review.reviewer.display_name if review.reviewer else None,
+                "review_started_at": review.review_started_at.isoformat() if review.review_started_at else None,
+                "review_completed_at": review.review_completed_at.isoformat() if review.review_completed_at else None,
+            }
+            for review in reviews
+        ]
+    }
+
+
+@router.get("/governance-actions")
+def get_all_governance_actions(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    status_filter: Optional[str] = None,
+    action_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get all governance action reviews for current user's tenants"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    query = db.query(GovernanceActionReview).filter(
+        GovernanceActionReview.tenant_id.in_(user_tenants)
+    )
+    
+    if status_filter:
+        query = query.filter(GovernanceActionReview.review_status == status_filter)
+    
+    if action_type:
+        query = query.filter(GovernanceActionReview.action_type == action_type)
+    
+    total = query.count()
+    reviews = query.order_by(GovernanceActionReview.action_date.desc()).offset(skip).limit(limit).all()
+    
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "items": [
+            {
+                "id": review.id,
+                "action_type": review.action_type,
+                "action_description": review.action_description,
+                "entity_type": review.entity_type,
+                "entity_id": review.entity_id,
+                "review_status": review.review_status,
+                "action_user_id": review.action_user_id,
+                "action_user_name": review.action_user.display_name if review.action_user else None,
+                "action_date": review.action_date.isoformat(),
+                "action_metadata": review.action_metadata,
+                "review_notes": review.review_notes,
+                "reviewer_id": review.reviewer_id,
+                "reviewer_name": review.reviewer.display_name if review.reviewer else None,
+                "review_started_at": review.review_started_at.isoformat() if review.review_started_at else None,
+                "review_completed_at": review.review_completed_at.isoformat() if review.review_completed_at else None,
+            }
+            for review in reviews
+        ]
+    }
+
+
+@router.put("/governance-actions/{review_id}")
+def update_governance_action_review(
+    review_id: int,
+    request: UpdateActionReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Update the review status of a governance action"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    review = db.query(GovernanceActionReview).filter(
+        GovernanceActionReview.id == review_id,
+        GovernanceActionReview.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not review:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Review record not found or access denied"
+        )
+    
+    review = update_action_review_status(
+        db=db,
+        review_id=review_id,
+        status=request.review_status,
+        reviewer_id=current_user.id,
+        review_notes=request.review_notes
+    )
+    
+    db.commit()
+    db.refresh(review)
+    
+    return {
+        "id": review.id,
+        "action_type": review.action_type,
+        "action_description": review.action_description,
+        "entity_type": review.entity_type,
+        "entity_id": review.entity_id,
+        "review_status": review.review_status,
+        "action_user_id": review.action_user_id,
+        "action_user_name": review.action_user.display_name if review.action_user else None,
+        "action_date": review.action_date.isoformat(),
+        "action_metadata": review.action_metadata,
+        "review_notes": review.review_notes,
+        "reviewer_id": review.reviewer_id,
+        "reviewer_name": review.reviewer.display_name if review.reviewer else None,
+        "review_started_at": review.review_started_at.isoformat() if review.review_started_at else None,
+        "review_completed_at": review.review_completed_at.isoformat() if review.review_completed_at else None,
+    }
+
+
+@router.get("/my-pending-reviews")
+def get_my_pending_reviews(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    action_type: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get pending reviews for actions taken by the current user"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    query = db.query(GovernanceActionReview).filter(
+        GovernanceActionReview.tenant_id.in_(user_tenants),
+        GovernanceActionReview.action_user_id == current_user.id,
+        GovernanceActionReview.review_status == "pending_review"
+    )
+    
+    if action_type:
+        query = query.filter(GovernanceActionReview.action_type == action_type)
+    
+    if entity_type:
+        query = query.filter(GovernanceActionReview.entity_type == entity_type)
+    
+    total = query.count()
+    reviews = query.order_by(GovernanceActionReview.action_date.desc()).offset(skip).limit(limit).all()
+    
+    # Get entity details if it's a governance document
+    items_with_details = []
+    for review in reviews:
+        item = {
+            "id": review.id,
+            "action_type": review.action_type,
+            "action_description": review.action_description,
+            "entity_type": review.entity_type,
+            "entity_id": review.entity_id,
+            "review_status": review.review_status,
+            "action_user_id": review.action_user_id,
+            "action_user_name": review.action_user.display_name if review.action_user else None,
+            "action_date": review.action_date.isoformat(),
+            "action_metadata": review.action_metadata,
+            "review_notes": review.review_notes,
+            "reviewer_id": review.reviewer_id,
+            "reviewer_name": review.reviewer.display_name if review.reviewer else None,
+            "review_started_at": review.review_started_at.isoformat() if review.review_started_at else None,
+            "review_completed_at": review.review_completed_at.isoformat() if review.review_completed_at else None,
+        }
+        
+        # Add document details if entity is a governance_document
+        if review.entity_type == "governance_document" and review.entity_id:
+            doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == review.entity_id).first()
+            if doc:
+                item["document_title"] = doc.title
+                item["document_code"] = doc.document_code
+                item["doc_type"] = doc.doc_type
+                item["document_status"] = doc.status
+        
+        items_with_details.append(item)
+    
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "items": items_with_details
+    }
+
+
+@router.get("/my-pending-approvals")
+def get_my_pending_approvals(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    action_type: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Get pending approvals for items that need approval by the current user.
+    This includes:
+    1. Actions from other users where current user is the document owner
+    2. Actions from other users where current user is assigned as reviewer
+    3. Actions where current user has admin/governance role
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    
+    # Get all pending actions from OTHER users
+    query = db.query(GovernanceActionReview).filter(
+        GovernanceActionReview.tenant_id.in_(user_tenants),
+        GovernanceActionReview.action_user_id != current_user.id,
+        GovernanceActionReview.review_status == "pending_review"
+    )
+    
+    if action_type:
+        query = query.filter(GovernanceActionReview.action_type == action_type)
+    
+    if entity_type:
+        query = query.filter(GovernanceActionReview.entity_type == entity_type)
+    
+    all_reviews = query.order_by(GovernanceActionReview.action_date.desc()).all()
+    
+    # Filter to items where current user should approve
+    items_needing_approval = []
+    for review in all_reviews:
+        should_approve = False
+        
+        # Check if current user is document owner
+        if review.entity_type == "governance_document" and review.entity_id:
+            doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == review.entity_id).first()
+            if doc and doc.owner_id == current_user.id:
+                should_approve = True
+        
+        # Check if current user is assigned as reviewer
+        if review.entity_type == "governance_document" and review.entity_id:
+            reviewer_assignment = db.query(DocumentReviewer).filter(
+                DocumentReviewer.document_id == review.entity_id,
+                DocumentReviewer.user_id == current_user.id,
+                DocumentReviewer.role_type.in_(["reviewer", "approver"])
+            ).first()
+            if reviewer_assignment:
+                should_approve = True
+        
+        # Check if user has admin/governance role
+        if hasattr(current_user, 'role') and current_user.role in ['admin', 'governance_admin']:
+            should_approve = True
+        
+        if should_approve:
+            item = {
+                "id": review.id,
+                "action_type": review.action_type,
+                "action_description": review.action_description,
+                "entity_type": review.entity_type,
+                "entity_id": review.entity_id,
+                "review_status": review.review_status,
+                "action_user_id": review.action_user_id,
+                "action_user_name": review.action_user.display_name if review.action_user else None,
+                "action_date": review.action_date.isoformat(),
+                "action_metadata": review.action_metadata,
+                "review_notes": review.review_notes,
+                "reviewer_id": review.reviewer_id,
+                "reviewer_name": review.reviewer.display_name if review.reviewer else None,
+                "review_started_at": review.review_started_at.isoformat() if review.review_started_at else None,
+                "review_completed_at": review.review_completed_at.isoformat() if review.review_completed_at else None,
+            }
+            
+            # Add document details if entity is a governance_document
+            if review.entity_type == "governance_document" and review.entity_id:
+                doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == review.entity_id).first()
+                if doc:
+                    item["document_title"] = doc.title
+                    item["document_code"] = doc.document_code
+                    item["doc_type"] = doc.doc_type
+                    item["document_status"] = doc.status
+            
+            items_needing_approval.append(item)
+    
+    # Apply pagination
+    total = len(items_needing_approval)
+    paginated_items = items_needing_approval[skip:skip + limit]
+    
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "items": paginated_items
     }

@@ -1,8 +1,19 @@
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import os
+import json
+import csv
+import re
+from io import BytesIO
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
+from pydantic import BaseModel
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
 
 from ....models import (
     InternalControl, InternalControlTest, InternalControlRiskLink,
@@ -24,6 +35,285 @@ from ....schemas import (
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/internal-controls", tags=["ERM - Internal Controls"])
+
+
+class InternalControlAIUploadItem(BaseModel):
+    control_id: Optional[str] = None
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    sub_category: Optional[str] = None
+    control_type: str = "preventive"
+    frequency: Optional[str] = "monthly"
+    regulatory_source: Optional[str] = None
+    priority: str = "medium"
+    is_key_control: bool = False
+
+
+def _get_openai_client():
+    from openai import OpenAI
+
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    if not api_key:
+        return None
+
+    is_modelfarm = "modelfarm" in (base_url or "")
+    if not is_modelfarm and (api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20):
+        return None
+    return OpenAI(api_key=api_key, base_url=base_url)
+
+
+def _normalize_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().lower()
+    return text in ["true", "yes", "1", "y"]
+
+
+def _infer_control_type(text: str) -> str:
+    value = (text or "").lower()
+    if any(k in value for k in ["detect", "monitor", "alert"]):
+        return "detective"
+    if any(k in value for k in ["recover", "correct", "respond"]):
+        return "corrective"
+    return "preventive"
+
+
+def _heuristic_control_enrichment(items: List[dict]) -> List[dict]:
+    enriched = []
+    for item in items:
+        name = str(item.get("name") or "").strip()
+        description = str(item.get("description") or "").strip()
+        joined = f"{name} {description}".lower()
+
+        category = item.get("category")
+        sub_category = item.get("sub_category")
+        if not category:
+            if any(k in joined for k in ["access", "identity", "password", "authentication"]):
+                category = "access_control"
+                sub_category = sub_category or "identity_and_access"
+            elif any(k in joined for k in ["backup", "recovery", "restore", "dr"]):
+                category = "business_continuity"
+                sub_category = sub_category or "backup_and_recovery"
+            elif any(k in joined for k in ["vendor", "third party", "supplier"]):
+                category = "third_party"
+                sub_category = sub_category or "vendor_management"
+            else:
+                category = "operational"
+                sub_category = sub_category or "general"
+
+        control_type = item.get("control_type") or _infer_control_type(joined)
+        priority = item.get("priority") or ("high" if "critical" in joined else "medium")
+
+        enriched.append({
+            "control_id": item.get("control_id"),
+            "name": name,
+            "description": description or None,
+            "category": category,
+            "sub_category": sub_category,
+            "control_type": control_type,
+            "frequency": item.get("frequency") or "monthly",
+            "regulatory_source": item.get("regulatory_source"),
+            "priority": priority,
+            "is_key_control": _normalize_bool(item.get("is_key_control", False))
+        })
+    return enriched
+
+
+def _ai_enrich_controls(items: List[dict]) -> List[dict]:
+    if not items:
+        return []
+
+    client = _get_openai_client()
+    if not client:
+        return _heuristic_control_enrichment(items)
+
+    prompt = f"""You are a GRC controls expert. Enrich internal controls parsed from a manually uploaded file.
+Return ONLY valid JSON array with one object per input item and preserve input order.
+
+Required keys for each object:
+- control_id (string or null)
+- name (string)
+- description (string or null)
+- category (string)
+- sub_category (string)
+- control_type (preventive|detective|corrective)
+- frequency (daily|weekly|monthly|quarterly|annually)
+- regulatory_source (string or null)
+- priority (low|medium|high|critical)
+- is_key_control (boolean)
+
+Input items:
+{json.dumps(items, ensure_ascii=False)}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a precise GRC assistant. Return valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2,
+            max_tokens=3500
+        )
+        content = (response.choices[0].message.content or "").strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+
+        parsed = json.loads(content.strip())
+        if not isinstance(parsed, list) or len(parsed) != len(items):
+            return _heuristic_control_enrichment(items)
+        return _heuristic_control_enrichment(parsed)
+    except Exception:
+        return _heuristic_control_enrichment(items)
+
+
+def _extract_controls_from_upload(filename: str, content: bytes) -> List[dict]:
+    lower_name = (filename or "").lower()
+    rows: List[dict] = []
+
+    def _canonical_header(value: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", (value or "").strip().lower())
+
+    header_aliases = {
+        "control_id": {"controlid", "id", "controlcode", "controlnumber"},
+        "name": {"name", "controlname", "controltitle", "control"},
+        "description": {"description", "controldescription", "details", "narrative"},
+        "category": {"category", "controlcategory", "riskcategory"},
+        "sub_category": {"subcategory", "subcategory", "controlsubcategory"},
+        "control_type": {"controltype", "type"},
+        "control_nature": {"automatedmanual", "controlnature", "nature"},
+        "frequency": {"frequency", "controlfrequency", "testingfrequency", "cadence"},
+        "regulatory_source": {"regulatorysource", "regulation", "framework", "riskids", "riskid", "riskids"},
+        "priority": {"priority", "riskrating", "criticality"},
+        "is_key_control": {"keycontrol", "iskeycontrol", "key"},
+        "status": {"status", "controlstatus"},
+        "effectiveness": {"effectiveness", "controleffectiveness"},
+        "testing_method": {"testingmethod", "testmethod"},
+    }
+
+    def _normalize_key(raw_key: str) -> str:
+        canonical = _canonical_header(raw_key)
+        for target, aliases in header_aliases.items():
+            if canonical in aliases:
+                return target
+        return (raw_key or "").strip().lower()
+
+    if lower_name.endswith(".csv"):
+        text = content.decode("utf-8-sig", errors="ignore")
+        reader = csv.DictReader(text.splitlines())
+        for row in reader:
+            normalized = {}
+            for key, value in (row or {}).items():
+                if key:
+                    normalized[_normalize_key(str(key))] = value
+            rows.append(normalized)
+    elif lower_name.endswith((".xlsx", ".xls")):
+        if openpyxl is None:
+            raise HTTPException(status_code=500, detail="openpyxl is not installed")
+        workbook = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
+
+        def _find_header_row_idx(all_rows: List[tuple]) -> Optional[int]:
+            max_scan = min(len(all_rows), 30)
+            for idx in range(max_scan):
+                row_vals = all_rows[idx]
+                normalized = [_normalize_key(str(v or "")) for v in row_vals]
+                matched = set()
+                for token in normalized:
+                    for target, aliases in header_aliases.items():
+                        if token in aliases:
+                            matched.add(target)
+                if "name" in matched and ("control_id" in matched or "description" in matched or "category" in matched or "control_type" in matched):
+                    return idx
+            return None
+
+        best_rows: List[dict] = []
+        for sheet in workbook.worksheets:
+            all_rows = list(sheet.iter_rows(values_only=True))
+            if not all_rows:
+                continue
+
+            header_idx = _find_header_row_idx(all_rows)
+            if header_idx is None:
+                continue
+
+            headers = [_normalize_key(str(v or "")) for v in all_rows[header_idx]]
+            sheet_rows: List[dict] = []
+            for raw in all_rows[header_idx + 1:]:
+                if not raw or not any(v is not None and str(v).strip() != "" for v in raw):
+                    continue
+                item = {}
+                for idx, val in enumerate(raw):
+                    if idx < len(headers) and headers[idx]:
+                        item[headers[idx]] = val
+                if item:
+                    sheet_rows.append(item)
+
+            if len(sheet_rows) > len(best_rows):
+                best_rows = sheet_rows
+
+        rows.extend(best_rows)
+    elif lower_name.endswith(".txt"):
+        text = content.decode("utf-8-sig", errors="ignore")
+        for line in text.splitlines():
+            cleaned = line.strip("-• \t\r\n")
+            if cleaned:
+                rows.append({"name": cleaned})
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file format. Upload .csv, .xlsx/.xls, or .txt"
+        )
+
+    mapped: List[dict] = []
+    for row in rows:
+        name = row.get("name") or row.get("control") or row.get("control name") or row.get("control_title")
+        if not name:
+            continue
+
+        control_nature = row.get("control_nature")
+        if control_nature:
+            nature_text = str(control_nature).strip().lower()
+            if "auto" in nature_text:
+                control_nature = "automated"
+            elif "manual" in nature_text:
+                control_nature = "manual"
+            elif "it" in nature_text and "manual" in nature_text:
+                control_nature = "it_dependent_manual"
+            else:
+                control_nature = "manual"
+
+        regulatory_source = row.get("regulatory_source") or row.get("regulation") or row.get("framework")
+        if not regulatory_source and (row.get("status") or row.get("effectiveness") or row.get("testing_method")):
+            parts = []
+            if row.get("status"):
+                parts.append(f"Status: {str(row.get('status')).strip()}")
+            if row.get("effectiveness"):
+                parts.append(f"Effectiveness: {str(row.get('effectiveness')).strip()}")
+            if row.get("testing_method"):
+                parts.append(f"Testing: {str(row.get('testing_method')).strip()}")
+            regulatory_source = " | ".join(parts) if parts else None
+
+        mapped.append({
+            "control_id": row.get("control_id") or row.get("id") or row.get("control code") or row.get("control_code"),
+            "name": str(name).strip(),
+            "description": row.get("description") or row.get("details") or row.get("control_description"),
+            "category": row.get("category"),
+            "sub_category": row.get("sub_category") or row.get("subcategory"),
+            "control_type": row.get("control_type") or row.get("type"),
+            "control_nature": control_nature,
+            "frequency": row.get("frequency"),
+            "regulatory_source": regulatory_source,
+            "priority": row.get("priority"),
+            "is_key_control": row.get("is_key_control") or row.get("key_control") or False
+        })
+    return mapped
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -244,6 +534,91 @@ def create_internal_control(
     db.commit()
     db.refresh(db_control)
     return db_control
+
+
+@router.post("/upload-manual", response_model=None)
+def upload_internal_controls_manual(
+    file: UploadFile = File(...),
+    auto_create: bool = Form(False),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not assigned to any tenant"
+        )
+
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File name is missing")
+
+    content = file.file.read()
+    extracted = _extract_controls_from_upload(file.filename, content)
+    enriched = _ai_enrich_controls(extracted)
+
+    created = 0
+    skipped = 0
+    errors: List[str] = []
+
+    if auto_create:
+        existing_ids = {
+            row[0] for row in db.query(InternalControl.control_id).filter(InternalControl.tenant_id == tenant_id).all()
+        }
+        sequence = db.query(func.count(InternalControl.id)).filter(InternalControl.tenant_id == tenant_id).scalar() or 0
+
+        for idx, item in enumerate(enriched, start=1):
+            try:
+                control_id = str(item.get("control_id") or "").strip()
+                if not control_id:
+                    sequence += 1
+                    control_id = f"IC-MAN-{sequence:04d}"
+
+                if control_id in existing_ids:
+                    skipped += 1
+                    continue
+
+                control_name = str(item.get("name") or "").strip()
+                if not control_name:
+                    skipped += 1
+                    continue
+
+                db_control = InternalControl(
+                    tenant_id=tenant_id,
+                    control_id=control_id,
+                    name=control_name,
+                    description=item.get("description"),
+                    category=item.get("category"),
+                    sub_category=item.get("sub_category"),
+                    control_type=item.get("control_type") or "preventive",
+                    control_nature=item.get("control_nature") or "manual",
+                    frequency=item.get("frequency") or "monthly",
+                    regulatory_source=item.get("regulatory_source"),
+                    priority=item.get("priority") or "medium",
+                    is_key_control=_normalize_bool(item.get("is_key_control", False)),
+                    created_by=current_user.id
+                )
+                db.add(db_control)
+                existing_ids.add(control_id)
+                created += 1
+            except Exception as exc:
+                errors.append(f"Row {idx}: {str(exc)}")
+                skipped += 1
+
+        if created > 0:
+            db.commit()
+
+    return {
+        "message": "Internal controls processed successfully",
+        "file_name": file.filename,
+        "auto_create": auto_create,
+        "extracted_count": len(extracted),
+        "suggested_count": len(enriched),
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+        "preview": enriched[:25]
+    }
 
 
 @router.get("/{control_id}", response_model=InternalControlDetailResponse)

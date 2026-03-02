@@ -65,8 +65,8 @@ interface PendingApproval {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  pending_review: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Pending Review' },
-  in_approval: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Approval' },
+  pending_review: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Pending Review' },
+  in_approval: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Approval' },
 };
 
 export default function PendingApprovalsPage() {
@@ -161,14 +161,14 @@ export default function PendingApprovalsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-600">
+      <div className="flex h-64 flex-col items-center justify-center text-red-400">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load pending approvals</p>
       </div>
@@ -180,13 +180,13 @@ export default function PendingApprovalsPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/compliance/assessments"
-          className="rounded-lg p-2 text-slate-600 hover:bg-white hover:text-slate-900"
+          className="rounded-lg p-2 text-gray-600 hover:bg-gray-50 hover:text-black"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-black">Pending Approvals</h1>
-          <p className="text-slate-600">
+          <p className="text-gray-600">
             Evidence submissions awaiting your review
           </p>
         </div>
@@ -196,7 +196,7 @@ export default function PendingApprovalsPage() {
         <div className="card p-12 text-center">
           <CheckCircle className="mx-auto h-12 w-12 text-emerald-600 mb-4" />
           <h3 className="text-lg font-semibold text-black mb-2">All Caught Up!</h3>
-          <p className="text-slate-600">You have no pending evidence approvals.</p>
+          <p className="text-gray-600">You have no pending evidence approvals.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -209,7 +209,7 @@ export default function PendingApprovalsPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <Paperclip className="h-5 w-5 text-primary-600" />
+                      <Paperclip className="h-5 w-5 text-blue-600" />
                       <h3 className="font-semibold text-black">{approval.evidence.name}</h3>
                       <span className={`badge ${statusStyle.bg} ${statusStyle.text}`}>
                         {statusStyle.label} (Tier {approval.current_tier})
@@ -218,28 +218,28 @@ export default function PendingApprovalsPage() {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>
-                        <p className="text-slate-600 mb-1">Assessment</p>
+                        <p className="text-gray-600 mb-1">Assessment</p>
                         <Link 
                           href={`/compliance/assessments/${approval.assessment_item.assessment.id}`}
-                          className="text-primary-600 hover:underline flex items-center gap-1"
+                          className="text-blue-600 hover:underline flex items-center gap-1"
                         >
                           {approval.assessment_item.assessment.name}
                           <ExternalLink className="h-3 w-3" />
                         </Link>
                       </div>
                       <div>
-                        <p className="text-slate-600 mb-1">Control/Requirement</p>
+                        <p className="text-gray-600 mb-1">Control/Requirement</p>
                         <p className="text-black text-xs line-clamp-2">
                           {approval.assessment_item.item_number && `${approval.assessment_item.item_number}: `}
                           {approval.assessment_item.control_description || 'N/A'}
                         </p>
                       </div>
                       <div>
-                        <p className="text-slate-600 mb-1">File</p>
+                        <p className="text-gray-600 mb-1">File</p>
                         <p className="text-black">{approval.evidence.file_name}</p>
                       </div>
                       <div>
-                        <p className="text-slate-600 mb-1">Submitted</p>
+                        <p className="text-gray-600 mb-1">Submitted</p>
                         <p className="text-black flex items-center gap-2">
                           <User className="h-4 w-4" />
                           {approval.submitter?.full_name || 'Unknown'} • {formatDate(approval.submitted_at)}
@@ -286,10 +286,10 @@ export default function PendingApprovalsPage() {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-4 pt-4 border-t border-slate-200">
+                  <div className="mt-4 pt-4 border-t border-gray-200">
                     {actionType && (
-                      <div className="mb-4 p-4 bg-white/50 rounded-lg">
-                        <p className="text-sm text-slate-600 mb-2">
+                      <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-700 mb-2">
                           {actionType === 'reject' ? 'Reason for rejection:' : 'Comments for return:'}
                         </p>
                         <textarea
@@ -324,21 +324,21 @@ export default function PendingApprovalsPage() {
 
                     {approval.approval_history && approval.approval_history.length > 0 ? (
                       <div>
-                        <h4 className="text-sm font-medium text-slate-600 mb-3">Approval History</h4>
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Approval History</h4>
                         <div className="space-y-3">
                           {approval.approval_history.map((entry) => (
                             <div key={entry.id} className="flex items-start gap-3 text-sm">
                               <div className={`mt-1 h-2 w-2 rounded-full ${
-                                entry.action === 'approved' ? 'bg-emerald-400' :
-                                entry.action === 'rejected' ? 'bg-rose-400' :
-                                entry.action === 'returned' ? 'bg-orange-400' :
-                                'bg-blue-400'
+                                entry.action === 'approved' ? 'bg-emerald-600' :
+                                entry.action === 'rejected' ? 'bg-rose-600' :
+                                entry.action === 'returned' ? 'bg-orange-600' :
+                                'bg-blue-600'
                               }`} />
                               <div className="flex-1">
                                 <p className="text-black">
                                   <span className="font-medium">{entry.performer?.full_name || 'Unknown'}</span>
                                   {' '}
-                                  <span className="text-slate-600">
+                                  <span className="text-gray-600">
                                     {entry.action === 'submitted' ? 'submitted for review' :
                                      entry.action === 'approved' ? `approved at tier ${entry.tier_number}` :
                                      entry.action === 'rejected' ? 'rejected' :
@@ -346,16 +346,16 @@ export default function PendingApprovalsPage() {
                                   </span>
                                 </p>
                                 {entry.comments && (
-                                  <p className="text-slate-600 mt-1 italic">"{entry.comments}"</p>
+                                  <p className="text-gray-600 mt-1 italic">"{entry.comments}"</p>
                                 )}
-                                <p className="text-slate-500 text-xs mt-1">{formatDate(entry.performed_at)}</p>
+                                <p className="text-gray-500 text-xs mt-1">{formatDate(entry.performed_at)}</p>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
                     ) : (
-                      <p className="text-slate-600 text-sm">No approval history yet.</p>
+                      <p className="text-gray-600 text-sm">No approval history yet.</p>
                     )}
                   </div>
                 )}

@@ -44,17 +44,17 @@ interface Finding {
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; border: string; label: string }> = {
-  critical: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-500', label: 'Critical' },
-  high: { bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-500', label: 'High' },
-  medium: { bg: 'bg-yellow-50', text: 'text-yellow-600', border: 'border-yellow-500', label: 'Medium' },
-  low: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-500', label: 'Low' },
+  critical: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500', label: 'Critical' },
+  high: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500', label: 'High' },
+  medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500', label: 'Medium' },
+  low: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500', label: 'Low' },
 };
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  open: { bg: 'bg-red-50', text: 'text-red-600', label: 'Open' },
-  in_progress: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'In Progress' },
-  remediated: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'Remediated' },
-  closed: { bg: 'bg-green-50', text: 'text-green-600', label: 'Closed' },
+  open: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Open' },
+  in_progress: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'In Progress' },
+  remediated: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Remediated' },
+  closed: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Closed' },
 };
 
 const STATUS_FLOW = ['open', 'in_progress', 'remediated', 'closed'];
@@ -99,22 +99,22 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-black">Link to {type === 'risk' ? 'Risk' : 'Internal Control'}</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Link to {type === 'risk' ? 'Risk' : 'Internal Control'}</h3>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
         <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-slate-600">
-            {type === 'risk' ? 'Risk' : 'Control'} ID <span className="text-red-600">*</span>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            {type === 'risk' ? 'Risk' : 'Control'} ID <span className="text-red-400">*</span>
           </label>
           <input
             type="number"
             value={entityId}
             onChange={(e) => setEntityId(e.target.value)}
             placeholder={`Enter ${type} ID...`}
-            className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400"
+            className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder-slate-400"
           />
         </div>
 
@@ -162,7 +162,7 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-black">Create Mitigation Action</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Create Mitigation Action</h3>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
@@ -170,8 +170,8 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
 
         <div className="space-y-4 mb-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">
-              Title <span className="text-red-600">*</span>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Title <span className="text-red-400">*</span>
             </label>
             <input
               type="text"
@@ -182,7 +182,7 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">Description</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -191,7 +191,7 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">Due Date</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
             <input
               type="date"
               value={dueDate}
@@ -235,26 +235,7 @@ export default function FindingDetailPage() {
         const response = await rcsaApi.getFinding(findingId);
         return response.data as Finding;
       } catch {
-        return {
-          id: findingId,
-          title: 'Inadequate Access Control Reviews',
-          description: 'Access reviews are not being conducted on a quarterly basis as required by the security policy. This increases the risk of unauthorized access persisting undetected.',
-          severity: 'high',
-          status: 'in_progress',
-          assessment_id: 2,
-          assessment_name: 'Q4 2025 RCSA - Finance',
-          business_unit: 'Finance',
-          created_at: '2025-01-18',
-          updated_at: '2025-01-22',
-          due_date: '2025-02-28',
-          ai_recommendation: 'Implement automated access review workflows with quarterly reminders. Consider using identity governance tools to streamline the review process and ensure timely completion.',
-          linked_risk: { id: 5, title: 'Unauthorized Access Risk' },
-          linked_control: null,
-          mitigation_actions: [
-            { id: 1, title: 'Implement automated access review reminders', status: 'in_progress', due_date: '2025-02-15' },
-            { id: 2, title: 'Configure quarterly review schedule in IAM system', status: 'pending', due_date: '2025-02-28' },
-          ],
-        } as Finding;
+        throw new Error('Failed to load finding');
       }
     },
   });
@@ -308,7 +289,7 @@ export default function FindingDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
@@ -316,8 +297,8 @@ export default function FindingDetailPage() {
   if (error || !finding) {
     return (
       <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
-        <p className="mt-2 text-red-600">Failed to load finding</p>
+        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
+        <p className="mt-2 text-red-400">Failed to load finding</p>
       </div>
     );
   }
@@ -332,14 +313,14 @@ export default function FindingDetailPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/risks/rcsa/findings"
-          className="p-2 rounded-lg hover:bg-slate-200 text-slate-500 hover:text-slate-900"
+          className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <AlertTriangle className={`h-6 w-6 ${severityStyle.text}`} />
-            <h1 className="text-2xl font-semibold text-black">{finding.title}</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">{finding.title}</h1>
           </div>
           <div className="flex items-center gap-4 mt-1 text-sm text-slate-600">
             <span className="flex items-center gap-1.5">
@@ -363,7 +344,7 @@ export default function FindingDetailPage() {
       </div>
 
       <div className="card p-6">
-        <h3 className="text-lg font-medium text-black mb-4">Status Workflow</h3>
+        <h3 className="text-lg font-medium text-slate-900 mb-4">Status Workflow</h3>
         <div className="flex items-center justify-between">
           {STATUS_FLOW.map((status, index) => {
             const style = getStatusStyle(status);
@@ -378,8 +359,8 @@ export default function FindingDetailPage() {
                   disabled={!isNext || updateStatusMutation.isPending}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                     isActive ? `${style.bg} ${style.text} ring-2 ring-offset-2 ring-offset-slate-900 ${style.text.replace('text-', 'ring-')}` :
-                    isPast ? 'bg-slate-200 text-slate-600' :
-                    isNext ? 'bg-slate-200 text-black hover:bg-slate-600 cursor-pointer' :
+                    isPast ? 'bg-slate-100 text-slate-700' :
+                    isNext ? 'bg-slate-100 text-slate-900 hover:bg-slate-200 cursor-pointer' :
                     'bg-white text-slate-500'
                   }`}
                 >
@@ -389,7 +370,7 @@ export default function FindingDetailPage() {
                   {style.label}
                 </button>
                 {index < STATUS_FLOW.length - 1 && (
-                  <div className={`w-8 h-0.5 mx-2 ${isPast ? 'bg-slate-500' : 'bg-slate-200'}`} />
+                  <div className={`w-8 h-0.5 mx-2 ${isPast ? 'bg-slate-500' : 'bg-slate-100'}`} />
                 )}
               </div>
             );
@@ -400,23 +381,23 @@ export default function FindingDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="card p-6">
-            <h3 className="text-lg font-medium text-black mb-4">Description</h3>
-            <p className="text-slate-600">{finding.description || 'No description provided.'}</p>
+            <h3 className="text-lg font-medium text-slate-900 mb-4">Description</h3>
+            <p className="text-slate-700">{finding.description || 'No description provided.'}</p>
           </div>
 
           {finding.ai_recommendation && (
-            <div className="card p-6 border-primary-200">
+            <div className="card p-6 border-purple-500/30">
               <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="h-5 w-5 text-primary-600" />
-                <h3 className="text-lg font-medium text-black">AI Recommendation</h3>
+                <Sparkles className="h-5 w-5 text-purple-400" />
+                <h3 className="text-lg font-medium text-slate-900">AI Recommendation</h3>
               </div>
-              <p className="text-slate-600">{finding.ai_recommendation}</p>
+              <p className="text-slate-700">{finding.ai_recommendation}</p>
             </div>
           )}
 
           <div className="card p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-black">Mitigation Actions</h3>
+              <h3 className="text-lg font-medium text-slate-900">Mitigation Actions</h3>
               <button
                 onClick={() => setShowActionModal(true)}
                 className="btn-secondary text-sm flex items-center gap-1.5"
@@ -430,13 +411,13 @@ export default function FindingDetailPage() {
                 {finding.mitigation_actions.map((action) => (
                   <div key={action.id} className="p-3 rounded-lg bg-white/50 flex items-center justify-between">
                     <div>
-                      <p className="text-black font-medium">{action.title}</p>
+                      <p className="text-slate-900 font-medium">{action.title}</p>
                       <p className="text-sm text-slate-600">Due: {formatDate(action.due_date)}</p>
                     </div>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      action.status === 'completed' ? 'bg-green-50 text-green-700' :
-                      action.status === 'in_progress' ? 'bg-yellow-50 text-yellow-700' :
-                      'bg-slate-50 text-slate-700'
+                      action.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                      action.status === 'in_progress' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-slate-500/20 text-slate-600'
                     }`}>
                       {action.status}
                     </span>
@@ -451,27 +432,27 @@ export default function FindingDetailPage() {
 
         <div className="space-y-6">
           <div className="card p-6">
-            <h3 className="text-lg font-medium text-black mb-4">Details</h3>
+            <h3 className="text-lg font-medium text-slate-900 mb-4">Details</h3>
             <div className="space-y-3">
               <div>
                 <p className="text-sm text-slate-600">Assessment</p>
-                <p className="text-black">{finding.assessment_name}</p>
+                <p className="text-slate-900">{finding.assessment_name}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-600">Due Date</p>
-                <p className={`${finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed' ? 'text-red-600' : 'text-black'}`}>
+                <p className={`${finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed' ? 'text-red-400' : 'text-slate-900'}`}>
                   {formatDate(finding.due_date)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-slate-600">Last Updated</p>
-                <p className="text-black">{formatDate(finding.updated_at)}</p>
+                <p className="text-slate-900">{formatDate(finding.updated_at)}</p>
               </div>
             </div>
           </div>
 
           <div className="card p-6">
-            <h3 className="text-lg font-medium text-black mb-4">Linked Items</h3>
+            <h3 className="text-lg font-medium text-slate-900 mb-4">Linked Items</h3>
             <div className="space-y-3">
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -482,7 +463,7 @@ export default function FindingDetailPage() {
                   {!finding.linked_risk && (
                     <button
                       onClick={() => setLinkModalType('risk')}
-                      className="text-xs text-primary-600 hover:text-primary-300"
+                      className="text-xs text-primary-400 hover:text-primary-300"
                     >
                       Link
                     </button>
@@ -491,10 +472,10 @@ export default function FindingDetailPage() {
                 {finding.linked_risk ? (
                   <Link
                     href={`/erm/risks/${finding.linked_risk.id}`}
-                    className="p-2 rounded-lg bg-primary-50 border border-primary-200 flex items-center justify-between hover:bg-primary-50"
+                    className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-between hover:bg-purple-500/20"
                   >
-                    <span className="text-black">{finding.linked_risk.title}</span>
-                    <ExternalLink className="h-4 w-4 text-primary-600" />
+                    <span className="text-slate-900">{finding.linked_risk.title}</span>
+                    <ExternalLink className="h-4 w-4 text-purple-400" />
                   </Link>
                 ) : (
                   <p className="text-slate-500 text-sm">No risk linked</p>
@@ -509,7 +490,7 @@ export default function FindingDetailPage() {
                   {!finding.linked_control && (
                     <button
                       onClick={() => setLinkModalType('control')}
-                      className="text-xs text-primary-600 hover:text-primary-300"
+                      className="text-xs text-primary-400 hover:text-primary-300"
                     >
                       Link
                     </button>
@@ -518,10 +499,10 @@ export default function FindingDetailPage() {
                 {finding.linked_control ? (
                   <Link
                     href={`/erm/internal-controls/${finding.linked_control.id}`}
-                    className="p-2 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-between hover:bg-blue-50"
+                    className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-between hover:bg-blue-500/20"
                   >
-                    <span className="text-black">{finding.linked_control.name}</span>
-                    <ExternalLink className="h-4 w-4 text-blue-600" />
+                    <span className="text-slate-900">{finding.linked_control.name}</span>
+                    <ExternalLink className="h-4 w-4 text-blue-400" />
                   </Link>
                 ) : (
                   <p className="text-slate-500 text-sm">No control linked</p>

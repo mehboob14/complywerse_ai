@@ -19,7 +19,7 @@ from ..schemas import (
     RiskFrameworkControlLinkCreate, RiskGovernanceLinkCreate,
     RiskDetailResponse, RiskHeatmapData, MessageResponse
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .auth_router import require_auth, require_tenant_permission, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/risks", tags=["Risk Management"])
 
@@ -41,11 +41,13 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
 def list_risks(
     tenant_id: Optional[int] = None,
     category: Optional[str] = None,
+    register_type: Optional[str] = None,
     status_filter: Optional[str] = None,
     min_score: Optional[float] = None,
     max_score: Optional[float] = None,
     skip: int = 0,
     limit: int = 100,
+    _perm: bool = Depends(require_tenant_permission("risks:risk_register:view")),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -60,6 +62,8 @@ def list_risks(
         query = query.filter(Risk.tenant_id == tenant_id)
     if category:
         query = query.filter(Risk.category == category)
+    if register_type:
+        query = query.filter(Risk.register_type == register_type)
     if status_filter:
         query = query.filter(Risk.status == status_filter)
     if min_score is not None:
@@ -75,6 +79,7 @@ def list_risks(
 def create_risk(
     risk: RiskCreate,
     tenant_id: Optional[int] = Query(None),
+    _perm: bool = Depends(require_tenant_permission("risks:risk_register:create")),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -112,6 +117,7 @@ def create_risk(
 @router.get("/dashboard")
 def get_risk_dashboard(
     tenant_id: Optional[int] = None,
+    _perm: bool = Depends(require_tenant_permission("risks:risk_register:view")),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -182,6 +188,7 @@ def get_risk_dashboard(
 def get_risk_heatmap(
     risk_type: Optional[str] = None,
     tenant_id: Optional[int] = None,
+    _perm: bool = Depends(require_tenant_permission("risks:risk_register:view")),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -329,6 +336,7 @@ def get_risk_detail(
 @router.get("/{risk_id}", response_model=dict)
 def get_risk(
     risk_id: int,
+    _perm: bool = Depends(require_tenant_permission("risks:risk_register:view")),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -378,6 +386,7 @@ def get_risk(
 def update_risk(
     risk_id: int,
     risk_update: RiskUpdate,
+    _perm: bool = Depends(require_tenant_permission("risks:risk_register:edit")),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -406,6 +415,7 @@ def update_risk(
 @router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_risk(
     risk_id: int,
+    _perm: bool = Depends(require_tenant_permission("risks:risk_register:delete")),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -430,6 +440,7 @@ def delete_risk(
 def assess_risk(
     risk_id: int,
     assessment: RiskAssessment,
+    _perm: bool = Depends(require_tenant_permission("risks:risk_assessment:edit")),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -473,6 +484,7 @@ def assess_risk(
 def add_treatment_plan(
     risk_id: int,
     treatment: RiskTreatment,
+    _perm: bool = Depends(require_tenant_permission("risks:risk_treatment:edit")),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -910,6 +922,7 @@ def unlink_risk_from_evidence(
 async def upload_risk_register(
     file: UploadFile = File(...),
     tenant_id: Optional[int] = Query(None),
+    register_type: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -943,7 +956,11 @@ async def upload_risk_register(
         
         headers = []
         header_row = 1
-        header_keywords = ['asset name', 'threat', 'likelihood', 'impact', 'risk score']
+        header_keywords = [
+            'risk', 'risk name', 'risk title', 'risk description',
+            'risk category', 'category', 'likelihood', 'impact',
+            'risk score', 'inherent', 'residual', 'threat', 'vulnerability'
+        ]
         for row_num in range(1, 10):
             row_values = [cell.value for cell in ws[row_num]]
             row_str = ' '.join([str(v).lower() for v in row_values if v])
@@ -952,6 +969,13 @@ async def upload_risk_register(
                 headers = row_values
                 header_row = row_num
                 break
+        if not headers:
+            for row_num in range(1, 6):
+                row_values = [cell.value for cell in ws[row_num]]
+                if any(row_values):
+                    headers = row_values
+                    header_row = row_num
+                    break
         
         header_map = {}
         for idx, h in enumerate(headers):
@@ -992,6 +1016,8 @@ async def upload_risk_register(
             if not threat_or_category:
                 return 'operational'
             text = str(threat_or_category).lower()
+            if any(w in text for w in ['internal control', 'internal controls', 'internal']):
+                return 'internal'
             if any(w in text for w in ['strategic', 'business', 'market']):
                 return 'strategic'
             if any(w in text for w in ['financial', 'money', 'cost', 'budget']):
@@ -1032,25 +1058,52 @@ async def upload_risk_register(
             asset_name = get_value(row, 'asset name', 'asset', 'asset_name')
             threat = get_value(row, 'threat', 'threat description')
             vulnerability = get_value(row, 'vulnerabilities', 'vulnerability', 'vuln')
+            risk_title = get_value(
+                row,
+                'risk title', 'risk name', 'risk',
+                'risk description', 'risk statement',
+                'event', 'issue', 'scenario', 'description'
+            )
+            explicit_category = get_value(row, 'risk category', 'category', 'risk_category', 'risk type', 'risk_type', 'type')
+            sub_category = get_value(row, 'risk sub category', 'sub category', 'subcategory', 'sub_category', 'sub type', 'sub-type')
+            row_register_type = get_value(row, 'register type', 'register_type', 'register', 'register category')
             
-            if not asset_name and not threat and not vulnerability:
+            # More lenient skip logic - accept row if it has ANY identifying information
+            has_any_info = any([ref, asset_name, threat, vulnerability, risk_title, explicit_category])
+            if not has_any_info:
                 skipped_count += 1
                 continue
             
+            # Build title from available fields with more flexibility
             title_parts = []
-            if asset_name:
-                title_parts.append(str(asset_name).strip())
-            if threat:
-                threat_clean = str(threat).strip().replace('\n', ' ')[:80]
-                if threat_clean:
-                    title_parts.append(threat_clean)
             
+            # Try to use risk title first (most descriptive)
+            if risk_title:
+                risk_title_clean = str(risk_title).strip().replace('\n', ' ')[:150]
+                if risk_title_clean:
+                    title_parts.append(risk_title_clean)
+            
+            # If no risk title, build from other fields
             if not title_parts:
-                if vulnerability:
-                    title_parts.append(str(vulnerability).strip()[:80])
-                elif ref:
-                    title_parts.append(str(ref))
+                if asset_name:
+                    title_parts.append(str(asset_name).strip())
+                if threat:
+                    threat_clean = str(threat).strip().replace('\n', ' ')[:100]
+                    if threat_clean:
+                        title_parts.append(threat_clean)
+                if vulnerability and not title_parts:
+                    vuln_clean = str(vulnerability).strip().replace('\n', ' ')[:100]
+                    if vuln_clean:
+                        title_parts.append(vuln_clean)
             
+            # Last resort: use ref or explicit_category
+            if not title_parts:
+                if ref:
+                    title_parts.append(f"Risk {ref}")
+                elif explicit_category:
+                    title_parts.append(f"{explicit_category} Risk")
+            
+            # If still no title after all attempts, skip
             if not title_parts:
                 skipped_count += 1
                 continue
@@ -1093,8 +1146,11 @@ async def upload_risk_register(
             treatment_plan = "\n\n".join(treatment_parts) if treatment_parts else None
             
             treatment_option = get_value(row, 'risk treatment option', 'treatment option', 'treatment')
-            category = map_category(threat)
+            category = map_category(explicit_category or threat or risk_title)
             risk_status = map_status(treatment_option, residual_score)
+            register_type_value = row_register_type or register_type
+            if not register_type_value and category == 'internal':
+                register_type_value = 'internal'
             
             owner_name = get_value(row, 'responsibility', 'owner', 'risk owner')
             
@@ -1105,6 +1161,8 @@ async def upload_risk_register(
                     description=description,
                     category=category,
                     risk_category=category,
+                    risk_sub_category=sub_category if sub_category else None,
+                    register_type=register_type_value if register_type_value else None,
                     inherent_likelihood=inherent_likelihood,
                     inherent_impact=inherent_impact,
                     inherent_score=inherent_score,

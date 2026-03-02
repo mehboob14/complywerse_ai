@@ -1,15 +1,51 @@
-from typing import List
+from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Cookie
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import text
 
 from ....models import (
-    VulnerabilityAssetLink, Vulnerability, ITAsset, GRCUser, get_db
+    VulnerabilityAssetLink, Vulnerability, ITAsset, GRCUser, Tenant, get_db
 )
 from ....schemas import (
     VulnerabilityAssetLinkCreate, VulnerabilityAssetLinkResponse, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, decode_token
+from ....tenant_manager import get_tenant_session, IS_SQLITE
+from ....tenant_models import TenantUser as TenantSchemaUser
+
+
+def _resolve_tenant_user_to_public(owner_id: int, token: str, db: Session):
+    """Resolve a tenant-schema user ID to a public GRCUser by email match"""
+    try:
+        if not token:
+            return None
+        payload = decode_token(token)
+        schema_name = payload.get("schema")
+        if not schema_name:
+            return None
+        
+        TenantSession = get_tenant_session(schema_name)
+        tenant_session = TenantSession()
+        try:
+            if not IS_SQLITE:
+                tenant_session.execute(text(f'SET search_path TO "{schema_name}", public'))
+            tenant_user = tenant_session.query(TenantSchemaUser).filter(
+                TenantSchemaUser.id == owner_id
+            ).first()
+            if not tenant_user:
+                return None
+            
+            # Match by email to public GRCUser
+            public_user = db.query(GRCUser).filter(
+                GRCUser.email == tenant_user.email
+            ).first()
+            return public_user
+        finally:
+            tenant_session.close()
+    except Exception as e:
+        print(f"[asset-link] Tenant user resolution failed: {e}")
+        return None
 
 router = APIRouter(tags=["Vulnerability Asset Links"])
 
@@ -62,7 +98,9 @@ def list_asset_links(
 @router.post("/vulnerabilities/{vuln_id}/assets", response_model=VulnerabilityAssetLinkResponse, status_code=status.HTTP_201_CREATED)
 def create_asset_link(
     vuln_id: int,
-    request: VulnerabilityAssetLinkCreate,
+    request_body: VulnerabilityAssetLinkCreate,
+    http_request: Request,
+    token: Optional[str] = Cookie(None, alias="grc_auth_token"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -73,7 +111,7 @@ def create_asset_link(
     vuln = get_vuln_or_404(vuln_id, user_tenants, db)
     
     asset = db.query(ITAsset).filter(
-        ITAsset.id == request.asset_id,
+        ITAsset.id == request_body.asset_id,
         ITAsset.tenant_id.in_(user_tenants)
     ).first()
     if not asset:
@@ -81,20 +119,68 @@ def create_asset_link(
     
     existing = db.query(VulnerabilityAssetLink).filter(
         VulnerabilityAssetLink.vulnerability_id == vuln_id,
-        VulnerabilityAssetLink.asset_id == request.asset_id
+        VulnerabilityAssetLink.asset_id == request_body.asset_id
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Asset already linked to this vulnerability")
     
     link = VulnerabilityAssetLink(
         vulnerability_id=vuln_id,
-        asset_id=request.asset_id,
-        impact_on_asset=request.impact_on_asset,
-        notes=request.notes,
+        asset_id=request_body.asset_id,
+        impact_on_asset=request_body.impact_on_asset,
+        notes=request_body.notes,
         created_by=current_user.id
     )
     db.add(link)
+    db.flush()  # Flush the link first
+    
+    # Auto-assign vulnerability owner from asset owner
+    print(f"[asset-link] Asset owner_id: {asset.owner_id}, owner_name: {asset.owner_name}, Vuln assigned_to: {vuln.assigned_to}")
+    if asset.owner_id and not vuln.assigned_to:
+        print(f"[asset-link] Attempting auto-assign for vuln {vuln.id}")
+        # Try to resolve tenant user to public user
+        auth_token = token
+        if not auth_token:
+            auth_header = http_request.headers.get("authorization", "")
+            if auth_header.startswith("Bearer "):
+                auth_token = auth_header[7:]
+        
+        if auth_token and asset.owner_id:
+            print(f"[asset-link] Trying tenant user resolution for owner_id {asset.owner_id}")
+            public_user = _resolve_tenant_user_to_public(asset.owner_id, auth_token, db)
+            if public_user:
+                print(f"[asset-link] Resolved to public user {public_user.id}")
+                vuln.assigned_to = public_user.id
+            else:
+                print(f"[asset-link] Tenant resolution failed, trying direct GRCUser lookup")
+                # Direct assignment if owner_id is already a public user
+                direct_user = db.query(GRCUser).filter(GRCUser.id == asset.owner_id).first()
+                if direct_user:
+                    print(f"[asset-link] Direct user found: {direct_user.id}")
+                    vuln.assigned_to = direct_user.id
+                else:
+                    print(f"[asset-link] No direct user found for owner_id {asset.owner_id}")
+        else:
+            print(f"[asset-link] No token or no owner_id, trying direct assignment")
+            # Fallback: try direct assignment
+            direct_user = db.query(GRCUser).filter(GRCUser.id == asset.owner_id).first()
+            if direct_user:
+                print(f"[asset-link] Fallback: Direct user found: {direct_user.id}")
+                vuln.assigned_to = direct_user.id
+            else:
+                print(f"[asset-link] Fallback: No direct user found")
+        
+        if vuln.assigned_to:
+            print(f"[asset-link] SUCCESS: Vuln {vuln.id} assigned to user {vuln.assigned_to}")
+        else:
+            print(f"[asset-link] FAILED: Could not auto-assign vuln {vuln.id}")
+    elif asset.owner_id:
+        print(f"[asset-link] Vuln already has assigned_to: {vuln.assigned_to}")
+    else:
+        print(f"[asset-link] Asset has no owner_id, skipping auto-assign")
+    
     db.commit()
+    db.refresh(link)  # Refresh the link after commit
     db.refresh(link)
     
     return VulnerabilityAssetLinkResponse(

@@ -109,8 +109,8 @@ export default function VulnerabilityReportsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Vulnerability Reports</h1>
-          <p className="mt-1 text-slate-600">Upload and manage vulnerability scan reports</p>
+          <h1 className="text-2xl font-bold cw-text-default">Vulnerability Reports</h1>
+          <p className="mt-1 cw-text-muted">Upload and manage vulnerability scan reports</p>
         </div>
         <div>
           <input
@@ -140,52 +140,52 @@ export default function VulnerabilityReportsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="cw-card overflow-hidden">
         <table className="w-full">
-          <thead className="bg-slate-50/50">
+          <thead className="bg-[var(--color-subtle)]">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Report</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Uploaded</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Total</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Critical</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">High</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Medium</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Low</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Actions</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Report</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Uploaded</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Total</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Critical</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">High</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Medium</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Low</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700">
+          <tbody className="divide-y divide-[var(--color-border)]">
             {(!reports || reports.length === 0) ? (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-slate-600">
-                  <FileText className="mx-auto h-12 w-12 text-slate-600 mb-3" />
+                <td colSpan={8} className="px-4 py-12 text-center cw-text-muted">
+                  <FileText className="mx-auto h-12 w-12 cw-text-muted mb-3" />
                   <p>No reports uploaded yet</p>
                   <p className="text-sm mt-1">Upload an Excel or CSV vulnerability scan report</p>
                 </td>
               </tr>
             ) : (
               reports.map((report) => (
-                <tr key={report.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={report.id} className="hover:bg-[var(--color-hover)] transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-slate-200 p-2">
-                        <FileText className="h-5 w-5 text-slate-600" />
+                      <div className="rounded-lg bg-[var(--color-subtle)] p-2">
+                        <FileText className="h-5 w-5 cw-text-muted" />
                       </div>
                       <div>
-                        <p className="font-medium text-black">{report.name}</p>
+                        <p className="font-medium cw-text-default">{report.name}</p>
                         {report.file_name && (
-                          <p className="text-xs text-slate-600">{report.file_name}</p>
+                          <p className="text-xs cw-text-muted">{report.file_name}</p>
                         )}
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                      <Calendar size={14} className="text-slate-600" />
+                    <div className="flex items-center gap-1.5 text-sm cw-text-muted">
+                      <Calendar size={14} className="cw-text-muted" />
                       {new Date(report.uploaded_at).toLocaleDateString()}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm font-medium text-black">
+                  <td className="px-4 py-3 text-sm font-medium cw-text-default">
                     {report.total_vulnerabilities}
                   </td>
                   <td className="px-4 py-3">
@@ -213,14 +213,14 @@ export default function VulnerabilityReportsPage() {
                       <button
                         onClick={() => analyzeMutation.mutate(report.id)}
                         disabled={analyzeMutation.isPending}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-primary-600 hover:bg-slate-200 transition-colors"
+                        className="p-1.5 rounded-lg cw-text-muted hover:text-[var(--color-primary)] hover:bg-[var(--color-hover)] transition-colors"
                         title="AI Analyze"
                       >
                         <Sparkles size={16} />
                       </button>
                       <button
                         onClick={() => setDeleteConfirm(report.id)}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-red-600 hover:bg-slate-200 transition-colors"
+                        className="p-1.5 rounded-lg cw-text-muted hover:text-red-600 hover:bg-[var(--color-hover)] transition-colors"
                         title="Delete"
                       >
                         <Trash2 size={16} />
@@ -236,9 +236,9 @@ export default function VulnerabilityReportsPage() {
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
-            <h2 className="text-xl font-bold text-black mb-4">Delete Report</h2>
-            <p className="text-slate-600 mb-6">
+          <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
+            <h2 className="text-xl font-bold cw-text-default mb-4">Delete Report</h2>
+            <p className="cw-text-muted mb-6">
               Are you sure you want to delete this report? This will also delete all vulnerabilities imported from this report.
             </p>
             <div className="flex justify-end gap-3">
@@ -248,7 +248,7 @@ export default function VulnerabilityReportsPage() {
               <button
                 onClick={() => deleteMutation.mutate(deleteConfirm)}
                 disabled={deleteMutation.isPending}
-                className="btn-primary bg-red-600 hover:bg-red-700"
+                className="cw-btn-danger"
               >
                 {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
               </button>

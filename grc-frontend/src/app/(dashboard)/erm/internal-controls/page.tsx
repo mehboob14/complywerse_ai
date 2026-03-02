@@ -8,6 +8,7 @@ import {
   Loader2,
   Search,
   Plus,
+  Upload,
   X,
   Edit2,
   Trash2,
@@ -54,6 +55,15 @@ const CONTROL_CATEGORIES = [
   'Customer Service',
 ];
 
+const CONTROL_SUBCATEGORIES: Record<string, string[]> = {
+  Operations: ['Process Management', 'Change Management', 'Business Continuity', 'Quality Assurance'],
+  Financial: ['General Ledger', 'Reconciliations', 'Accounts Payable', 'Accounts Receivable', 'Treasury'],
+  'IT Security': ['Access Management', 'Network Security', 'Endpoint Security', 'Vulnerability Management', 'Data Protection'],
+  'AML/CFT': ['KYC', 'Transaction Monitoring', 'Sanctions Screening', 'Suspicious Activity Reporting'],
+  'Credit Risk': ['Underwriting', 'Credit Review', 'Collateral Management', 'Provisioning'],
+  'Customer Service': ['Complaint Handling', 'Service Delivery', 'Customer Onboarding', 'Escalation Management'],
+};
+
 const CONTROL_TYPES = [
   { value: 'preventive', label: 'Preventive' },
   { value: 'detective', label: 'Detective' },
@@ -84,18 +94,18 @@ const PRIORITIES = [
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
-  pending_approval: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Pending Approval' },
-  active: { bg: 'bg-green-50', text: 'text-green-600', label: 'Active' },
-  inactive: { bg: 'bg-red-50', text: 'text-red-600', label: 'Inactive' },
-  rejected: { bg: 'bg-red-50', text: 'text-red-600', label: 'Rejected' },
+  draft: { bg: 'bg-slate-500/20', text: 'text-slate-600', label: 'Draft' },
+  pending_approval: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pending Approval' },
+  active: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Active' },
+  inactive: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Inactive' },
+  rejected: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rejected' },
 };
 
 const EFFECTIVENESS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  effective: { bg: 'bg-green-50', text: 'text-green-600', label: 'Effective' },
-  partially_effective: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Partially Effective' },
-  ineffective: { bg: 'bg-red-50', text: 'text-red-600', label: 'Ineffective' },
-  not_tested: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Not Tested' },
+  effective: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Effective' },
+  partially_effective: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Partially Effective' },
+  ineffective: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Ineffective' },
+  not_tested: { bg: 'bg-slate-500/20', text: 'text-slate-600', label: 'Not Tested' },
 };
 
 function getStatusStyle(status: string) {
@@ -122,7 +132,23 @@ export default function InternalControlsPage() {
   const [keyControlFilter, setKeyControlFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingControl, setEditingControl] = useState<InternalControl | null>(null);
+  const [selectedModalCategory, setSelectedModalCategory] = useState('');
+  const [selectedModalSubCategory, setSelectedModalSubCategory] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [autoCreateUpload, setAutoCreateUpload] = useState(true);
+  const [uploadResult, setUploadResult] = useState<{
+    message: string;
+    file_name: string;
+    auto_create: boolean;
+    extracted_count: number;
+    suggested_count: number;
+    created: number;
+    skipped: number;
+    errors: string[];
+    preview: Array<Record<string, unknown>>;
+  } | null>(null);
   const queryClient = useQueryClient();
 
   const { data: controls, isLoading, error } = useQuery({
@@ -171,6 +197,30 @@ export default function InternalControlsPage() {
     },
   });
 
+  const uploadMutation = useMutation({
+    mutationFn: ({ file, autoCreate }: { file: File; autoCreate: boolean }) =>
+      ermApi.internalControls.uploadManualWithAI(file, autoCreate),
+    onSuccess: (response) => {
+      setUploadResult(response.data);
+      setUploadFile(null);
+      queryClient.invalidateQueries({ queryKey: ['internal-controls'] });
+      queryClient.invalidateQueries({ queryKey: ['internal-controls-dashboard'] });
+    },
+    onError: (error: any) => {
+      setUploadResult({
+        message: error?.response?.data?.detail || 'Upload failed',
+        file_name: uploadFile?.name || 'N/A',
+        auto_create: autoCreateUpload,
+        extracted_count: 0,
+        suggested_count: 0,
+        created: 0,
+        skipped: 0,
+        errors: [error?.response?.data?.detail || 'Unknown error'],
+        preview: [],
+      });
+    },
+  });
+
   const filteredControls = useMemo(() => {
     if (!controls) return [];
     return controls.filter((control) => {
@@ -187,6 +237,10 @@ export default function InternalControlsPage() {
       return matchesSearch && matchesStatus && matchesCategory && matchesKeyControl;
     });
   }, [controls, searchTerm, statusFilter, categoryFilter, keyControlFilter]);
+
+  const availableModalSubCategories = useMemo(() => {
+    return CONTROL_SUBCATEGORIES[selectedModalCategory] || [];
+  }, [selectedModalCategory]);
 
   const handleSubmit = (formData: FormData) => {
     const data: Record<string, unknown> = {
@@ -207,15 +261,16 @@ export default function InternalControlsPage() {
 
     if (editingControl) {
       updateMutation.mutate({ id: editingControl.id, data });
-    } else {
-      createMutation.mutate(data);
+      return;
     }
+
+    createMutation.mutate(data);
   };
 
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
@@ -223,8 +278,8 @@ export default function InternalControlsPage() {
   if (error) {
     return (
       <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
-        <p className="mt-2 text-red-600">Failed to load internal controls</p>
+        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
+        <p className="mt-2 text-red-400">Failed to load internal controls</p>
       </div>
     );
   }
@@ -234,36 +289,44 @@ export default function InternalControlsPage() {
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <Shield className="h-5 w-5 text-blue-600" />
+            <div className="rounded-lg bg-blue-500/20 p-2">
+              <Shield className="h-5 w-5 text-blue-400" />
+            </div>
             <div>
-              <p className="text-2xl font-bold text-black">{dashboard?.total_controls || 0}</p>
+              <p className="text-2xl font-bold text-slate-900">{dashboard?.total_controls || 0}</p>
               <p className="text-sm text-slate-600">Total Controls</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <Key className="h-5 w-5 text-primary-600" />
+            <div className="rounded-lg bg-purple-500/20 p-2">
+              <Key className="h-5 w-5 text-purple-400" />
+            </div>
             <div>
-              <p className="text-2xl font-bold text-black">{dashboard?.key_controls || 0}</p>
+              <p className="text-2xl font-bold text-slate-900">{dashboard?.key_controls || 0}</p>
               <p className="text-sm text-slate-600">Key Controls</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <CheckCircle className="h-5 w-5 text-green-600" />
+            <div className="rounded-lg bg-green-500/20 p-2">
+              <CheckCircle className="h-5 w-5 text-green-400" />
+            </div>
             <div>
-              <p className="text-2xl font-bold text-black">{dashboard?.effective_controls || 0}</p>
+              <p className="text-2xl font-bold text-slate-900">{dashboard?.effective_controls || 0}</p>
               <p className="text-sm text-slate-600">Effective</p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-yellow-700/50 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <Clock className="h-5 w-5 text-yellow-600" />
+            <div className="rounded-lg bg-yellow-500/20 p-2">
+              <Clock className="h-5 w-5 text-yellow-400" />
+            </div>
             <div>
-              <p className="text-2xl font-bold text-yellow-600">{dashboard?.pending_approval || 0}</p>
+              <p className="text-2xl font-bold text-yellow-400">{dashboard?.pending_approval || 0}</p>
               <p className="text-sm text-slate-600">Pending Approval</p>
             </div>
           </div>
@@ -279,13 +342,13 @@ export default function InternalControlsPage() {
               placeholder="Search controls..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-sm text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-100 py-2 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Statuses</option>
             <option value="draft">Draft</option>
@@ -296,7 +359,7 @@ export default function InternalControlsPage() {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Categories</option>
             {CONTROL_CATEGORIES.map((cat) => (
@@ -308,29 +371,45 @@ export default function InternalControlsPage() {
           <select
             value={keyControlFilter}
             onChange={(e) => setKeyControlFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Controls</option>
             <option value="yes">Key Controls Only</option>
             <option value="no">Non-Key Controls</option>
           </select>
         </div>
-        <button
-          onClick={() => {
-            setEditingControl(null);
-            setIsModalOpen(true);
-          }}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Add New Control
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setShowUploadModal(true);
+              setUploadResult(null);
+              setUploadFile(null);
+              setAutoCreateUpload(true);
+            }}
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-200 transition-colors"
+          >
+            <Upload className="h-4 w-4" />
+            Upload Manual + AI
+          </button>
+          <button
+            onClick={() => {
+              setEditingControl(null);
+              setSelectedModalCategory('');
+              setSelectedModalSubCategory('');
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add New Control
+          </button>
+        </div>
       </div>
 
       {filteredControls.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
           <Shield className="mx-auto h-12 w-12 text-slate-500" />
-          <p className="mt-4 text-lg font-medium text-black">No controls found</p>
+          <p className="mt-4 text-lg font-medium text-slate-900">No controls found</p>
           <p className="mt-1 text-sm text-slate-600">
             {searchTerm || statusFilter !== 'all' || categoryFilter !== 'all'
               ? 'Try adjusting your filters'
@@ -358,11 +437,11 @@ export default function InternalControlsPage() {
                   getOverallEffectiveness(control.design_effectiveness, control.operating_effectiveness)
                 );
                 return (
-                  <tr key={control.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={control.id} className="hover:bg-slate-100/50 transition-colors">
                     <td className="px-4 py-3">
                       <Link
                         href={`/erm/internal-controls/${control.id}`}
-                        className="font-mono text-sm text-primary-600 hover:text-primary-300"
+                        className="font-mono text-sm text-primary-400 hover:text-primary-300"
                       >
                         {control.control_id}
                       </Link>
@@ -371,20 +450,20 @@ export default function InternalControlsPage() {
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/erm/internal-controls/${control.id}`}
-                          className="text-sm font-medium text-black hover:text-primary-600"
+                          className="text-sm font-medium text-slate-900 hover:text-primary-400"
                         >
                           {control.name}
                         </Link>
                         {control.is_key_control && (
-                          <span className="flex items-center gap-1 rounded bg-primary-50 px-1.5 py-0.5 text-xs text-primary-600">
+                          <span className="flex items-center gap-1 rounded bg-purple-500/20 px-1.5 py-0.5 text-xs text-purple-400">
                             <Key className="h-3 w-3" />
                             Key
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{control.category || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
+                    <td className="px-4 py-3 text-sm text-slate-700">{control.category || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-slate-700">
                       {control.department?.name || '-'}
                     </td>
                     <td className="px-4 py-3">
@@ -406,16 +485,18 @@ export default function InternalControlsPage() {
                         <button
                           onClick={() => {
                             setEditingControl(control);
+                            setSelectedModalCategory(control.category || '');
+                            setSelectedModalSubCategory(control.sub_category || '');
                             setIsModalOpen(true);
                           }}
-                          className="rounded p-1 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                          className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
                           title="Edit"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(control.id)}
-                          className="rounded p-1 text-slate-600 hover:bg-red-600/20 hover:text-red-600 transition-colors"
+                          className="rounded p-1 text-slate-600 hover:bg-red-600/20 hover:text-red-400 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -434,15 +515,17 @@ export default function InternalControlsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-6">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-black">
+              <h2 className="text-xl font-bold text-slate-900">
                 {editingControl ? 'Edit Control' : 'Add New Control'}
               </h2>
               <button
                 onClick={() => {
                   setIsModalOpen(false);
                   setEditingControl(null);
+                  setSelectedModalCategory('');
+                  setSelectedModalSubCategory('');
                 }}
-                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -456,49 +539,57 @@ export default function InternalControlsPage() {
             >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">
-                    Control ID <span className="text-red-600">*</span>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Control ID <span className="text-red-400">*</span>
                   </label>
                   <input
                     name="control_id"
                     type="text"
                     required
                     defaultValue={editingControl?.control_id || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                     placeholder="e.g., CTL-001"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">
-                    Name <span className="text-red-600">*</span>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Name <span className="text-red-400">*</span>
                   </label>
                   <input
                     name="name"
                     type="text"
                     required
                     defaultValue={editingControl?.name || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                     placeholder="Control name"
                   />
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600">Description</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
                 <textarea
                   name="description"
                   rows={3}
                   defaultValue={editingControl?.description || ''}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                   placeholder="Describe the control..."
                 />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">Category</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Category</label>
                   <select
                     name="category"
-                    defaultValue={editingControl?.category || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                    value={selectedModalCategory}
+                    onChange={(e) => {
+                      const nextCategory = e.target.value;
+                      setSelectedModalCategory(nextCategory);
+                      const nextOptions = CONTROL_SUBCATEGORIES[nextCategory] || [];
+                      if (!nextOptions.includes(selectedModalSubCategory)) {
+                        setSelectedModalSubCategory('');
+                      }
+                    }}
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select category</option>
                     {CONTROL_CATEGORIES.map((cat) => (
@@ -509,23 +600,32 @@ export default function InternalControlsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">Sub-Category</label>
-                  <input
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Sub-Category</label>
+                  <select
                     name="sub_category"
-                    type="text"
-                    defaultValue={editingControl?.sub_category || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
-                    placeholder="Sub-category"
-                  />
+                    value={selectedModalSubCategory}
+                    onChange={(e) => setSelectedModalSubCategory(e.target.value)}
+                    disabled={!selectedModalCategory}
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-200"
+                  >
+                    <option value="">
+                      {selectedModalCategory ? 'Select sub-category' : 'Select category first'}
+                    </option>
+                    {availableModalSubCategories.map((subCategory) => (
+                      <option key={subCategory} value={subCategory}>
+                        {subCategory}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">Control Type</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Control Type</label>
                   <select
                     name="control_type"
                     defaultValue={editingControl?.control_type || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select type</option>
                     {CONTROL_TYPES.map((t) => (
@@ -536,11 +636,11 @@ export default function InternalControlsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">Control Nature</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Control Nature</label>
                   <select
                     name="control_nature"
                     defaultValue={editingControl?.control_nature || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select nature</option>
                     {CONTROL_NATURES.map((n) => (
@@ -553,11 +653,11 @@ export default function InternalControlsPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">Frequency</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Frequency</label>
                   <select
                     name="frequency"
                     defaultValue={editingControl?.frequency || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select frequency</option>
                     {FREQUENCIES.map((f) => (
@@ -568,11 +668,11 @@ export default function InternalControlsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">Priority</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Priority</label>
                   <select
                     name="priority"
                     defaultValue={editingControl?.priority || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select priority</option>
                     {PRIORITIES.map((p) => (
@@ -584,34 +684,34 @@ export default function InternalControlsPage() {
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-600">
+                <label className="mb-1 block text-sm font-medium text-slate-700">
                   Regulatory Source
                 </label>
                 <input
                   name="regulatory_source"
                   type="text"
                   defaultValue={editingControl?.regulatory_source || ''}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                   placeholder="e.g., SOX, PCI-DSS, ISO 27001"
                 />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">Effective Date</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Effective Date</label>
                   <input
                     name="effective_date"
                     type="date"
                     defaultValue={editingControl?.effective_date?.split('T')[0] || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-600">Review Date</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Review Date</label>
                   <input
                     name="review_date"
                     type="date"
                     defaultValue={editingControl?.review_date?.split('T')[0] || ''}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -621,9 +721,9 @@ export default function InternalControlsPage() {
                   type="checkbox"
                   value="true"
                   defaultChecked={editingControl?.is_key_control || false}
-                  className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
+                  className="h-4 w-4 rounded border-slate-300 bg-slate-100 text-primary-600 focus:ring-primary-500"
                 />
-                <label className="text-sm font-medium text-slate-600">Key Control</label>
+                <label className="text-sm font-medium text-slate-700">Key Control</label>
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <button
@@ -632,7 +732,7 @@ export default function InternalControlsPage() {
                     setIsModalOpen(false);
                     setEditingControl(null);
                   }}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
                 >
                   Cancel
                 </button>
@@ -652,22 +752,152 @@ export default function InternalControlsPage() {
         </div>
       )}
 
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 max-h-[90vh] overflow-y-auto">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Upload Internal Controls (Manual + AI)</h3>
+              <button onClick={() => setShowUploadModal(false)} className="text-slate-600 hover:text-slate-900">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {uploadResult ? (
+              <div className="space-y-4">
+                <div className={`rounded-lg p-4 ${uploadResult.created > 0 ? 'bg-green-500/10 border border-green-500/30' : 'bg-blue-500/10 border border-blue-500/30'}`}>
+                  <p className={`text-sm font-medium ${uploadResult.created > 0 ? 'text-green-400' : 'text-blue-400'}`}>
+                    {uploadResult.message}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Extracted: {uploadResult.extracted_count} | AI Suggestions: {uploadResult.suggested_count} | Created: {uploadResult.created} | Skipped: {uploadResult.skipped}
+                  </p>
+                  {uploadResult.errors.length > 0 && (
+                    <div className="mt-2 max-h-32 overflow-y-auto">
+                      {uploadResult.errors.map((err, i) => (
+                        <p key={i} className="text-xs text-red-400">{err}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {uploadResult.preview.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-slate-700">AI Preview (first 25)</p>
+                    <div className="max-h-64 overflow-auto rounded-lg border border-slate-200">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-100 text-slate-700">
+                          <tr>
+                            <th className="px-2 py-1 text-left">Control ID</th>
+                            <th className="px-2 py-1 text-left">Name</th>
+                            <th className="px-2 py-1 text-left">Category</th>
+                            <th className="px-2 py-1 text-left">Type</th>
+                            <th className="px-2 py-1 text-left">Priority</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {uploadResult.preview.map((item, idx) => (
+                            <tr key={idx} className="border-t border-slate-100 text-slate-700">
+                              <td className="px-2 py-1">{String(item.control_id || '-')}</td>
+                              <td className="px-2 py-1">{String(item.name || '-')}</td>
+                              <td className="px-2 py-1">{String(item.category || '-')}</td>
+                              <td className="px-2 py-1">{String(item.control_type || '-')}</td>
+                              <td className="px-2 py-1">{String(item.priority || '-')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowUploadModal(false)}
+                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  Upload a manual control file (`.csv`, `.xlsx`, `.xls`, `.txt`). AI will normalize and suggest control fields.
+                </p>
+
+                <div className="rounded-lg border-2 border-dashed border-slate-300 p-6 text-center">
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls,.txt"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                    id="internal-control-upload"
+                  />
+                  <label htmlFor="internal-control-upload" className="cursor-pointer">
+                    <Upload className="mx-auto h-8 w-8 text-slate-500" />
+                    <p className="mt-2 text-sm text-slate-600">
+                      {uploadFile ? uploadFile.name : 'Click to select a file'}
+                    </p>
+                  </label>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={autoCreateUpload}
+                    onChange={(e) => setAutoCreateUpload(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-primary-600"
+                  />
+                  Auto-create controls after AI extraction
+                </label>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setShowUploadModal(false)}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => uploadFile && uploadMutation.mutate({ file: uploadFile, autoCreate: autoCreateUpload })}
+                    disabled={!uploadFile || uploadMutation.isPending}
+                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+                  >
+                    {uploadMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        Upload & Analyze
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
             <div className="mb-4 flex items-center gap-3">
-              <div className="rounded-full bg-red-50 p-2">
-                <XCircle className="h-6 w-6 text-red-600" />
+              <div className="rounded-full bg-red-500/20 p-2">
+                <XCircle className="h-6 w-6 text-red-400" />
               </div>
-              <h3 className="text-lg font-bold text-black">Delete Control</h3>
+              <h3 className="text-lg font-bold text-slate-900">Delete Control</h3>
             </div>
-            <p className="mb-6 text-slate-600">
+            <p className="mb-6 text-slate-700">
               Are you sure you want to delete this control? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200"
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
                 Cancel
               </button>

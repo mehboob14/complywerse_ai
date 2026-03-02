@@ -20,6 +20,8 @@ import {
   X,
   Edit2,
   Trash2,
+  Upload,
+  Sparkles,
 } from 'lucide-react';
 
 const KRI_STATUS_COLORS = {
@@ -33,6 +35,9 @@ export default function KRIsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showMeasureModal, setShowMeasureModal] = useState<RiskKRI | null>(null);
   const [editingKRI, setEditingKRI] = useState<RiskKRI | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadResult, setUploadResult] = useState<{ message: string; created: number; skipped: number; errors: string[] } | null>(null);
   const queryClient = useQueryClient();
 
   const { data: kris, isLoading } = useQuery({
@@ -67,6 +72,24 @@ export default function KRIsPage() {
     },
   });
 
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => ermApi.kris.upload(file),
+    onSuccess: (response) => {
+      setUploadResult(response.data);
+      setUploadFile(null);
+      queryClient.invalidateQueries({ queryKey: ['erm-kris'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-kri-alerts'] });
+    },
+    onError: (error: any) => {
+      setUploadResult({
+        message: error?.response?.data?.detail || 'Upload failed',
+        created: 0,
+        skipped: 0,
+        errors: [error?.response?.data?.detail || 'Unknown error'],
+      });
+    },
+  });
+
   const alertCount = alerts?.length || 0;
   const redAlerts = alerts?.filter(k => k.current_status === 'red').length || 0;
   const amberAlerts = alerts?.filter(k => k.current_status === 'amber').length || 0;
@@ -74,7 +97,7 @@ export default function KRIsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
@@ -84,31 +107,40 @@ export default function KRIsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-black">Key Risk Indicators</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Key Risk Indicators</h2>
             <p className="text-sm text-slate-600">Monitor and track risk metrics</p>
           </div>
           {alertCount > 0 && (
             <div className="flex items-center gap-2">
               {redAlerts > 0 && (
-                <span className="rounded-full bg-red-50 px-3 py-1 text-sm text-red-600">
+                <span className="rounded-full bg-red-500/20 px-3 py-1 text-sm text-red-400">
                   {redAlerts} Critical
                 </span>
               )}
               {amberAlerts > 0 && (
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-sm text-amber-600">
+                <span className="rounded-full bg-amber-500/20 px-3 py-1 text-sm text-amber-400">
                   {amberAlerts} Warning
                 </span>
               )}
             </div>
           )}
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
-        >
-          <Plus className="h-4 w-4" />
-          Add KRI
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setShowUploadModal(true); setUploadResult(null); setUploadFile(null); }}
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm text-slate-900 hover:bg-slate-200"
+          >
+            <Upload className="h-4 w-4" />
+            Upload KRIs
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+          >
+            <Plus className="h-4 w-4" />
+            Add KRI
+          </button>
+        </div>
       </div>
 
       {kris && kris.length > 0 ? (
@@ -130,7 +162,7 @@ export default function KRIsPage() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <Activity className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-black">No KRIs defined</h3>
+          <h3 className="mt-4 text-lg font-medium text-slate-900">No KRIs defined</h3>
           <p className="mt-1 text-slate-600">Create Key Risk Indicators to monitor risk metrics</p>
         </div>
       )}
@@ -169,6 +201,95 @@ export default function KRIsPage() {
           }}
         />
       )}
+
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-lg rounded-xl bg-white border border-slate-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900">Upload KRIs from Excel</h3>
+              <button onClick={() => setShowUploadModal(false)} className="text-slate-600 hover:text-slate-900">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {uploadResult ? (
+              <div className="space-y-4">
+                <div className={`rounded-lg p-4 ${uploadResult.created > 0 ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+                  <p className={`text-sm font-medium ${uploadResult.created > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {uploadResult.message}
+                  </p>
+                  {uploadResult.created > 0 && (
+                    <p className="text-sm text-slate-600 mt-1">
+                      {uploadResult.created} created, {uploadResult.skipped} skipped
+                    </p>
+                  )}
+                  {uploadResult.errors.length > 0 && (
+                    <div className="mt-2 max-h-32 overflow-y-auto">
+                      {uploadResult.errors.map((err, i) => (
+                        <p key={i} className="text-xs text-red-400">{err}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowUploadModal(false)}
+                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  Upload an Excel file with KRI data. Expected columns: KRI Name, Description, Frequency, Green/Amber/Red Thresholds, Current Value, etc.
+                </p>
+                <div className="rounded-lg border-2 border-dashed border-slate-300 p-6 text-center">
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                    id="kri-upload"
+                  />
+                  <label htmlFor="kri-upload" className="cursor-pointer">
+                    <Upload className="mx-auto h-8 w-8 text-slate-500" />
+                    <p className="mt-2 text-sm text-slate-600">
+                      {uploadFile ? uploadFile.name : 'Click to select an Excel file'}
+                    </p>
+                  </label>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setShowUploadModal(false)}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => uploadFile && uploadMutation.mutate(uploadFile)}
+                    disabled={!uploadFile || uploadMutation.isPending}
+                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+                  >
+                    {uploadMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        Upload
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -195,20 +316,20 @@ function KRICard({
         <div className="flex items-center gap-3">
           <div className={`h-3 w-3 rounded-full ${statusColor}`} />
           <div>
-            <h3 className="font-medium text-black">{kri.name}</h3>
+            <h3 className="font-medium text-slate-900">{kri.name}</h3>
             <p className="text-sm text-slate-600">{kri.frequency} measurement</p>
           </div>
         </div>
         <div className="flex gap-1">
           <button
             onClick={onEdit}
-            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+            className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           >
             <Edit2 className="h-4 w-4" />
           </button>
           <button
             onClick={onDelete}
-            className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600"
+            className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -218,7 +339,7 @@ function KRICard({
       <div className="mt-4">
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-3xl font-bold text-black">
+            <p className="text-3xl font-bold text-slate-900">
               {kri.current_value !== undefined && kri.current_value !== null
                 ? `${kri.current_value}${kri.unit || ''}`
                 : '—'}
@@ -230,7 +351,7 @@ function KRICard({
             )}
           </div>
           {trend !== 0 && (
-            <div className={`flex items-center gap-1 ${trend > 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`flex items-center gap-1 ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
               {trend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
               <span className="text-sm">{Math.abs(trend).toFixed(1)}</span>
             </div>
@@ -255,7 +376,7 @@ function KRICard({
 
       <button
         onClick={onMeasure}
-        className="mt-4 w-full rounded-lg bg-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-600"
+        className="mt-4 w-full rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700 hover:bg-slate-200"
       >
         Record Measurement
       </button>
@@ -285,6 +406,7 @@ function KRIModal({
     threshold_direction: kri?.threshold_direction || 'higher_is_better',
     frequency: kri?.frequency || 'monthly',
   });
+  const [aiSuggestionNote, setAiSuggestionNote] = useState<string | null>(null);
 
   const createMutation = useMutation({
     mutationFn: (data: RiskKRICreate) => ermApi.kris.create(data),
@@ -295,6 +417,32 @@ function KRIModal({
     mutationFn: (data: { id: number; updates: Partial<RiskKRICreate> }) =>
       ermApi.kris.update(data.id, data.updates),
     onSuccess,
+  });
+
+  const aiSuggestMutation = useMutation({
+    mutationFn: () =>
+      ermApi.kris.aiSuggestManual({
+        name: formData.name || '',
+        description: formData.description,
+        risk_id: formData.risk_id,
+      }),
+    onSuccess: (response) => {
+      const suggestion = response.data.suggestion;
+      setFormData((prev) => ({
+        ...prev,
+        description: prev.description || suggestion.description || '',
+        metric_type: (suggestion.metric_type as KRIMetricType) || prev.metric_type,
+        unit: prev.unit || suggestion.unit || '',
+        threshold_direction: (suggestion.threshold_direction as KRIThresholdDirection) || prev.threshold_direction,
+        frequency: (suggestion.frequency as KRIFrequency) || prev.frequency,
+        green_threshold: prev.green_threshold ?? suggestion.green_threshold,
+        amber_threshold: prev.amber_threshold ?? suggestion.amber_threshold,
+      }));
+      setAiSuggestionNote(suggestion.rationale || 'AI suggestions applied');
+    },
+    onError: () => {
+      setAiSuggestionNote('AI suggestion failed. Please try again.');
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -312,19 +460,35 @@ function KRIModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-lg rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black">{kri ? 'Edit KRI' : 'Create KRI'}</h2>
+          <h2 className="text-lg font-semibold text-slate-900">{kri ? 'Edit KRI' : 'Create KRI'}</h2>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-600">Use AI to prefill KRI details for manual entry</p>
+              <button
+                type="button"
+                onClick={() => aiSuggestMutation.mutate()}
+                disabled={!formData.name || aiSuggestMutation.isPending}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+              >
+                {aiSuggestMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                AI Suggest
+              </button>
+            </div>
+            {aiSuggestionNote && <p className="mt-2 text-xs text-slate-600">{aiSuggestionNote}</p>}
+          </div>
+
           <div>
             <label className="block text-sm text-slate-600">Risk</label>
             <select
               value={formData.risk_id}
               onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               required
             >
               {risks.map((risk) => (
@@ -341,7 +505,7 @@ function KRIModal({
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               required
             />
           </div>
@@ -351,7 +515,7 @@ function KRIModal({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               rows={2}
             />
           </div>
@@ -362,7 +526,7 @@ function KRIModal({
               <select
                 value={formData.metric_type}
                 onChange={(e) => setFormData({ ...formData, metric_type: e.target.value as KRIMetricType })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               >
                 <option value="percentage">Percentage</option>
                 <option value="count">Count</option>
@@ -377,7 +541,7 @@ function KRIModal({
                 type="text"
                 value={formData.unit}
                 onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               />
             </div>
           </div>
@@ -389,7 +553,7 @@ function KRIModal({
                 type="number"
                 value={formData.green_threshold}
                 onChange={(e) => setFormData({ ...formData, green_threshold: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               />
             </div>
             <div>
@@ -398,7 +562,7 @@ function KRIModal({
                 type="number"
                 value={formData.amber_threshold}
                 onChange={(e) => setFormData({ ...formData, amber_threshold: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               />
             </div>
           </div>
@@ -409,7 +573,7 @@ function KRIModal({
               <select
                 value={formData.threshold_direction}
                 onChange={(e) => setFormData({ ...formData, threshold_direction: e.target.value as KRIThresholdDirection })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               >
                 <option value="higher_is_better">Higher is Better</option>
                 <option value="lower_is_better">Lower is Better</option>
@@ -420,7 +584,7 @@ function KRIModal({
               <select
                 value={formData.frequency}
                 onChange={(e) => setFormData({ ...formData, frequency: e.target.value as KRIFrequency })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               >
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
@@ -435,7 +599,7 @@ function KRIModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
             >
               Cancel
             </button>
@@ -480,7 +644,7 @@ function MeasureKRIModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black">Record Measurement</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Record Measurement</h2>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
@@ -497,7 +661,7 @@ function MeasureKRIModal({
                 step="0.01"
                 value={value}
                 onChange={(e) => setValue(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
                 required
               />
               {kri.unit && <span className="text-slate-600">{kri.unit}</span>}
@@ -509,7 +673,7 @@ function MeasureKRIModal({
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               rows={2}
             />
           </div>
@@ -518,7 +682,7 @@ function MeasureKRIModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
             >
               Cancel
             </button>

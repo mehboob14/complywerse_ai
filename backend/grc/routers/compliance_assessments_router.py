@@ -83,6 +83,13 @@ class ApprovalActionRequest(BaseModel):
     comments: Optional[str] = None
     delegated_to: Optional[int] = None
 
+
+class AssessmentContextRequest(BaseModel):
+    name: str
+    assessment_type: str
+    source: Optional[str] = None
+    notes: Optional[str] = None
+
 COLUMN_MAPPINGS = {
     "item_number": ["sr", "sr.", "sr#", "s#", "s.no", "s.no.", "no", "no.", "item", "item no", "item number", "control id", "control #", "id", "ref", "reference", "#"],
     "area_domain": ["area", "domain", "category", "section", "control area", "control domain", "control category", "subject area", "topic", "area / domain", "area/domain"],
@@ -285,6 +292,82 @@ def calculate_assessment_stats(items: List[ComplianceAssessmentDocumentItem]) ->
         )
     
     return stats
+
+
+def _fallback_assessment_context(payload: AssessmentContextRequest) -> dict:
+    assessment_type_label = payload.assessment_type.replace("_", " ").title()
+    source_text = f" Source: {payload.source}." if payload.source else ""
+    notes_text = f" Notes: {payload.notes}." if payload.notes else ""
+    summary = (
+        f"{payload.name} is a {assessment_type_label} focused assessment to evaluate current control effectiveness, "
+        f"identify non-compliance gaps, and prioritize remediation actions.{source_text}{notes_text}"
+    )
+    risk_perspective = (
+        "From a risk perspective, this assessment improves visibility of control weaknesses, supports risk scoring updates, "
+        "and helps reduce residual risk through targeted corrective actions."
+    )
+    compliance_perspective = (
+        "From a compliance perspective, this assessment provides audit-ready evidence of due diligence, tracks requirement-level "
+        "conformance, and supports ongoing regulatory and framework adherence."
+    )
+    return {
+        "summary": summary,
+        "risk_perspective": risk_perspective,
+        "compliance_perspective": compliance_perspective,
+        "generated_by": "fallback",
+    }
+
+
+@router.post("/ai-context")
+def generate_assessment_ai_context(
+    request: AssessmentContextRequest,
+    current_user: GRCUser = Depends(require_auth),
+):
+    api_key = AI_INTEGRATIONS_OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return _fallback_assessment_context(request)
+
+    try:
+        client_kwargs = {"api_key": api_key}
+        if AI_INTEGRATIONS_OPENAI_BASE_URL:
+            client_kwargs["base_url"] = AI_INTEGRATIONS_OPENAI_BASE_URL
+        client = OpenAI(**client_kwargs)
+
+        prompt = f"""
+You are a senior GRC advisor.
+Generate a concise assessment context in JSON for this compliance assessment upload:
+
+Assessment Name: {request.name}
+Assessment Type: {request.assessment_type}
+Source: {request.source or 'N/A'}
+Notes: {request.notes or 'N/A'}
+
+Return strict JSON with keys:
+- summary (2-3 sentences describing what this assessment is about)
+- risk_perspective (1-2 sentences on risk-management value)
+- compliance_perspective (1-2 sentences on compliance/audit value)
+"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            temperature=0.3,
+            messages=[
+                {"role": "system", "content": "You produce concise, practical GRC guidance as valid JSON."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        content = response.choices[0].message.content or "{}"
+        parsed = json.loads(content)
+
+        return {
+            "summary": parsed.get("summary") or _fallback_assessment_context(request)["summary"],
+            "risk_perspective": parsed.get("risk_perspective") or _fallback_assessment_context(request)["risk_perspective"],
+            "compliance_perspective": parsed.get("compliance_perspective") or _fallback_assessment_context(request)["compliance_perspective"],
+            "generated_by": "ai",
+        }
+    except Exception:
+        logger.warning("AI context generation failed, using fallback", exc_info=True)
+        return _fallback_assessment_context(request)
 
 
 @router.post("/upload")
@@ -1029,6 +1112,8 @@ def get_assessment(
             "priority": item.priority,
             "evidence_reference": item.evidence_reference,
             "remarks": item.remarks,
+            "ai_evidence_recommendation": item.ai_evidence_recommendation,
+            "ai_recommendation_generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None,
             "created_at": item.created_at.isoformat(),
             "updated_at": item.updated_at.isoformat() if item.updated_at else None
         })
@@ -1067,6 +1152,8 @@ def get_assessment(
                 "priority": item.priority,
                 "evidence_reference": item.evidence_reference,
                 "remarks": item.remarks,
+                "ai_evidence_recommendation": item.ai_evidence_recommendation,
+                "ai_recommendation_generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None,
                 "created_at": item.created_at.isoformat(),
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None
             }
@@ -1383,6 +1470,9 @@ def get_assessment_types():
 
 def check_ai_available() -> bool:
     """Check if OpenAI API key is configured."""
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    if base_url and "modelfarm" in base_url:
+        return True
     api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return False

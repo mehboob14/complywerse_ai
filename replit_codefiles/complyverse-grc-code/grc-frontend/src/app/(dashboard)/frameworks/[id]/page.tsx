@@ -1,0 +1,2443 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useRouter } from 'next/navigation';
+import { certificationsApi, governanceApi } from '@/lib/api';
+import apiClient from '@/lib/api';
+import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence } from '@/types';
+import ControlImplementationModal from '@/components/ControlImplementationModal';
+import { 
+  Loader2, 
+  AlertCircle,
+  Shield,
+  ChevronRight,
+  ChevronDown,
+  Calendar,
+  Target,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Play,
+  Check,
+  XCircle,
+  ArrowLeft,
+  Layers,
+  FileText,
+  Download,
+  ExternalLink,
+  MapPin,
+  Building2,
+  Users,
+  Percent,
+  Search,
+  Filter,
+  ChevronUp,
+  Circle,
+  FileCheck,
+  BookOpen,
+  ClipboardCheck,
+  GraduationCap,
+  Eye,
+  BarChart3,
+  Settings,
+  Upload,
+  Plus,
+  Minus,
+  Award,
+  TrendingUp,
+  Radio,
+  Paperclip,
+  Sparkles,
+  Trash2,
+  CheckCircle
+} from 'lucide-react';
+
+const EVIDENCE_TYPE_MAP: Record<string, { label: string; color: string }> = {
+  policy: { label: 'Policy', color: 'bg-blue-500/20 text-blue-400' },
+  procedure: { label: 'Procedure', color: 'bg-purple-500/20 text-purple-400' },
+  screenshot: { label: 'Screenshot', color: 'bg-cyan-500/20 text-cyan-400' },
+  audit: { label: 'Audit Log', color: 'bg-orange-500/20 text-orange-400' },
+  log: { label: 'Log', color: 'bg-orange-500/20 text-orange-400' },
+  training: { label: 'Training', color: 'bg-green-500/20 text-green-400' },
+  risk: { label: 'Risk Assessment', color: 'bg-red-500/20 text-red-400' },
+  access: { label: 'Access Review', color: 'bg-yellow-500/20 text-yellow-400' },
+  config: { label: 'Configuration', color: 'bg-indigo-500/20 text-indigo-400' },
+  report: { label: 'Report', color: 'bg-pink-500/20 text-pink-400' },
+  certificate: { label: 'Certificate', color: 'bg-emerald-500/20 text-emerald-400' },
+  contract: { label: 'Contract', color: 'bg-amber-500/20 text-amber-400' },
+  register: { label: 'Register', color: 'bg-teal-500/20 text-teal-400' },
+  inventory: { label: 'Inventory', color: 'bg-lime-500/20 text-lime-400' },
+  plan: { label: 'Plan', color: 'bg-sky-500/20 text-sky-400' },
+  matrix: { label: 'Matrix', color: 'bg-violet-500/20 text-violet-400' },
+  list: { label: 'List', color: 'bg-fuchsia-500/20 text-fuchsia-400' },
+};
+
+const getEvidenceType = (recommendation: string): { label: string; color: string } => {
+  const key = recommendation.toLowerCase();
+  for (const [pattern, value] of Object.entries(EVIDENCE_TYPE_MAP)) {
+    if (key.includes(pattern)) return value;
+  }
+  return { label: 'Document', color: 'bg-slate-500/20 text-slate-400' };
+};
+
+interface EvidenceRequirement {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  typeLabel: string;
+  typeColor: string;
+  frequency: string;
+  isRequired: boolean;
+}
+
+const EVIDENCE_DETAILS: Record<string, { title: string; description: string; frequency: string; isRequired: boolean }> = {
+  policy_document: { title: 'Policy Document', description: 'Approved and published policy document', frequency: 'annual', isRequired: true },
+  procedure_document: { title: 'Procedure Document', description: 'Documented operational procedures', frequency: 'annual', isRequired: true },
+  screenshot: { title: 'System Screenshot', description: 'Screenshot evidence of system configuration', frequency: 'quarterly', isRequired: false },
+  audit_log: { title: 'Audit Log Records', description: 'System audit log exports showing activity', frequency: 'monthly', isRequired: true },
+  configuration_export: { title: 'Configuration Export', description: 'System configuration settings export', frequency: 'quarterly', isRequired: true },
+  training_record: { title: 'Training Records', description: 'Records of personnel training completion', frequency: 'annual', isRequired: true },
+  risk_assessment: { title: 'Risk Assessment Report', description: 'Documented risk assessment results', frequency: 'annual', isRequired: true },
+  penetration_test_report: { title: 'Penetration Test Report', description: 'External penetration testing results', frequency: 'annual', isRequired: true },
+  vulnerability_scan: { title: 'Vulnerability Scan Results', description: 'Automated vulnerability scan output', frequency: 'quarterly', isRequired: true },
+  access_review: { title: 'Access Review Records', description: 'Periodic access review documentation', frequency: 'quarterly', isRequired: true },
+  change_request: { title: 'Change Request Records', description: 'Records of change requests', frequency: 'monthly', isRequired: true },
+  incident_report: { title: 'Incident Reports', description: 'Security incident documentation', frequency: 'as_needed', isRequired: false },
+  backup_log: { title: 'Backup Log Records', description: 'System backup verification logs', frequency: 'monthly', isRequired: true },
+  encryption_certificate: { title: 'Encryption Certificate', description: 'Valid encryption/SSL certificate', frequency: 'annual', isRequired: true },
+  contract: { title: 'Contract/Agreement', description: 'Signed contractual agreements', frequency: 'as_needed', isRequired: true },
+  register: { title: 'Register/Inventory', description: 'Maintained register or inventory list', frequency: 'quarterly', isRequired: true },
+  plan: { title: 'Management Plan', description: 'Documented management or response plan', frequency: 'annual', isRequired: true },
+  matrix: { title: 'Responsibility Matrix', description: 'Roles and responsibilities matrix', frequency: 'annual', isRequired: true },
+  meeting_minutes: { title: 'Meeting Minutes', description: 'Meeting records and minutes', frequency: 'monthly', isRequired: false },
+  acknowledgment: { title: 'Acknowledgment Records', description: 'Signed acknowledgment forms', frequency: 'annual', isRequired: true },
+  job_description: { title: 'Job Descriptions', description: 'Role-specific job descriptions', frequency: 'annual', isRequired: false },
+  org_chart: { title: 'Organizational Chart', description: 'Current organizational structure', frequency: 'annual', isRequired: false },
+};
+
+const getEvidenceRequirements = (controlName: string, evidenceRecs: string[]): EvidenceRequirement[] => {
+  return evidenceRecs.map((rec, idx) => {
+    const key = rec.toLowerCase().replace(/-/g, '_');
+    const details = EVIDENCE_DETAILS[key] || {
+      title: rec.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+      description: `Documentation for ${rec.replace(/_/g, ' ')}`,
+      frequency: 'annual',
+      isRequired: true
+    };
+    const evType = getEvidenceType(rec);
+    return {
+      id: `${rec}-${idx}`,
+      title: details.title,
+      description: details.description,
+      type: rec,
+      typeLabel: evType.label,
+      typeColor: evType.color,
+      frequency: details.frequency,
+      isRequired: details.isRequired
+    };
+  });
+};
+
+const getCategoryFromDomain = (domainName: string): string => {
+  const name = domainName?.toLowerCase() || '';
+  if (name.includes('organizational')) return 'Organizational';
+  if (name.includes('people')) return 'People';
+  if (name.includes('physical')) return 'Physical';
+  if (name.includes('technological')) return 'Technological';
+  return 'Other';
+};
+
+type CategoryFilter = 'all' | 'organizational' | 'people' | 'physical' | 'technological';
+type StatusFilter = 'all' | 'implemented' | 'not_implemented' | 'partial' | 'in_progress' | 'verified';
+type SortOrder = 'asc' | 'desc' | 'default';
+
+
+const ANNEX_A_DOMAINS = [
+  { id: 'A.5', name: 'Organizational Controls', controlCount: 37 },
+  { id: 'A.6', name: 'People Controls', controlCount: 8 },
+  { id: 'A.7', name: 'Physical Controls', controlCount: 14 },
+  { id: 'A.8', name: 'Technological Controls', controlCount: 34 },
+];
+
+type TabType = 'overview' | 'phases' | 'controls' | string;
+type ScopingSubTab = 'definition' | 'locations' | 'exclusions' | 'departments';
+type SoaSubTab = 'controls' | 'summary' | 'export';
+type ControlsSubTab = 'library' | 'policies' | 'evidence';
+
+export default function CertificationJourneyPage() {
+  const params = useParams();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const journeyId = parseInt(params.id as string);
+  
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [expandedPhases, setExpandedPhases] = useState<number[]>([1]);
+  const [expandedDomains, setExpandedDomains] = useState<string[]>(['A.5']);
+  const [scopingSubTab, setScopingSubTab] = useState<ScopingSubTab>('definition');
+  const [soaSubTab, setSoaSubTab] = useState<SoaSubTab>('controls');
+  const [controlsSubTab, setControlsSubTab] = useState<ControlsSubTab>('library');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDomain, setSelectedDomain] = useState<number | null>(null);
+  const [selectedControl, setSelectedControl] = useState<ControlImplementation | null>(null);
+  const [showControlModal, setShowControlModal] = useState(false);
+  const [expandedControls, setExpandedControls] = useState<number[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('default');
+  const [uploadingControlId, setUploadingControlId] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: journey, isLoading: journeyLoading, error: journeyError } = useQuery({
+    queryKey: ['certification', journeyId],
+    queryFn: async () => {
+      const response = await certificationsApi.getById(journeyId);
+      return response.data as CertificationJourney;
+    },
+  });
+
+  const { data: controls, isLoading: controlsLoading } = useQuery({
+    queryKey: ['certification-controls', journeyId],
+    queryFn: async () => {
+      const response = await certificationsApi.getControls(journeyId);
+      return response.data as CertificationControl[];
+    },
+    enabled: !!journeyId,
+  });
+
+  const uploadEvidenceMutation = useMutation({
+    mutationFn: async ({ controlId, file }: { controlId: number; file: File }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return certificationsApi.uploadEvidence(journeyId, controlId, formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      setUploadingControlId(null);
+    },
+    onError: () => {
+      setUploadingControlId(null);
+    }
+  });
+
+  const [assessingEvidenceId, setAssessingEvidenceId] = useState<number | null>(null);
+
+  const assessEvidenceMutation = useMutation({
+    mutationFn: async (evidenceId: number) => {
+      return apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess?force_refresh=true`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      setAssessingEvidenceId(null);
+    },
+    onError: () => {
+      setAssessingEvidenceId(null);
+    }
+  });
+
+  const [deletingEvidenceId, setDeletingEvidenceId] = useState<number | null>(null);
+
+  const deleteEvidenceMutation = useMutation({
+    mutationFn: async (evidenceId: number) => {
+      return apiClient.delete(`/certifications/evidence/${evidenceId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      setDeletingEvidenceId(null);
+    },
+    onError: () => {
+      setDeletingEvidenceId(null);
+    }
+  });
+
+  const reviewEvidenceMutation = useMutation({
+    mutationFn: async ({ evidenceId, action }: { evidenceId: number; action: 'approve' | 'reject' }) => {
+      return apiClient.put(`/certifications/evidence/${evidenceId}/review`, { action });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+    }
+  });
+
+  const [enhanceSuccess, setEnhanceSuccess] = useState<string | null>(null);
+  const [enhanceError, setEnhanceError] = useState<string | null>(null);
+
+  const [showApplicabilityModal, setShowApplicabilityModal] = useState(false);
+  const [applicabilityModalControl, setApplicabilityModalControl] = useState<any>(null);
+  const [applicabilityJustification, setApplicabilityJustification] = useState('');
+  const [applicabilityIsApplicable, setApplicabilityIsApplicable] = useState(true);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewingRecord, setReviewingRecord] = useState<any>(null);
+  const [reviewComment, setReviewComment] = useState('');
+  const [applicabilityStatusFilter, setApplicabilityStatusFilter] = useState<string>('all');
+
+  const enhanceMutation = useMutation({
+    mutationFn: async (frameworkId: number) => {
+      return await apiClient.post(`/framework-upload/parser/frameworks/${frameworkId}/enhance`);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      setEnhanceSuccess(`Enhancement started for ${data.data?.total_controls || 0} controls. Estimated time: ${data.data?.estimated_time_minutes || 1} minutes.`);
+      setTimeout(() => setEnhanceSuccess(null), 8000);
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.detail || error?.message || 'Enhancement failed';
+      setEnhanceError(message);
+      setTimeout(() => setEnhanceError(null), 5000);
+    }
+  });
+
+  const { data: progress } = useQuery({
+    queryKey: ['certification-progress', journeyId],
+    queryFn: async () => {
+      const response = await certificationsApi.getProgress(journeyId);
+      return response.data as ProgressSummary;
+    },
+    enabled: !!journeyId,
+  });
+
+  const { data: gaps } = useQuery({
+    queryKey: ['certification-gaps', journeyId],
+    queryFn: async () => {
+      const response = await certificationsApi.getGaps(journeyId);
+      return response.data;
+    },
+    enabled: !!journeyId,
+  });
+
+  const { data: certificationPhases, isLoading: phasesLoading } = useQuery({
+    queryKey: ['framework-phases', journey?.framework_id],
+    queryFn: async () => {
+      if (!journey?.framework_id) return [];
+      const response = await certificationsApi.getFrameworkPhases(journey.framework_id);
+      return response.data;
+    },
+    enabled: !!journey?.framework_id,
+  });
+
+  const phases = (certificationPhases || []).map((phase: any) => ({
+    id: phase.phase_number,
+    name: phase.name,
+    description: phase.description,
+    tasks: phase.key_tasks || [],
+    deliverables: phase.deliverables || [],
+  }));
+
+  useEffect(() => {
+    if (progress?.by_domain?.length && !selectedDomain) {
+      setSelectedDomain(progress.by_domain[0].domain_id);
+    }
+  }, [progress, selectedDomain]);
+
+  const { data: cdeData, isLoading: cdeLoading } = useQuery({
+    queryKey: ['cde-systems'],
+    queryFn: async () => {
+      const response = await certificationsApi.getCDESystems();
+      return response.data as {
+        systems: { id: number; name: string; asset_type: string; description: string; location: string; owner_name: string | null; owner_id: number | null; vendor: string | null; criticality: string; status: string; cde_environment: boolean; created_at: string }[];
+        summary: { total: number; type_breakdown: Record<string, number>; criticality_breakdown: Record<string, number> };
+      };
+    },
+    enabled: activeTab === 'cde-scope',
+  });
+
+  const toggleCDEScopeMutation = useMutation({
+    mutationFn: ({ systemId, inScope }: { systemId: number; inScope: boolean }) =>
+      certificationsApi.updateCDESystemScope(systemId, { cde_environment: inScope }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cde-systems'] });
+    },
+  });
+
+  const { data: applicabilityData, isLoading: applicabilityLoading } = useQuery({
+    queryKey: ['applicability', journey?.framework_id, applicabilityStatusFilter],
+    queryFn: async () => {
+      if (!journey?.framework_id) return null;
+      const params = applicabilityStatusFilter !== 'all' ? `?status_filter=${applicabilityStatusFilter}` : '';
+      const response = await governanceApi.getFrameworkApplicability(journey.framework_id);
+      return response.data;
+    },
+    enabled: !!journey?.framework_id && activeTab === 'applicability',
+  });
+
+  const { data: applicabilityAuditLog } = useQuery({
+    queryKey: ['applicability-audit-log', journey?.framework_id],
+    queryFn: async () => {
+      if (!journey?.framework_id) return [];
+      const response = await governanceApi.getApplicabilityAuditLog(journey.framework_id);
+      return response.data;
+    },
+    enabled: !!journey?.framework_id && activeTab === 'applicability',
+  });
+
+  const setApplicabilityMutation = useMutation({
+    mutationFn: async (data: { control_id: number; uploaded_framework_id: number; is_applicable: boolean; justification: string }) => {
+      return governanceApi.setClauseApplicability(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applicability'] });
+      queryClient.invalidateQueries({ queryKey: ['applicability-audit-log'] });
+      setShowApplicabilityModal(false);
+      setApplicabilityJustification('');
+      setApplicabilityModalControl(null);
+    },
+  });
+
+  const reviewApplicabilityMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: { status: string; review_comment?: string } }) => {
+      return governanceApi.reviewApplicability(id, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applicability'] });
+      queryClient.invalidateQueries({ queryKey: ['applicability-audit-log'] });
+      setShowReviewModal(false);
+      setReviewingRecord(null);
+      setReviewComment('');
+    },
+  });
+
+  const isLoading = journeyLoading || controlsLoading;
+  const completionPercentage = progress?.completion_percentage || 0;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+      </div>
+    );
+  }
+
+  if (journeyError || !journey) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+        <AlertCircle className="mb-2 h-8 w-8" />
+        <p>Failed to load certification journey</p>
+        <button 
+          onClick={() => router.push('/frameworks')}
+          className="btn-secondary mt-4"
+        >
+          Back to Frameworks
+        </button>
+      </div>
+    );
+  }
+
+  const togglePhase = (phaseId: number) => {
+    setExpandedPhases(prev => 
+      prev.includes(phaseId) 
+        ? prev.filter(id => id !== phaseId)
+        : [...prev, phaseId]
+    );
+  };
+
+  const toggleDomain = (domainId: string) => {
+    setExpandedDomains(prev => 
+      prev.includes(domainId) 
+        ? prev.filter(id => id !== domainId)
+        : [...prev, domainId]
+    );
+  };
+
+  const toggleControl = (controlId: number) => {
+    setExpandedControls(prev => 
+      prev.includes(controlId) 
+        ? prev.filter(id => id !== controlId)
+        : [...prev, controlId]
+    );
+  };
+
+  const handleFileUpload = (controlId: number, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setUploadingControlId(controlId);
+      uploadEvidenceMutation.mutate({ controlId, file });
+    }
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
+
+  // Natural sort comparison for section/clause numbers (e.g., "1.2.10" should come after "1.2.9")
+  const naturalSortCompare = (a: string, b: string): number => {
+    const aParts = (a || '').split(/[.\-_\s]+/).map(p => {
+      const num = parseInt(p, 10);
+      return isNaN(num) ? p.toLowerCase() : num;
+    });
+    const bParts = (b || '').split(/[.\-_\s]+/).map(p => {
+      const num = parseInt(p, 10);
+      return isNaN(num) ? p.toLowerCase() : num;
+    });
+    
+    const maxLen = Math.max(aParts.length, bParts.length);
+    for (let i = 0; i < maxLen; i++) {
+      const aPart = aParts[i] ?? '';
+      const bPart = bParts[i] ?? '';
+      
+      if (typeof aPart === 'number' && typeof bPart === 'number') {
+        if (aPart !== bPart) return aPart - bPart;
+      } else if (typeof aPart === 'number') {
+        return -1; // Numbers come before strings
+      } else if (typeof bPart === 'number') {
+        return 1;
+      } else {
+        const cmp = String(aPart).localeCompare(String(bPart));
+        if (cmp !== 0) return cmp;
+      }
+    }
+    return 0;
+  };
+
+  const filteredControls = controls?.filter((control: CertificationControl) => {
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = 
+        control.control_code?.toLowerCase().includes(query) ||
+        control.control_name?.toLowerCase().includes(query) ||
+        control.control_statement?.toLowerCase().includes(query);
+      if (!matchesSearch) return false;
+    }
+    if (categoryFilter !== 'all') {
+      const category = getCategoryFromDomain(control.domain_name).toLowerCase();
+      if (category !== categoryFilter) return false;
+    }
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'not_implemented' && control.status !== 'not_started') return false;
+      if (statusFilter === 'implemented' && !['implemented', 'verified'].includes(control.status)) return false;
+      if (statusFilter === 'partial' && control.status !== 'in_progress') return false;
+      if (statusFilter === 'in_progress' && control.status !== 'in_progress') return false;
+      if (statusFilter === 'verified' && control.status !== 'verified') return false;
+    }
+    return true;
+  }).sort((a: CertificationControl, b: CertificationControl) => {
+    const codeA = a.control_code || '';
+    const codeB = b.control_code || '';
+    const result = naturalSortCompare(codeA, codeB);
+    return sortOrder === 'desc' ? -result : result;
+  }) || [];
+
+  const controlStats = {
+    total: controls?.length || 0,
+    applicable: controls?.filter((c: CertificationControl) => c.is_applicable).length || 0,
+    notApplicable: controls?.filter((c: CertificationControl) => !c.is_applicable).length || 0,
+    implemented: controls?.filter((c: CertificationControl) => ['implemented', 'verified'].includes(c.status)).length || 0,
+    partial: controls?.filter((c: CertificationControl) => c.status === 'in_progress').length || 0,
+    notImplemented: controls?.filter((c: CertificationControl) => c.status === 'not_started').length || 0,
+    byCategory: {
+      organizational: controls?.filter((c: CertificationControl) => getCategoryFromDomain(c.domain_name) === 'Organizational').length || 0,
+      people: controls?.filter((c: CertificationControl) => getCategoryFromDomain(c.domain_name) === 'People').length || 0,
+      physical: controls?.filter((c: CertificationControl) => getCategoryFromDomain(c.domain_name) === 'Physical').length || 0,
+      technological: controls?.filter((c: CertificationControl) => getCategoryFromDomain(c.domain_name) === 'Technological').length || 0,
+    }
+  };
+
+  const totalEvidence = controls?.reduce((acc: number, c: CertificationControl) => acc + c.evidence_count, 0) || 0;
+
+  const handleControlClick = (control: ControlImplementation) => {
+    setSelectedControl(control);
+    setShowControlModal(true);
+  };
+
+  const phaseTabs = phases.map((phase, index) => ({
+    id: `phase-${phase.id}` as TabType,
+    label: `${index + 1}. ${phase.name.split(' ')[0]}`
+  }));
+  
+  const tabs: { id: TabType; label: string; icon?: React.ReactNode }[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'phases', label: 'Phases' },
+    { id: 'cde-scope', label: 'CDE Scope' },
+    ...phaseTabs,
+    { id: 'controls', label: 'Controls' },
+    { id: 'applicability', label: 'Applicability' },
+  ];
+
+  const CircularProgress = ({ percentage }: { percentage: number }) => {
+    const circumference = 2 * Math.PI * 45;
+    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+    
+    return (
+      <div className="relative h-32 w-32">
+        <svg className="h-32 w-32 -rotate-90 transform">
+          <circle
+            cx="64"
+            cy="64"
+            r="45"
+            stroke="currentColor"
+            strokeWidth="8"
+            fill="transparent"
+            className="text-slate-700"
+          />
+          <circle
+            cx="64"
+            cy="64"
+            r="45"
+            stroke="currentColor"
+            strokeWidth="8"
+            fill="transparent"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            className="text-primary-500 transition-all duration-500"
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-bold text-white">{percentage}%</span>
+          <span className="text-xs text-slate-400">Ready</span>
+        </div>
+      </div>
+    );
+  };
+
+  const renderOverviewTab = () => {
+    const currentPhaseIdx = journey.current_phase - 1;
+    const phaseCompletionPct = phases.length > 0 ? Math.round((currentPhaseIdx / phases.length) * 100) : 0;
+
+    const rocPhase = phases.find((p) => p.name?.toLowerCase().includes('roc') || p.name?.toLowerCase().includes('documentation') || p.deliverables?.some((d: string) => d.toLowerCase().includes('roc')));
+    const aocPhase = phases.find((p) => p.name?.toLowerCase().includes('aoc') || p.name?.toLowerCase().includes('attestation') || p.deliverables?.some((d: string) => d.toLowerCase().includes('aoc')));
+    const saqPhase = phases.find((p) => p.name?.toLowerCase().includes('saq') || p.deliverables?.some((d: string) => d.toLowerCase().includes('saq')));
+
+    const getDocStatus = (phase: typeof phases[0] | undefined) => {
+      if (!phase) return { status: 'Not Applicable', color: 'text-slate-500', bg: 'bg-slate-500/10' };
+      const phaseIdx = phases.indexOf(phase);
+      if (journey.current_phase > phaseIdx + 1) return { status: 'Completed', color: 'text-emerald-400', bg: 'bg-emerald-500/10' };
+      if (journey.current_phase === phaseIdx + 1) return { status: 'In Progress', color: 'text-blue-400', bg: 'bg-blue-500/10' };
+      return { status: 'Pending', color: 'text-slate-400', bg: 'bg-slate-500/10' };
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="card">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+            <TrendingUp className="h-5 w-5 text-primary-400" />
+            Certification Lifecycle
+          </h3>
+          {phases.length === 0 && phasesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+            </div>
+          ) : phases.length === 0 ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-sm text-slate-500">No certification phases defined for this framework</p>
+            </div>
+          ) : (
+            <>
+              <div className="relative mb-6">
+                <div className="flex items-center justify-between">
+                  {phases.map((phase, idx) => {
+                    const isCurrent = journey.current_phase === phase.id;
+                    const isCompleted = journey.current_phase > phase.id;
+                    return (
+                      <div key={phase.id} className="flex flex-col items-center relative" style={{ flex: 1 }}>
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold z-10 ${
+                          isCompleted ? 'bg-emerald-500 text-white' : isCurrent ? 'bg-primary-500 text-white ring-4 ring-primary-500/30' : 'bg-slate-700 text-slate-400'
+                        }`}>
+                          {isCompleted ? <Check className="h-5 w-5" /> : idx + 1}
+                        </div>
+                        <p className={`mt-2 text-center text-xs font-medium leading-tight max-w-[100px] ${
+                          isCompleted ? 'text-emerald-400' : isCurrent ? 'text-white' : 'text-slate-500'
+                        }`}>
+                          {phase.name}
+                        </p>
+                        {isCurrent && (
+                          <span className="mt-1 rounded-full bg-primary-500/20 px-2 py-0.5 text-[10px] font-medium text-primary-400">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="absolute top-5 left-0 right-0 h-0.5 bg-slate-700 -z-0 mx-[5%]">
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-500"
+                    style={{ width: `${phaseCompletionPct}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                {[
+                  { label: 'ROC', full: 'Report on Compliance', phase: rocPhase, icon: <FileText className="h-5 w-5" /> },
+                  { label: 'AOC', full: 'Attestation of Compliance', phase: aocPhase, icon: <Award className="h-5 w-5" /> },
+                  { label: 'SAQ', full: 'Self-Assessment Questionnaire', phase: saqPhase, icon: <ClipboardCheck className="h-5 w-5" /> },
+                ].map((doc) => {
+                  const docStatus = getDocStatus(doc.phase);
+                  return (
+                    <div key={doc.label} className={`rounded-lg border border-slate-700 ${docStatus.bg} p-4`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`rounded-lg bg-slate-800 p-2 ${docStatus.color}`}>
+                          {doc.icon}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-semibold text-white">{doc.label}</h4>
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${docStatus.bg} ${docStatus.color}`}>
+                              {docStatus.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400">{doc.full}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <div className="card">
+              <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+                <Clock className="h-5 w-5 text-primary-400" />
+                Phase Details
+              </h3>
+              <div className="space-y-2">
+                {phases.map((phase) => {
+                  const isExpanded = expandedPhases.includes(phase.id);
+                  const isCurrent = journey.current_phase === phase.id;
+                  const isCompleted = journey.current_phase > phase.id;
+
+                  return (
+                    <div key={phase.id} className="rounded-lg border border-slate-700 bg-slate-800/50">
+                      <button
+                        onClick={() => togglePhase(phase.id)}
+                        className="flex w-full items-center justify-between p-4 text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                            isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-primary-500 text-white' : 'bg-slate-700 text-slate-400'
+                          }`}>
+                            {isCompleted ? <Check className="h-4 w-4" /> : phase.id}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className={`font-medium ${isCompleted ? 'text-green-400' : isCurrent ? 'text-white' : 'text-slate-400'}`}>
+                                {phase.name}
+                              </span>
+                              {isCurrent && (
+                                <span className="rounded-full bg-primary-500/20 px-2 py-0.5 text-xs font-medium text-primary-400">
+                                  In Progress
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-500">{phase.description}</p>
+                          </div>
+                        </div>
+                        {isExpanded ? (
+                          <ChevronUp className="h-5 w-5 text-slate-400" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5 text-slate-400" />
+                        )}
+                      </button>
+                      {isExpanded && (
+                        <div className="border-t border-slate-700 p-4">
+                          <div className="mb-3">
+                            <h4 className="mb-2 text-sm font-medium text-slate-300">Key Tasks</h4>
+                            <ul className="space-y-1">
+                              {phase.tasks.map((task, idx) => (
+                                <li key={idx} className="flex items-center gap-2 text-sm text-slate-400">
+                                  <Circle className="h-2 w-2 fill-current" />
+                                  {task}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="mb-2 text-sm font-medium text-slate-300">Deliverables</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {phase.deliverables.map((deliverable, idx) => (
+                                <span key={idx} className="rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-300">
+                                  {deliverable}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="card">
+              <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+                <BarChart3 className="h-5 w-5 text-primary-400" />
+                Key Metrics
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Controls Implemented</span>
+                  <span className="font-semibold text-white">{progress?.implemented || 0}/{progress?.total_controls || 0}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Controls In Progress</span>
+                  <span className="font-semibold text-blue-400">{progress?.in_progress || 0}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Evidence Collected</span>
+                  <span className="font-semibold text-white">{totalEvidence}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Not Applicable</span>
+                  <span className="font-semibold text-slate-500">{progress?.not_applicable || 0}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Open Gaps</span>
+                  <span className="font-semibold text-orange-400">{(gaps as any)?.not_implemented?.length || 0}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+                <AlertTriangle className="h-5 w-5 text-orange-400" />
+                Attention Required
+              </h3>
+              <div className="space-y-3">
+                {(gaps as any)?.not_implemented?.length > 0 && (
+                  <div className="rounded-lg bg-orange-500/10 p-3">
+                    <p className="text-sm font-medium text-orange-400">{(gaps as any).not_implemented.length} controls not implemented</p>
+                    <p className="text-xs text-slate-400">Require implementation</p>
+                  </div>
+                )}
+                {(gaps as any)?.missing_evidence?.length > 0 && (
+                  <div className="rounded-lg bg-yellow-500/10 p-3">
+                    <p className="text-sm font-medium text-yellow-400">{(gaps as any).missing_evidence.length} controls missing evidence</p>
+                    <p className="text-xs text-slate-400">Evidence collection needed</p>
+                  </div>
+                )}
+                {(gaps as any)?.pending_verification?.length > 0 && (
+                  <div className="rounded-lg bg-blue-500/10 p-3">
+                    <p className="text-sm font-medium text-blue-400">{(gaps as any).pending_verification.length} controls pending verification</p>
+                    <p className="text-xs text-slate-400">Ready for review</p>
+                  </div>
+                )}
+                {!(gaps as any)?.not_implemented?.length && !(gaps as any)?.missing_evidence?.length && !(gaps as any)?.pending_verification?.length && (
+                  <p className="text-sm text-slate-500">No attention items at this time</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPhasesTab = () => (
+    <div className="card">
+      <div className="mb-6 flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-white">Certification Phases</h3>
+        <span className="text-sm text-slate-400">
+          Phase {journey.current_phase} of {phases.length || '...'}
+        </span>
+      </div>
+      <div className="space-y-3">
+        {phases.length === 0 && phasesLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+          </div>
+        ) : phases.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-sm text-slate-500">No certification phases defined for this framework</p>
+          </div>
+        ) : phases.map((phase) => {
+          const isExpanded = expandedPhases.includes(phase.id);
+          const isCurrent = journey.current_phase === phase.id;
+          const isCompleted = journey.current_phase > phase.id;
+          
+          return (
+            <div key={phase.id} className={`rounded-lg border ${isCurrent ? 'border-primary-500' : 'border-slate-700'} bg-slate-800/50`}>
+              <button
+                onClick={() => togglePhase(phase.id)}
+                className="flex w-full items-center justify-between p-4 text-left"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${
+                    isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-primary-500 text-white' : 'bg-slate-700 text-slate-400'
+                  }`}>
+                    {isCompleted ? <Check className="h-5 w-5" /> : phase.id}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-lg font-medium ${isCompleted ? 'text-green-400' : isCurrent ? 'text-white' : 'text-slate-400'}`}>
+                        {phase.name}
+                      </span>
+                      {isCurrent && (
+                        <span className="rounded-full bg-primary-500/20 px-2 py-0.5 text-xs font-medium text-primary-400">
+                          Current
+                        </span>
+                      )}
+                      {isCompleted && (
+                        <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
+                          Completed
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-500">{phase.description}</p>
+                  </div>
+                </div>
+                {isExpanded ? (
+                  <ChevronUp className="h-5 w-5 text-slate-400" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 text-slate-400" />
+                )}
+              </button>
+              {isExpanded && (
+                <div className="border-t border-slate-700 p-4">
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div>
+                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Key Tasks
+                      </h4>
+                      <ul className="space-y-2">
+                        {phase.tasks.map((task, idx) => (
+                          <li key={idx} className="flex items-center gap-2 text-sm text-slate-400">
+                            <Circle className="h-2 w-2 fill-slate-600 text-slate-600" />
+                            {task}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
+                        <FileText className="h-4 w-4" />
+                        Deliverables
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {phase.deliverables.map((deliverable, idx) => (
+                          <span key={idx} className="rounded-full bg-primary-500/20 px-3 py-1 text-xs text-primary-400">
+                            {deliverable}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderScopingTab = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-blue-500/20 p-2">
+            <MapPin className="h-5 w-5 text-blue-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-white">0</p>
+            <p className="text-xs text-slate-400">Locations</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-orange-500/20 p-2">
+            <XCircle className="h-5 w-5 text-orange-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-white">0</p>
+            <p className="text-xs text-slate-400">Exclusions</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-purple-500/20 p-2">
+            <Building2 className="h-5 w-5 text-purple-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-white">0</p>
+            <p className="text-xs text-slate-400">Departments</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-green-500/20 p-2">
+            <Percent className="h-5 w-5 text-green-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-white">0%</p>
+            <p className="text-xs text-slate-400">Complete</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="mb-6 flex gap-4 border-b border-slate-700">
+          {(['definition', 'locations', 'exclusions', 'departments'] as ScopingSubTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setScopingSubTab(tab)}
+              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                scopingSubTab === tab
+                  ? 'border-primary-500 text-primary-400'
+                  : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              {tab === 'definition' ? 'Scope Definition' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {scopingSubTab === 'definition' && (
+          <div className="space-y-6">
+            <div>
+              <label className="label">Scope Name</label>
+              <input
+                type="text"
+                className="input"
+                placeholder="Enter scope name..."
+              />
+            </div>
+            <div>
+              <label className="label">Description</label>
+              <textarea
+                className="input min-h-[100px]"
+                placeholder="Describe the scope of the ISMS..."
+              />
+            </div>
+            <div>
+              <label className="label">Boundaries</label>
+              <textarea
+                className="input min-h-[100px]"
+                placeholder="Define the boundaries of the ISMS..."
+              />
+            </div>
+            <div className="flex gap-3">
+              <button className="btn-secondary flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Download Scope Report
+              </button>
+              <button className="btn-primary flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Create Scope
+              </button>
+            </div>
+          </div>
+        )}
+
+        {scopingSubTab === 'locations' && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <MapPin className="mb-4 h-12 w-12 text-slate-600" />
+            <h3 className="text-lg font-medium text-white">No Locations Defined</h3>
+            <p className="mt-1 text-slate-400">Add locations that are in scope for certification</p>
+            <button className="btn-primary mt-4 flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Add Location
+            </button>
+          </div>
+        )}
+
+        {scopingSubTab === 'exclusions' && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <XCircle className="mb-4 h-12 w-12 text-slate-600" />
+            <h3 className="text-lg font-medium text-white">No Exclusions Defined</h3>
+            <p className="mt-1 text-slate-400">Document any scope exclusions with justifications</p>
+            <button className="btn-primary mt-4 flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Add Exclusion
+            </button>
+          </div>
+        )}
+
+        {scopingSubTab === 'departments' && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Building2 className="mb-4 h-12 w-12 text-slate-600" />
+            <h3 className="text-lg font-medium text-white">No Departments Defined</h3>
+            <p className="mt-1 text-slate-400">Add departments that are in scope for certification</p>
+            <button className="btn-primary mt-4 flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Add Department
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderSubControlsRecursive = (subControls: SubControlWithEvidence[], depth: number): JSX.Element => {
+    const borderColors = ['border-primary-500/30', 'border-cyan-500/30', 'border-purple-500/30'];
+    const bgColors = ['bg-slate-900/50', 'bg-slate-900/40', 'bg-slate-900/30'];
+    const borderColor = borderColors[Math.min(depth, borderColors.length - 1)];
+    const bgColor = bgColors[Math.min(depth, bgColors.length - 1)];
+    
+    return (
+      <div className={`space-y-2 ${depth > 0 ? `pl-4 border-l-2 ${borderColor}` : `pl-4 border-l-2 ${borderColor}`}`}>
+        {subControls.map((sub, idx) => (
+          <div key={sub.id || idx} className={`rounded-lg ${bgColor} p-3`}>
+            <div className="flex items-start gap-3">
+              <ChevronRight className={`h-4 w-4 mt-0.5 flex-shrink-0 ${depth === 0 ? 'text-primary-400' : depth === 1 ? 'text-cyan-400' : 'text-purple-400'}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`font-mono text-xs ${depth === 0 ? 'text-primary-400' : depth === 1 ? 'text-cyan-400' : 'text-purple-400'}`}>{sub.code}</span>
+                  <span className="text-sm font-medium text-white">{sub.name}</span>
+                  {depth > 0 && (
+                    <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-xs text-slate-500">Level {depth + 1}</span>
+                  )}
+                </div>
+                {sub.description && (
+                  <p className="text-xs text-slate-400 mt-1 line-clamp-2">{sub.description}</p>
+                )}
+                {sub.evidence_requirements && sub.evidence_requirements.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {sub.evidence_requirements.slice(0, 4).map((ev, evIdx) => (
+                      <span key={evIdx} className="rounded bg-slate-700/50 px-1.5 py-0.5 text-xs text-slate-400">
+                        {ev.title}
+                      </span>
+                    ))}
+                    {sub.evidence_requirements.length > 4 && (
+                      <span className="text-xs text-slate-500">+{sub.evidence_requirements.length - 4} more</span>
+                    )}
+                  </div>
+                )}
+                {sub.sub_controls && sub.sub_controls.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs text-slate-500 mb-2">Sub-controls ({sub.sub_controls.length})</p>
+                    {renderSubControlsRecursive(sub.sub_controls, depth + 1)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderControlAccordion = (control: CertificationControl, showUpload = true) => {
+    const isExpanded = expandedControls.includes(control.id);
+    const category = getCategoryFromDomain(control.domain_name);
+    const statusConfig: Record<string, { label: string; color: string }> = {
+      not_started: { label: 'Not Implemented', color: 'bg-red-500/20 text-red-400' },
+      in_progress: { label: 'Partial', color: 'bg-yellow-500/20 text-yellow-400' },
+      implemented: { label: 'Implemented', color: 'bg-green-500/20 text-green-400' },
+      verified: { label: 'Verified', color: 'bg-blue-500/20 text-blue-400' },
+      not_applicable: { label: 'N/A', color: 'bg-slate-500/20 text-slate-400' },
+    };
+    const status = statusConfig[control.status] || statusConfig.not_started;
+    
+    return (
+      <div key={control.id} className="rounded-lg border border-slate-700 bg-slate-800/50">
+        <button
+          onClick={() => toggleControl(control.id)}
+          className="flex w-full items-center justify-between p-4 text-left"
+        >
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm text-primary-400">{control.control_code}</span>
+                <span className="font-medium text-white truncate">{control.control_name}</span>
+              </div>
+              <p className="text-sm text-slate-500 truncate mt-0.5">{control.control_statement}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+            <span className="rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-300">{category}</span>
+            <span className={`rounded-full px-2 py-1 text-xs ${control.is_applicable ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/20 text-slate-400'}`}>
+              {control.is_applicable ? 'Applicable' : 'N/A'}
+            </span>
+            <span className={`rounded-full px-2 py-1 text-xs ${status.color}`}>{status.label}</span>
+            <span className="text-xs text-slate-500">{control.evidence_count}/{control.required_evidence_count}</span>
+            <Circle className={`h-4 w-4 ${control.evidence_count > 0 ? 'text-green-400 fill-green-400' : 'text-slate-600'}`} />
+          </div>
+        </button>
+        {isExpanded && (
+          <div className="border-t border-slate-700 p-4">
+            {/* Sub-controls section - recursive hierarchy */}
+            {control.sub_controls && control.sub_controls.length > 0 && (
+              <div className="mb-6">
+                <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
+                  <Layers className="h-4 w-4 text-primary-400" />
+                  Control Hierarchy ({control.sub_controls.length} sub-controls)
+                </h4>
+                {renderSubControlsRecursive(control.sub_controls, 0)}
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Linked Evidence - Now appears FIRST (left column) */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <Paperclip className="h-4 w-4 text-primary-400" />
+                    Linked Evidence ({control.evidence_count})
+                  </h4>
+                  {showUpload && (
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => handleFileUpload(control.id, e)}
+                        disabled={uploadingControlId === control.id}
+                      />
+                      <span className="flex items-center gap-1 rounded bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600">
+                        {uploadingControlId === control.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Upload className="h-3 w-3" />
+                        )}
+                        Upload
+                      </span>
+                    </label>
+                  )}
+                </div>
+                {control.evidence?.length > 0 ? (
+                  <div className="space-y-2">
+                    {control.evidence.map((ev: ControlEvidence) => {
+                      const getAIAssessmentBadge = () => {
+                        const status = ev.ai_assessment_status || 'pending';
+                        switch (status) {
+                          case 'completed':
+                            return { label: 'Assessed', className: 'bg-green-500/20 text-green-400' };
+                          case 'processing':
+                            return { label: 'Assessing...', className: 'bg-yellow-500/20 text-yellow-400' };
+                          case 'pending_assessment':
+                            return { label: 'Ready for Assessment', className: 'bg-blue-500/20 text-blue-400' };
+                          case 'pending_ocr':
+                            return { label: 'Processing...', className: 'bg-slate-500/20 text-slate-400' };
+                          default:
+                            return { label: 'Pending', className: 'bg-slate-500/20 text-slate-400' };
+                        }
+                      };
+                      const aiBadge = getAIAssessmentBadge();
+                      const canAssess = ev.ai_assessment_status === 'pending_assessment' || ev.ai_assessment_status === 'pending' || !ev.ai_assessment_status;
+                      const isAssessing = assessingEvidenceId === ev.id;
+                      const isPendingReview = ev.review_status === 'pending';
+                      
+                      return (
+                        <div key={ev.id} className="rounded-lg bg-slate-900/50 p-3">
+                          <div className="flex items-center gap-3">
+                            <Paperclip className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-white truncate">{ev.file_name || 'Evidence file'}</p>
+                              <p className="text-xs text-slate-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className={`rounded px-2 py-0.5 text-xs ${aiBadge.className}`} title={ev.ai_assessment_summary || ''}>
+                                {aiBadge.label}
+                              </span>
+                              <span className={`rounded px-2 py-0.5 text-xs ${
+                                ev.review_status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                                ev.review_status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                                'bg-yellow-500/20 text-yellow-400'
+                              }`}>
+                                {ev.review_status}
+                              </span>
+                            </div>
+                          </div>
+                          {ev.ai_assessment_summary && (
+                            <div className="mt-2 ml-7 rounded bg-slate-800/50 p-2">
+                              <p className="text-xs text-slate-300">{ev.ai_assessment_summary}</p>
+                            </div>
+                          )}
+                          {/* Action buttons row */}
+                          <div className="mt-3 ml-7 flex items-center gap-2 flex-wrap">
+                            {isPendingReview && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    reviewEvidenceMutation.mutate({ evidenceId: ev.id, action: 'approve' });
+                                  }}
+                                  disabled={reviewEvidenceMutation.isPending}
+                                  className="flex items-center gap-1 rounded bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400 hover:bg-green-500/30 disabled:opacity-50"
+                                  title="Approve evidence"
+                                >
+                                  <CheckCircle className="h-3 w-3" />
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    reviewEvidenceMutation.mutate({ evidenceId: ev.id, action: 'reject' });
+                                  }}
+                                  disabled={reviewEvidenceMutation.isPending}
+                                  className="flex items-center gap-1 rounded bg-red-500/20 px-2 py-1 text-xs font-medium text-red-400 hover:bg-red-500/30 disabled:opacity-50"
+                                  title="Reject evidence"
+                                >
+                                  <XCircle className="h-3 w-3" />
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                            {canAssess && ev.linked_evidence_id && (
+                              <button
+                                onClick={() => {
+                                  setAssessingEvidenceId(ev.id);
+                                  assessEvidenceMutation.mutate(ev.linked_evidence_id);
+                                }}
+                                disabled={isAssessing}
+                                className="flex items-center gap-1 rounded bg-primary-500 px-2 py-1 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+                                title="Trigger AI assessment"
+                              >
+                                {isAssessing ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3" />
+                                )}
+                                Assess
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                if (window.confirm('Are you sure you want to delete this evidence?')) {
+                                  setDeletingEvidenceId(ev.id);
+                                  deleteEvidenceMutation.mutate(ev.id);
+                                }
+                              }}
+                              disabled={deletingEvidenceId === ev.id}
+                              className="flex items-center gap-1 rounded bg-red-500/20 px-2 py-1 text-xs font-medium text-red-400 hover:bg-red-500/30 disabled:opacity-50"
+                              title="Delete evidence"
+                            >
+                              {deletingEvidenceId === ev.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )}
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6 text-center">
+                    <Paperclip className="mx-auto h-8 w-8 text-slate-600 mb-2" />
+                    <p className="text-sm text-slate-400">No evidence linked yet</p>
+                    <p className="text-xs text-slate-500 mt-1">Upload evidence to comply</p>
+                  </div>
+                )}
+              </div>
+              {/* Required Evidence - Now appears SECOND (right column) */}
+              <div>
+                <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
+                  <FileCheck className="h-4 w-4 text-slate-400" />
+                  Required Evidence for {control.control_code}
+                </h4>
+                {control.evidence_requirements?.length > 0 ? (
+                  <div className="space-y-2">
+                    {control.evidence_requirements.map((ev, idx: number) => {
+                      const evType = ev.type || 'document';
+                      const typeColors: Record<string, string> = {
+                        'policy': 'bg-blue-500/20 text-blue-400',
+                        'procedure': 'bg-purple-500/20 text-purple-400',
+                        'log': 'bg-orange-500/20 text-orange-400',
+                        'report': 'bg-pink-500/20 text-pink-400',
+                        'screenshot': 'bg-cyan-500/20 text-cyan-400',
+                        'record': 'bg-green-500/20 text-green-400',
+                        'configuration': 'bg-indigo-500/20 text-indigo-400',
+                        'certificate': 'bg-emerald-500/20 text-emerald-400',
+                        'contract': 'bg-amber-500/20 text-amber-400',
+                        'attestation': 'bg-teal-500/20 text-teal-400',
+                        'test_results': 'bg-lime-500/20 text-lime-400',
+                        'register': 'bg-violet-500/20 text-violet-400',
+                      };
+                      const typeColor = typeColors[evType] || 'bg-slate-500/20 text-slate-400';
+                      const typeLabel = evType.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                      
+                      return (
+                        <div key={`${idx}`} className="rounded-lg bg-slate-900/50 p-3">
+                          <div className="flex items-start gap-3">
+                            <Radio className="h-4 w-4 text-primary-400 mt-1 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-white">{ev.title}</p>
+                              <p className="text-xs text-slate-400 mt-1">{ev.description}</p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className={`rounded px-1.5 py-0.5 text-xs ${typeColor}`}>
+                                  {typeLabel}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className={`rounded px-2 py-1 text-xs ${ev.is_required !== false ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-400'}`}>
+                                {ev.is_required !== false ? 'Required' : 'Optional'}
+                              </span>
+                              {showUpload && (
+                                <label className="cursor-pointer">
+                                  <input
+                                    type="file"
+                                    className="hidden"
+                                    onChange={(e) => handleFileUpload(control.id, e)}
+                                    disabled={uploadingControlId === control.id}
+                                  />
+                                  <span className="flex items-center gap-1 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700">
+                                    {uploadingControlId === control.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Upload className="h-3 w-3" />
+                                    )}
+                                  </span>
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-slate-900/50 p-4 text-center">
+                    <p className="text-sm text-slate-400">No evidence requirements defined</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSoaTab = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-slate-700 p-2">
+            <Layers className="h-5 w-5 text-slate-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-white">{controlStats.total}</p>
+            <p className="text-xs text-slate-400">Total Controls</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-green-500/20 p-2">
+            <CheckCircle2 className="h-5 w-5 text-green-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-green-400">{controlStats.applicable}</p>
+            <p className="text-xs text-slate-400">Applicable</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-slate-700 p-2">
+            <XCircle className="h-5 w-5 text-slate-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-slate-400">{controlStats.notApplicable}</p>
+            <p className="text-xs text-slate-400">Not Applicable</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-blue-500/20 p-2">
+            <Check className="h-5 w-5 text-blue-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-blue-400">{controlStats.implemented}</p>
+            <p className="text-xs text-slate-400">Implemented</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-yellow-500/20 p-2">
+            <Clock className="h-5 w-5 text-yellow-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-yellow-400">{controlStats.partial}</p>
+            <p className="text-xs text-slate-400">Partial</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-red-500/20 p-2">
+            <AlertCircle className="h-5 w-5 text-red-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-red-400">{controlStats.notImplemented}</p>
+            <p className="text-xs text-slate-400">Not Implemented</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-700 pb-4">
+          {([
+            { key: 'all', label: 'All', count: controlStats.total },
+            { key: 'organizational', label: 'Organizational', count: controlStats.byCategory.organizational },
+            { key: 'people', label: 'People', count: controlStats.byCategory.people },
+            { key: 'physical', label: 'Physical', count: controlStats.byCategory.physical },
+            { key: 'technological', label: 'Technological', count: controlStats.byCategory.technological },
+          ] as { key: CategoryFilter; label: string; count: number }[]).map((cat) => (
+            <button
+              key={cat.key}
+              onClick={() => setCategoryFilter(cat.key)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                categoryFilter === cat.key
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+              }`}
+            >
+              {cat.label} ({cat.count})
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-4 flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search controls..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="input w-full pl-10"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="input w-48"
+          >
+            <option value="all">All Status</option>
+            <option value="implemented">Implemented</option>
+            <option value="not_implemented">Not Implemented</option>
+            <option value="partial">Partial</option>
+          </select>
+        </div>
+
+        <div className="space-y-3">
+          {filteredControls.length > 0 ? (
+            filteredControls.map((control: CertificationControl) => renderControlAccordion(control))
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Shield className="mb-4 h-12 w-12 text-slate-600" />
+              <p className="text-slate-400">No controls found</p>
+              <p className="text-sm text-slate-500 mt-1">Try adjusting your filters</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderControlsTab = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-slate-700 p-2">
+            <Layers className="h-5 w-5 text-slate-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-white">{controlStats.total}</p>
+            <p className="text-xs text-slate-400">Total Controls</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-green-500/20 p-2">
+            <CheckCircle2 className="h-5 w-5 text-green-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-green-400">{controlStats.implemented}</p>
+            <p className="text-xs text-slate-400">Implemented</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-blue-500/20 p-2">
+            <FileCheck className="h-5 w-5 text-blue-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-blue-400">{controlStats.partial}</p>
+            <p className="text-xs text-slate-400">In Progress</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-purple-500/20 p-2">
+            <FileText className="h-5 w-5 text-purple-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-purple-400">{totalEvidence}</p>
+            <p className="text-xs text-slate-400">Evidence Collected</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card !p-4">
+        <div className="mb-2 flex items-center justify-between text-sm">
+          <span className="text-slate-400">Implementation Progress</span>
+          <span className="font-medium text-white">{completionPercentage}%</span>
+        </div>
+        <div className="h-3 overflow-hidden rounded-full bg-slate-700">
+          <div
+            className="h-full rounded-full bg-primary-500 transition-all"
+            style={{ width: `${completionPercentage}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="mb-6 flex items-center justify-between border-b border-slate-700 pb-4">
+          <div className="flex gap-4">
+            {(['library', 'policies', 'evidence'] as ControlsSubTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setControlsSubTab(tab)}
+                className={`text-sm font-medium transition-colors ${
+                  controlsSubTab === tab
+                    ? 'text-primary-400'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {tab === 'library' ? 'Control Library' : tab === 'policies' ? 'Policies & Procedures' : 'Evidence Management'}
+              </button>
+            ))}
+          </div>
+          <button className="btn-secondary flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Download Implementation Report
+          </button>
+        </div>
+
+        {controlsSubTab === 'library' && (
+          <div>
+            <div className="mb-4 flex gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search controls..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="input w-full pl-10"
+                />
+              </div>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
+                className="input w-48"
+              >
+                <option value="all">All Categories</option>
+                <option value="organizational">Organizational</option>
+                <option value="people">People</option>
+                <option value="physical">Physical</option>
+                <option value="technological">Technological</option>
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className="input w-48"
+              >
+                <option value="all">All Statuses</option>
+                <option value="implemented">Implemented</option>
+                <option value="partial">In Progress</option>
+                <option value="not_implemented">Not Started</option>
+              </select>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                className="input w-48"
+              >
+                <option value="default">Sort by Default</option>
+                <option value="asc">Clause # (Ascending)</option>
+                <option value="desc">Clause # (Descending)</option>
+              </select>
+            </div>
+
+            <div className="space-y-3">
+              {filteredControls.length > 0 ? (
+                filteredControls.map((control: CertificationControl) => renderControlAccordion(control))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Shield className="mb-4 h-12 w-12 text-slate-600" />
+                  <p className="text-slate-400">No controls found</p>
+                  <p className="text-sm text-slate-500 mt-1">Try adjusting your filters</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {controlsSubTab === 'policies' && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <BookOpen className="mb-4 h-12 w-12 text-slate-600" />
+            <h3 className="text-lg font-medium text-white">Policies & Procedures</h3>
+            <p className="mt-1 text-slate-400">Manage policies and procedures documentation</p>
+            <button className="btn-primary mt-4 flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              Upload Policy
+            </button>
+          </div>
+        )}
+
+        {controlsSubTab === 'evidence' && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <FileText className="mb-4 h-12 w-12 text-slate-600" />
+            <h3 className="text-lg font-medium text-white">Evidence Management</h3>
+            <p className="mt-1 text-slate-400">Collect and manage implementation evidence</p>
+            <button className="btn-primary mt-4 flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              Upload Evidence
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderPlaceholderTab = (title: string, icon: React.ReactNode, description: string) => (
+    <div className="card">
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="mb-4 rounded-full bg-slate-800 p-4">
+          {icon}
+        </div>
+        <h3 className="text-xl font-semibold text-white">{title}</h3>
+        <p className="mt-2 max-w-md text-slate-400">{description}</p>
+        <button className="btn-primary mt-6">
+          Get Started
+        </button>
+      </div>
+    </div>
+  );
+
+  const openApplicabilityModal = (control: any, isApplicable: boolean) => {
+    setApplicabilityModalControl(control);
+    setApplicabilityIsApplicable(isApplicable);
+    setApplicabilityJustification('');
+    setShowApplicabilityModal(true);
+  };
+
+  const handleSetApplicability = () => {
+    if (!applicabilityModalControl || !journey?.framework_id) return;
+    if (!applicabilityIsApplicable && !applicabilityJustification.trim()) return;
+    setApplicabilityMutation.mutate({
+      control_id: applicabilityModalControl.id,
+      uploaded_framework_id: journey.framework_id,
+      is_applicable: applicabilityIsApplicable,
+      justification: applicabilityJustification,
+    });
+  };
+
+  const handleReviewApplicability = (status: 'approved' | 'rejected') => {
+    if (!reviewingRecord) return;
+    reviewApplicabilityMutation.mutate({
+      id: reviewingRecord.id,
+      data: { status, review_comment: reviewComment },
+    });
+  };
+
+  const renderApplicabilityTab = () => {
+    const applicabilityRecords = (applicabilityData as any)?.records || [];
+    const applicabilityMap = new Map<number, any>();
+    applicabilityRecords.forEach((r: any) => applicabilityMap.set(r.control_id, r));
+
+    const allControls = controls || [];
+    const filteredApplicabilityControls = allControls.filter((c: any) => {
+      if (applicabilityStatusFilter === 'all') return true;
+      const record = applicabilityMap.get(c.id);
+      if (applicabilityStatusFilter === 'pending') return record?.status === 'pending';
+      if (applicabilityStatusFilter === 'approved') return record?.status === 'approved';
+      if (applicabilityStatusFilter === 'rejected') return record?.status === 'rejected';
+      if (applicabilityStatusFilter === 'not_applicable') return record && !record.is_applicable;
+      return true;
+    });
+
+    const totalControls = allControls.length;
+    const naCount = applicabilityRecords.filter((r: any) => !r.is_applicable).length;
+    const pendingCount = applicabilityRecords.filter((r: any) => r.status === 'pending').length;
+    const approvedCount = applicabilityRecords.filter((r: any) => r.status === 'approved').length;
+    const rejectedCount = applicabilityRecords.filter((r: any) => r.status === 'rejected').length;
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+            <p className="text-sm text-slate-400">Total Controls</p>
+            <p className="text-2xl font-bold text-white">{totalControls}</p>
+          </div>
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+            <p className="text-sm text-slate-400">Not Applicable</p>
+            <p className="text-2xl font-bold text-orange-400">{naCount}</p>
+          </div>
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+            <p className="text-sm text-slate-400">Pending Review</p>
+            <p className="text-2xl font-bold text-yellow-400">{pendingCount}</p>
+          </div>
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+            <p className="text-sm text-slate-400">Approved</p>
+            <p className="text-2xl font-bold text-green-400">{approvedCount}</p>
+          </div>
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+            <p className="text-sm text-slate-400">Rejected</p>
+            <p className="text-2xl font-bold text-red-400">{rejectedCount}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-400">Filter:</span>
+          {['all', 'pending', 'approved', 'rejected', 'not_applicable'].map((f) => (
+            <button
+              key={f}
+              onClick={() => setApplicabilityStatusFilter(f)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                applicabilityStatusFilter === f
+                  ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
+              }`}
+            >
+              {f === 'not_applicable' ? 'Not Applicable' : f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {applicabilityLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-slate-700">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-700 bg-slate-800/80">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Reference</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Title</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400">Applicable</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Justification</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-400">Requested By</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-400">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700/50">
+                {filteredApplicabilityControls.map((control: any) => {
+                  const record = applicabilityMap.get(control.id);
+                  const isApplicable = record ? record.is_applicable : true;
+                  const status = record?.status || null;
+
+                  return (
+                    <tr key={control.id} className="hover:bg-slate-800/50 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="text-sm font-mono text-primary-400">
+                          {control.control_code || control.original_reference || control.control_id || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-white line-clamp-2">
+                          {control.control_name || control.title || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {isApplicable ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-2.5 py-1 text-xs font-medium text-green-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Yes
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-2.5 py-1 text-xs font-medium text-orange-400">
+                            <XCircle className="h-3 w-3" />
+                            N/A
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-400 line-clamp-2">
+                          {record?.justification || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {status === 'pending' && (
+                          <span className="inline-flex items-center rounded-full bg-yellow-500/20 px-2.5 py-1 text-xs font-medium text-yellow-400">
+                            <Clock className="mr-1 h-3 w-3" />
+                            Pending
+                          </span>
+                        )}
+                        {status === 'approved' && (
+                          <span className="inline-flex items-center rounded-full bg-green-500/20 px-2.5 py-1 text-xs font-medium text-green-400">
+                            <CheckCircle2 className="mr-1 h-3 w-3" />
+                            Approved
+                          </span>
+                        )}
+                        {status === 'rejected' && (
+                          <span className="inline-flex items-center rounded-full bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-400">
+                            <XCircle className="mr-1 h-3 w-3" />
+                            Rejected
+                          </span>
+                        )}
+                        {!status && (
+                          <span className="text-xs text-slate-500">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-400">
+                          {record?.requested_by_name || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          {!record || record.is_applicable ? (
+                            <button
+                              onClick={() => openApplicabilityModal(control, false)}
+                              className="rounded-lg bg-orange-500/20 px-2.5 py-1.5 text-xs font-medium text-orange-400 hover:bg-orange-500/30 transition-colors"
+                            >
+                              Mark N/A
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => openApplicabilityModal(control, true)}
+                              className="rounded-lg bg-green-500/20 px-2.5 py-1.5 text-xs font-medium text-green-400 hover:bg-green-500/30 transition-colors"
+                            >
+                              Mark Applicable
+                            </button>
+                          )}
+                          {record?.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => { setReviewingRecord(record); setReviewComment(''); setShowReviewModal(true); }}
+                                className="rounded-lg bg-primary-500/20 px-2.5 py-1.5 text-xs font-medium text-primary-400 hover:bg-primary-500/30 transition-colors"
+                              >
+                                Review
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredApplicabilityControls.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                      No controls found matching the selected filter.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {(applicabilityAuditLog as any[])?.length > 0 && (
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+            <h3 className="mb-3 text-sm font-semibold uppercase text-slate-400">Audit Trail</h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {(applicabilityAuditLog as any[]).slice(0, 20).map((log: any) => (
+                <div key={log.id} className="flex items-start gap-3 rounded-lg bg-slate-900/50 p-3">
+                  <div className={`mt-0.5 h-2 w-2 rounded-full flex-shrink-0 ${
+                    log.action === 'applicability_approved' ? 'bg-green-400' :
+                    log.action === 'applicability_rejected' ? 'bg-red-400' : 'bg-yellow-400'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-300">{log.details}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {log.created_at ? new Date(log.created_at).toLocaleString() : ''}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {showApplicabilityModal && applicabilityModalControl && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-white mb-1">
+                {applicabilityIsApplicable ? 'Mark as Applicable' : 'Mark as Not Applicable'}
+              </h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Control: <span className="text-primary-400 font-mono">{applicabilityModalControl.control_code || applicabilityModalControl.original_reference || applicabilityModalControl.control_id}</span>
+                {' — '}
+                {applicabilityModalControl.control_name || applicabilityModalControl.title}
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Justification {!applicabilityIsApplicable && <span className="text-red-400">*</span>}
+                </label>
+                <textarea
+                  value={applicabilityJustification}
+                  onChange={(e) => setApplicabilityJustification(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  rows={4}
+                  placeholder={applicabilityIsApplicable ? 'Provide justification for re-applying this control...' : 'Explain why this clause is not applicable to your organization...'}
+                />
+                {!applicabilityIsApplicable && !applicabilityJustification.trim() && (
+                  <p className="mt-1 text-xs text-red-400">Justification is required when marking a clause as Not Applicable</p>
+                )}
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => { setShowApplicabilityModal(false); setApplicabilityModalControl(null); }}
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSetApplicability}
+                  disabled={setApplicabilityMutation.isPending || (!applicabilityIsApplicable && !applicabilityJustification.trim())}
+                  className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
+                >
+                  {setApplicabilityMutation.isPending ? (
+                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Saving...</span>
+                  ) : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showReviewModal && reviewingRecord && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-white mb-1">Review Applicability Decision</h3>
+              <p className="text-sm text-slate-400 mb-2">
+                Control: <span className="text-primary-400 font-mono">{reviewingRecord.control_reference}</span>
+                {' — '}
+                {reviewingRecord.control_title}
+              </p>
+              <div className="mb-3 rounded-lg bg-slate-800 p-3 border border-slate-700">
+                <p className="text-xs text-slate-400 mb-1">Decision</p>
+                <p className="text-sm text-white">{reviewingRecord.is_applicable ? 'Applicable' : 'Not Applicable'}</p>
+                <p className="text-xs text-slate-400 mt-2 mb-1">Justification</p>
+                <p className="text-sm text-slate-300">{reviewingRecord.justification}</p>
+                <p className="text-xs text-slate-400 mt-2 mb-1">Requested By</p>
+                <p className="text-sm text-slate-300">{reviewingRecord.requested_by_name} on {reviewingRecord.requested_at ? new Date(reviewingRecord.requested_at).toLocaleDateString() : ''}</p>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-300 mb-2">Review Comment</label>
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  rows={3}
+                  placeholder="Add a review comment (optional)..."
+                />
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => { setShowReviewModal(false); setReviewingRecord(null); }}
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleReviewApplicability('rejected')}
+                  disabled={reviewApplicabilityMutation.isPending}
+                  className="rounded-lg bg-red-500/20 border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={() => handleReviewApplicability('approved')}
+                  disabled={reviewApplicabilityMutation.isPending}
+                  className="rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 transition-colors disabled:opacity-50"
+                >
+                  {reviewApplicabilityMutation.isPending ? (
+                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Processing...</span>
+                  ) : 'Approve'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const ASSET_TYPE_STYLES: Record<string, { color: string; bg: string }> = {
+    application: { color: 'text-purple-400', bg: 'bg-purple-500/20' },
+    infrastructure: { color: 'text-blue-400', bg: 'bg-blue-500/20' },
+    data: { color: 'text-amber-400', bg: 'bg-amber-500/20' },
+    cloud: { color: 'text-cyan-400', bg: 'bg-cyan-500/20' },
+    third_party: { color: 'text-orange-400', bg: 'bg-orange-500/20' },
+  };
+
+  const CRITICALITY_STYLES: Record<string, { color: string; bg: string }> = {
+    critical: { color: 'text-red-400', bg: 'bg-red-500/20' },
+    high: { color: 'text-orange-400', bg: 'bg-orange-500/20' },
+    medium: { color: 'text-yellow-400', bg: 'bg-yellow-500/20' },
+    low: { color: 'text-green-400', bg: 'bg-green-500/20' },
+  };
+
+  const renderCDEScopeTab = () => {
+    if (cdeLoading) {
+      return (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+        </div>
+      );
+    }
+
+    const systems = cdeData?.systems || [];
+    const summary = cdeData?.summary || { total: 0, type_breakdown: {}, criticality_breakdown: {} };
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+          <p className="text-sm text-blue-300">
+            CDE assets are sourced from your <a href="/assets" className="font-medium text-blue-400 underline hover:text-blue-300">IT Asset Inventory</a>. Mark an IT asset as &quot;CDE Environment&quot; when creating or editing it to include it here.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+          <div className="card flex items-center gap-3 !p-4">
+            <div className="rounded-lg bg-blue-500/20 p-2">
+              <Layers className="h-5 w-5 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-white">{summary.total}</p>
+              <p className="text-xs text-slate-400">CDE Assets</p>
+            </div>
+          </div>
+          <div className="card flex items-center gap-3 !p-4">
+            <div className="rounded-lg bg-purple-500/20 p-2">
+              <Shield className="h-5 w-5 text-purple-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-white">{Object.keys(summary.type_breakdown).length}</p>
+              <p className="text-xs text-slate-400">Asset Types</p>
+            </div>
+          </div>
+          <div className="card flex items-center gap-3 !p-4">
+            <div className="rounded-lg bg-red-500/20 p-2">
+              <AlertTriangle className="h-5 w-5 text-red-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-white">{(summary.criticality_breakdown?.critical || 0) + (summary.criticality_breakdown?.high || 0)}</p>
+              <p className="text-xs text-slate-400">High/Critical</p>
+            </div>
+          </div>
+        </div>
+
+        {(Object.keys(summary.type_breakdown).length > 0 || Object.keys(summary.criticality_breakdown || {}).length > 0) && (
+          <div className="grid gap-4 md:grid-cols-2">
+            {Object.keys(summary.type_breakdown).length > 0 && (
+              <div className="card !p-4">
+                <h3 className="mb-3 text-sm font-semibold text-white">By Asset Type</h3>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(summary.type_breakdown).map(([type, count]) => {
+                    const style = ASSET_TYPE_STYLES[type] || { color: 'text-slate-400', bg: 'bg-slate-500/20' };
+                    return (
+                      <div key={type} className={`flex items-center gap-2 rounded-lg ${style.bg} px-3 py-2`}>
+                        <span className={`text-sm font-medium capitalize ${style.color}`}>{type.replace('_', ' ')}</span>
+                        <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs font-bold text-white">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {Object.keys(summary.criticality_breakdown || {}).length > 0 && (
+              <div className="card !p-4">
+                <h3 className="mb-3 text-sm font-semibold text-white">By Criticality</h3>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(summary.criticality_breakdown || {}).map(([level, count]) => {
+                    const style = CRITICALITY_STYLES[level] || { color: 'text-slate-400', bg: 'bg-slate-500/20' };
+                    return (
+                      <div key={level} className={`flex items-center gap-2 rounded-lg ${style.bg} px-3 py-2`}>
+                        <span className={`text-sm font-medium capitalize ${style.color}`}>{level}</span>
+                        <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs font-bold text-white">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="card">
+          <h3 className="mb-4 text-lg font-semibold text-white">Cardholder Data Environment Assets</h3>
+          <div className="space-y-3">
+            {systems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Layers className="mb-4 h-12 w-12 text-slate-600" />
+                <h3 className="text-lg font-medium text-white">No CDE Assets Found</h3>
+                <p className="mt-1 text-sm text-slate-400">Mark IT assets as &quot;CDE Environment&quot; in the IT Asset Inventory to see them here</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-700 text-left text-xs uppercase text-slate-400">
+                      <th className="px-4 py-3">Asset</th>
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3">Criticality</th>
+                      <th className="px-4 py-3">Location</th>
+                      <th className="px-4 py-3">Vendor</th>
+                      <th className="px-4 py-3">Owner</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">CDE</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {systems.map((asset) => {
+                      const typeStyle = ASSET_TYPE_STYLES[asset.asset_type] || { color: 'text-slate-400', bg: 'bg-slate-500/20' };
+                      const critStyle = CRITICALITY_STYLES[asset.criticality] || { color: 'text-slate-400', bg: 'bg-slate-500/20' };
+                      return (
+                        <tr key={asset.id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                          <td className="px-4 py-3">
+                            <a href={`/assets/${asset.id}`} className="group">
+                              <p className="font-medium text-white group-hover:text-primary-400">{asset.name}</p>
+                              {asset.description && (
+                                <p className="mt-0.5 text-xs text-slate-500 line-clamp-1">{asset.description}</p>
+                              )}
+                            </a>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${typeStyle.bg} ${typeStyle.color}`}>
+                              {asset.asset_type.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${critStyle.bg} ${critStyle.color}`}>
+                              {asset.criticality}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-400">{asset.location || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-slate-400">{asset.vendor || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-slate-400">{asset.owner_name || '—'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              asset.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
+                              asset.status === 'inactive' ? 'bg-yellow-500/20 text-yellow-400' :
+                              'bg-slate-500/20 text-slate-400'
+                            }`}>
+                              {asset.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => toggleCDEScopeMutation.mutate({ systemId: asset.id, inScope: !asset.cde_environment })}
+                              disabled={toggleCDEScopeMutation.isPending}
+                              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                                asset.cde_environment ? 'bg-emerald-500' : 'bg-slate-600'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                                  asset.cde_environment ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderActiveTab = () => {
+    switch (activeTab) {
+      case 'overview':
+        return renderOverviewTab();
+      case 'phases':
+        return renderPhasesTab();
+      case 'cde-scope':
+        return renderCDEScopeTab();
+      case 'scoping':
+        return renderScopingTab();
+      case 'context':
+        return renderPlaceholderTab(
+          'Context of Organization',
+          <Building2 className="h-12 w-12 text-slate-500" />,
+          'Analyze internal and external context, identify interested parties, and determine their requirements for the ISMS.'
+        );
+      case 'risk':
+        return renderPlaceholderTab(
+          'Risk Assessment & Treatment',
+          <AlertTriangle className="h-12 w-12 text-slate-500" />,
+          'Identify, analyze, and evaluate information security risks. Develop and implement risk treatment plans.'
+        );
+      case 'soa':
+        return renderSoaTab();
+      case 'controls':
+        return renderControlsTab();
+      case 'applicability':
+        return renderApplicabilityTab();
+      case 'training':
+        return renderPlaceholderTab(
+          'Training & Awareness',
+          <GraduationCap className="h-12 w-12 text-slate-500" />,
+          'Manage security awareness training programs, track completion, and assess competency across the organization.'
+        );
+      case 'audit':
+        return renderPlaceholderTab(
+          'Internal Audit',
+          <ClipboardCheck className="h-12 w-12 text-slate-500" />,
+          'Plan and conduct internal ISMS audits, document findings, and track corrective actions.'
+        );
+      case 'review':
+        return renderPlaceholderTab(
+          'Management Review',
+          <Eye className="h-12 w-12 text-slate-500" />,
+          'Conduct management reviews of ISMS performance, document decisions, and track action items.'
+        );
+      case 'certification':
+        return renderPlaceholderTab(
+          'Certification Audit',
+          <Award className="h-12 w-12 text-slate-500" />,
+          'Prepare for and track certification audit stages, manage non-conformities, and achieve certification.'
+        );
+      default:
+        return renderOverviewTab();
+    }
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="mb-6">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => router.push('/frameworks')}
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-white">{journey.name}</h1>
+              <p className="text-slate-400">Framework certification lifecycle</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => journey?.framework_id && enhanceMutation.mutate(journey.framework_id)}
+              disabled={enhanceMutation.isPending || !journey?.framework_id}
+              className="flex items-center gap-2 rounded-lg bg-purple-500/20 px-4 py-2 text-purple-400 hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+              title="Generate AI evidence recommendations for all controls"
+            >
+              {enhanceMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Enhancing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Generate Evidence Recommendations
+                </>
+              )}
+            </button>
+            <button className="btn-secondary flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Generate Report
+            </button>
+            <button className="btn-primary flex items-center gap-2">
+              <ExternalLink className="h-4 w-4" />
+              Auditor Portal
+            </button>
+          </div>
+        </div>
+
+        {enhanceSuccess && (
+          <div className="mt-4 rounded-lg bg-green-500/20 border border-green-500/30 p-4 text-green-400">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              {enhanceSuccess}
+            </div>
+          </div>
+        )}
+
+        {enhanceError && (
+          <div className="mt-4 rounded-lg bg-red-500/20 border border-red-500/30 p-4 text-red-400">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              {enhanceError}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="card flex items-center justify-center !p-6">
+            <CircularProgress percentage={completionPercentage} />
+            <div className="ml-4">
+              <p className="text-lg font-semibold text-white">Certification Readiness</p>
+              <p className="text-sm text-slate-400">Overall progress</p>
+            </div>
+          </div>
+          <div className="card !p-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-primary-500/20 p-2">
+                <Target className="h-5 w-5 text-primary-400" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-400">Current Phase</p>
+                <p className="text-lg font-semibold text-white">Phase {journey.current_phase}</p>
+                <p className="text-sm text-primary-400">{phasesLoading ? 'Loading...' : (phases[journey.current_phase - 1]?.name || 'Phase ' + journey.current_phase)}</p>
+              </div>
+            </div>
+          </div>
+          <div className="card !p-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-blue-500/20 p-2">
+                <Shield className="h-5 w-5 text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-slate-400">Control Coverage</p>
+                <p className="text-lg font-semibold text-white">{progress?.implemented || 0}/{progress?.total_controls || 0}</p>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-700">
+                  <div
+                    className="h-full rounded-full bg-blue-500"
+                    style={{ width: `${progress?.total_controls ? (progress.implemented / progress.total_controls) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="card !p-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-purple-500/20 p-2">
+                <Calendar className="h-5 w-5 text-purple-400" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-400">Target Date</p>
+                <p className="text-lg font-semibold text-white">
+                  {journey.target_date ? new Date(journey.target_date).toLocaleDateString() : 'Not set'}
+                </p>
+                <p className="text-sm text-slate-500">Stage 2 audit scheduled</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-6 overflow-x-auto">
+        <div className="flex min-w-max gap-1 border-b border-slate-700">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'border-b-2 border-primary-500 text-primary-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {renderActiveTab()}
+      </div>
+
+      {selectedControl && (
+        <ControlImplementationModal
+          isOpen={showControlModal}
+          onClose={() => {
+            setShowControlModal(false);
+            setSelectedControl(null);
+          }}
+          journeyId={journeyId}
+          control={selectedControl}
+        />
+      )}
+    </div>
+  );
+}

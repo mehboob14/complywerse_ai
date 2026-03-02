@@ -103,17 +103,17 @@ export default function AssetsPage() {
   const getAssetIcon = (type: string) => {
     const assetType = ASSET_TYPES.find(t => t.value === type);
     const Icon = assetType?.icon || Server;
-    return <Icon className="h-5 w-5 text-primary-600" />;
+    return <Icon className="h-5 w-5 text-primary-400" />;
   };
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      active: 'bg-green-900/50 text-green-600',
-      inactive: 'bg-yellow-900/50 text-yellow-600',
-      decommissioned: 'bg-slate-200 text-slate-500',
+      active: 'bg-green-900/50 text-green-400',
+      inactive: 'bg-yellow-900/50 text-yellow-400',
+      decommissioned: 'bg-slate-700 text-slate-400',
     };
     return (
-      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[status] || 'bg-slate-200 text-slate-500'}`}>
+      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[status] || 'bg-slate-700 text-slate-400'}`}>
         {status}
       </span>
     );
@@ -121,13 +121,13 @@ export default function AssetsPage() {
 
   const getCriticalityBadge = (criticality: string) => {
     const colors: Record<string, string> = {
-      critical: 'bg-red-900/50 text-red-600',
-      high: 'bg-orange-900/50 text-orange-600',
-      medium: 'bg-yellow-900/50 text-yellow-600',
-      low: 'bg-green-900/50 text-green-600',
+      critical: 'bg-red-900/50 text-red-400',
+      high: 'bg-orange-900/50 text-orange-400',
+      medium: 'bg-yellow-900/50 text-yellow-400',
+      low: 'bg-green-900/50 text-green-400',
     };
     return (
-      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[criticality] || 'bg-slate-200 text-slate-500'}`}>
+      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[criticality] || 'bg-slate-700 text-slate-400'}`}>
         {criticality}
       </span>
     );
@@ -136,7 +136,7 @@ export default function AssetsPage() {
   const getTypeBadge = (type: string) => {
     const assetType = ASSET_TYPES.find(t => t.value === type);
     return (
-      <span className="rounded-full bg-primary-900/50 px-2 py-0.5 text-xs text-primary-600">
+      <span className="rounded-full bg-primary-900/50 px-2 py-0.5 text-xs text-primary-400">
         {assetType?.label || type}
       </span>
     );
@@ -151,7 +151,7 @@ export default function AssetsPage() {
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className={`h-2 w-1.5 rounded-sm ${i <= value ? color : 'bg-slate-200'}`}
+              className={`h-2 w-1.5 rounded-sm ${i <= value ? color : 'bg-slate-700'}`}
             />
           ))}
         </div>
@@ -196,14 +196,14 @@ export default function AssetsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-600">
+      <div className="flex h-64 flex-col items-center justify-center text-red-400">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load assets</p>
       </div>
@@ -211,16 +211,16 @@ export default function AssetsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="assets-light space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">IT Asset Inventory & Valuation</h1>
-          <p className="text-slate-600">Manage and track IT assets with CIA ratings and valuations</p>
+          <h1 className="text-2xl font-bold text-white">IT Asset Inventory & Valuation</h1>
+          <p className="text-slate-400">Manage and track IT assets with CIA ratings and valuations</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => assetsApi.downloadTemplate()}
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200"
+            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700"
             title="Download CSV template for bulk import"
           >
             <Download size={16} />
@@ -228,7 +228,7 @@ export default function AssetsPage() {
           </button>
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-primary-600 bg-primary-600/20 px-3 py-2 text-sm font-medium text-primary-600 hover:bg-primary-600/30"
+            className="flex items-center gap-2 rounded-lg border border-primary-600 bg-primary-600/20 px-3 py-2 text-sm font-medium text-primary-400 hover:bg-primary-600/30"
           >
             <Upload size={16} />
             Import
@@ -244,77 +244,85 @@ export default function AssetsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <div className="rounded-lg bg-white p-4 border border-slate-200">
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
           <div className="flex items-center gap-3">
-                          <Server className="h-5 w-5 text-primary-600" />
+            <div className="rounded-lg bg-primary-500/20 p-2">
+              <Server className="h-5 w-5 text-primary-400" />
+            </div>
             <div>
-              <p className="text-sm text-slate-600">Total Assets</p>
-              <p className="text-2xl font-semibold text-black">{dashboard?.total_assets || 0}</p>
+              <p className="text-sm text-slate-400">Total Assets</p>
+              <p className="text-2xl font-semibold text-white">{dashboard?.total_assets || 0}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg bg-white p-4 border border-slate-200">
-          <p className="text-sm text-slate-600 mb-2">By Type</p>
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
+          <p className="text-sm text-slate-400 mb-2">By Type</p>
           <div className="space-y-1">
             {Object.entries(dashboard?.by_type || {}).map(([type, count]) => (
               <div key={type} className="flex justify-between text-xs">
-                <span className="text-slate-600 capitalize">{type.replace('_', ' ')}</span>
-                <span className="text-black font-medium">{count as number}</span>
+                <span className="text-slate-300 capitalize">{type.replace('_', ' ')}</span>
+                <span className="text-white font-medium">{count as number}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="rounded-lg bg-white p-4 border border-slate-200">
-          <p className="text-sm text-slate-600 mb-2">By Criticality</p>
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
+          <p className="text-sm text-slate-400 mb-2">By Criticality</p>
           <div className="space-y-1">
             <div className="flex justify-between text-xs">
-              <span className="text-red-600">Critical</span>
-              <span className="text-black font-medium">{dashboard?.by_criticality?.critical || 0}</span>
+              <span className="text-red-400">Critical</span>
+              <span className="text-white font-medium">{dashboard?.by_criticality?.critical || 0}</span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-orange-600">High</span>
-              <span className="text-black font-medium">{dashboard?.by_criticality?.high || 0}</span>
+              <span className="text-orange-400">High</span>
+              <span className="text-white font-medium">{dashboard?.by_criticality?.high || 0}</span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-yellow-600">Medium</span>
-              <span className="text-black font-medium">{dashboard?.by_criticality?.medium || 0}</span>
+              <span className="text-yellow-400">Medium</span>
+              <span className="text-white font-medium">{dashboard?.by_criticality?.medium || 0}</span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-green-600">Low</span>
-              <span className="text-black font-medium">{dashboard?.by_criticality?.low || 0}</span>
+              <span className="text-green-400">Low</span>
+              <span className="text-white font-medium">{dashboard?.by_criticality?.low || 0}</span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg bg-white p-4 border border-slate-200">
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
           <div className="flex items-center gap-3">
-                          <DollarSign className="h-5 w-5 text-green-600" />
+            <div className="rounded-lg bg-green-500/20 p-2">
+              <DollarSign className="h-5 w-5 text-green-400" />
+            </div>
             <div>
-              <p className="text-sm text-slate-600">High Value</p>
-              <p className="text-2xl font-semibold text-black">{dashboard?.high_value_assets || 0}</p>
+              <p className="text-sm text-slate-400">High Value</p>
+              <p className="text-2xl font-semibold text-white">{dashboard?.high_value_assets || 0}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg bg-white p-4 border border-slate-200">
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
           <div className="flex items-center gap-3">
-                          <AlertCircle className="h-5 w-5 text-yellow-600" />
+            <div className="rounded-lg bg-yellow-500/20 p-2">
+              <AlertCircle className="h-5 w-5 text-yellow-400" />
+            </div>
             <div>
-              <p className="text-sm text-slate-600">Need Assessment</p>
-              <p className="text-2xl font-semibold text-black">{dashboard?.assets_needing_assessment || 0}</p>
+              <p className="text-sm text-slate-400">Need Assessment</p>
+              <p className="text-2xl font-semibold text-white">{dashboard?.assets_needing_assessment || 0}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg bg-white p-4 border border-slate-200">
+        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
           <div className="flex items-center gap-3">
-                          <Shield className="h-5 w-5 text-blue-600" />
+            <div className="rounded-lg bg-blue-500/20 p-2">
+              <Shield className="h-5 w-5 text-blue-400" />
+            </div>
             <div>
-              <p className="text-sm text-slate-600">Status</p>
+              <p className="text-sm text-slate-400">Status</p>
               <div className="flex gap-2 text-sm">
-                <span className="text-green-600">{dashboard?.by_status?.active || 0} active</span>
+                <span className="text-green-400">{dashboard?.by_status?.active || 0} active</span>
               </div>
             </div>
           </div>
@@ -323,22 +331,22 @@ export default function AssetsPage() {
 
       <div className="flex flex-wrap gap-4">
         <div className="relative flex-1 sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search assets..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-600" />
+          <Filter className="h-4 w-4 text-slate-400" />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
@@ -350,7 +358,7 @@ export default function AssetsPage() {
         <select
           value={criticalityFilter}
           onChange={(e) => setCriticalityFilter(e.target.value as CriticalityFilter)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+          className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
         >
           <option value="all">All Criticality</option>
           <option value="critical">Critical</option>
@@ -360,17 +368,17 @@ export default function AssetsPage() {
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200">
+      <div className="overflow-hidden rounded-lg border border-slate-700">
         <table className="w-full">
-          <thead className="bg-white">
+          <thead className="bg-slate-800">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Asset</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 md:table-cell">Type</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 lg:table-cell">CIA Ratings</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 lg:table-cell">Valuation</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Criticality</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Asset</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 md:table-cell">Type</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 lg:table-cell">CIA Ratings</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 lg:table-cell">Valuation</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Criticality</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Status</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-slate-300">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700">
@@ -379,15 +387,20 @@ export default function AssetsPage() {
               return (
                 <React.Fragment key={asset.id}>
                   <tr 
-                    className="bg-white/50 hover:bg-slate-50 cursor-pointer"
+                    className="bg-slate-800/50 hover:bg-slate-700/50 cursor-pointer"
                     onClick={() => setExpandedAsset(isExpanded ? null : asset.id)}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {getAssetIcon(asset.asset_type)}
                         <div>
-                          <p className="font-medium text-black">{asset.name}</p>
-                          <p className="text-sm text-slate-600 line-clamp-1">{asset.description || 'No description'}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-white">{asset.name}</p>
+                            {asset.cde_environment && (
+                              <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">CDE</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-400 line-clamp-1">{asset.description || 'No description'}</p>
                         </div>
                       </div>
                     </td>
@@ -403,8 +416,8 @@ export default function AssetsPage() {
                     </td>
                     <td className="hidden px-4 py-3 lg:table-cell">
                       <div className="flex items-center gap-1 text-sm">
-                        <DollarSign className="h-3 w-3 text-green-600" />
-                        <span className="text-slate-600">{formatCurrency(asset.valuation)}</span>
+                        <DollarSign className="h-3 w-3 text-green-400" />
+                        <span className="text-slate-300">{formatCurrency(asset.valuation)}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">{getCriticalityBadge(asset.criticality)}</td>
@@ -413,58 +426,58 @@ export default function AssetsPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={(e) => handleView(e, asset.id)}
-                          className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                          className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
                           title="View"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
                           onClick={(e) => handleEdit(e, asset)}
-                          className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                          className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
                           title="Edit"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={(e) => handleDelete(e, asset.id)}
-                          className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-red-600"
+                          className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-red-400"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                         {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-slate-600" />
+                          <ChevronDown className="h-4 w-4 text-slate-400" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-slate-600" />
+                          <ChevronRight className="h-4 w-4 text-slate-400" />
                         )}
                       </div>
                     </td>
                   </tr>
                   {isExpanded && (
                     <tr key={`${asset.id}-expanded`}>
-                      <td colSpan={7} className="bg-slate-50 px-4 py-4">
+                      <td colSpan={7} className="bg-slate-900 px-4 py-4">
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                           <div>
-                            <h4 className="text-sm font-medium text-slate-600">Description</h4>
-                            <p className="mt-1 text-sm text-black">{asset.description || 'No description'}</p>
+                            <h4 className="text-sm font-medium text-slate-400">Description</h4>
+                            <p className="mt-1 text-sm text-white">{asset.description || 'No description'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-600">Owner</h4>
-                            <p className="mt-1 text-sm text-black">{asset.owner_name || 'Not assigned'}</p>
+                            <h4 className="text-sm font-medium text-slate-400">Owner</h4>
+                            <p className="mt-1 text-sm text-white">{asset.owner_name || 'Not assigned'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-600">Vendor</h4>
-                            <p className="mt-1 text-sm text-black">{asset.vendor || 'N/A'}</p>
+                            <h4 className="text-sm font-medium text-slate-400">Vendor</h4>
+                            <p className="mt-1 text-sm text-white">{asset.vendor || 'N/A'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-600">Location</h4>
-                            <p className="mt-1 text-sm text-black">{asset.location || 'Unknown'}</p>
+                            <h4 className="text-sm font-medium text-slate-400">Location</h4>
+                            <p className="mt-1 text-sm text-white">{asset.location || 'Unknown'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-600">Linked Controls</h4>
+                            <h4 className="text-sm font-medium text-slate-400">Linked Controls</h4>
                             <button 
                               onClick={(e) => handleView(e, asset.id)}
-                              className="mt-1 flex items-center gap-1 text-sm text-primary-600 hover:text-primary-300"
+                              className="mt-1 flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300"
                             >
                               <Shield size={14} />
                               <span>View details</span>
@@ -484,8 +497,8 @@ export default function AssetsPage() {
       {(!filteredAssets || filteredAssets.length === 0) && (
         <div className="card flex flex-col items-center justify-center py-12 text-center">
           <Server className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-black">No assets found</h3>
-          <p className="mt-1 text-slate-600">Add your first IT asset to get started</p>
+          <h3 className="text-lg font-medium text-white">No assets found</h3>
+          <p className="mt-1 text-slate-400">Add your first IT asset to get started</p>
         </div>
       )}
 
@@ -543,6 +556,7 @@ function AssetModal({
     availability_rating: initialData?.availability_rating || 3,
     valuation: initialData?.valuation || null as number | null,
     status: (initialData?.status || 'active') as 'active' | 'inactive' | 'decommissioned',
+    cde_environment: (initialData as any)?.cde_environment || false,
   });
   
   const isEditMode = !!initialData;
@@ -561,6 +575,7 @@ function AssetModal({
       integrity_rating: formData.integrity_rating,
       availability_rating: formData.availability_rating,
       valuation: formData.valuation || undefined,
+      cde_environment: formData.cde_environment,
     };
     if (isEditMode) {
       submitData.status = formData.status;
@@ -580,7 +595,7 @@ function AssetModal({
     color: string;
   }) => (
     <div>
-      <label className="block text-sm font-medium text-slate-600 mb-2">{label}</label>
+      <label className="block text-sm font-medium text-slate-300 mb-2">{label}</label>
       <div className="flex gap-2">
         {[1, 2, 3, 4, 5].map((rating) => (
           <button
@@ -589,8 +604,8 @@ function AssetModal({
             onClick={() => onChange(rating)}
             className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm font-medium transition-colors ${
               rating <= value
-                ? `${color} border-transparent text-black`
-                : 'border-slate-300 bg-slate-200 text-slate-500 hover:border-slate-400'
+                ? `${color} border-transparent text-white`
+                : 'border-slate-600 bg-slate-700 text-slate-400 hover:border-slate-500'
             }`}
           >
             {rating}
@@ -601,42 +616,42 @@ function AssetModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 md:p-6">
+      <div className="w-full max-w-5xl rounded-lg bg-slate-800 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black">{isEditMode ? 'Edit Asset' : 'Add Asset'}</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-white">{isEditMode ? 'Edit Asset' : 'Add Asset'}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="border-b border-slate-200 pb-4">
-            <h3 className="text-sm font-medium text-slate-600 mb-3">Basic Information</h3>
+          <div className="border-b border-slate-700 pb-4">
+            <h3 className="text-sm font-medium text-slate-400 mb-3">Basic Information</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-600">Name *</label>
+                <label className="block text-sm font-medium text-slate-300">Name *</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-600">Description</label>
+                <label className="block text-sm font-medium text-slate-300">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
                   rows={2}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-600">Asset Type *</label>
+                <label className="block text-sm font-medium text-slate-300">Asset Type *</label>
                 <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {ASSET_TYPES.map((type) => {
                     const Icon = type.icon;
@@ -649,12 +664,12 @@ function AssetModal({
                         className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
                           isSelected
                             ? 'border-primary-500 bg-primary-900/30'
-                            : 'border-slate-300 bg-slate-200 hover:border-slate-400'
+                            : 'border-slate-600 bg-slate-700 hover:border-slate-500'
                         }`}
                       >
-                        <Icon className={`h-5 w-5 ${isSelected ? 'text-primary-600' : 'text-slate-600'}`} />
+                        <Icon className={`h-5 w-5 ${isSelected ? 'text-primary-400' : 'text-slate-400'}`} />
                         <div>
-                          <p className={`text-sm font-medium ${isSelected ? 'text-black' : 'text-slate-600'}`}>
+                          <p className={`text-sm font-medium ${isSelected ? 'text-white' : 'text-slate-300'}`}>
                             {type.label}
                           </p>
                           <p className="text-xs text-slate-500 line-clamp-1">{type.description}</p>
@@ -667,40 +682,40 @@ function AssetModal({
             </div>
           </div>
 
-          <div className="border-b border-slate-200 pb-4">
-            <h3 className="text-sm font-medium text-slate-600 mb-3">Ownership & Location</h3>
+          <div className="border-b border-slate-700 pb-4">
+            <h3 className="text-sm font-medium text-slate-400 mb-3">Ownership & Location</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-slate-600">Vendor</label>
+                <label className="block text-sm font-medium text-slate-300">Vendor</label>
                 <input
                   type="text"
                   value={formData.vendor}
                   onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
                   placeholder="e.g., Microsoft, AWS"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600">Location</label>
+                <label className="block text-sm font-medium text-slate-300">Location</label>
                 <input
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
                   placeholder="e.g., US-East, On-Premise"
                 />
               </div>
             </div>
           </div>
 
-          <div className="border-b border-slate-200 pb-4">
-            <h3 className="text-sm font-medium text-slate-600 mb-3">Classification</h3>
+          <div className="border-b border-slate-700 pb-4">
+            <h3 className="text-sm font-medium text-slate-400 mb-3">Classification</h3>
             <div>
-              <label className="block text-sm font-medium text-slate-600">Criticality</label>
+              <label className="block text-sm font-medium text-slate-300">Criticality</label>
               <select
                 value={formData.criticality}
                 onChange={(e) => setFormData({ ...formData, criticality: e.target.value as typeof formData.criticality })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
               >
                 <option value="low">Low - Minimal business impact</option>
                 <option value="medium">Medium - Moderate business impact</option>
@@ -710,8 +725,31 @@ function AssetModal({
             </div>
           </div>
 
-          <div className="border-b border-slate-200 pb-4">
-            <h3 className="text-sm font-medium text-slate-600 mb-3">CIA Ratings</h3>
+          <div className="border-b border-slate-700 pb-4">
+            <h3 className="text-sm font-medium text-slate-400 mb-3">PCI DSS Scope</h3>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, cde_environment: !formData.cde_environment })}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                  formData.cde_environment ? 'bg-emerald-500' : 'bg-slate-600'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                    formData.cde_environment ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+              <div>
+                <span className="text-sm font-medium text-slate-300">CDE Environment</span>
+                <p className="text-xs text-slate-500">Mark this asset as part of the Cardholder Data Environment (PCI DSS)</p>
+              </div>
+            </label>
+          </div>
+
+          <div className="border-b border-slate-700 pb-4">
+            <h3 className="text-sm font-medium text-slate-400 mb-3">CIA Ratings</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <RatingSelector
                 label="Confidentiality"
@@ -735,16 +773,16 @@ function AssetModal({
           </div>
 
           <div className="pb-2">
-            <h3 className="text-sm font-medium text-slate-600 mb-3">Valuation</h3>
+            <h3 className="text-sm font-medium text-slate-400 mb-3">Valuation</h3>
             <div>
-              <label className="block text-sm font-medium text-slate-600">Asset Value (USD)</label>
+              <label className="block text-sm font-medium text-slate-300">Asset Value (USD)</label>
               <div className="relative mt-1">
-                <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
+                <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="number"
                   value={formData.valuation || ''}
                   onChange={(e) => setFormData({ ...formData, valuation: e.target.value ? Number(e.target.value) : null })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-black focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 py-2 pl-10 pr-4 text-white focus:border-primary-500 focus:outline-none"
                   placeholder="0"
                   min="0"
                 />
@@ -753,12 +791,12 @@ function AssetModal({
           </div>
 
           {isEditMode && (
-            <div className="border-t border-slate-200 pt-4">
-              <h3 className="text-sm font-medium text-slate-600 mb-3">Status</h3>
+            <div className="border-t border-slate-700 pt-4">
+              <h3 className="text-sm font-medium text-slate-400 mb-3">Status</h3>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white focus:border-primary-500 focus:outline-none"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -771,7 +809,7 @@ function AssetModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-200"
+              className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
             >
               Cancel
             </button>
@@ -866,22 +904,22 @@ function ImportAssetsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-lg bg-white p-6">
+      <div className="w-full max-w-lg rounded-lg bg-slate-800 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black">Import IT Assets</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
+          <h2 className="text-lg font-semibold text-white">Import IT Assets</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X size={20} />
           </button>
         </div>
 
         {!result ? (
           <>
-            <div className="mb-4 rounded-lg border border-slate-300 bg-slate-200/50 p-4">
+            <div className="mb-4 rounded-lg border border-slate-600 bg-slate-700/50 p-4">
               <div className="flex items-start gap-3">
-                <FileSpreadsheet className="h-5 w-5 text-primary-600 mt-0.5" />
+                <FileSpreadsheet className="h-5 w-5 text-primary-400 mt-0.5" />
                 <div>
-                  <p className="text-sm text-black font-medium">How to import assets:</p>
-                  <ol className="mt-2 text-xs text-slate-600 space-y-1 list-decimal list-inside">
+                  <p className="text-sm text-white font-medium">How to import assets:</p>
+                  <ol className="mt-2 text-xs text-slate-400 space-y-1 list-decimal list-inside">
                     <li>Click "Template" button to download the CSV template</li>
                     <li>Fill in your assets (keep the header row)</li>
                     <li>Upload the completed file here</li>
@@ -896,7 +934,7 @@ function ImportAssetsModal({
                   ? 'border-primary-500 bg-primary-900/20'
                   : file
                   ? 'border-green-500 bg-green-900/20'
-                  : 'border-slate-300 hover:border-slate-400'
+                  : 'border-slate-600 hover:border-slate-500'
               }`}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
@@ -912,9 +950,9 @@ function ImportAssetsModal({
               
               {file ? (
                 <div className="flex flex-col items-center">
-                  <CheckCircle2 className="h-10 w-10 text-green-600 mb-2" />
-                  <p className="text-black font-medium">{file.name}</p>
-                  <p className="text-sm text-slate-600 mt-1">
+                  <CheckCircle2 className="h-10 w-10 text-green-400 mb-2" />
+                  <p className="text-white font-medium">{file.name}</p>
+                  <p className="text-sm text-slate-400 mt-1">
                     {(file.size / 1024).toFixed(1)} KB
                   </p>
                   <button
@@ -923,7 +961,7 @@ function ImportAssetsModal({
                       e.stopPropagation();
                       setFile(null);
                     }}
-                    className="mt-2 text-xs text-slate-600 hover:text-slate-900"
+                    className="mt-2 text-xs text-slate-400 hover:text-white"
                   >
                     Choose different file
                   </button>
@@ -931,8 +969,8 @@ function ImportAssetsModal({
               ) : (
                 <div className="flex flex-col items-center">
                   <Upload className="h-10 w-10 text-slate-500 mb-2" />
-                  <p className="text-black">Drag and drop your file here</p>
-                  <p className="text-sm text-slate-600 mt-1">or click to browse</p>
+                  <p className="text-white">Drag and drop your file here</p>
+                  <p className="text-sm text-slate-400 mt-1">or click to browse</p>
                   <p className="text-xs text-slate-500 mt-2">Supports CSV, XLSX, XLS</p>
                 </div>
               )}
@@ -941,7 +979,7 @@ function ImportAssetsModal({
             <div className="flex justify-end gap-3">
               <button
                 onClick={onClose}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-200"
+                className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
               >
                 Cancel
               </button>
@@ -964,20 +1002,20 @@ function ImportAssetsModal({
             }`}>
               <div className="flex items-start gap-3">
                 {result.success && result.imported > 0 ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                  <CheckCircle2 className="h-5 w-5 text-green-400 mt-0.5" />
                 ) : (
-                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                  <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
                 )}
                 <div>
                   <p className={`font-medium ${
-                    result.success && result.imported > 0 ? 'text-green-600' : 'text-red-600'
+                    result.success && result.imported > 0 ? 'text-green-400' : 'text-red-400'
                   }`}>
                     {result.message}
                   </p>
-                  <div className="mt-2 text-sm text-slate-600">
+                  <div className="mt-2 text-sm text-slate-300">
                     <p>Imported: {result.imported} of {result.total_rows} rows</p>
                     {result.total_errors > 0 && (
-                      <p className="text-red-600">Errors: {result.total_errors}</p>
+                      <p className="text-red-400">Errors: {result.total_errors}</p>
                     )}
                   </div>
                 </div>
@@ -985,9 +1023,9 @@ function ImportAssetsModal({
             </div>
 
             {result.errors.length > 0 && (
-              <div className="mb-4 max-h-40 overflow-y-auto rounded-lg bg-slate-200/50 p-3">
-                <p className="text-xs font-medium text-slate-600 mb-2">Error Details:</p>
-                <ul className="text-xs text-red-600 space-y-1">
+              <div className="mb-4 max-h-40 overflow-y-auto rounded-lg bg-slate-700/50 p-3">
+                <p className="text-xs font-medium text-slate-400 mb-2">Error Details:</p>
+                <ul className="text-xs text-red-400 space-y-1">
                   {result.errors.map((error, idx) => (
                     <li key={idx}>{error}</li>
                   ))}
@@ -1006,7 +1044,7 @@ function ImportAssetsModal({
                   setFile(null);
                   setResult(null);
                 }}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-200"
+                className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
               >
                 Import More
               </button>

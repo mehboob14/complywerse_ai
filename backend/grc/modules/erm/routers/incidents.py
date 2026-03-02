@@ -27,6 +27,13 @@ class IncidentAIAnalyzeRequest(BaseModel):
     department: Optional[str] = None
 
 
+class IncidentAISuggestRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    severity: Optional[str] = None
+    risk_id: Optional[int] = None
+
+
 def get_openai_client():
     from openai import OpenAI
     api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
@@ -36,7 +43,8 @@ def get_openai_client():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI features unavailable. OpenAI API key not configured."
         )
-    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+    is_modelfarm = "modelfarm" in (base_url or "")
+    if not is_modelfarm and (api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI features unavailable. OpenAI API key not configured."
@@ -52,6 +60,64 @@ def get_user_tenant_id(user: GRCUser, db: Session) -> int:
             detail="User is not assigned to any tenant"
         )
     return tenant_id
+
+
+def _fallback_incident_suggestion(title: str, description: Optional[str] = None, severity: Optional[str] = None) -> dict:
+    text = f"{title} {description or ''}".lower()
+    suggested_severity = severity or "medium"
+    if any(k in text for k in ["outage", "breach", "fraud", "ransomware", "critical"]):
+        suggested_severity = "high"
+    elif any(k in text for k in ["minor", "delay", "small"]):
+        suggested_severity = "low"
+
+    return {
+        "suggested_severity": suggested_severity,
+        "root_cause": "Initial root cause assessment pending detailed investigation",
+        "corrective_actions": "Contain impact, investigate underlying cause, implement remediation, and monitor recurrence",
+        "operational_impact": "Moderate operational disruption",
+        "rationale": "Heuristic suggestion generated from incident title and description"
+    }
+
+
+def _ai_suggest_incident_payload(title: str, description: Optional[str], severity: Optional[str], risk_context: Optional[str] = None) -> dict:
+    client = get_openai_client()
+    prompt = f"""You are a GRC incident response specialist.
+Suggest manual incident form values and return ONLY valid JSON with keys:
+suggested_severity, root_cause, corrective_actions, operational_impact, rationale
+
+Incident Title: {title}
+Incident Description: {description or 'Not provided'}
+Current Severity: {severity or 'Not provided'}
+Risk Context: {risk_context or 'Not provided'}
+
+Constraints:
+- suggested_severity must be one of: low, medium, high, critical
+- Keep root_cause and corrective_actions concise and practical
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a precise assistant. Return JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=700,
+            temperature=0.2
+        )
+        content = (response.choices[0].message.content or "").strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        parsed = json.loads(content.strip())
+        fallback = _fallback_incident_suggestion(title, description, severity)
+        fallback.update({k: v for k, v in parsed.items() if v is not None})
+        return fallback
+    except Exception:
+        return _fallback_incident_suggestion(title, description, severity)
 
 
 @router.get("", response_model=List[RiskIncidentResponse])
@@ -98,6 +164,7 @@ def list_incidents(
 @router.post("", response_model=RiskIncidentResponse, status_code=status.HTTP_201_CREATED)
 def create_incident(
     incident: RiskIncidentCreate,
+    ai_assist: bool = False,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -113,6 +180,29 @@ def create_incident(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Risk not found"
             )
+
+    suggestion = None
+    if ai_assist:
+        linked_risk = None
+        if incident.risk_id:
+            linked_risk = db.query(Risk).filter(
+                Risk.id == incident.risk_id,
+                Risk.tenant_id == tenant_id
+            ).first()
+        risk_context = None
+        if linked_risk:
+            risk_context = f"{linked_risk.title} | category={linked_risk.category} | status={linked_risk.status}"
+        suggestion = _ai_suggest_incident_payload(
+            title=incident.title,
+            description=incident.description,
+            severity=incident.severity,
+            risk_context=risk_context
+        )
+
+    severity = incident.severity or (suggestion.get("suggested_severity") if suggestion else "medium")
+    operational_impact = incident.operational_impact or (suggestion.get("operational_impact") if suggestion else None)
+    root_cause = incident.root_cause or (suggestion.get("root_cause") if suggestion else None)
+    corrective_actions = incident.corrective_actions or (suggestion.get("corrective_actions") if suggestion else None)
     
     db_incident = RiskIncident(
         tenant_id=tenant_id,
@@ -120,11 +210,11 @@ def create_incident(
         title=incident.title,
         description=incident.description,
         incident_date=incident.incident_date,
-        severity=incident.severity,
+        severity=severity,
         financial_impact=incident.financial_impact,
-        operational_impact=incident.operational_impact,
-        root_cause=incident.root_cause,
-        corrective_actions=incident.corrective_actions,
+        operational_impact=operational_impact,
+        root_cause=root_cause,
+        corrective_actions=corrective_actions,
         reported_by=current_user.id,
         assigned_to=incident.assigned_to
     )
@@ -132,6 +222,35 @@ def create_incident(
     db.commit()
     db.refresh(db_incident)
     return db_incident
+
+
+@router.post("/ai-suggest")
+def suggest_incident_with_ai(
+    request: IncidentAISuggestRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    risk_context = None
+
+    if request.risk_id:
+        risk = db.query(Risk).filter(
+            Risk.id == request.risk_id,
+            Risk.tenant_id.in_(user_tenants)
+        ).first()
+        if not risk:
+            raise HTTPException(status_code=404, detail="Risk not found")
+        risk_context = f"{risk.title} | category={risk.category} | status={risk.status}"
+
+    return {
+        "title": request.title,
+        "suggestion": _ai_suggest_incident_payload(
+            title=request.title,
+            description=request.description,
+            severity=request.severity,
+            risk_context=risk_context
+        )
+    }
 
 
 @router.get("/dashboard")

@@ -22,6 +22,18 @@ import {
   User,
   BarChart3,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from 'recharts';
 
 interface UploadedFramework {
   id: number;
@@ -87,6 +99,14 @@ interface AssessmentDashboard {
   total_items: number;
   assessed_items: number;
   remediation_stats: { open: number; in_progress: number; completed: number; deferred: number };
+  evidence_stats?: {
+    controls_with_evidence: number;
+    controls_without_evidence: number;
+    total_evidence_uploaded: number;
+    reviewed_evidence: number;
+    not_reviewed_evidence: number;
+    review_breakdown: { accepted: number; rejected: number; pending: number };
+  };
 }
 
 const COMPLIANCE_STATUSES = [
@@ -242,6 +262,15 @@ export default function AssessmentPage() {
   });
 
   const frameworks = (frameworksData?.items || []) as UploadedFramework[];
+  const uniqueFrameworks = useMemo(() => {
+    const seen = new Set<string>();
+    return frameworks.filter((framework) => {
+      const normalizedName = (framework.name || '').trim().toLowerCase();
+      if (!normalizedName || seen.has(normalizedName)) return false;
+      seen.add(normalizedName);
+      return true;
+    });
+  }, [frameworks]);
   const assessments = (assessmentsData?.items || []) as Assessment[];
   const items = (assessmentDetail?.items || []) as AssessmentItem[];
 
@@ -345,6 +374,22 @@ export default function AssessmentPage() {
 
   const complianceScore = dashboard?.overall_compliance_score ?? 0;
   const progressPercentage = dashboard?.progress_percentage ?? 0;
+  const evidenceStats = dashboard?.evidence_stats;
+
+  const complianceDoneRemainingData = [
+    { name: 'Done', value: dashboard?.assessed_items ?? 0, color: '#10b981' },
+    { name: 'Remaining', value: Math.max(0, (dashboard?.total_items ?? 0) - (dashboard?.assessed_items ?? 0)), color: '#94a3b8' },
+  ];
+
+  const evidenceCoverageData = [
+    { name: 'Uploaded', value: evidenceStats?.controls_with_evidence ?? 0, color: '#3b82f6' },
+    { name: 'Pending Upload', value: evidenceStats?.controls_without_evidence ?? 0, color: '#cbd5e1' },
+  ];
+
+  const evidenceReviewData = [
+    { name: 'Reviewed', value: evidenceStats?.reviewed_evidence ?? 0 },
+    { name: 'Not Reviewed', value: evidenceStats?.not_reviewed_evidence ?? 0 },
+  ];
 
   return (
     <div className="space-y-6">
@@ -456,6 +501,74 @@ export default function AssessmentPage() {
             <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
               <span>{dashboard.assessed_items} of {dashboard.total_items} controls assessed</span>
               <span>{dashboard.gap_count} gaps identified</span>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="mb-3 text-sm font-semibold text-black">Compliance Progress (Done vs Remaining)</h3>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={complianceDoneRemainingData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={70}
+                      label
+                    >
+                      {complianceDoneRemainingData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="mb-3 text-sm font-semibold text-black">Evidence Upload Coverage</h3>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={evidenceCoverageData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={70}
+                      label
+                    >
+                      {evidenceCoverageData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="mt-2 text-xs text-slate-600">
+                Total evidence uploaded: <span className="font-semibold text-black">{evidenceStats?.total_evidence_uploaded ?? 0}</span>
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="mb-3 text-sm font-semibold text-black">Evidence Review Status</h3>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={evidenceReviewData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="name" tick={{ fill: '#475569', fontSize: 12 }} />
+                    <YAxis tick={{ fill: '#475569', fontSize: 12 }} allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </>
@@ -640,7 +753,7 @@ export default function AssessmentPage() {
                   className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   <option value="">Select a framework...</option>
-                  {frameworks.filter((f: UploadedFramework) => f.upload_status === 'parsed' && f.parsed_controls_count > 0).map((f: UploadedFramework) => (
+                  {uniqueFrameworks.filter((f: UploadedFramework) => f.upload_status === 'parsed' && f.parsed_controls_count > 0).map((f: UploadedFramework) => (
                     <option key={f.id} value={f.id}>
                       {f.name} ({f.parsed_controls_count} controls)
                     </option>

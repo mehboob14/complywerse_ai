@@ -37,9 +37,9 @@ interface Campaign {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  draft: { bg: 'bg-slate-50', text: 'text-slate-600', icon: FileCheck },
-  active: { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: Play },
-  closed: { bg: 'bg-blue-50', text: 'text-blue-600', icon: CheckCircle },
+  draft: { bg: 'bg-gray-100', text: 'text-gray-700', icon: FileCheck },
+  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: Play },
+  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle },
 };
 
 const ATTESTATION_TYPES = [
@@ -139,7 +139,7 @@ export default function AttestationCampaignsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-black">Attestation Campaigns</h1>
-            <p className="text-slate-600 mt-1">Manage attestation and certification campaigns</p>
+            <p className="text-gray-600 mt-1">Manage attestation and certification campaigns</p>
           </div>
           <button
             onClick={() => setIsModalOpen(true)}
@@ -153,7 +153,7 @@ export default function AttestationCampaignsPage() {
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-600" />
           <input
             type="text"
             placeholder="Search campaigns..."
@@ -184,8 +184,8 @@ export default function AttestationCampaignsPage() {
             <div key={campaign.id} className="card p-6 hover:border-primary-500/50 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
-                    <ClipboardCheck className="h-5 w-5 text-primary-600" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
+                    <ClipboardCheck className="h-5 w-5 text-primary-400" />
                   </div>
                   <div>
                     <h3 className="text-black font-medium">{campaign.name}</h3>
@@ -197,37 +197,37 @@ export default function AttestationCampaignsPage() {
                 </div>
               </div>
 
-              <p className="text-slate-600 text-sm mb-4 line-clamp-2">
+              <p className="text-gray-600 text-sm mb-4 line-clamp-2">
                 {campaign.description || `${campaign.attestation_type.replace('_', ' ')} attestation`}
               </p>
 
               <div className="space-y-3 mb-4">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600 flex items-center gap-1.5">
+                  <span className="text-gray-600 flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
                     Duration
                   </span>
-                  <span className="text-slate-600">
+                  <span className="text-gray-700">
                     {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600 flex items-center gap-1.5">
+                  <span className="text-gray-600 flex items-center gap-1.5">
                     <Users className="h-4 w-4" />
                     {campaign.total_requests} recipients
                   </span>
-                  <span className="text-slate-600">
+                  <span className="text-gray-700">
                     {campaign.completed_requests} completed
                   </span>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-slate-600">Progress</span>
+                    <span className="text-gray-600">Progress</span>
                     <span className="text-black font-medium">{campaign.progress}%</span>
                   </div>
-                  <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${campaign.progress === 100 ? 'bg-emerald-500' : 'bg-primary-500'}`}
                       style={{ width: `${campaign.progress}%` }}
@@ -236,14 +236,14 @@ export default function AttestationCampaignsPage() {
                 </div>
 
                 {pendingRequests > 0 && campaign.status === 'active' && (
-                  <div className="flex items-center gap-1.5 text-amber-600 text-sm">
+                  <div className="flex items-center gap-1.5 text-amber-400 text-sm">
                     <Clock className="h-4 w-4" />
                     {pendingRequests} pending responses
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 pt-4 border-t border-slate-200">
+              <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
                 <Link
                   href={`/governance/attestations/campaigns/${campaign.id}`}
                   className="flex-1 btn-secondary text-center text-sm py-1.5 flex items-center justify-center gap-1"
@@ -259,7 +259,7 @@ export default function AttestationCampaignsPage() {
                         activateMutation.mutate(campaign.id);
                       }
                     }}
-                    className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded"
+                    className="p-1.5 text-gray-600 hover:text-emerald-700 hover:bg-emerald-100 rounded"
                     title="Activate Campaign"
                   >
                     <Play className="h-4 w-4" />
@@ -273,7 +273,7 @@ export default function AttestationCampaignsPage() {
                         closeMutation.mutate(campaign.id);
                       }
                     }}
-                    className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded"
+                    className="p-1.5 text-gray-600 hover:text-blue-700 hover:bg-blue-100 rounded"
                     title="Close Campaign"
                   >
                     <XCircle className="h-4 w-4" />
@@ -287,7 +287,7 @@ export default function AttestationCampaignsPage() {
                         deleteMutation.mutate(campaign.id);
                       }
                     }}
-                    className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded"
+                    className="p-1.5 text-gray-600 hover:text-rose-700 hover:bg-rose-100 rounded"
                     title="Delete Campaign"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -301,9 +301,9 @@ export default function AttestationCampaignsPage() {
 
       {filteredCampaigns.length === 0 && (
         <div className="card p-12 text-center">
-          <ClipboardCheck className="h-12 w-12 text-slate-500 mx-auto mb-4" />
+          <ClipboardCheck className="h-12 w-12 text-gray-600 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-black mb-2">No Campaigns Found</h3>
-          <p className="text-slate-600 mb-4">
+          <p className="text-gray-600 mb-4">
             {searchTerm || statusFilter
               ? 'No campaigns match your filters'
               : 'Create your first attestation campaign to get started'}
@@ -317,10 +317,10 @@ export default function AttestationCampaignsPage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-slate-200 mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-gray-300 mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-medium text-black">Create New Campaign</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-600 hover:text-slate-900">
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-600 hover:text-black">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -341,7 +341,7 @@ export default function AttestationCampaignsPage() {
             >
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Campaign Name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Name</label>
                   <input
                     type="text"
                     name="name"
@@ -351,7 +351,7 @@ export default function AttestationCampaignsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                   <textarea
                     name="description"
                     className="input w-full"
@@ -360,7 +360,7 @@ export default function AttestationCampaignsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Attestation Type</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Attestation Type</label>
                   <select name="attestation_type" className="input w-full" required>
                     <option value="">Select type</option>
                     {ATTESTATION_TYPES.map((type) => (
@@ -369,7 +369,7 @@ export default function AttestationCampaignsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Attestation Text</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Attestation Text</label>
                   <textarea
                     name="attestation_text"
                     className="input w-full"
@@ -380,7 +380,7 @@ export default function AttestationCampaignsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-600 mb-1">Start Date</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                     <input
                       type="date"
                       name="start_date"
@@ -389,7 +389,7 @@ export default function AttestationCampaignsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-600 mb-1">End Date</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
                     <input
                       type="date"
                       name="end_date"
@@ -403,9 +403,9 @@ export default function AttestationCampaignsPage() {
                     type="checkbox"
                     name="requires_evidence"
                     id="requires_evidence"
-                    className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
+                    className="rounded border-gray-300 bg-white text-primary-500 focus:ring-primary-500"
                   />
-                  <label htmlFor="requires_evidence" className="text-sm text-slate-600">
+                  <label htmlFor="requires_evidence" className="text-sm text-gray-700">
                     Require evidence upload
                   </label>
                 </div>

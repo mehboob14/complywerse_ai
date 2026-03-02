@@ -339,8 +339,12 @@ def get_unified_dashboard(
     # ===== EXECUTIVE SUMMARY =====
     # Calculate overall compliance from uploaded frameworks
     uploaded_frameworks = db.query(UploadedFramework).filter(
-        UploadedFramework.tenant_id.in_(tenant_filter),
-        UploadedFramework.upload_status.in_(['parsed', 'completed', 'published']),
+        or_(
+            UploadedFramework.tenant_id.in_(tenant_filter),
+            UploadedFramework.is_shared == True,
+            UploadedFramework.tenant_id.is_(None)
+        ),
+        UploadedFramework.upload_status.in_(['parsed', 'published', 'completed']),
         UploadedFramework.is_active == True
     ).all()
     
@@ -373,6 +377,32 @@ def get_unified_dashboard(
             "score": score,
             "status": "compliant" if score >= 80 else "partial" if score >= 50 else "at_risk"
         })
+
+    if not framework_coverage:
+        published_frameworks = db.query(Framework).filter(
+            Framework.is_active == True
+        ).all()
+
+        for fw in published_frameworks:
+            compliance_data = calculate_framework_compliance(fw.id, tenant_filter, db)
+            fw_total = compliance_data.get("total_controls", 0)
+            fw_implemented = compliance_data.get("covered_controls", 0)
+            score = compliance_data.get("score", 0)
+
+            total_controls += fw_total
+            implemented_controls += fw_implemented
+            framework_scores.append(score)
+
+            framework_coverage.append({
+                "framework_id": fw.id,
+                "name": fw.name,
+                "short_code": fw.short_code,
+                "version": fw.version or "1.0",
+                "total_controls": fw_total,
+                "implemented_controls": fw_implemented,
+                "score": score,
+                "status": compliance_data.get("status", "not_started")
+            })
     
     overall_compliance = round(sum(framework_scores) / len(framework_scores)) if framework_scores else 0
     
@@ -676,7 +706,7 @@ def get_unified_dashboard(
             "mitigations_overdue": mitigations_overdue
         },
         "compliance": {
-            "frameworks_tracked": len(uploaded_frameworks),
+            "frameworks_tracked": len(framework_coverage),
             "framework_coverage": framework_coverage,
             "overall_maturity": maturity_score,
             "controls_implemented": implemented_controls,
@@ -1016,4 +1046,136 @@ Use these action_link patterns:
         "generated_at": now.isoformat() + "Z",
         "signals": signals,
         "recommendations": recommendations[:6]
+    }
+
+
+@router.get("/enhanced-stats")
+def get_enhanced_stats(
+    tenant_id: int = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if tenant_id and tenant_id in user_tenants:
+        user_tenants = [tenant_id]
+
+    risks = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants)).all()
+
+    top_risks = sorted(risks, key=lambda r: (r.inherent_score or 0), reverse=True)[:10]
+    top_risks_data = [
+        {
+            "id": r.id,
+            "title": r.title,
+            "category": r.risk_category or "uncategorized",
+            "inherent_score": r.inherent_score or 0,
+            "residual_score": r.residual_score or 0,
+            "treatment": r.treatment_plan or "untreated",
+            "status": r.status or "open",
+            "owner": r.owner_id,
+        }
+        for r in top_risks
+    ]
+
+    treatment_dist = {}
+    for r in risks:
+        t = r.treatment_plan or "untreated"
+        treatment_dist[t] = treatment_dist.get(t, 0) + 1
+
+    improved = 0
+    unchanged = 0
+    worsened = 0
+    for r in risks:
+        inh = r.inherent_score or 0
+        res = r.residual_score or 0
+        if res < inh:
+            improved += 1
+        elif res == inh:
+            unchanged += 1
+        else:
+            worsened += 1
+
+    actions = db.query(RiskMitigationAction).join(
+        Risk, RiskMitigationAction.risk_id == Risk.id
+    ).filter(
+        Risk.tenant_id.in_(user_tenants)
+    ).all()
+    now = datetime.utcnow()
+    mitigation_summary = {"completed": 0, "in_progress": 0, "overdue": 0, "not_started": 0}
+    for a in actions:
+        if a.status == "completed":
+            mitigation_summary["completed"] += 1
+        elif a.status == "in_progress":
+            if a.due_date and a.due_date < now:
+                mitigation_summary["overdue"] += 1
+            else:
+                mitigation_summary["in_progress"] += 1
+        elif a.status == "not_started":
+            if a.due_date and a.due_date < now:
+                mitigation_summary["overdue"] += 1
+            else:
+                mitigation_summary["not_started"] += 1
+        else:
+            mitigation_summary["not_started"] += 1
+
+    incidents = db.query(RiskIncident).filter(
+        RiskIncident.tenant_id.in_(user_tenants)
+    ).all()
+    incident_by_severity = {}
+    for inc in incidents:
+        sev = inc.severity or "low"
+        incident_by_severity[sev] = incident_by_severity.get(sev, 0) + 1
+
+    category_effectiveness = {}
+    category_counts = {}
+    for r in risks:
+        cat = r.risk_category or "uncategorized"
+        inh = r.inherent_score or 0
+        res = r.residual_score or 0
+        if inh > 0:
+            reduction = ((inh - res) / inh) * 100
+            category_effectiveness[cat] = category_effectiveness.get(cat, 0) + reduction
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+    control_effectiveness = {}
+    for cat in category_effectiveness:
+        cnt = category_counts.get(cat, 1)
+        control_effectiveness[cat] = round(category_effectiveness[cat] / cnt, 1)
+
+    status_dist = {}
+    for r in risks:
+        s = r.status or "open"
+        status_dist[s] = status_dist.get(s, 0) + 1
+
+    kris = db.query(RiskKRI).filter(RiskKRI.tenant_id.in_(user_tenants)).all()
+    kri_gauges = []
+    for k in kris[:10]:
+        current_val = k.current_value or 0
+        amber = k.amber_threshold
+        green = k.green_threshold
+        if k.threshold_direction == "higher_is_better":
+            status = "green" if (green and current_val >= green) else ("amber" if (amber and current_val >= amber) else "red")
+        else:
+            status = "green" if (green and current_val <= green) else ("amber" if (amber and current_val <= amber) else "red")
+        kri_gauges.append({
+            "id": k.id,
+            "name": k.name,
+            "current_value": k.current_value,
+            "amber_threshold": k.amber_threshold,
+            "green_threshold": k.green_threshold,
+            "unit": k.unit,
+            "current_status": status,
+        })
+
+    return {
+        "top_risks": top_risks_data,
+        "risk_treatment_distribution": treatment_dist,
+        "risk_movement": {
+            "improved": improved,
+            "unchanged": unchanged,
+            "worsened": worsened,
+        },
+        "mitigation_summary": mitigation_summary,
+        "incident_by_severity": incident_by_severity,
+        "control_effectiveness": control_effectiveness,
+        "risk_status_distribution": status_dist,
+        "kri_gauges": kri_gauges,
     }

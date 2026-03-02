@@ -1,0 +1,1700 @@
+'use client';
+
+import { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import apiClient from '@/lib/api';
+import { 
+  ArrowLeft, Loader2, AlertCircle, FileCheck, Calendar, Clock,
+  CheckCircle, XCircle, FileText, Edit, ScanText, Brain, Link2,
+  AlertTriangle, Eye, Trash2, Send, ThumbsUp, ThumbsDown, RefreshCw,
+  History, FileSpreadsheet, Shield, Building2, Info, Image, Settings,
+  ShieldCheck, ClipboardList, ExternalLink, Plus, X, Lock, Unlock,
+  ChevronDown, ChevronRight, Hash, Cpu, FileCode, Quote
+} from 'lucide-react';
+import Link from 'next/link';
+
+type TabType = 'overview' | 'ocr' | 'assessment' | 'controls' | 'cross-links';
+
+interface EvidenceVersion {
+  id: number;
+  version_number: number;
+  file_path: string | null;
+  changes: string | null;
+  created_by: number | null;
+  created_at: string | null;
+}
+
+interface ControlMapping {
+  id: number;
+  normalized_control_id: number | null;
+  normalized_control_code: string | null;
+  normalized_control_name: string | null;
+  framework_control_id: number | null;
+  framework_control_code: string | null;
+  framework_control_name: string | null;
+}
+
+interface AIAssessment {
+  id: number;
+  relevance_score: number | null;
+  adequacy_score: number | null;
+  confidence_score: number | null;
+  audit_readiness: number | null;
+  content_summary: string | null;
+  gap_analysis: {
+    detected_controls?: string[];
+    compliance_frameworks?: string[];
+    gaps?: string[];
+    recommendations?: string[];
+  } | null;
+  assessed_at: string | null;
+}
+
+interface RiskLink {
+  id: number;
+  risk_id: number;
+  risk_title: string | null;
+}
+
+interface AssetLink {
+  id: number;
+  asset_id: number;
+  asset_name: string | null;
+}
+
+interface IncidentLink {
+  id: number;
+  incident_id: number;
+}
+
+interface PolicyLink {
+  id: number;
+  policy_statement_id: number;
+}
+
+interface EvidenceDetail {
+  id: number;
+  tenant_id: number;
+  name: string;
+  description: string | null;
+  file_path: string | null;
+  file_name: string | null;
+  file_type: string | null;
+  version: number;
+  uploaded_by: number | null;
+  uploader_name: string | null;
+  uploaded_at: string | null;
+  status: string;
+  ocr_status: string;
+  ocr_processed_at: string | null;
+  evidence_type: string | null;
+  collection_date: string | null;
+  validity_period_days: number | null;
+  expiry_date: string | null;
+  is_stale: boolean;
+  source_system: string | null;
+  content_summary: string | null;
+  quality_score: number | null;
+  submitted_by: number | null;
+  submitted_at: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  review_comments: string | null;
+  approved_by: number | null;
+  approved_at: string | null;
+  control_mappings: ControlMapping[];
+  versions: EvidenceVersion[];
+  latest_assessment: AIAssessment | null;
+  risk_links: RiskLink[];
+  asset_links: AssetLink[];
+  incident_links: IncidentLink[];
+  policy_links: PolicyLink[];
+}
+
+interface OCRContent {
+  evidence_id: number;
+  ocr_content: string | null;
+  ocr_status: string;
+  ocr_processed_at: string | null;
+}
+
+interface ClauseMapping {
+  framework_name: string;
+  control_id: string;
+  clause_reference: string;
+  control_title: string;
+  matching_rationale: string;
+  confidence: number;
+  coverage_type: string;
+  matched_text_excerpt: string;
+  match_type?: 'explicit' | 'implicit' | 'inferred';
+  intent_analysis?: string;
+  cross_framework_equivalents?: string[];
+}
+
+interface LatestAssessment {
+  id: number;
+  evidence_id: number;
+  relevance_score: number | null;
+  adequacy_score: number | null;
+  confidence_score: number | null;
+  audit_readiness: number | null;
+  content_summary: string | null;
+  detected_controls: string[];
+  compliance_frameworks: string[];
+  compliance_gaps: string[];
+  recommendations: string[];
+  assessed_at: string;
+  content_hash: string | null;
+  model_version: string | null;
+  prompt_version: string | null;
+  assessment_mode: string | null;
+  is_locked: boolean;
+  clause_mappings: ClauseMapping[];
+  matched_text_excerpts: { text: string; relevance: string }[];
+}
+
+interface AllLinksResponse {
+  evidence_id: number;
+  evidence_name: string;
+  risks: { total: number; links: Array<{ id: number; risk_id: number; risk: { id: number; title: string; status: string; inherent_score: number | null; residual_score: number | null } | null }> };
+  assets: { total: number; links: Array<{ id: number; asset_id: number; link_type: string; asset: { id: number; name: string; asset_type: string; criticality: string; status: string } | null }> };
+  incidents: { total: number; links: Array<{ id: number; incident_id: number; link_type: string | null; incident: { id: number; title: string; severity: string; status: string } | null }> };
+  policy_statements: { total: number; links: Array<{ id: number; policy_statement_id: number; link_type: string | null; policy_statement: { id: number; statement_code: string; statement_summary: string | null; status: string } | null }> };
+  total_links: number;
+}
+
+interface ControlsResponse {
+  evidence_id: number;
+  evidence_name: string;
+  total_mappings: number;
+  normalized_controls: Array<{ id: number; normalized_control: { id: number; code: string; name: string } | null }>;
+  by_framework: Array<{ framework_id: number; framework_name: string; framework_code: string; controls: Array<{ id: number; framework_control: { id: number; code: string; name: string } | null }> }>;
+}
+
+const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Draft' },
+  pending_review: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pending Review' },
+  approved: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Approved' },
+  rejected: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rejected' },
+  expired: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Expired' },
+  archived: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Archived' },
+};
+
+const OCR_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  pending: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Pending' },
+  processing: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Processing' },
+  completed: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Completed' },
+  failed: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Failed' },
+  not_applicable: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'N/A' },
+};
+
+const TYPE_ICONS: Record<string, typeof FileText> = {
+  screenshot: Image,
+  document: FileText,
+  certificate: ShieldCheck,
+  audit_report: ClipboardList,
+  log: FileSpreadsheet,
+  policy: FileText,
+  procedure: ClipboardList,
+  configuration: Settings,
+  attestation: ShieldCheck,
+  training_record: ClipboardList,
+  access_review: Eye,
+  vulnerability_scan: AlertTriangle,
+  penetration_test: ShieldCheck,
+  backup_log: FileSpreadsheet,
+  change_record: Edit,
+  incident_report: AlertCircle,
+  other: FileCheck,
+};
+
+export default function EvidenceDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const evidenceId = Number(params.id);
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | null>(null);
+  const [rejectComments, setRejectComments] = useState('');
+
+  const { data: evidence, isLoading, error } = useQuery<EvidenceDetail>({
+    queryKey: ['evidence-detail', evidenceId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/evidence-mgmt/items/${evidenceId}`);
+      return response.data;
+    },
+  });
+
+  const { data: ocrContent } = useQuery<OCRContent>({
+    queryKey: ['evidence-ocr', evidenceId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/evidence-mgmt/ocr/${evidenceId}/ocr-content`);
+      return response.data;
+    },
+    enabled: activeTab === 'ocr',
+  });
+
+  const { data: latestAssessment, refetch: refetchAssessment } = useQuery<LatestAssessment>({
+    queryKey: ['evidence-assessment', evidenceId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/evidence-mgmt/ai/${evidenceId}/latest-assessment`);
+      return response.data;
+    },
+    enabled: activeTab === 'assessment',
+    retry: false,
+  });
+
+  const { data: allLinks } = useQuery<AllLinksResponse>({
+    queryKey: ['evidence-cross-links', evidenceId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/evidence-mgmt/cross-links/${evidenceId}/all-links`);
+      return response.data;
+    },
+    enabled: activeTab === 'cross-links' || activeTab === 'assessment',
+  });
+
+  const { data: controlsData } = useQuery<ControlsResponse>({
+    queryKey: ['evidence-controls', evidenceId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/evidence-mgmt/links/${evidenceId}/controls`);
+      return response.data;
+    },
+    enabled: activeTab === 'controls' || activeTab === 'assessment',
+  });
+
+  const { data: clauseMappings } = useQuery<ClauseMapping[]>({
+    queryKey: ['evidence-clause-mappings', evidenceId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/evidence-mgmt/ai/${evidenceId}/clause-mappings`);
+      return response.data;
+    },
+    enabled: activeTab === 'assessment',
+    retry: false,
+  });
+
+  const { data: aiLinkStatus, refetch: refetchLinkStatus } = useQuery<{
+    evidence_id: number;
+    linked_controls: Record<string, { mapping_id: number; control_id: string; original_reference: string; framework_name: string }>;
+    total_linked: number;
+  }>({
+    queryKey: ['evidence-ai-link-status', evidenceId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/evidence-mgmt/links/${evidenceId}/ai-link-status`);
+      return response.data;
+    },
+    enabled: activeTab === 'assessment',
+    retry: false,
+  });
+
+  const processOCRMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/ocr/${evidenceId}/process-ocr`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-ocr', evidenceId] });
+    },
+  });
+
+  const runAssessmentMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess?force_refresh=true`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-assessment', evidenceId] });
+      refetchAssessment();
+    },
+  });
+
+  const submitForReviewMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/lifecycle/${evidenceId}/submit`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+    },
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: (data: { action: string; comments?: string }) => 
+      apiClient.post(`/evidence-mgmt/lifecycle/${evidenceId}/review`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+      setReviewAction(null);
+      setRejectComments('');
+    },
+  });
+
+  const unlinkControlMutation = useMutation({
+    mutationFn: (mappingId: number) => 
+      apiClient.delete(`/evidence-mgmt/links/${evidenceId}/controls/${mappingId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-controls', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+    },
+  });
+
+  const unlinkRiskMutation = useMutation({
+    mutationFn: (linkId: number) => 
+      apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/risks/${linkId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    },
+  });
+
+  const unlinkAssetMutation = useMutation({
+    mutationFn: (linkId: number) => 
+      apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/assets/${linkId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    },
+  });
+
+  const lockAssessmentMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/lock`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-assessment', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+    },
+  });
+
+  const unlockAssessmentMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/unlock`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-assessment', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+    },
+  });
+
+  const [linkingClauseIndex, setLinkingClauseIndex] = useState<number | null>(null);
+  const [linkFeedback, setLinkFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const linkFromAIMutation = useMutation({
+    mutationFn: (clause: ClauseMapping) => 
+      apiClient.post(`/evidence-mgmt/links/${evidenceId}/link-from-ai`, {
+        framework_name: clause.framework_name,
+        control_id: clause.control_id,
+        clause_reference: clause.clause_reference,
+        confidence: clause.confidence,
+        matching_rationale: clause.matching_rationale
+      }),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-ai-link-status', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-controls', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+      setLinkingClauseIndex(null);
+      refetchLinkStatus();
+      const data = response.data;
+      if (data.already_linked) {
+        setLinkFeedback({ type: 'success', message: `Already linked to ${data.control_id}` });
+      } else {
+        setLinkFeedback({ type: 'success', message: `Successfully linked to ${data.control_id}: ${data.control_title}` });
+      }
+      setTimeout(() => setLinkFeedback(null), 5000);
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      setLinkingClauseIndex(null);
+      const errorMessage = error.response?.data?.detail || 'Failed to create link. Please try again.';
+      setLinkFeedback({ type: 'error', message: errorMessage });
+      setTimeout(() => setLinkFeedback(null), 5000);
+    }
+  });
+
+  const isClauseLinked = (clause: ClauseMapping): boolean => {
+    if (!aiLinkStatus?.linked_controls) return false;
+    const key = `${clause.framework_name}:${clause.control_id}`;
+    return !!aiLinkStatus.linked_controls[key];
+  };
+
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const formatDateTime = (dateString?: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const getDaysRemaining = () => {
+    if (!evidence?.expiry_date) return null;
+    const now = new Date();
+    const expiry = new Date(evidence.expiry_date);
+    const diffTime = expiry.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const getQualityScoreColor = (score: number | null) => {
+    if (score === null) return 'bg-slate-600';
+    if (score >= 80) return 'bg-green-500';
+    if (score >= 60) return 'bg-yellow-500';
+    if (score >= 40) return 'bg-orange-500';
+    return 'bg-red-500';
+  };
+
+  const getQualityScoreTextColor = (score: number | null) => {
+    if (score === null) return 'text-slate-400';
+    if (score >= 80) return 'text-green-400';
+    if (score >= 60) return 'text-yellow-400';
+    if (score >= 40) return 'text-orange-400';
+    return 'text-red-400';
+  };
+
+  const getStatusStyle = (status: string) => {
+    return STATUS_STYLES[status] || STATUS_STYLES.draft;
+  };
+
+  const getOCRStatusStyle = (status: string) => {
+    return OCR_STATUS_STYLES[status] || OCR_STATUS_STYLES.pending;
+  };
+
+  const getTypeIcon = (type: string | null) => {
+    if (!type) return FileCheck;
+    return TYPE_ICONS[type] || FileCheck;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+      </div>
+    );
+  }
+
+  if (error || !evidence) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+        <AlertCircle className="mb-2 h-8 w-8" />
+        <p>Failed to load evidence details</p>
+        <Link href="/evidence" className="mt-4 text-primary-400 hover:underline">
+          Back to Evidence Library
+        </Link>
+      </div>
+    );
+  }
+
+  const daysRemaining = getDaysRemaining();
+  const statusStyle = getStatusStyle(evidence.status);
+  const ocrStatusStyle = getOCRStatusStyle(evidence.ocr_status);
+  const TypeIcon = getTypeIcon(evidence.evidence_type);
+
+  const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
+    { id: 'overview', label: 'Overview', icon: Info },
+    { id: 'ocr', label: 'OCR Content', icon: ScanText },
+    { id: 'assessment', label: 'AI Assessment', icon: Brain },
+    { id: 'controls', label: 'Linked Controls', icon: Shield },
+    { id: 'cross-links', label: 'Cross-Module Links', icon: Link2 },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start gap-4">
+        <Link
+          href="/evidence"
+          className="mt-1 rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-900/50 text-primary-400">
+              <TypeIcon className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">{evidence.name}</h1>
+              <p className="text-slate-400">{evidence.description || 'No description'}</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {evidence.evidence_type && (
+            <span className="rounded-full bg-primary-900/50 px-3 py-1 text-sm text-primary-400">
+              {evidence.evidence_type.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            </span>
+          )}
+          <span className={`rounded-full ${statusStyle.bg} px-3 py-1 text-sm ${statusStyle.text}`}>
+            {statusStyle.label}
+          </span>
+          {evidence.quality_score !== null && (
+            <span className={`rounded-full ${getQualityScoreColor(evidence.quality_score)} px-3 py-1 text-sm text-white`}>
+              Quality: {Math.round(evidence.quality_score)}%
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-white hover:bg-slate-600"
+            title="Edit Evidence"
+          >
+            <Edit className="h-4 w-4" />
+            Edit
+          </button>
+          {evidence.status === 'draft' && (
+            <button
+              onClick={() => submitForReviewMutation.mutate()}
+              disabled={submitForReviewMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-yellow-600 px-4 py-2 text-white hover:bg-yellow-700 disabled:opacity-50"
+              title="Submit for Review"
+            >
+              {submitForReviewMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              Submit
+            </button>
+          )}
+          {evidence.ocr_status !== 'completed' && evidence.ocr_status !== 'not_applicable' && (
+            <button
+              onClick={() => processOCRMutation.mutate()}
+              disabled={processOCRMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+              title="Process OCR"
+            >
+              {processOCRMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ScanText className="h-4 w-4" />
+              )}
+              OCR
+            </button>
+          )}
+          <button
+            onClick={() => runAssessmentMutation.mutate()}
+            disabled={runAssessmentMutation.isPending || evidence.ocr_status !== 'completed'}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+            title={evidence.ocr_status !== 'completed' ? 'Run OCR first' : 'Run AI Assessment'}
+          >
+            {runAssessmentMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Brain className="h-4 w-4" />
+            )}
+            Assess
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-400">
+            <Calendar className="h-4 w-4" />
+            <span className="text-sm font-medium">Collection & Expiry</span>
+          </div>
+          <div className="space-y-2">
+            <div>
+              <span className="text-xs text-slate-500">Collected</span>
+              <p className="text-white">{formatDate(evidence.collection_date)}</p>
+            </div>
+            <div>
+              <span className="text-xs text-slate-500">Expires</span>
+              <p className={`${evidence.is_stale ? 'text-red-400' : daysRemaining !== null && daysRemaining <= 30 ? 'text-yellow-400' : 'text-white'}`}>
+                {formatDate(evidence.expiry_date)}
+              </p>
+            </div>
+            {daysRemaining !== null && (
+              <div className={`text-sm ${daysRemaining <= 0 ? 'text-red-400' : daysRemaining <= 30 ? 'text-yellow-400' : 'text-green-400'}`}>
+                {daysRemaining <= 0 ? 'Expired' : `${daysRemaining} days remaining`}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-400">
+            <ScanText className="h-4 w-4" />
+            <span className="text-sm font-medium">OCR Status</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`rounded-full ${ocrStatusStyle.bg} px-3 py-1 text-sm ${ocrStatusStyle.text}`}>
+              {ocrStatusStyle.label}
+            </span>
+          </div>
+          {evidence.ocr_processed_at && (
+            <p className="mt-2 text-xs text-slate-500">
+              Processed: {formatDateTime(evidence.ocr_processed_at)}
+            </p>
+          )}
+          {evidence.ocr_status === 'pending' && (
+            <button
+              onClick={() => processOCRMutation.mutate()}
+              disabled={processOCRMutation.isPending}
+              className="mt-3 flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300"
+            >
+              {processOCRMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <ScanText className="h-3 w-3" />
+              )}
+              Process Now
+            </button>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-400">
+            <Brain className="h-4 w-4" />
+            <span className="text-sm font-medium">Quality Score</span>
+          </div>
+          {evidence.quality_score !== null ? (
+            <>
+              <div className={`text-3xl font-bold ${getQualityScoreTextColor(evidence.quality_score)}`}>
+                {Math.round(evidence.quality_score)}%
+              </div>
+              <div className="mt-2">
+                <div className="h-2 w-full rounded-full bg-slate-700">
+                  <div 
+                    className={`h-2 rounded-full transition-all ${getQualityScoreColor(evidence.quality_score)}`}
+                    style={{ width: `${evidence.quality_score}%` }}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-3xl font-bold text-slate-500">-</div>
+              <button
+                onClick={() => runAssessmentMutation.mutate()}
+                disabled={runAssessmentMutation.isPending || evidence.ocr_status !== 'completed'}
+                className="mt-3 flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300 disabled:text-slate-600"
+              >
+                {runAssessmentMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Brain className="h-3 w-3" />
+                )}
+                Run Assessment
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-400">
+            <FileText className="h-4 w-4" />
+            <span className="text-sm font-medium">File Info</span>
+          </div>
+          <div className="space-y-2">
+            <div>
+              <span className="text-xs text-slate-500">Filename</span>
+              <p className="truncate text-sm text-white">{evidence.file_name || 'No file'}</p>
+            </div>
+            <div>
+              <span className="text-xs text-slate-500">Type</span>
+              <p className="text-sm text-white">{evidence.file_type || 'Unknown'}</p>
+            </div>
+            <div>
+              <span className="text-xs text-slate-500">Version</span>
+              <p className="text-sm text-white">v{evidence.version}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {evidence.status === 'pending_review' && (
+        <div className="rounded-lg border border-yellow-600/50 bg-yellow-900/20 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Clock className="h-5 w-5 text-yellow-400" />
+              <div>
+                <p className="font-medium text-yellow-400">Pending Review</p>
+                <p className="text-sm text-slate-400">
+                  Submitted by {evidence.uploader_name || 'Unknown'} on {formatDateTime(evidence.submitted_at)}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {reviewAction === null ? (
+                <>
+                  <button
+                    onClick={() => setReviewAction('approve')}
+                    className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                  >
+                    <ThumbsUp className="h-4 w-4" />
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => setReviewAction('reject')}
+                    className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+                  >
+                    <ThumbsDown className="h-4 w-4" />
+                    Reject
+                  </button>
+                </>
+              ) : reviewAction === 'approve' ? (
+                <>
+                  <span className="text-sm text-slate-400">Confirm approval?</span>
+                  <button
+                    onClick={() => reviewMutation.mutate({ action: 'approve' })}
+                    disabled={reviewMutation.isPending}
+                    className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {reviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setReviewAction(null)}
+                    className="rounded-lg bg-slate-700 px-3 py-2 text-white hover:bg-slate-600"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={rejectComments}
+                    onChange={(e) => setRejectComments(e.target.value)}
+                    placeholder="Rejection comments..."
+                    className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white placeholder-slate-400 focus:border-red-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => reviewMutation.mutate({ action: 'reject', comments: rejectComments })}
+                    disabled={reviewMutation.isPending}
+                    className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {reviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                    Reject
+                  </button>
+                  <button
+                    onClick={() => { setReviewAction(null); setRejectComments(''); }}
+                    className="rounded-lg bg-slate-700 px-3 py-2 text-white hover:bg-slate-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="border-b border-slate-700">
+        <nav className="flex gap-1">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-primary-500 text-primary-400'
+                    : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      <div className="rounded-lg border border-slate-700 bg-slate-800 p-6">
+        {activeTab === 'overview' && (
+          <OverviewTab evidence={evidence} formatDate={formatDate} formatDateTime={formatDateTime} />
+        )}
+        {activeTab === 'ocr' && (
+          <OCRTab 
+            evidence={evidence}
+            ocrContent={ocrContent}
+            onProcessOCR={() => processOCRMutation.mutate()}
+            isProcessing={processOCRMutation.isPending}
+            formatDateTime={formatDateTime}
+          />
+        )}
+        {activeTab === 'assessment' && (
+          <AssessmentTab 
+            evidence={evidence}
+            assessment={latestAssessment}
+            controlsData={controlsData}
+            assetsData={allLinks?.assets}
+            clauseMappings={clauseMappings}
+            onRunAssessment={() => runAssessmentMutation.mutate()}
+            onLock={() => lockAssessmentMutation.mutate()}
+            onUnlock={() => unlockAssessmentMutation.mutate()}
+            isRunning={runAssessmentMutation.isPending}
+            isLocking={lockAssessmentMutation.isPending}
+            isUnlocking={unlockAssessmentMutation.isPending}
+            formatDateTime={formatDateTime}
+            isClauseLinked={isClauseLinked}
+            onLinkFromAI={(clause: ClauseMapping) => {
+              linkFromAIMutation.mutate(clause);
+            }}
+            linkingClauseIndex={linkingClauseIndex}
+            setLinkingClauseIndex={setLinkingClauseIndex}
+            isLinkingPending={linkFromAIMutation.isPending}
+            linkFeedback={linkFeedback}
+          />
+        )}
+        {activeTab === 'controls' && (
+          <ControlsTab 
+            controlsData={controlsData}
+            onUnlink={(mappingId) => unlinkControlMutation.mutate(mappingId)}
+            isUnlinking={unlinkControlMutation.isPending}
+          />
+        )}
+        {activeTab === 'cross-links' && (
+          <CrossLinksTab 
+            links={allLinks}
+            onUnlinkRisk={(linkId) => unlinkRiskMutation.mutate(linkId)}
+            onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
+            isUnlinking={unlinkRiskMutation.isPending || unlinkAssetMutation.isPending}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OverviewTab({ 
+  evidence, 
+  formatDate, 
+  formatDateTime 
+}: { 
+  evidence: EvidenceDetail; 
+  formatDate: (d?: string | null) => string;
+  formatDateTime: (d?: string | null) => string;
+}) {
+  return (
+    <div className="grid gap-6 md:grid-cols-2">
+      <div className="space-y-6">
+        <div>
+          <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-white">
+            <Info className="h-5 w-5 text-primary-400" />
+            Basic Information
+          </h3>
+          <div className="space-y-3 rounded-lg bg-slate-900 p-4">
+            <div>
+              <span className="text-sm text-slate-400">Description</span>
+              <p className="text-white">{evidence.description || 'No description provided'}</p>
+            </div>
+            <div>
+              <span className="text-sm text-slate-400">Source System</span>
+              <p className="text-white">{evidence.source_system || 'Not specified'}</p>
+            </div>
+            <div>
+              <span className="text-sm text-slate-400">Uploaded By</span>
+              <p className="text-white">{evidence.uploader_name || 'Unknown'}</p>
+            </div>
+            <div>
+              <span className="text-sm text-slate-400">Uploaded At</span>
+              <p className="text-white">{formatDateTime(evidence.uploaded_at)}</p>
+            </div>
+            {evidence.content_summary && (
+              <div>
+                <span className="text-sm text-slate-400">Content Summary</span>
+                <p className="text-white">{evidence.content_summary}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {evidence.review_comments && (
+          <div>
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-white">
+              <AlertCircle className="h-5 w-5 text-yellow-400" />
+              Review Comments
+            </h3>
+            <div className="rounded-lg bg-yellow-900/20 border border-yellow-600/30 p-4">
+              <p className="text-yellow-200">{evidence.review_comments}</p>
+              {evidence.reviewed_at && (
+                <p className="mt-2 text-xs text-slate-400">Reviewed on {formatDateTime(evidence.reviewed_at)}</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-white">
+          <History className="h-5 w-5 text-primary-400" />
+          Version History
+        </h3>
+        {evidence.versions && evidence.versions.length > 0 ? (
+          <div className="space-y-2">
+            {evidence.versions.map((version) => (
+              <div key={version.id} className="rounded-lg bg-slate-900 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-white">Version {version.version_number}</span>
+                  <span className="text-sm text-slate-400">{formatDateTime(version.created_at)}</span>
+                </div>
+                {version.changes && (
+                  <p className="mt-1 text-sm text-slate-400">{version.changes}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg bg-slate-900 p-4 text-center text-slate-400">
+            <History className="mx-auto mb-2 h-8 w-8 text-slate-600" />
+            <p>No version history available</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OCRTab({ 
+  evidence, 
+  ocrContent,
+  onProcessOCR,
+  isProcessing,
+  formatDateTime
+}: { 
+  evidence: EvidenceDetail;
+  ocrContent?: OCRContent;
+  onProcessOCR: () => void;
+  isProcessing: boolean;
+  formatDateTime: (d?: string | null) => string;
+}) {
+  const content = ocrContent?.ocr_content;
+  
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <ScanText className="h-5 w-5 text-primary-400" />
+          OCR Extracted Content
+        </h3>
+        <div className="flex items-center gap-3">
+          {ocrContent?.ocr_processed_at && (
+            <span className="text-sm text-slate-400">
+              Processed: {formatDateTime(ocrContent.ocr_processed_at)}
+            </span>
+          )}
+          <button
+            onClick={onProcessOCR}
+            disabled={isProcessing}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {isProcessing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Re-process OCR
+          </button>
+        </div>
+      </div>
+
+      {evidence.ocr_status === 'completed' && content ? (
+        <div className="max-h-[600px] overflow-auto rounded-lg bg-slate-900 p-4">
+          <pre className="whitespace-pre-wrap font-mono text-sm text-slate-300">{content}</pre>
+        </div>
+      ) : evidence.ocr_status === 'processing' ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Loader2 className="mb-4 h-12 w-12 animate-spin text-blue-400" />
+          <p className="text-lg font-medium text-white">Processing OCR...</p>
+          <p className="text-slate-400">This may take a moment</p>
+        </div>
+      ) : evidence.ocr_status === 'failed' ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <XCircle className="mb-4 h-12 w-12 text-red-400" />
+          <p className="text-lg font-medium text-white">OCR Processing Failed</p>
+          <p className="text-slate-400">Try re-processing the document</p>
+          <button
+            onClick={onProcessOCR}
+            disabled={isProcessing}
+            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Retry OCR
+          </button>
+        </div>
+      ) : evidence.ocr_status === 'not_applicable' ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <FileText className="mb-4 h-12 w-12 text-slate-600" />
+          <p className="text-lg font-medium text-white">OCR Not Applicable</p>
+          <p className="text-slate-400">This file type does not support OCR extraction</p>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <ScanText className="mb-4 h-12 w-12 text-slate-600" />
+          <p className="text-lg font-medium text-white">No OCR Content Yet</p>
+          <p className="text-slate-400">Process the document to extract text content</p>
+          <button
+            onClick={onProcessOCR}
+            disabled={isProcessing}
+            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanText className="h-4 w-4" />}
+            Process OCR
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface AssetsDataType {
+  total: number;
+  links: Array<{
+    id: number;
+    asset_id: number;
+    link_type: string;
+    asset: { id: number; name: string; asset_type: string; criticality: string; status: string } | null;
+  }>;
+}
+
+function AssessmentTab({ 
+  evidence, 
+  assessment,
+  controlsData,
+  assetsData,
+  clauseMappings,
+  onRunAssessment,
+  onLock,
+  onUnlock,
+  isRunning,
+  isLocking,
+  isUnlocking,
+  formatDateTime,
+  isClauseLinked,
+  onLinkFromAI,
+  linkingClauseIndex,
+  setLinkingClauseIndex,
+  isLinkingPending,
+  linkFeedback
+}: { 
+  evidence: EvidenceDetail;
+  assessment?: LatestAssessment;
+  controlsData?: ControlsResponse;
+  assetsData?: AssetsDataType;
+  clauseMappings?: ClauseMapping[];
+  onRunAssessment: () => void;
+  onLock: () => void;
+  onUnlock: () => void;
+  isRunning: boolean;
+  isLocking: boolean;
+  isUnlocking: boolean;
+  formatDateTime: (d?: string | null) => string;
+  isClauseLinked: (clause: ClauseMapping) => boolean;
+  onLinkFromAI: (clause: ClauseMapping) => void;
+  linkingClauseIndex: number | null;
+  setLinkingClauseIndex: (index: number | null) => void;
+  isLinkingPending: boolean;
+  linkFeedback: { type: 'success' | 'error'; message: string } | null;
+}) {
+  const [expandedClauses, setExpandedClauses] = useState<Set<number>>(new Set());
+
+  const toggleClause = (index: number) => {
+    setExpandedClauses(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const getCoverageTypeStyle = (coverageType: string) => {
+    switch (coverageType.toLowerCase()) {
+      case 'full':
+        return 'bg-green-500/20 text-green-400 border-green-500/30';
+      case 'partial':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'minimal':
+        return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+      case 'none':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      default:
+        return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+    }
+  };
+
+  const truncateHash = (hash: string | null) => {
+    if (!hash) return '-';
+    return `${hash.substring(0, 8)}...${hash.substring(hash.length - 8)}`;
+  };
+
+  const ScoreBar = ({ label, score, color }: { label: string; score: number | null; color: string }) => {
+    const value = score || 0;
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-slate-400">{label}</span>
+          <span className={`font-bold ${value >= 70 ? 'text-green-400' : value >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+            {value.toFixed(0)}%
+          </span>
+        </div>
+        <div className="h-3 w-full rounded-full bg-slate-700">
+          <div 
+            className={`h-3 rounded-full transition-all ${color}`}
+            style={{ width: `${value}%` }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  if (!assessment && !evidence.latest_assessment) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <Brain className="mb-4 h-12 w-12 text-slate-600" />
+        <p className="text-lg font-medium text-white">No AI Assessment Yet</p>
+        <p className="text-slate-400">
+          {evidence.ocr_status !== 'completed' 
+            ? 'Process OCR first, then run the AI assessment'
+            : 'Run an AI assessment to analyze evidence quality'}
+        </p>
+        <button
+          onClick={onRunAssessment}
+          disabled={isRunning || evidence.ocr_status !== 'completed'}
+          className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+        >
+          {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+          Run Assessment
+        </button>
+      </div>
+    );
+  }
+
+  const data = assessment || evidence.latest_assessment;
+  if (!data) return null;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <Brain className="h-5 w-5 text-primary-400" />
+          AI Quality Assessment
+        </h3>
+        <div className="flex items-center gap-3">
+          {assessment?.assessed_at && (
+            <span className="text-sm text-slate-400">
+              Assessed: {formatDateTime(assessment.assessed_at)}
+            </span>
+          )}
+          <button
+            onClick={onRunAssessment}
+            disabled={isRunning || evidence.ocr_status !== 'completed'}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Re-assess
+          </button>
+        </div>
+      </div>
+
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="space-y-4 rounded-lg bg-slate-900 p-4">
+          <h4 className="font-medium text-white">Quality Scores</h4>
+          <ScoreBar label="Relevance" score={data.relevance_score} color="bg-blue-500" />
+          <ScoreBar label="Adequacy" score={data.adequacy_score} color="bg-green-500" />
+          <ScoreBar label="Audit Readiness" score={data.audit_readiness} color="bg-purple-500" />
+          <ScoreBar label="Confidence" score={data.confidence_score} color="bg-cyan-500" />
+        </div>
+
+        <div className="space-y-4 rounded-lg bg-slate-900 p-4">
+          <h4 className="font-medium text-white">Content Summary</h4>
+          <p className="text-slate-300">{data.content_summary || 'No summary available'}</p>
+        </div>
+      </div>
+
+      <div className="rounded-lg bg-gradient-to-r from-primary-900/50 to-blue-900/50 border border-primary-500/30 p-4">
+        <h4 className="mb-3 flex items-center gap-2 font-medium text-white">
+          <ShieldCheck className="h-5 w-5 text-primary-400" />
+          Applicable Compliance Frameworks
+        </h4>
+        <p className="mb-3 text-xs text-slate-400">This evidence can be used to demonstrate compliance with the following requirements:</p>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-600/50">
+                <th className="pb-3 pr-4 font-medium text-slate-300 w-1/3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-primary-400" />
+                    AI-Detected Frameworks
+                  </div>
+                </th>
+                <th className="pb-3 px-4 font-medium text-slate-300 w-1/3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-blue-400" />
+                    Linked Controls
+                  </div>
+                </th>
+                <th className="pb-3 pl-4 font-medium text-slate-300 w-1/3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-green-400" />
+                    Associated Assets
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="py-3 pr-4 align-top">
+                  {(() => {
+                    const frameworks = (assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks) || [];
+                    return frameworks.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {frameworks.map((framework, i) => (
+                          <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-primary-500/20 px-3 py-1 text-sm font-medium text-primary-300 border border-primary-500/30">
+                            <Shield className="h-3 w-3" />
+                            {framework}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-500 text-sm">Run AI assessment to identify</span>
+                    );
+                  })()}
+                </td>
+                <td className="py-3 px-4 align-top border-l border-slate-700/30">
+                  {controlsData?.by_framework && controlsData.by_framework.length > 0 ? (
+                    <div className="space-y-3">
+                      {controlsData.by_framework.map((framework) => (
+                        <div key={framework.framework_id}>
+                          <div className="text-xs font-medium text-slate-400 mb-1.5">{framework.framework_name}</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {framework.controls.slice(0, 5).map((mapping) => (
+                              <Link 
+                                key={mapping.id}
+                                href={`/frameworks`}
+                                className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-300 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
+                              >
+                                <ShieldCheck className="h-2.5 w-2.5" />
+                                {mapping.framework_control?.code}
+                              </Link>
+                            ))}
+                            {framework.controls.length > 5 && (
+                              <span className="text-xs text-slate-500">+{framework.controls.length - 5} more</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-slate-500 text-sm">No linked controls</span>
+                  )}
+                </td>
+                <td className="py-3 pl-4 align-top border-l border-slate-700/30">
+                  {assetsData?.links && assetsData.links.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {assetsData.links.slice(0, 6).map((link) => (
+                        link.asset && (
+                          <Link 
+                            key={link.id}
+                            href={`/assets/${link.asset_id}`}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-green-500/20 px-3 py-1 text-sm font-medium text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-colors"
+                          >
+                            <Building2 className="h-3 w-3" />
+                            {link.asset.name}
+                          </Link>
+                        )
+                      ))}
+                      {assetsData.links.length > 6 && (
+                        <span className="text-xs text-slate-500 self-center">+{assetsData.links.length - 6} more</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-slate-500 text-sm">No linked assets</span>
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div className="mt-4 pt-3 border-t border-slate-700/30 flex items-center gap-6 text-xs text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5 text-primary-400" />
+            <span className="font-medium text-slate-300">{(assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks)?.length || 0}</span> frameworks detected
+          </span>
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
+            <span className="font-medium text-slate-300">{controlsData?.total_mappings || 0}</span> controls linked
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Building2 className="h-3.5 w-3.5 text-green-400" />
+            <span className="font-medium text-slate-300">{assetsData?.total || 0}</span> assets associated
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="rounded-lg bg-slate-900 p-4">
+          <h4 className="mb-3 flex items-center gap-2 font-medium text-white">
+            <Shield className="h-4 w-4 text-blue-400" />
+            Detected Controls
+          </h4>
+          {(assessment?.detected_controls || (data as AIAssessment)?.gap_analysis?.detected_controls)?.length ? (
+            <ul className="space-y-1">
+              {((assessment?.detected_controls || (data as AIAssessment)?.gap_analysis?.detected_controls) || []).map((control, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                  <CheckCircle className="mt-0.5 h-3 w-3 shrink-0 text-green-400" />
+                  {control}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">No controls detected</p>
+          )}
+        </div>
+
+        <div className="rounded-lg bg-slate-900 p-4">
+          <h4 className="mb-3 flex items-center gap-2 font-medium text-white">
+            <AlertTriangle className="h-4 w-4 text-yellow-400" />
+            Compliance Gaps
+          </h4>
+          {(assessment?.compliance_gaps || (data as AIAssessment)?.gap_analysis?.gaps)?.length ? (
+            <ul className="space-y-1">
+              {((assessment?.compliance_gaps || (data as AIAssessment)?.gap_analysis?.gaps) || []).map((gap, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-yellow-400" />
+                  {gap}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">No gaps identified</p>
+          )}
+        </div>
+
+        <div className="rounded-lg bg-slate-900 p-4">
+          <h4 className="mb-3 flex items-center gap-2 font-medium text-white">
+            <Info className="h-4 w-4 text-primary-400" />
+            Recommendations
+          </h4>
+          {(assessment?.recommendations || (data as AIAssessment)?.gap_analysis?.recommendations)?.length ? (
+            <ul className="space-y-1">
+              {((assessment?.recommendations || (data as AIAssessment)?.gap_analysis?.recommendations) || []).map((rec, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                  <Info className="mt-0.5 h-3 w-3 shrink-0 text-primary-400" />
+                  {rec}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">No recommendations</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ControlsTab({ 
+  controlsData,
+  onUnlink,
+  isUnlinking
+}: { 
+  controlsData?: ControlsResponse;
+  onUnlink: (mappingId: number) => void;
+  isUnlinking: boolean;
+}) {
+  if (!controlsData) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+      </div>
+    );
+  }
+
+  const totalControls = controlsData.total_mappings;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <Shield className="h-5 w-5 text-primary-400" />
+          Linked Controls ({totalControls})
+        </h3>
+        <button className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
+          <Plus className="h-4 w-4" />
+          Link Control
+        </button>
+      </div>
+
+      {totalControls === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Shield className="mb-4 h-12 w-12 text-slate-600" />
+          <p className="text-lg font-medium text-white">No Linked Controls</p>
+          <p className="text-slate-400">Link this evidence to compliance controls</p>
+        </div>
+      ) : (
+        <>
+          {controlsData.normalized_controls.length > 0 && (
+            <div>
+              <h4 className="mb-3 text-sm font-medium text-slate-400">Normalized Controls</h4>
+              <div className="space-y-2">
+                {controlsData.normalized_controls.map((mapping) => (
+                  <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck className="h-5 w-5 text-primary-400" />
+                      <div>
+                        <span className="text-sm font-medium text-primary-400">{mapping.normalized_control?.code}</span>
+                        <p className="text-white">{mapping.normalized_control?.name}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onUnlink(mapping.id)}
+                      disabled={isUnlinking}
+                      className="rounded p-2 text-slate-400 hover:bg-slate-700 hover:text-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {controlsData.by_framework.map((framework) => (
+            <div key={framework.framework_id}>
+              <h4 className="mb-3 text-sm font-medium text-slate-400">
+                {framework.framework_name} ({framework.framework_code})
+              </h4>
+              <div className="space-y-2">
+                {framework.controls.map((mapping) => (
+                  <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
+                    <div className="flex items-center gap-3">
+                      <Shield className="h-5 w-5 text-blue-400" />
+                      <div>
+                        <span className="text-sm font-medium text-blue-400">{mapping.framework_control?.code}</span>
+                        <p className="text-white">{mapping.framework_control?.name}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onUnlink(mapping.id)}
+                      disabled={isUnlinking}
+                      className="rounded p-2 text-slate-400 hover:bg-slate-700 hover:text-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+function CrossLinksTab({ 
+  links,
+  onUnlinkRisk,
+  onUnlinkAsset,
+  isUnlinking
+}: { 
+  links?: AllLinksResponse;
+  onUnlinkRisk: (linkId: number) => void;
+  onUnlinkAsset: (linkId: number) => void;
+  isUnlinking: boolean;
+}) {
+  if (!links) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+      </div>
+    );
+  }
+
+  const LinkSection = ({ 
+    title, 
+    icon: Icon, 
+    iconColor,
+    count,
+    children,
+    addButton
+  }: { 
+    title: string; 
+    icon: typeof AlertTriangle;
+    iconColor: string;
+    count: number;
+    children: React.ReactNode;
+    addButton?: React.ReactNode;
+  }) => (
+    <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="flex items-center gap-2 font-medium text-white">
+          <Icon className={`h-5 w-5 ${iconColor}`} />
+          {title} ({count})
+        </h4>
+        {addButton}
+      </div>
+      {children}
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <Link2 className="h-5 w-5 text-primary-400" />
+          Cross-Module Links ({links.total_links})
+        </h3>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <LinkSection 
+          title="Linked Risks" 
+          icon={AlertTriangle} 
+          iconColor="text-red-400"
+          count={links.risks.total}
+          addButton={
+            <button className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300">
+              <Plus className="h-4 w-4" /> Add
+            </button>
+          }
+        >
+          {links.risks.links.length > 0 ? (
+            <div className="space-y-2">
+              {links.risks.links.map((link) => (
+                <div key={link.id} className="flex items-center justify-between rounded bg-slate-800 p-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-red-400" />
+                    <Link href={`/risks/${link.risk_id}`} className="text-sm text-white hover:text-primary-400">
+                      {link.risk?.title || `Risk #${link.risk_id}`}
+                    </Link>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Link href={`/risks/${link.risk_id}`} className="text-slate-400 hover:text-white">
+                      <ExternalLink className="h-4 w-4" />
+                    </Link>
+                    <button
+                      onClick={() => onUnlinkRisk(link.id)}
+                      disabled={isUnlinking}
+                      className="text-slate-400 hover:text-red-400"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No linked risks</p>
+          )}
+        </LinkSection>
+
+        <LinkSection 
+          title="Linked Assets" 
+          icon={Building2} 
+          iconColor="text-blue-400"
+          count={links.assets.total}
+          addButton={
+            <button className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300">
+              <Plus className="h-4 w-4" /> Add
+            </button>
+          }
+        >
+          {links.assets.links.length > 0 ? (
+            <div className="space-y-2">
+              {links.assets.links.map((link) => (
+                <div key={link.id} className="flex items-center justify-between rounded bg-slate-800 p-2">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-blue-400" />
+                    <Link href={`/assets/${link.asset_id}`} className="text-sm text-white hover:text-primary-400">
+                      {link.asset?.name || `Asset #${link.asset_id}`}
+                    </Link>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Link href={`/assets/${link.asset_id}`} className="text-slate-400 hover:text-white">
+                      <ExternalLink className="h-4 w-4" />
+                    </Link>
+                    <button
+                      onClick={() => onUnlinkAsset(link.id)}
+                      disabled={isUnlinking}
+                      className="text-slate-400 hover:text-red-400"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No linked assets</p>
+          )}
+        </LinkSection>
+
+        <LinkSection 
+          title="Linked Incidents" 
+          icon={AlertCircle} 
+          iconColor="text-orange-400"
+          count={links.incidents.total}
+          addButton={
+            <button className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300">
+              <Plus className="h-4 w-4" /> Add
+            </button>
+          }
+        >
+          {links.incidents.links.length > 0 ? (
+            <div className="space-y-2">
+              {links.incidents.links.map((link) => (
+                <div key={link.id} className="flex items-center justify-between rounded bg-slate-800 p-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-orange-400" />
+                    <span className="text-sm text-white">
+                      {link.incident?.title || `Incident #${link.incident_id}`}
+                    </span>
+                  </div>
+                  {link.incident && (
+                    <span className={`rounded px-2 py-0.5 text-xs ${
+                      link.incident.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                      link.incident.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                      link.incident.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-green-500/20 text-green-400'
+                    }`}>
+                      {link.incident.severity}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No linked incidents</p>
+          )}
+        </LinkSection>
+
+        <LinkSection 
+          title="Policy Statements" 
+          icon={FileText} 
+          iconColor="text-purple-400"
+          count={links.policy_statements.total}
+          addButton={
+            <button className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300">
+              <Plus className="h-4 w-4" /> Add
+            </button>
+          }
+        >
+          {links.policy_statements.links.length > 0 ? (
+            <div className="space-y-2">
+              {links.policy_statements.links.map((link) => (
+                <div key={link.id} className="flex items-center justify-between rounded bg-slate-800 p-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-purple-400" />
+                    <div>
+                      <span className="text-xs text-purple-400">{link.policy_statement?.statement_code}</span>
+                      <p className="text-sm text-white">{link.policy_statement?.statement_summary || 'Policy Statement'}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No linked policy statements</p>
+          )}
+        </LinkSection>
+      </div>
+    </div>
+  );
+}

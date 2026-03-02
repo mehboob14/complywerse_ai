@@ -39,12 +39,12 @@ interface Campaign {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  not_started: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Not Started' },
-  in_progress: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Progress' },
-  submitted: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Submitted' },
-  under_review: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'Under Review' },
-  approved: { bg: 'bg-green-50', text: 'text-green-600', label: 'Approved' },
-  rejected: { bg: 'bg-red-50', text: 'text-red-600', label: 'Rejected' },
+  not_started: { bg: 'bg-slate-500/20', text: 'text-slate-600', label: 'Not Started' },
+  in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },
+  submitted: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Submitted' },
+  under_review: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Under Review' },
+  approved: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Approved' },
+  rejected: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rejected' },
 };
 
 function getStatusStyle(status: string) {
@@ -78,14 +78,7 @@ export default function RCSAAssessmentsPage() {
         const response = await rcsaApi.getAssessments(params);
         return response.data as Assessment[];
       } catch {
-        return [
-          { id: 1, campaign_id: 1, campaign_name: 'Q4 2025 RCSA', business_unit: 'IT Operations', assessor_name: 'John Smith', status: 'in_progress', score: undefined, due_date: '2025-12-31', created_at: '2025-10-01', updated_at: '2025-01-20', progress: 45 },
-          { id: 2, campaign_id: 1, campaign_name: 'Q4 2025 RCSA', business_unit: 'Finance', assessor_name: 'Jane Doe', status: 'submitted', score: 78, due_date: '2025-12-31', created_at: '2025-10-01', updated_at: '2025-01-18', progress: 100 },
-          { id: 3, campaign_id: 1, campaign_name: 'Q4 2025 RCSA', business_unit: 'Treasury', assessor_name: 'Mike Wilson', status: 'not_started', score: undefined, due_date: '2025-12-31', created_at: '2025-10-01', updated_at: '2025-10-01', progress: 0 },
-          { id: 4, campaign_id: 2, campaign_name: 'Annual IT Risk', business_unit: 'IT Operations', assessor_name: 'Sarah Johnson', status: 'approved', score: 85, due_date: '2025-12-31', created_at: '2025-01-01', updated_at: '2025-01-15', progress: 100 },
-          { id: 5, campaign_id: 2, campaign_name: 'Annual IT Risk', business_unit: 'Cybersecurity', assessor_name: 'Tom Brown', status: 'under_review', score: 72, due_date: '2025-12-31', created_at: '2025-01-01', updated_at: '2025-01-20', progress: 100 },
-          { id: 6, campaign_id: 1, campaign_name: 'Q4 2025 RCSA', business_unit: 'Retail Banking', assessor_name: 'Emily Davis', status: 'rejected', score: 45, due_date: '2025-12-31', created_at: '2025-10-01', updated_at: '2025-01-22', progress: 100 },
-        ] as Assessment[];
+        return [] as Assessment[];
       }
     },
   });
@@ -97,10 +90,7 @@ export default function RCSAAssessmentsPage() {
         const response = await rcsaApi.getCampaigns();
         return response.data as Campaign[];
       } catch {
-        return [
-          { id: 1, name: 'Q4 2025 RCSA' },
-          { id: 2, name: 'Annual IT Risk Assessment' },
-        ] as Campaign[];
+        return [] as Campaign[];
       }
     },
   });
@@ -121,7 +111,7 @@ export default function RCSAAssessmentsPage() {
 
   const businessUnits = useMemo(() => {
     if (!assessments) return [];
-    const units = [...new Set(assessments.map(a => a.business_unit))];
+    const units = Array.from(new Set(assessments.map(a => a.business_unit)));
     return units.sort();
   }, [assessments]);
 
@@ -143,7 +133,7 @@ export default function RCSAAssessmentsPage() {
           <button
             onClick={() => startMutation.mutate(assessment.id)}
             disabled={startMutation.isPending}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30"
           >
             <Play className="h-3.5 w-3.5" />
             Start
@@ -153,7 +143,7 @@ export default function RCSAAssessmentsPage() {
         return (
           <Link
             href={`/risks/rcsa/assessments/${assessment.id}`}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
           >
             <ArrowRight className="h-3.5 w-3.5" />
             Continue
@@ -163,7 +153,7 @@ export default function RCSAAssessmentsPage() {
         return (
           <Link
             href={`/risks/rcsa/assessments/${assessment.id}`}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
           >
             <ArrowRight className="h-3.5 w-3.5" />
             Revise
@@ -173,7 +163,7 @@ export default function RCSAAssessmentsPage() {
         return (
           <Link
             href={`/risks/rcsa/assessments/${assessment.id}`}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-500/30"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-slate-500/20 text-slate-600 hover:bg-slate-500/30"
           >
             <Eye className="h-3.5 w-3.5" />
             View
@@ -185,7 +175,7 @@ export default function RCSAAssessmentsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
@@ -193,8 +183,8 @@ export default function RCSAAssessmentsPage() {
   if (error) {
     return (
       <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
-        <p className="mt-2 text-red-600">Failed to load assessments</p>
+        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
+        <p className="mt-2 text-red-400">Failed to load assessments</p>
       </div>
     );
   }
@@ -204,7 +194,7 @@ export default function RCSAAssessmentsPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-black">RCSA Assessments</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">RCSA Assessments</h1>
             <p className="text-slate-600 mt-1">View and complete your assigned risk assessments</p>
           </div>
         </div>
@@ -275,21 +265,21 @@ export default function RCSAAssessmentsPage() {
               const isOverdue = new Date(assessment.due_date) < new Date() && !['approved', 'rejected'].includes(assessment.status);
               
               return (
-                <tr key={assessment.id} className="border-b border-slate-200 hover:bg-white/50">
+                <tr key={assessment.id} className="border-b border-slate-200/50 hover:bg-white/50">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-                      <ClipboardCheck className="h-4 w-4 text-primary-600" />
-                      <span className="text-black font-medium">{assessment.campaign_name}</span>
+                      <ClipboardCheck className="h-4 w-4 text-primary-400" />
+                      <span className="text-slate-900 font-medium">{assessment.campaign_name}</span>
                     </div>
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex items-center gap-2 text-slate-600">
+                    <div className="flex items-center gap-2 text-slate-700">
                       <Building2 className="h-4 w-4 text-slate-500" />
                       {assessment.business_unit}
                     </div>
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex items-center gap-2 text-slate-600">
+                    <div className="flex items-center gap-2 text-slate-700">
                       <User className="h-4 w-4 text-slate-500" />
                       {assessment.assessor_name}
                     </div>
@@ -302,8 +292,8 @@ export default function RCSAAssessmentsPage() {
                   <td className="py-3 px-4">
                     {assessment.score !== undefined ? (
                       <span className={`font-medium ${
-                        assessment.score >= 80 ? 'text-green-600' : 
-                        assessment.score >= 60 ? 'text-yellow-600' : 'text-red-600'
+                        assessment.score >= 80 ? 'text-green-400' : 
+                        assessment.score >= 60 ? 'text-yellow-400' : 'text-red-400'
                       }`}>
                         {assessment.score}%
                       </span>
@@ -312,7 +302,7 @@ export default function RCSAAssessmentsPage() {
                     )}
                   </td>
                   <td className="py-3 px-4">
-                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-600' : 'text-slate-600'}`}>
+                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-400' : 'text-slate-700'}`}>
                       <Calendar className="h-4 w-4" />
                       {formatDate(assessment.due_date)}
                     </div>
@@ -329,7 +319,7 @@ export default function RCSAAssessmentsPage() {
         {filteredAssessments.length === 0 && (
           <div className="p-12 text-center">
             <ClipboardCheck className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-black mb-2">No Assessments Found</h3>
+            <h3 className="text-lg font-medium text-slate-900 mb-2">No Assessments Found</h3>
             <p className="text-slate-600">
               {searchTerm || statusFilter || campaignFilter || businessUnitFilter
                 ? 'No assessments match your filters'

@@ -193,6 +193,22 @@ def list_business_units(
     business_units = db.query(BusinessUnit).filter(
         BusinessUnit.tenant_id == tenant_id
     ).all()
+
+    if not business_units:
+        demo_units = [
+            "Finance",
+            "Operations",
+            "IT",
+            "Human Resources",
+            "Compliance",
+        ]
+        for unit_name in demo_units:
+            db.add(BusinessUnit(tenant_id=tenant_id, name=unit_name, parent_id=None))
+        db.commit()
+        business_units = db.query(BusinessUnit).filter(
+            BusinessUnit.tenant_id == tenant_id
+        ).all()
+
     return business_units
 
 

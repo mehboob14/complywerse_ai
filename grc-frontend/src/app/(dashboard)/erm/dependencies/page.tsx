@@ -20,11 +20,11 @@ import {
 } from 'lucide-react';
 
 const DEPENDENCY_TYPES: { value: DependencyType; label: string; color: string }[] = [
-  { value: 'causes', label: 'Causes', color: 'text-red-600' },
-  { value: 'caused_by', label: 'Caused By', color: 'text-orange-600' },
-  { value: 'related', label: 'Related', color: 'text-blue-600' },
-  { value: 'amplifies', label: 'Amplifies', color: 'text-primary-600' },
-  { value: 'mitigates', label: 'Mitigates', color: 'text-green-600' },
+  { value: 'causes', label: 'Causes', color: 'text-red-400' },
+  { value: 'caused_by', label: 'Caused By', color: 'text-orange-400' },
+  { value: 'related', label: 'Related', color: 'text-blue-400' },
+  { value: 'amplifies', label: 'Amplifies', color: 'text-purple-400' },
+  { value: 'mitigates', label: 'Mitigates', color: 'text-green-400' },
 ];
 
 export default function DependenciesPage() {
@@ -68,7 +68,7 @@ export default function DependenciesPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
@@ -78,13 +78,13 @@ export default function DependenciesPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-black">Risk Dependencies</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Risk Dependencies</h2>
             <p className="text-sm text-slate-600">Visualize relationships between risks</p>
           </div>
           <select
             value={selectedRisk || ''}
             onChange={(e) => setSelectedRisk(e.target.value ? Number(e.target.value) : null)}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black"
+            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
           >
             <option value="">Select risk for cascade analysis</option>
             {risks?.map((risk) => (
@@ -104,20 +104,20 @@ export default function DependenciesPage() {
       </div>
 
       {cascadeAnalysis && (
-        <div className="rounded-xl border border-blue-200 bg-blue-500/5 p-4">
-          <h3 className="font-medium text-black">Cascade Analysis: {cascadeAnalysis.risk_title}</h3>
+        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
+          <h3 className="font-medium text-slate-900">Cascade Analysis: {cascadeAnalysis.risk_title}</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Total Cascade Score: <span className="font-bold text-blue-600">{cascadeAnalysis.total_cascade_score.toFixed(1)}</span>
+            Total Cascade Score: <span className="font-bold text-blue-400">{cascadeAnalysis.total_cascade_score.toFixed(1)}</span>
           </p>
           
           {cascadeAnalysis.direct_impacts && cascadeAnalysis.direct_impacts.length > 0 && (
             <div className="mt-4">
-              <p className="text-sm font-medium text-slate-600">Direct Impacts:</p>
+              <p className="text-sm font-medium text-slate-700">Direct Impacts:</p>
               <div className="mt-2 space-y-1">
                 {cascadeAnalysis.direct_impacts.map((impact) => (
                   <div key={impact.id} className="flex items-center gap-2 text-sm">
-                    <ArrowRight className="h-4 w-4 text-blue-600" />
-                    <span className="text-slate-600">{impact.title}</span>
+                    <ArrowRight className="h-4 w-4 text-blue-400" />
+                    <span className="text-slate-700">{impact.title}</span>
                     <span className="text-slate-500">({impact.type}, strength: {impact.strength})</span>
                   </div>
                 ))}
@@ -135,7 +135,7 @@ export default function DependenciesPage() {
               <div key={dep.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="font-medium text-black">{dep.source_risk_title || `Risk #${dep.source_risk_id}`}</p>
+                    <p className="font-medium text-slate-900">{dep.source_risk_title || `Risk #${dep.source_risk_id}`}</p>
                     <p className="text-xs text-slate-500">Source</p>
                   </div>
                   <div className="flex flex-col items-center">
@@ -143,14 +143,14 @@ export default function DependenciesPage() {
                     <span className={`text-xs ${typeInfo?.color || 'text-slate-600'}`}>{typeInfo?.label}</span>
                   </div>
                   <div>
-                    <p className="font-medium text-black">{dep.target_risk_title || `Risk #${dep.target_risk_id}`}</p>
+                    <p className="font-medium text-slate-900">{dep.target_risk_title || `Risk #${dep.target_risk_id}`}</p>
                     <p className="text-xs text-slate-500">Target</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <p className="text-sm text-slate-600">Strength</p>
-                    <p className="font-medium text-black">{dep.strength}/5</p>
+                    <p className="font-medium text-slate-900">{dep.strength}/5</p>
                   </div>
                   <button
                     onClick={() => {
@@ -158,7 +158,7 @@ export default function DependenciesPage() {
                         deleteMutation.mutate(dep.id);
                       }
                     }}
-                    className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600"
+                    className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -170,7 +170,7 @@ export default function DependenciesPage() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <GitBranch className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-black">No dependencies defined</h3>
+          <h3 className="mt-4 text-lg font-medium text-slate-900">No dependencies defined</h3>
           <p className="mt-1 text-slate-600">Create relationships between risks to understand cascading effects</p>
         </div>
       )}
@@ -224,7 +224,7 @@ function DependencyModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-lg rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black">Add Dependency</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Add Dependency</h2>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
@@ -236,7 +236,7 @@ function DependencyModal({
             <select
               value={formData.source_risk_id}
               onChange={(e) => setFormData({ ...formData, source_risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               required
             >
               {risks.map((risk) => (
@@ -252,7 +252,7 @@ function DependencyModal({
             <select
               value={formData.dependency_type}
               onChange={(e) => setFormData({ ...formData, dependency_type: e.target.value as DependencyType })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
             >
               {DEPENDENCY_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -267,7 +267,7 @@ function DependencyModal({
             <select
               value={formData.target_risk_id}
               onChange={(e) => setFormData({ ...formData, target_risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               required
             >
               {risks.map((risk) => (
@@ -290,7 +290,7 @@ function DependencyModal({
             />
             <div className="flex justify-between text-xs text-slate-500">
               <span>Weak</span>
-              <span className="font-medium text-black">{formData.strength}</span>
+              <span className="font-medium text-slate-900">{formData.strength}</span>
               <span>Strong</span>
             </div>
           </div>
@@ -300,7 +300,7 @@ function DependencyModal({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               rows={2}
             />
           </div>
@@ -309,7 +309,7 @@ function DependencyModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
             >
               Cancel
             </button>

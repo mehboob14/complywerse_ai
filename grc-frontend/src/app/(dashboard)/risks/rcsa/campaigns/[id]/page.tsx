@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { rcsaApi } from '@/lib/api';
+import apiClient from '@/lib/api';
 import {
   ClipboardList,
   ArrowLeft,
@@ -45,6 +46,7 @@ interface Assessment {
 
 interface Campaign {
   id: number;
+  tenant_id: number;
   name: string;
   description?: string;
   template_id: number;
@@ -65,23 +67,36 @@ interface Campaign {
   updated_at: string;
 }
 
+interface TenantUser {
+  id: number;
+  user_id: number;
+  tenant_id: number;
+  is_primary: boolean;
+  user?: {
+    id: number;
+    username: string;
+    email: string;
+    display_name?: string;
+  };
+}
+
 interface BusinessUnit {
   id: number;
   name: string;
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  draft: { bg: 'bg-slate-50', text: 'text-slate-600' },
-  active: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
-  closed: { bg: 'bg-blue-50', text: 'text-blue-600' },
+  draft: { bg: 'bg-slate-500/20', text: 'text-slate-600' },
+  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
 };
 
 const ASSESSMENT_STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  not_started: { bg: 'bg-slate-50', text: 'text-slate-600', icon: Clock },
-  in_progress: { bg: 'bg-amber-50', text: 'text-amber-600', icon: Clock },
-  submitted: { bg: 'bg-blue-50', text: 'text-blue-600', icon: FileText },
-  approved: { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: CheckCircle },
-  rejected: { bg: 'bg-rose-50', text: 'text-rose-600', icon: XCircle },
+  not_started: { bg: 'bg-slate-500/20', text: 'text-slate-600', icon: Clock },
+  in_progress: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
+  submitted: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: FileText },
+  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
+  rejected: { bg: 'bg-rose-500/20', text: 'text-rose-400', icon: XCircle },
 };
 
 export default function CampaignDetailPage() {
@@ -92,47 +107,41 @@ export default function CampaignDetailPage() {
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedAssessments, setSelectedAssessments] = useState<number[]>([]);
+  const [selectedBusinessUnitId, setSelectedBusinessUnitId] = useState<number>(0);
+  const [selectedAssessorId, setSelectedAssessorId] = useState<number>(0);
 
   const { data: campaign, isLoading, error } = useQuery({
     queryKey: ['rcsa-campaign', campaignId],
     queryFn: async () => {
       try {
-        const response = await rcsaApi.getCampaign(campaignId);
+        const response = await rcsaApi.getCampaignDetail(campaignId);
         return response.data as Campaign;
       } catch {
-        return {
-          id: campaignId,
-          name: 'Q4 2025 RCSA',
-          description: 'Quarterly risk assessment for Q4 2025',
-          template_id: 1,
-          template_name: 'SAMA CSF',
-          status: 'active' as const,
-          period: 'Q4 2025',
-          start_date: '2025-10-01',
-          end_date: '2025-12-31',
-          progress: 65,
-          assigned_units: 8,
-          completed_units: 5,
-          pending_assessments: 3,
-          total_findings: 18,
-          avg_risk_score: 3.2,
-          avg_control_score: 3.8,
-          assessments: [
-            { id: 1, business_unit_id: 1, business_unit_name: 'IT Operations', assessor_id: 1, assessor_name: 'John Smith', assessor_email: 'john.smith@company.com', status: 'approved' as const, progress: 100, risk_score: 3.5, control_score: 4.0, findings_count: 3, submitted_at: '2025-11-15', reviewed_at: '2025-11-18' },
-            { id: 2, business_unit_id: 2, business_unit_name: 'Finance', assessor_id: 2, assessor_name: 'Jane Doe', assessor_email: 'jane.doe@company.com', status: 'submitted' as const, progress: 100, risk_score: 2.8, control_score: 3.5, findings_count: 2, submitted_at: '2025-11-20' },
-            { id: 3, business_unit_id: 3, business_unit_name: 'Retail Banking', assessor_id: 3, assessor_name: 'Mike Johnson', assessor_email: 'mike.johnson@company.com', status: 'in_progress' as const, progress: 60, findings_count: 4 },
-            { id: 4, business_unit_id: 4, business_unit_name: 'Corporate Banking', assessor_id: 4, assessor_name: 'Sarah Wilson', assessor_email: 'sarah.wilson@company.com', status: 'approved' as const, progress: 100, risk_score: 3.0, control_score: 4.2, findings_count: 1, submitted_at: '2025-11-10', reviewed_at: '2025-11-12' },
-            { id: 5, business_unit_id: 5, business_unit_name: 'Treasury', assessor_id: 5, assessor_name: 'David Brown', assessor_email: 'david.brown@company.com', status: 'not_started' as const, progress: 0, findings_count: 0 },
-            { id: 6, business_unit_id: 6, business_unit_name: 'Risk Management', assessor_id: 6, assessor_name: 'Lisa Chen', assessor_email: 'lisa.chen@company.com', status: 'approved' as const, progress: 100, risk_score: 2.5, control_score: 4.5, findings_count: 2, submitted_at: '2025-11-08', reviewed_at: '2025-11-10' },
-            { id: 7, business_unit_id: 7, business_unit_name: 'Compliance', assessor_name: 'Tom Harris', status: 'approved' as const, progress: 100, risk_score: 3.2, control_score: 3.9, findings_count: 4, submitted_at: '2025-11-12', reviewed_at: '2025-11-14' },
-            { id: 8, business_unit_id: 8, business_unit_name: 'Internal Audit', status: 'not_started' as const, progress: 0, findings_count: 0 },
-          ],
-          created_at: '2025-09-15',
-          updated_at: '2025-01-20',
-        } as Campaign;
+        throw new Error('Failed to load campaign');
       }
     },
   });
+
+  const { data: businessUnits } = useQuery({
+    queryKey: ['tenant-business-units', campaign?.tenant_id],
+    queryFn: async () => {
+      const response = await apiClient.get(`/tenants/${campaign!.tenant_id}/business-units`);
+      return response.data as BusinessUnit[];
+    },
+    enabled: !!campaign?.tenant_id,
+  });
+
+  const { data: tenantUsers } = useQuery({
+    queryKey: ['tenant-users', campaign?.tenant_id],
+    queryFn: async () => {
+      const response = await apiClient.get(`/tenants/${campaign!.tenant_id}/users`);
+      return response.data as TenantUser[];
+    },
+    enabled: !!campaign?.tenant_id,
+  });
+
+  const assignedBUIds = (campaign?.assessments || []).map(a => a.business_unit_id);
+  const availableBusinessUnits = (businessUnits || []).filter(bu => !assignedBUIds.includes(bu.id));
 
   const activateMutation = useMutation({
     mutationFn: () => rcsaApi.activateCampaign(campaignId),
@@ -175,6 +184,12 @@ export default function CampaignDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rcsa-campaign', campaignId] });
       setIsAssignModalOpen(false);
+      setSelectedBusinessUnitId(0);
+      setSelectedAssessorId(0);
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.detail || error?.message || 'Failed to assign business unit';
+      alert(message);
     },
   });
 
@@ -213,8 +228,8 @@ export default function CampaignDetailPage() {
   if (error || !campaign) {
     return (
       <div className="card p-8 text-center">
-        <AlertCircle className="h-12 w-12 text-rose-600 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-black mb-2">Campaign Not Found</h3>
+        <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-slate-900 mb-2">Campaign Not Found</h3>
         <p className="text-slate-600 mb-4">The requested campaign could not be loaded.</p>
         <Link href="/risks/rcsa/campaigns" className="btn-primary">
           Back to Campaigns
@@ -235,7 +250,7 @@ export default function CampaignDetailPage() {
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-black">{campaign.name}</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">{campaign.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
                 {campaign.status}
               </span>
@@ -295,45 +310,45 @@ export default function CampaignDetailPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Template</p>
-            <p className="text-black font-medium">{campaign.template_name}</p>
+            <p className="text-slate-900 font-medium">{campaign.template_name}</p>
           </div>
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Period</p>
-            <p className="text-black font-medium">{campaign.period}</p>
+            <p className="text-slate-900 font-medium">{campaign.period}</p>
           </div>
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Duration</p>
-            <p className="text-black font-medium text-sm">
+            <p className="text-slate-900 font-medium text-sm">
               {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Progress</p>
             <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+              <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary-500 rounded-full"
                   style={{ width: `${campaign.progress}%` }}
                 />
               </div>
-              <span className="text-black font-medium text-sm">{campaign.progress}%</span>
+              <span className="text-slate-900 font-medium text-sm">{campaign.progress}%</span>
             </div>
           </div>
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Avg Risk Score</p>
-            <p className="text-black font-medium">{campaign.avg_risk_score?.toFixed(1) || 'N/A'}</p>
+            <p className="text-slate-900 font-medium">{campaign.avg_risk_score?.toFixed(1) || 'N/A'}</p>
           </div>
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Total Findings</p>
-            <p className="text-black font-medium">{campaign.total_findings}</p>
+            <p className="text-slate-900 font-medium">{campaign.total_findings}</p>
           </div>
         </div>
       </div>
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-black flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary-600" />
+          <h3 className="text-lg font-medium text-slate-900 flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary-400" />
             Assessment Progress ({(campaign.assessments || []).length} Business Units)
           </h3>
           <div className="flex items-center gap-3">
@@ -365,7 +380,7 @@ export default function CampaignDetailPage() {
                     type="checkbox"
                     checked={selectedAssessments.length === (campaign.assessments || []).length}
                     onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
+                    className="rounded border-slate-300 bg-slate-100 text-primary-500 focus:ring-primary-500"
                   />
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Business Unit</th>
@@ -384,25 +399,25 @@ export default function CampaignDetailPage() {
                 const StatusIcon = astyle.icon;
 
                 return (
-                  <tr key={assessment.id} className="border-b border-slate-200 hover:bg-white/50">
+                  <tr key={assessment.id} className="border-b border-slate-200/50 hover:bg-white/50">
                     <td className="py-3 px-4">
                       <input
                         type="checkbox"
                         checked={selectedAssessments.includes(assessment.id)}
                         onChange={(e) => handleSelectAssessment(assessment.id, e.target.checked)}
-                        className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
+                        className="rounded border-slate-300 bg-slate-100 text-primary-500 focus:ring-primary-500"
                       />
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-slate-600" />
-                        <span className="text-black font-medium">{assessment.business_unit_name}</span>
+                        <span className="text-slate-900 font-medium">{assessment.business_unit_name}</span>
                       </div>
                     </td>
                     <td className="py-3 px-4">
                       {assessment.assessor_name ? (
                         <div>
-                          <p className="text-slate-600">{assessment.assessor_name}</p>
+                          <p className="text-slate-700">{assessment.assessor_name}</p>
                           {assessment.assessor_email && (
                             <p className="text-xs text-slate-500">{assessment.assessor_email}</p>
                           )}
@@ -419,7 +434,7 @@ export default function CampaignDetailPage() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-16 h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-primary-500 rounded-full"
                             style={{ width: `${assessment.progress}%` }}
@@ -429,11 +444,11 @@ export default function CampaignDetailPage() {
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      {assessment.risk_score !== undefined ? (
+                      {assessment.risk_score != null ? (
                         <span className={`font-medium ${
-                          assessment.risk_score >= 4 ? 'text-rose-600' :
-                          assessment.risk_score >= 3 ? 'text-amber-600' :
-                          'text-emerald-600'
+                          assessment.risk_score >= 4 ? 'text-rose-400' :
+                          assessment.risk_score >= 3 ? 'text-amber-400' :
+                          'text-emerald-400'
                         }`}>
                           {assessment.risk_score.toFixed(1)}
                         </span>
@@ -442,11 +457,11 @@ export default function CampaignDetailPage() {
                       )}
                     </td>
                     <td className="py-3 px-4">
-                      {assessment.control_score !== undefined ? (
+                      {assessment.control_score != null ? (
                         <span className={`font-medium ${
-                          assessment.control_score >= 4 ? 'text-emerald-600' :
-                          assessment.control_score >= 3 ? 'text-amber-600' :
-                          'text-rose-600'
+                          assessment.control_score >= 4 ? 'text-emerald-400' :
+                          assessment.control_score >= 3 ? 'text-amber-400' :
+                          'text-rose-400'
                         }`}>
                           {assessment.control_score.toFixed(1)}
                         </span>
@@ -456,7 +471,7 @@ export default function CampaignDetailPage() {
                     </td>
                     <td className="py-3 px-4">
                       {assessment.findings_count > 0 ? (
-                        <span className="text-amber-600 font-medium">{assessment.findings_count}</span>
+                        <span className="text-amber-400 font-medium">{assessment.findings_count}</span>
                       ) : (
                         <span className="text-slate-500">0</span>
                       )}
@@ -474,8 +489,8 @@ export default function CampaignDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary-600" />
+          <h3 className="text-lg font-medium text-slate-900 mb-4 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary-400" />
             Status Summary
           </h3>
           <div className="space-y-3">
@@ -486,7 +501,7 @@ export default function CampaignDetailPage() {
                 <div key={status} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <StatusIcon className={`h-4 w-4 ${style.text}`} />
-                    <span className="text-slate-600 capitalize">{status.replace('_', ' ')}</span>
+                    <span className="text-slate-700 capitalize">{status.replace('_', ' ')}</span>
                   </div>
                   <span className={`font-medium ${style.text}`}>{count}</span>
                 </div>
@@ -496,8 +511,8 @@ export default function CampaignDetailPage() {
         </div>
 
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-amber-600" />
+          <h3 className="text-lg font-medium text-slate-900 mb-4 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-amber-400" />
             Pending Actions
           </h3>
           {pendingAssessments.length > 0 ? (
@@ -507,7 +522,7 @@ export default function CampaignDetailPage() {
                   <div className="flex items-center gap-3">
                     <Building2 className="h-4 w-4 text-slate-600" />
                     <div>
-                      <p className="text-black text-sm">{assessment.business_unit_name}</p>
+                      <p className="text-slate-900 text-sm">{assessment.business_unit_name}</p>
                       <p className="text-xs text-slate-500">{assessment.assessor_name || 'No assessor assigned'}</p>
                     </div>
                   </div>
@@ -527,48 +542,60 @@ export default function CampaignDetailPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200 mx-4">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-black">Assign Business Unit</h3>
-              <button onClick={() => setIsAssignModalOpen(false)} className="text-slate-600 hover:text-slate-900">
+              <h3 className="text-lg font-medium text-slate-900">Assign Business Unit</h3>
+              <button onClick={() => { setIsAssignModalOpen(false); setSelectedBusinessUnitId(0); setSelectedAssessorId(0); }} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                const formData = new FormData(e.currentTarget);
+                if (!selectedBusinessUnitId) return;
                 assignMutation.mutate({
-                  business_unit_id: Number(formData.get('business_unit_id')),
-                  assessor_email: formData.get('assessor_email') as string,
+                  business_unit_ids: [selectedBusinessUnitId],
+                  assessor_ids: selectedAssessorId ? { [selectedBusinessUnitId]: selectedAssessorId } : undefined,
                 });
               }}
             >
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Business Unit</label>
-                  <select name="business_unit_id" className="input w-full" required>
-                    <option value="">Select business unit</option>
-                    <option value="9">Human Resources</option>
-                    <option value="10">Legal</option>
-                    <option value="11">Marketing</option>
-                    <option value="12">Operations</option>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Business Unit</label>
+                  <select
+                    value={selectedBusinessUnitId}
+                    onChange={(e) => setSelectedBusinessUnitId(Number(e.target.value))}
+                    className="input w-full"
+                    required
+                  >
+                    <option value={0}>Select business unit</option>
+                    {availableBusinessUnits.map((bu) => (
+                      <option key={bu.id} value={bu.id}>{bu.name}</option>
+                    ))}
                   </select>
+                  {availableBusinessUnits.length === 0 && businessUnits && businessUnits.length > 0 && (
+                    <p className="text-xs text-amber-400 mt-1">All business units have already been assigned.</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Assessor Email</label>
-                  <input
-                    type="email"
-                    name="assessor_email"
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Assessor (Optional)</label>
+                  <select
+                    value={selectedAssessorId}
+                    onChange={(e) => setSelectedAssessorId(Number(e.target.value))}
                     className="input w-full"
-                    placeholder="assessor@company.com"
-                    required
-                  />
+                  >
+                    <option value={0}>Select assessor</option>
+                    {(tenantUsers || []).map((tu) => (
+                      <option key={tu.user_id} value={tu.user_id}>
+                        {tu.user?.display_name || tu.user?.username || tu.user?.email || `User #${tu.user_id}`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsAssignModalOpen(false)} className="btn-secondary">
+                <button type="button" onClick={() => { setIsAssignModalOpen(false); setSelectedBusinessUnitId(0); setSelectedAssessorId(0); }} className="btn-secondary">
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary" disabled={assignMutation.isPending}>
+                <button type="submit" className="btn-primary" disabled={assignMutation.isPending || !selectedBusinessUnitId}>
                   {assignMutation.isPending ? 'Assigning...' : 'Assign'}
                 </button>
               </div>

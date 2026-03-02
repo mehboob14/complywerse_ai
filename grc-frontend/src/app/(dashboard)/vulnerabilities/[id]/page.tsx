@@ -162,7 +162,6 @@ const TABS = [
   { id: 'departments', label: 'Departments', icon: Users },
   { id: 'workflow', label: 'Workflow', icon: GitBranch },
   { id: 'escalations', label: 'Escalations', icon: Bell },
-  { id: 'retests', label: 'Retests', icon: RefreshCw },
   { id: 'ai', label: 'AI Analysis', icon: Sparkles },
   { id: 'exception', label: 'Exception', icon: AlertCircle },
 ];
@@ -462,7 +461,7 @@ export default function VulnerabilityDetailPage() {
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-black">{vulnerability.title}</h1>
+            <h1 className="text-2xl font-bold cw-text">{vulnerability.title}</h1>
             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${severityStyle.bg} ${severityStyle.text}`}>
               {severityStyle.label}
             </span>
@@ -477,7 +476,7 @@ export default function VulnerabilityDetailPage() {
         </button>
       </div>
 
-      <div className="border-b border-slate-200">
+      <div className="border-b border-[var(--color-border)]">
         <nav className="flex gap-1 overflow-x-auto">
           {TABS.map((tab) => (
             <button
@@ -499,8 +498,8 @@ export default function VulnerabilityDetailPage() {
       {activeTab === 'overview' && (
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="text-lg font-semibold text-black mb-4">Description</h2>
+            <div className="cw-card p-6">
+              <h2 className="text-lg font-semibold cw-text mb-4">Description</h2>
               <p className="text-slate-600 whitespace-pre-wrap">
                 {vulnerability.description || 'No description provided.'}
               </p>
@@ -508,7 +507,7 @@ export default function VulnerabilityDetailPage() {
 
             {vulnerability.ai_recommendation && (
               <div className="rounded-xl border border-primary-200 bg-primary-50 p-6">
-                <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+                <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-primary-600" />
                   AI Recommendation
                 </h2>
@@ -518,43 +517,43 @@ export default function VulnerabilityDetailPage() {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="text-lg font-semibold text-black mb-4">Details</h2>
+            <div className="cw-card p-6">
+              <h2 className="text-lg font-semibold cw-text mb-4">Details</h2>
               <dl className="space-y-3">
                 {vulnerability.cvss_score && (
                   <div>
                     <dt className="text-sm text-slate-600">CVSS Score</dt>
-                    <dd className="text-black font-medium">{vulnerability.cvss_score}</dd>
+                    <dd className="cw-text font-medium">{vulnerability.cvss_score}</dd>
                   </div>
                 )}
                 {vulnerability.cve_id && (
                   <div>
                     <dt className="text-sm text-slate-600">CVE ID</dt>
-                    <dd className="text-black font-mono">{vulnerability.cve_id}</dd>
+                    <dd className="cw-text font-mono">{vulnerability.cve_id}</dd>
                   </div>
                 )}
                 {vulnerability.cwe_id && (
                   <div>
                     <dt className="text-sm text-slate-600">CWE ID</dt>
-                    <dd className="text-black font-mono">{vulnerability.cwe_id}</dd>
+                    <dd className="cw-text font-mono">{vulnerability.cwe_id}</dd>
                   </div>
                 )}
                 {vulnerability.affected_component && (
                   <div>
                     <dt className="text-sm text-slate-600">Affected Component</dt>
-                    <dd className="text-black">{vulnerability.affected_component}</dd>
+                    <dd className="cw-text">{vulnerability.affected_component}</dd>
                   </div>
                 )}
                 {vulnerability.affected_host && (
                   <div>
                     <dt className="text-sm text-slate-600">Affected Host</dt>
-                    <dd className="text-black">{vulnerability.affected_host}</dd>
+                    <dd className="cw-text">{vulnerability.affected_host}</dd>
                   </div>
                 )}
                 {vulnerability.due_date && (
                   <div>
                     <dt className="text-sm text-slate-600">Due Date</dt>
-                    <dd className="text-black flex items-center gap-1.5">
+                    <dd className="cw-text flex items-center gap-1.5">
                       <Calendar size={14} className="text-slate-600" />
                       {new Date(vulnerability.due_date).toLocaleDateString()}
                     </dd>
@@ -563,7 +562,7 @@ export default function VulnerabilityDetailPage() {
                 {vulnerability.assigned_user_name && (
                   <div>
                     <dt className="text-sm text-slate-600">Assigned To</dt>
-                    <dd className="text-black flex items-center gap-1.5">
+                    <dd className="cw-text flex items-center gap-1.5">
                       <User size={14} className="text-slate-600" />
                       {vulnerability.assigned_user_name}
                     </dd>
@@ -571,7 +570,7 @@ export default function VulnerabilityDetailPage() {
                 )}
                 <div>
                   <dt className="text-sm text-slate-600">Created</dt>
-                  <dd className="text-black">{new Date(vulnerability.created_at).toLocaleString()}</dd>
+                  <dd className="cw-text">{new Date(vulnerability.created_at).toLocaleString()}</dd>
                 </div>
               </dl>
             </div>
@@ -582,13 +581,13 @@ export default function VulnerabilityDetailPage() {
       {activeTab === 'mitigations' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-black">Mitigations</h2>
+            <h2 className="text-lg font-semibold cw-text">Mitigations</h2>
             <button onClick={() => setShowMitigationModal(true)} className="btn-primary flex items-center gap-2">
               <Plus size={16} />
               Add Mitigation
             </button>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="cw-card overflow-hidden">
             {(!mitigations || mitigations.length === 0) ? (
               <div className="p-8 text-center text-slate-600">No mitigations added yet</div>
             ) : (
@@ -604,7 +603,7 @@ export default function VulnerabilityDetailPage() {
                 <tbody className="divide-y divide-slate-700">
                   {mitigations.map((m) => (
                     <tr key={m.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-black">{m.title}</td>
+                      <td className="px-4 py-3 cw-text">{m.title}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
                           m.status === 'completed' ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'
@@ -626,13 +625,13 @@ export default function VulnerabilityDetailPage() {
       {activeTab === 'assets' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-black">Linked Assets</h2>
+            <h2 className="text-lg font-semibold cw-text">Linked Assets</h2>
             <button onClick={() => setShowAssetModal(true)} className="btn-primary flex items-center gap-2">
               <Plus size={16} />
               Link Asset
             </button>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="cw-card overflow-hidden">
             {(!assetLinks || assetLinks.length === 0) ? (
               <div className="p-8 text-center text-slate-600">No assets linked yet</div>
             ) : (
@@ -648,7 +647,7 @@ export default function VulnerabilityDetailPage() {
                 <tbody className="divide-y divide-slate-700">
                   {assetLinks.map((link) => (
                     <tr key={link.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-black">{link.asset_name}</td>
+                      <td className="px-4 py-3 cw-text">{link.asset_name}</td>
                       <td className="px-4 py-3 text-slate-600">{link.asset_type || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{link.relationship_type || 'affected'}</td>
                       <td className="px-4 py-3">
@@ -671,13 +670,13 @@ export default function VulnerabilityDetailPage() {
       {activeTab === 'controls' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-black">Linked Controls</h2>
+            <h2 className="text-lg font-semibold cw-text">Linked Controls</h2>
             <button onClick={() => setShowControlModal(true)} className="btn-primary flex items-center gap-2">
               <Plus size={16} />
               Link Control
             </button>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="cw-card overflow-hidden">
             {(!controlLinks || controlLinks.length === 0) ? (
               <div className="p-8 text-center text-slate-600">No controls linked yet</div>
             ) : (
@@ -693,7 +692,7 @@ export default function VulnerabilityDetailPage() {
                 <tbody className="divide-y divide-slate-700">
                   {controlLinks.map((link) => (
                     <tr key={link.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-black">{link.control_name || '-'}</td>
+                      <td className="px-4 py-3 cw-text">{link.control_name || '-'}</td>
                       <td className="px-4 py-3 text-slate-600 capitalize">{link.control_type}</td>
                       <td className="px-4 py-3 text-slate-600 font-mono">{link.control_id_display || '-'}</td>
                       <td className="px-4 py-3">
@@ -716,13 +715,13 @@ export default function VulnerabilityDetailPage() {
       {activeTab === 'departments' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-black">Department Assignments</h2>
+            <h2 className="text-lg font-semibold cw-text">Department Assignments</h2>
             <button onClick={() => setShowDeptAssignModal(true)} className="btn-primary flex items-center gap-2">
               <Plus size={16} />
               Assign Department
             </button>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="cw-card overflow-hidden">
             {(!departmentAssignments || departmentAssignments.length === 0) ? (
               <div className="p-8 text-center text-slate-600">No departments assigned yet</div>
             ) : (
@@ -745,9 +744,9 @@ export default function VulnerabilityDetailPage() {
                             <Users size={14} className="text-primary-600" />
                           </div>
                           <div>
-                            <span className="text-black font-medium">{assignment.department_name || `Department ${assignment.department_id}`}</span>
+                            <span className="cw-text font-medium">{assignment.department_name || `Department ${assignment.department_id}`}</span>
                             {assignment.department_code && (
-                              <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-500 font-mono">
+                              <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-[var(--color-subtle)] cw-text-muted font-mono">
                                 {assignment.department_code}
                               </span>
                             )}
@@ -789,8 +788,8 @@ export default function VulnerabilityDetailPage() {
       {activeTab === 'workflow' && (
         <div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+            <div className="cw-card p-6">
+              <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2">
                 <GitBranch className="h-5 w-5 text-primary-600" />
                 Current State
               </h2>
@@ -819,7 +818,7 @@ export default function VulnerabilityDetailPage() {
                         }
                       }}
                       disabled={workflowTransitionMutation.isPending}
-                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm font-medium text-black hover:bg-slate-600 transition-colors"
+                      className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] px-3 py-2 text-sm font-medium cw-text hover:bg-[var(--color-hover)] transition-colors"
                     >
                       <ChevronRight size={14} />
                       {transition.name}
@@ -832,8 +831,8 @@ export default function VulnerabilityDetailPage() {
               )}
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+            <div className="cw-card p-6">
+              <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2">
                 <Clock className="h-5 w-5 text-slate-600" />
                 Workflow History
               </h2>
@@ -849,7 +848,7 @@ export default function VulnerabilityDetailPage() {
                       <div className="absolute left-0 top-1 w-4 h-4 rounded-full bg-primary-50 border-2 border-primary-500" />
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-black">{item.transition_name || 'State Change'}</span>
+                          <span className="text-sm font-medium cw-text">{item.transition_name || 'State Change'}</span>
                           <span className="text-xs text-slate-500">
                             {item.from_state_name || 'Initial'} → {item.to_state_name || 'Unknown'}
                           </span>
@@ -873,9 +872,9 @@ export default function VulnerabilityDetailPage() {
       {activeTab === 'escalations' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-black">Escalation History</h2>
+            <h2 className="text-lg font-semibold cw-text">Escalation History</h2>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="cw-card overflow-hidden">
             {(!escalationsData || escalationsData.length === 0) ? (
               <div className="p-8 text-center text-slate-600">No escalations triggered</div>
             ) : (
@@ -894,7 +893,7 @@ export default function VulnerabilityDetailPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <Bell size={14} className="text-orange-600" />
-                          <span className="text-black">{esc.rule_name}</span>
+                          <span className="cw-text">{esc.rule_name}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{esc.escalated_to || '-'}</td>
@@ -919,54 +918,11 @@ export default function VulnerabilityDetailPage() {
         </div>
       )}
 
-      {activeTab === 'retests' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-black">Retest History</h2>
-            <button onClick={() => setShowRetestModal(true)} className="btn-primary flex items-center gap-2">
-              <Plus size={16} />
-              Add Retest
-            </button>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-            {(!retests || retests.length === 0) ? (
-              <div className="p-8 text-center text-slate-600">No retests recorded yet</div>
-            ) : (
-              <table className="w-full">
-                <thead className="bg-slate-50/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Result</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Tester</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Notes</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-700">
-                  {retests.map((r) => (
-                    <tr key={r.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-black">{new Date(r.test_date).toLocaleDateString()}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
-                          r.result === 'pass' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                        }`}>
-                          {r.result}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{r.tester_name || '-'}</td>
-                      <td className="px-4 py-3 text-slate-600 truncate max-w-xs">{r.notes || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
 
       {activeTab === 'ai' && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-6">
-            <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
+          <div className="cw-card p-6">
+            <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary-600" />
               AI-Powered Analysis
             </h2>
@@ -1003,13 +959,13 @@ export default function VulnerabilityDetailPage() {
       {activeTab === 'exception' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-black">Risk Exception</h2>
+            <h2 className="text-lg font-semibold cw-text">Risk Exception</h2>
             <button onClick={() => setShowExceptionModal(true)} className="btn-primary flex items-center gap-2">
               <Plus size={16} />
               Create Exception
             </button>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="cw-card overflow-hidden">
             {(!exceptions || exceptions.length === 0) ? (
               <div className="p-8 text-center text-slate-600">No exception requests</div>
             ) : (
@@ -1024,7 +980,7 @@ export default function VulnerabilityDetailPage() {
                 <tbody className="divide-y divide-slate-700">
                   {exceptions.map((ex) => (
                     <tr key={ex.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-black">{ex.reason}</td>
+                      <td className="px-4 py-3 cw-text">{ex.reason}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
                           ex.status === 'approved' ? 'bg-green-50 text-green-700' :
@@ -1048,9 +1004,9 @@ export default function VulnerabilityDetailPage() {
 
       {showStatusModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="cw-card w-full max-w-md p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Change Status</h2>
+              <h2 className="text-xl font-bold cw-text">Change Status</h2>
               <button onClick={() => setShowStatusModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
@@ -1095,9 +1051,9 @@ export default function VulnerabilityDetailPage() {
 
       {showMitigationModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="cw-card w-full max-w-md p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Add Mitigation</h2>
+              <h2 className="text-xl font-bold cw-text">Add Mitigation</h2>
               <button onClick={() => setShowMitigationModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
@@ -1139,9 +1095,9 @@ export default function VulnerabilityDetailPage() {
 
       {showAssetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="cw-card w-full max-w-md p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Link Asset</h2>
+              <h2 className="text-xl font-bold cw-text">Link Asset</h2>
               <button onClick={() => setShowAssetModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
@@ -1187,9 +1143,9 @@ export default function VulnerabilityDetailPage() {
 
       {showControlModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="cw-card w-full max-w-md p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Link Control</h2>
+              <h2 className="text-xl font-bold cw-text">Link Control</h2>
               <button onClick={() => setShowControlModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
@@ -1238,64 +1194,11 @@ export default function VulnerabilityDetailPage() {
         </div>
       )}
 
-      {showRetestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Add Retest</h2>
-              <button onClick={() => setShowRetestModal(false)} className="text-slate-600 hover:text-slate-900">
-                <X size={20} />
-              </button>
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                createRetestMutation.mutate({
-                  test_date: formData.get('test_date'),
-                  result: formData.get('result'),
-                  tester_name: formData.get('tester_name') || undefined,
-                  notes: formData.get('notes') || undefined,
-                });
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Test Date *</label>
-                <input type="date" name="test_date" required className="input-field w-full" defaultValue={new Date().toISOString().split('T')[0]} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Result *</label>
-                <select name="result" required className="input-field w-full">
-                  <option value="pass">Pass - Vulnerability Remediated</option>
-                  <option value="fail">Fail - Still Vulnerable</option>
-                  <option value="partial">Partial - Partially Remediated</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Tester Name</label>
-                <input type="text" name="tester_name" className="input-field w-full" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Notes</label>
-                <textarea name="notes" rows={3} className="input-field w-full" />
-              </div>
-              <div className="flex justify-end gap-3">
-                <button type="button" onClick={() => setShowRetestModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={createRetestMutation.isPending} className="btn-primary">
-                  {createRetestMutation.isPending ? 'Adding...' : 'Add Retest'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {showExceptionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="cw-card w-full max-w-md p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Create Exception</h2>
+              <h2 className="text-xl font-bold cw-text">Create Exception</h2>
               <button onClick={() => setShowExceptionModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
@@ -1332,9 +1235,9 @@ export default function VulnerabilityDetailPage() {
 
       {showDeptAssignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="cw-card w-full max-w-md p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Assign Department</h2>
+              <h2 className="text-xl font-bold cw-text">Assign Department</h2>
               <button onClick={() => setShowDeptAssignModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X size={20} />
               </button>
@@ -1390,9 +1293,9 @@ export default function VulnerabilityDetailPage() {
 
       {showTransitionModal && selectedTransition && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="cw-card w-full max-w-md p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">{selectedTransition.name}</h2>
+              <h2 className="text-xl font-bold cw-text">{selectedTransition.name}</h2>
               <button 
                 onClick={() => {
                   setShowTransitionModal(false);
@@ -1406,7 +1309,7 @@ export default function VulnerabilityDetailPage() {
             </div>
             <div className="mb-4">
               <p className="text-slate-600 text-sm">
-                Transition to <span className="text-black font-medium">{selectedTransition.to_state_name}</span>
+                Transition to <span className="cw-text font-medium">{selectedTransition.to_state_name}</span>
               </p>
             </div>
             <div className="space-y-4">

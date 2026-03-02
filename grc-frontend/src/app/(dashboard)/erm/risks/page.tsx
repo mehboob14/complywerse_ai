@@ -17,6 +17,7 @@ import {
   Edit2,
   Trash2,
   Upload,
+  Download,
   CheckCircle,
   Lock,
   Unlock,
@@ -33,14 +34,71 @@ import { useRef } from 'react';
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 
 const RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string }[] = [
-  { value: 'strategic', label: 'Strategic', color: 'text-primary-600', bgColor: 'bg-primary-50' },
-  { value: 'operational', label: 'Operational', color: 'text-blue-600', bgColor: 'bg-blue-50' },
-  { value: 'financial', label: 'Financial', color: 'text-green-600', bgColor: 'bg-green-50' },
-  { value: 'compliance', label: 'Compliance', color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
-  { value: 'technology', label: 'Technology', color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
-  { value: 'third_party', label: 'Third Party', color: 'text-orange-600', bgColor: 'bg-orange-50' },
+  { value: 'strategic', label: 'Strategic', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  { value: 'operational', label: 'Operational', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+  { value: 'financial', label: 'Financial', color: 'text-green-400', bgColor: 'bg-green-500/20' },
+  { value: 'compliance', label: 'Compliance', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
+  { value: 'technology', label: 'Technology', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
+  { value: 'third_party', label: 'Third Party', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
   { value: 'project_change', label: 'Project/Change', color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
+  { value: 'internal', label: 'Internal', color: 'text-slate-700', bgColor: 'bg-slate-500/20' },
 ];
+
+const REGISTER_TYPES = [
+  { value: 'PCI-DSS', label: 'PCI-DSS' },
+  { value: 'ISO 27001', label: 'ISO 27001' },
+  { value: 'SOX', label: 'SOX' },
+  { value: 'GDPR', label: 'GDPR' },
+  { value: 'NIST', label: 'NIST' },
+  { value: 'SAMA CSF', label: 'SAMA CSF' },
+  { value: 'Internal', label: 'Internal' },
+  { value: 'Project-Based', label: 'Project-Based' },
+  { value: 'Third-Party', label: 'Third-Party' },
+  { value: 'Other', label: 'Other' },
+];
+
+const normalizeFilterValue = (value: string | null | undefined) =>
+  (value || '').toString().trim().toLowerCase();
+
+const canonicalFilterValue = (value: string | null | undefined) =>
+  normalizeFilterValue(value)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+const filterValuesMatch = (left: string | null | undefined, right: string | null | undefined) => {
+  const leftCanonical = canonicalFilterValue(left);
+  const rightCanonical = canonicalFilterValue(right);
+
+  if (!leftCanonical || !rightCanonical) return false;
+  return (
+    leftCanonical === rightCanonical ||
+    leftCanonical.includes(rightCanonical) ||
+    rightCanonical.includes(leftCanonical)
+  );
+};
+
+const inferEffectiveRiskCategory = (risk: Risk): RiskCategory => {
+  const categoryText = [
+    risk.risk_category,
+    risk.category,
+    risk.register_type,
+    risk.title,
+    risk.description,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (/(gdpr|privacy|lawfulness|data subject|regulatory|compliance|legal)/.test(categoryText)) return 'compliance';
+  if (/(technology|cyber|security|network|system|information security|iso ?27001|nist|pci)/.test(categoryText)) return 'technology';
+  if (/(financial|budget|cost|credit|liquidity|sox|soc ?2|basel)/.test(categoryText)) return 'financial';
+  if (/(vendor|supplier|third party|outsourcing|partner)/.test(categoryText)) return 'third_party';
+  if (/(project|change|implementation|transformation)/.test(categoryText)) return 'project_change';
+  if (/(strategy|strategic|market|reputation|brand)/.test(categoryText)) return 'strategic';
+  if (/(internal|fraud|governance|culture|integrity)/.test(categoryText)) return 'internal';
+  return 'operational';
+};
 
 const SUB_CATEGORIES_BY_CATEGORY: Record<RiskCategory, string[]> = {
   strategic: ['Market', 'Reputation', 'Strategic Planning', 'Competitive', 'Brand', 'Other'],
@@ -50,6 +108,7 @@ const SUB_CATEGORIES_BY_CATEGORY: Record<RiskCategory, string[]> = {
   technology: ['Cybersecurity', 'Infrastructure', 'Data', 'System Availability', 'Software', 'Other'],
   third_party: ['Vendor', 'Outsourcing', 'Partnership', 'Contractor', 'Other'],
   project_change: ['Project Delivery', 'Change Management', 'Integration', 'Scope', 'Other'],
+  internal: ['Fraud', 'Governance', 'Culture', 'Process Integrity', 'Other'],
 };
 
 const DEPARTMENTS = [
@@ -64,15 +123,30 @@ const DEPARTMENTS = [
 ];
 
 const RISK_STATUSES: { value: RiskStatus; label: string; color: string; bgColor: string }[] = [
-  { value: 'open', label: 'Open', color: 'text-red-600', bgColor: 'bg-red-50' },
-  { value: 'in_treatment', label: 'In Treatment', color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
-  { value: 'mitigated', label: 'Mitigated', color: 'text-green-600', bgColor: 'bg-green-50' },
-  { value: 'accepted', label: 'Accepted', color: 'text-blue-600', bgColor: 'bg-blue-50' },
-  { value: 'closed', label: 'Closed', color: 'text-slate-600', bgColor: 'bg-slate-50' },
+  { value: 'open', label: 'Open', color: 'text-red-400', bgColor: 'bg-red-500/20' },
+  { value: 'in_treatment', label: 'In Treatment', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
+  { value: 'mitigated', label: 'Mitigated', color: 'text-green-400', bgColor: 'bg-green-500/20' },
+  { value: 'accepted', label: 'Accepted', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+  { value: 'closed', label: 'Closed', color: 'text-slate-600', bgColor: 'bg-slate-500/20' },
 ];
 
-const getCategoryStyle = (category: RiskCategory) => {
-  return RISK_CATEGORIES.find(c => c.value === category) || RISK_CATEGORIES[0];
+const getCategoryStyle = (category: string | null | undefined) => {
+  const canonicalCategory = canonicalFilterValue(category);
+  const matched = RISK_CATEGORIES.find((item) => canonicalFilterValue(item.value) === canonicalCategory);
+  if (matched) return matched;
+
+  const fallbackLabel = (category || 'Other')
+    .toString()
+    .trim()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+
+  return {
+    value: 'operational' as RiskCategory,
+    label: fallbackLabel,
+    color: 'text-slate-700',
+    bgColor: 'bg-slate-100',
+  };
 };
 
 const getStatusStyle = (status: RiskStatus) => {
@@ -80,11 +154,11 @@ const getStatusStyle = (status: RiskStatus) => {
 };
 
 const getScoreColor = (score: number | undefined) => {
-  if (!score) return { text: 'text-slate-600', bg: 'bg-slate-50' };
-  if (score >= 20) return { text: 'text-red-600', bg: 'bg-red-50' };
-  if (score >= 12) return { text: 'text-orange-600', bg: 'bg-orange-50' };
-  if (score >= 6) return { text: 'text-yellow-600', bg: 'bg-yellow-50' };
-  return { text: 'text-green-600', bg: 'bg-green-50' };
+  if (!score) return { text: 'text-slate-600', bg: 'bg-slate-500/20' };
+  if (score >= 20) return { text: 'text-red-400', bg: 'bg-red-500/20' };
+  if (score >= 12) return { text: 'text-orange-400', bg: 'bg-orange-500/20' };
+  if (score >= 6) return { text: 'text-yellow-400', bg: 'bg-yellow-500/20' };
+  return { text: 'text-green-400', bg: 'bg-green-500/20' };
 };
 
 const getHeatmapCellColor = (likelihood: number, impact: number) => {
@@ -100,12 +174,15 @@ const getHeatmapCellColor = (likelihood: number, impact: number) => {
 export default function ERMRisksPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RiskStatus | 'all'>('all');
-  const [categoryFilter, setCategoryFilter] = useState<RiskCategory | 'all'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [registerTypeFilter, setRegisterTypeFilter] = useState<string>('all');
   const [scoreFilter, setScoreFilter] = useState<ScoreFilter>('all');
   const [heatmapType, setHeatmapType] = useState<'inherent' | 'residual'>('inherent');
   const [selectedHeatmapCell, setSelectedHeatmapCell] = useState<{l: number, i: number} | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRisk, setEditingRisk] = useState<Risk | null>(null);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [selectedRegisterType, setSelectedRegisterType] = useState<string>('');
   const [uploadResult, setUploadResult] = useState<{ message: string; created: number; skipped: number; errors: string[] } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -174,11 +251,13 @@ export default function ERMRisksPage() {
     setUploadResult(null);
     
     try {
-      const response = await ermApi.risks.uploadRiskRegister(file);
+      const response = await ermApi.risks.uploadRiskRegister(file, selectedRegisterType || undefined);
       setUploadResult(response.data);
       queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
       queryClient.invalidateQueries({ queryKey: ['erm-risks-dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['erm-risks-heatmap'] });
+      setIsUploadModalOpen(false);
+      setSelectedRegisterType('');
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to upload file';
       setUploadResult({
@@ -192,6 +271,31 @@ export default function ERMRisksPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await ermApi.risks.downloadTemplate();
+      const blob = new Blob([
+        response.data,
+      ], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'risk_register_template.xlsx';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download risk register template', error);
+      setUploadResult({
+        message: 'Failed to download risk register template',
+        created: 0,
+        skipped: 0,
+        errors: ['Template download failed'],
+      });
     }
   };
 
@@ -278,8 +382,12 @@ export default function ERMRisksPage() {
         risk.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         risk.description?.toLowerCase().includes(searchTerm.toLowerCase());
       
+      const effectiveCategory = inferEffectiveRiskCategory(risk);
+      const riskRegisterType = risk.register_type;
+
       const matchesStatus = statusFilter === 'all' || risk.status === statusFilter;
-      const matchesCategory = categoryFilter === 'all' || risk.risk_category === categoryFilter;
+      const matchesCategory = categoryFilter === 'all' || filterValuesMatch(effectiveCategory, categoryFilter);
+      const matchesRegisterType = registerTypeFilter === 'all' || filterValuesMatch(riskRegisterType, registerTypeFilter);
       
       let matchesScore = true;
       const score = risk.inherent_score || 0;
@@ -295,21 +403,68 @@ export default function ERMRisksPage() {
         matchesHeatmap = likelihood === selectedHeatmapCell.l && impact === selectedHeatmapCell.i;
       }
       
-      return matchesSearch && matchesStatus && matchesCategory && matchesScore && matchesHeatmap;
+      return matchesSearch && matchesStatus && matchesCategory && matchesRegisterType && matchesScore && matchesHeatmap;
     });
-  }, [risks, searchTerm, statusFilter, categoryFilter, scoreFilter, selectedHeatmapCell, heatmapType]);
+  }, [risks, searchTerm, statusFilter, categoryFilter, registerTypeFilter, scoreFilter, selectedHeatmapCell, heatmapType]);
+
+  const availableCategoryOptions = useMemo(() => {
+    const valuesByCanonical = new Map<string, string>();
+
+    RISK_CATEGORIES.forEach((item) => {
+      const canonical = canonicalFilterValue(item.value);
+      if (canonical && !valuesByCanonical.has(canonical)) {
+        valuesByCanonical.set(canonical, item.value);
+      }
+    });
+
+    (risks || []).forEach((risk) => {
+      const value = (risk.risk_category || risk.category || '').trim();
+      const canonical = canonicalFilterValue(value);
+      if (canonical && !valuesByCanonical.has(canonical)) {
+        valuesByCanonical.set(canonical, value);
+      }
+    });
+
+    return Array.from(valuesByCanonical.values()).map((value) => ({
+      value,
+      label: value
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (match) => match.toUpperCase()),
+    }));
+  }, [risks]);
+
+  const availableRegisterTypeOptions = useMemo(() => {
+    const valuesByCanonical = new Map<string, string>();
+
+    REGISTER_TYPES.forEach((item) => {
+      const canonical = canonicalFilterValue(item.value);
+      if (canonical && !valuesByCanonical.has(canonical)) {
+        valuesByCanonical.set(canonical, item.value);
+      }
+    });
+
+    (risks || []).forEach((risk) => {
+      const value = (risk.register_type || '').trim();
+      const canonical = canonicalFilterValue(value);
+      if (canonical && !valuesByCanonical.has(canonical)) {
+        valuesByCanonical.set(canonical, value);
+      }
+    });
+
+    return Array.from(valuesByCanonical.values()).map((value) => ({ value, label: value }));
+  }, [risks]);
 
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-600">
+      <div className="flex h-64 flex-col items-center justify-center text-red-400">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load risks</p>
       </div>
@@ -328,9 +483,9 @@ export default function ERMRisksPage() {
             className="hidden"
           />
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setIsUploadModalOpen(true)}
             disabled={isUploading}
-            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 font-medium text-black hover:bg-slate-600 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 font-medium text-slate-900 hover:bg-slate-200 disabled:opacity-50"
           >
             {isUploading ? (
               <Loader2 size={18} className="animate-spin" />
@@ -338,6 +493,13 @@ export default function ERMRisksPage() {
               <Upload size={18} />
             )}
             Upload Register
+          </button>
+          <button
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-2 rounded-lg bg-white px-4 py-2 font-medium text-slate-900 border border-slate-300 hover:bg-slate-50"
+          >
+            <Download size={18} />
+            Download Template
           </button>
           <button
             onClick={() => {
@@ -357,17 +519,17 @@ export default function ERMRisksPage() {
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
               {uploadResult.errors.length > 0 ? (
-                <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
               ) : (
-                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                <CheckCircle className="h-5 w-5 text-green-400 mt-0.5" />
               )}
               <div>
-                <p className="font-medium text-black">{uploadResult.message}</p>
+                <p className="font-medium text-slate-900">{uploadResult.message}</p>
                 <div className="mt-1 flex gap-4 text-sm">
-                  <span className="text-green-600">Created: {uploadResult.created}</span>
-                  <span className="text-yellow-600">Skipped: {uploadResult.skipped}</span>
+                  <span className="text-green-400">Created: {uploadResult.created}</span>
+                  <span className="text-yellow-400">Skipped: {uploadResult.skipped}</span>
                   {uploadResult.errors.length > 0 && (
-                    <span className="text-red-600">Errors: {uploadResult.errors.length}</span>
+                    <span className="text-red-400">Errors: {uploadResult.errors.length}</span>
                   )}
                 </div>
               </div>
@@ -385,30 +547,36 @@ export default function ERMRisksPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <AlertTriangle className="h-5 w-5 text-primary-600" />
+            <div className="rounded-lg bg-primary-500/20 p-2">
+              <AlertTriangle className="h-5 w-5 text-primary-400" />
+            </div>
             <div>
               <p className="text-sm text-slate-600">Total Risks</p>
-              <p className="text-2xl font-bold text-black">{computedDashboard?.total_risks || 0}</p>
+              <p className="text-2xl font-bold text-slate-900">{computedDashboard?.total_risks || 0}</p>
             </div>
           </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <Shield className="h-5 w-5 text-red-600" />
+            <div className="rounded-lg bg-red-500/20 p-2">
+              <Shield className="h-5 w-5 text-red-400" />
+            </div>
             <div>
               <p className="text-sm text-slate-600">Open Risks</p>
-              <p className="text-2xl font-bold text-black">{computedDashboard?.open_risks || 0}</p>
+              <p className="text-2xl font-bold text-slate-900">{computedDashboard?.open_risks || 0}</p>
             </div>
           </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <TrendingUp className="h-5 w-5 text-orange-600" />
+            <div className="rounded-lg bg-orange-500/20 p-2">
+              <TrendingUp className="h-5 w-5 text-orange-400" />
+            </div>
             <div>
               <p className="text-sm text-slate-600">Avg Inherent</p>
-              <p className="text-2xl font-bold text-black">
+              <p className="text-2xl font-bold text-slate-900">
                 {(computedDashboard?.avg_inherent_score || 0).toFixed(1)}
               </p>
             </div>
@@ -417,10 +585,12 @@ export default function ERMRisksPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <TrendingDown className="h-5 w-5 text-green-600" />
+            <div className="rounded-lg bg-green-500/20 p-2">
+              <TrendingDown className="h-5 w-5 text-green-400" />
+            </div>
             <div>
               <p className="text-sm text-slate-600">Avg Residual</p>
-              <p className="text-2xl font-bold text-black">
+              <p className="text-2xl font-bold text-slate-900">
                 {(computedDashboard?.avg_residual_score || 0).toFixed(1)}
               </p>
             </div>
@@ -431,7 +601,7 @@ export default function ERMRisksPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-1">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-black">Risk Heatmap</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Risk Heatmap</h2>
             <div className="flex gap-1">
               <button
                 onClick={() => {
@@ -441,7 +611,7 @@ export default function ERMRisksPage() {
                 className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                   heatmapType === 'inherent'
                     ? 'bg-primary-600 text-white'
-                    : 'bg-slate-200 text-slate-600 hover:bg-slate-600'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 Inherent
@@ -454,7 +624,7 @@ export default function ERMRisksPage() {
                 className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                   heatmapType === 'residual'
                     ? 'bg-primary-600 text-white'
-                    : 'bg-slate-200 text-slate-600 hover:bg-slate-600'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 Residual
@@ -492,7 +662,7 @@ export default function ERMRisksPage() {
                         title={`L${likelihood} x I${impact} = ${likelihood * impact}`}
                       >
                         {cell?.count > 0 && (
-                          <span className="text-black">{cell.count}</span>
+                          <span className="text-slate-900">{cell.count}</span>
                         )}
                       </button>
                     );
@@ -512,7 +682,7 @@ export default function ERMRisksPage() {
           {selectedHeatmapCell && (
             <button
               onClick={() => setSelectedHeatmapCell(null)}
-              className="mt-3 w-full rounded bg-slate-200 py-1 text-xs text-slate-600 hover:bg-slate-600"
+              className="mt-3 w-full rounded bg-slate-100 py-1 text-xs text-slate-700 hover:bg-slate-200"
             >
               Clear filter
             </button>
@@ -528,26 +698,37 @@ export default function ERMRisksPage() {
                 placeholder="Search risks..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
               />
             </div>
 
             <div className="flex flex-wrap gap-2">
               <select
                 value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value as RiskCategory | 'all')}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 <option value="all">All Categories</option>
-                {RISK_CATEGORIES.map(cat => (
+                {availableCategoryOptions.map((cat) => (
                   <option key={cat.value} value={cat.value}>{cat.label}</option>
+                ))}
+              </select>
+
+              <select
+                value={registerTypeFilter}
+                onChange={(e) => setRegisterTypeFilter(e.target.value)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
+              >
+                <option value="all">All Register Types</option>
+                {availableRegisterTypeOptions.map((type) => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
                 ))}
               </select>
 
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as RiskStatus | 'all')}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 <option value="all">All Statuses</option>
                 {RISK_STATUSES.map(status => (
@@ -558,7 +739,7 @@ export default function ERMRisksPage() {
               <select
                 value={scoreFilter}
                 onChange={(e) => setScoreFilter(e.target.value as ScoreFilter)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 <option value="all">All Scores</option>
                 <option value="critical">Critical (≥20)</option>
@@ -577,7 +758,7 @@ export default function ERMRisksPage() {
               </div>
             ) : (
               filteredRisks.map((risk) => {
-                const categoryStyle = getCategoryStyle(risk.risk_category);
+                const categoryStyle = getCategoryStyle(inferEffectiveRiskCategory(risk));
                 const statusStyle = getStatusStyle(risk.status);
                 const scoreColor = getScoreColor(risk.inherent_score);
                 
@@ -588,7 +769,7 @@ export default function ERMRisksPage() {
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <Link href={`/risks/${risk.id}`} className="text-lg font-medium text-black hover:text-primary-600">
+                        <Link href={`/risks/${risk.id}`} className="text-lg font-medium text-slate-900 hover:text-primary-400">
                           {risk.title}
                         </Link>
                         {risk.description && (
@@ -599,7 +780,7 @@ export default function ERMRisksPage() {
                             {categoryStyle.label}
                           </span>
                           {risk.risk_sub_category && (
-                            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-600/50 text-slate-600">
+                            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-200/50 text-slate-700">
                               {risk.risk_sub_category}
                             </span>
                           )}
@@ -609,8 +790,8 @@ export default function ERMRisksPage() {
                           {risk.closure_status && (
                             <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                               risk.closure_status === 'closed' 
-                                ? 'bg-slate-500/30 text-slate-600' 
-                                : 'bg-amber-50 text-amber-700'
+                                ? 'bg-slate-500/30 text-slate-700' 
+                                : 'bg-amber-500/20 text-amber-400'
                             }`}>
                               {risk.closure_status === 'closed' ? <Lock size={10} /> : <Unlock size={10} />}
                               {risk.closure_status === 'closed' ? 'Closed' : 'Pending Closure'}
@@ -643,7 +824,7 @@ export default function ERMRisksPage() {
                               setEditingRisk(risk);
                               setIsModalOpen(true);
                             }}
-                            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                            className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                           >
                             <Edit2 className="h-4 w-4" />
                           </button>
@@ -653,7 +834,7 @@ export default function ERMRisksPage() {
                                 deleteMutation.mutate(risk.id);
                               }
                             }}
-                            className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600"
+                            className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -684,6 +865,64 @@ export default function ERMRisksPage() {
           }}
           isLoading={createMutation.isPending || updateMutation.isPending}
         />
+      )}
+
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-900">Upload Risk Register</h2>
+              <button
+                onClick={() => {
+                  setIsUploadModalOpen(false);
+                  setSelectedRegisterType('');
+                }}
+                className="text-slate-600 hover:text-slate-900"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Risk Register Type (Optional)
+                </label>
+                <select
+                  value={selectedRegisterType}
+                  onChange={(e) => setSelectedRegisterType(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
+                >
+                  <option value="">None (No Register Type)</option>
+                  {REGISTER_TYPES.map(type => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  Select a register type to categorize all risks in this file
+                </p>
+              </div>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={18} />
+                    Select File to Upload
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -739,6 +978,7 @@ function RiskModal({
 
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [isGeneratingTreatment, setIsGeneratingTreatment] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -843,7 +1083,7 @@ function RiskModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black">{risk ? 'Edit Risk' : 'Create Risk'}</h2>
+          <h2 className="text-lg font-semibold text-slate-900">{risk ? 'Edit Risk' : 'Create Risk'}</h2>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
@@ -857,7 +1097,7 @@ function RiskModal({
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="flex-1 rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="flex-1 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
                 required
                 placeholder="Enter risk title..."
               />
@@ -865,7 +1105,7 @@ function RiskModal({
                 type="button"
                 onClick={handleGetAISuggestions}
                 disabled={isLoadingAI || formData.title.trim().length < 3}
-                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-black hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-slate-900 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isLoadingAI ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -876,7 +1116,7 @@ function RiskModal({
               </button>
             </div>
             {aiError && (
-              <p className="mt-1 text-xs text-red-600">{aiError}</p>
+              <p className="mt-1 text-xs text-red-400">{aiError}</p>
             )}
           </div>
 
@@ -889,8 +1129,8 @@ function RiskModal({
                   className="flex w-full items-center justify-between text-left"
                 >
                   <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-primary-600" />
-                    <span className="text-sm font-medium text-black">AI Suggestions</span>
+                    <Zap className="h-4 w-4 text-purple-400" />
+                    <span className="text-sm font-medium text-slate-900">AI Suggestions</span>
                   </div>
                   {showSuggestions ? (
                     <ChevronUp className="h-4 w-4 text-slate-600" />
@@ -907,13 +1147,13 @@ function RiskModal({
                         <button
                           type="button"
                           onClick={applyDescription}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-purple-400 hover:bg-purple-500/20"
                         >
                           <Check className="h-3 w-3" />
                           Use this
                         </button>
                       </div>
-                      <p className="mt-1 text-sm text-slate-600 bg-slate-200/50 rounded-lg p-3">
+                      <p className="mt-1 text-sm text-slate-700 bg-slate-100/50 rounded-lg p-3">
                         {aiSuggestions.suggested_description}
                       </p>
                     </div>
@@ -927,7 +1167,7 @@ function RiskModal({
                               key={idx}
                               type="button"
                               onClick={() => appendCauseToDescription(cause)}
-                              className="rounded-full bg-red-50 px-2.5 py-1 text-xs text-red-300 hover:bg-red-100 transition-colors"
+                              className="rounded-full bg-red-500/20 px-2.5 py-1 text-xs text-red-300 hover:bg-red-500/30 transition-colors"
                             >
                               + {cause}
                             </button>
@@ -942,7 +1182,7 @@ function RiskModal({
                               key={idx}
                               type="button"
                               onClick={() => appendConsequenceToDescription(consequence)}
-                              className="rounded-full bg-orange-50 px-2.5 py-1 text-xs text-orange-300 hover:bg-orange-100 transition-colors"
+                              className="rounded-full bg-orange-500/20 px-2.5 py-1 text-xs text-orange-300 hover:bg-orange-500/30 transition-colors"
                             >
                               + {consequence}
                             </button>
@@ -957,7 +1197,7 @@ function RiskModal({
                         <button
                           type="button"
                           onClick={applyLikelihoodImpact}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-purple-400 hover:bg-purple-500/20"
                         >
                           <Check className="h-3 w-3" />
                           Apply
@@ -966,13 +1206,13 @@ function RiskModal({
                       <div className="mt-2 flex items-center gap-4">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-600">Likelihood:</span>
-                          <span className="rounded bg-blue-50 px-2 py-0.5 text-sm font-medium text-blue-300">
+                          <span className="rounded bg-blue-500/20 px-2 py-0.5 text-sm font-medium text-blue-300">
                             {aiSuggestions.suggested_likelihood}/5
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-600">Impact:</span>
-                          <span className="rounded bg-amber-50 px-2 py-0.5 text-sm font-medium text-amber-300">
+                          <span className="rounded bg-amber-500/20 px-2 py-0.5 text-sm font-medium text-amber-300">
                             {aiSuggestions.suggested_impact}/5
                           </span>
                         </div>
@@ -992,25 +1232,25 @@ function RiskModal({
                           {aiSuggestions.recommended_controls.map((control) => (
                             <div
                               key={control.control_id}
-                              className="flex items-start gap-3 rounded-lg bg-slate-200/50 p-3"
+                              className="flex items-start gap-3 rounded-lg bg-slate-100/50 p-3"
                             >
-                              <Shield className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                              <Shield className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-black truncate">
+                                  <span className="text-sm font-medium text-slate-900 truncate">
                                     {control.control_name}
                                   </span>
                                   {control.control_code && (
-                                    <span className="rounded bg-slate-600 px-1.5 py-0.5 text-xs text-slate-600">
+                                    <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-700">
                                       {control.control_code}
                                     </span>
                                   )}
                                   <span className={`rounded px-1.5 py-0.5 text-xs ${
                                     control.relevance === 'high' 
-                                      ? 'bg-green-50 text-green-300'
+                                      ? 'bg-green-500/20 text-green-300'
                                       : control.relevance === 'medium'
-                                      ? 'bg-yellow-50 text-yellow-300'
-                                      : 'bg-slate-50 text-slate-700'
+                                      ? 'bg-yellow-500/20 text-yellow-300'
+                                      : 'bg-slate-500/20 text-slate-700'
                                   }`}>
                                     {control.relevance}
                                   </span>
@@ -1029,7 +1269,7 @@ function RiskModal({
                         {aiSuggestions.risk_treatment_options.map((option, idx) => (
                           <span
                             key={idx}
-                            className="rounded-full bg-primary-50 px-3 py-1 text-xs text-primary-500"
+                            className="rounded-full bg-purple-500/20 px-3 py-1 text-xs text-purple-300"
                           >
                             {option}
                           </span>
@@ -1047,7 +1287,7 @@ function RiskModal({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               rows={3}
               placeholder="Describe the risk..."
             />
@@ -1059,7 +1299,7 @@ function RiskModal({
               <select
                 value={formData.risk_category}
                 onChange={(e) => handleCategoryChange(e.target.value as RiskCategory)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               >
                 {RISK_CATEGORIES.map((cat) => (
                   <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -1071,7 +1311,7 @@ function RiskModal({
               <select
                 value={formData.risk_sub_category}
                 onChange={(e) => setFormData({ ...formData, risk_sub_category: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               >
                 <option value="">Select sub-category...</option>
                 {subCategories.map((sub) => (
@@ -1087,7 +1327,7 @@ function RiskModal({
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as RiskStatus })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               >
                 {RISK_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -1099,7 +1339,7 @@ function RiskModal({
               <select
                 value={formData.business_owner_id || ''}
                 onChange={(e) => setFormData({ ...formData, business_owner_id: e.target.value ? Number(e.target.value) : undefined })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               >
                 <option value="">Select owner...</option>
                 {(users || []).map((user) => (
@@ -1120,7 +1360,7 @@ function RiskModal({
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     formData.affected_department_ids.includes(dept.id)
                       ? 'bg-primary-600 text-white'
-                      : 'bg-slate-600 text-slate-600 hover:bg-slate-500'
+                      : 'bg-slate-200 text-slate-700 hover:bg-slate-500'
                   }`}
                 >
                   {dept.name}
@@ -1138,7 +1378,7 @@ function RiskModal({
                 max="5"
                 value={formData.inherent_likelihood}
                 onChange={(e) => setFormData({ ...formData, inherent_likelihood: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               />
             </div>
             <div>
@@ -1149,7 +1389,7 @@ function RiskModal({
                 max="5"
                 value={formData.inherent_impact}
                 onChange={(e) => setFormData({ ...formData, inherent_impact: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               />
             </div>
           </div>
@@ -1163,7 +1403,7 @@ function RiskModal({
                 max="5"
                 value={formData.residual_likelihood}
                 onChange={(e) => setFormData({ ...formData, residual_likelihood: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               />
             </div>
             <div>
@@ -1174,18 +1414,45 @@ function RiskModal({
                 max="5"
                 value={formData.residual_impact}
                 onChange={(e) => setFormData({ ...formData, residual_impact: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Treatment Plan</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm text-slate-600">Treatment Plan</label>
+              {risk && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsGeneratingTreatment(true);
+                    try {
+                      const response = await ermApi.risks.generateTreatmentPlan(risk.id);
+                      setFormData(prev => ({ ...prev, treatment_plan: response.data.treatment_plan }));
+                    } catch {
+                      setAiError('Failed to generate treatment plan');
+                    } finally {
+                      setIsGeneratingTreatment(false);
+                    }
+                  }}
+                  disabled={isGeneratingTreatment}
+                  className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-slate-900 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 transition-all"
+                >
+                  {isGeneratingTreatment ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  AI Generate Treatment Plan
+                </button>
+              )}
+            </div>
             <textarea
               value={formData.treatment_plan}
               onChange={(e) => setFormData({ ...formData, treatment_plan: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
-              rows={2}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              rows={formData.treatment_plan.length > 200 ? 8 : 2}
             />
           </div>
 
@@ -1193,7 +1460,7 @@ function RiskModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
             >
               Cancel
             </button>

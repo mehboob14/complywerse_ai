@@ -196,8 +196,8 @@ export default function DepartmentsManagementPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Vulnerability Departments</h1>
-          <p className="text-slate-600 mt-1">Manage departments responsible for vulnerability remediation</p>
+          <h1 className="text-2xl font-bold cw-text-default">Vulnerability Departments</h1>
+          <p className="cw-text-muted mt-1">Manage departments responsible for vulnerability remediation</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -210,23 +210,23 @@ export default function DepartmentsManagementPage() {
 
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 cw-text-muted" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search departments..."
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+            className="cw-field w-full py-2 pl-10 pr-4 text-sm"
           />
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {(!filteredDepartments || filteredDepartments.length === 0) ? (
-          <div className="col-span-full rounded-xl border border-slate-200 bg-white p-12 text-center">
-            <Building2 className="h-12 w-12 mx-auto text-slate-600 mb-4" />
-            <h3 className="text-lg font-medium text-black mb-2">No departments found</h3>
-            <p className="text-slate-600 mb-4">Create your first department to start assigning vulnerabilities</p>
+          <div className="col-span-full cw-card p-12 text-center">
+            <Building2 className="h-12 w-12 mx-auto cw-text-muted mb-4" />
+            <h3 className="text-lg font-medium cw-text-default mb-2">No departments found</h3>
+            <p className="cw-text-muted mb-4">Create your first department to start assigning vulnerabilities</p>
             <button
               onClick={() => setShowCreateModal(true)}
               className="btn-primary inline-flex items-center gap-2"
@@ -239,7 +239,7 @@ export default function DepartmentsManagementPage() {
           filteredDepartments.map((dept) => (
             <div
               key={dept.id}
-              className="rounded-xl border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors"
+              className="cw-card p-6 hover:shadow-md transition-colors"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -248,34 +248,34 @@ export default function DepartmentsManagementPage() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-black">{dept.name}</h3>
+                      <h3 className="font-semibold cw-text-default">{dept.name}</h3>
                       {dept.code && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-500 font-mono">
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--color-subtle)] cw-text-muted font-mono">
                           {dept.code}
                         </span>
                       )}
                     </div>
                     {dept.description && (
-                      <p className="text-sm text-slate-600 line-clamp-1">{dept.description}</p>
+                      <p className="text-sm cw-text-muted line-clamp-1">{dept.description}</p>
                     )}
                   </div>
                 </div>
                 <div className="relative">
                   <button
                     onClick={() => setActiveMenuId(activeMenuId === dept.id ? null : dept.id)}
-                    className="p-1 text-slate-600 hover:text-slate-900 rounded"
+                    className="p-1 cw-text-muted hover:cw-text-default rounded"
                   >
                     <MoreVertical size={16} />
                   </button>
                   {activeMenuId === dept.id && (
-                    <div className="absolute right-0 mt-1 w-40 rounded-lg border border-slate-200 bg-white shadow-xl z-10">
+                    <div className="absolute right-0 mt-1 w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl z-10">
                       <button
                         onClick={() => {
                           setSelectedDepartment(dept);
                           setShowEditModal(true);
                           setActiveMenuId(null);
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-200"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm cw-text-muted hover:bg-[var(--color-hover)]"
                       >
                         <Edit2 size={14} />
                         Edit
@@ -286,7 +286,7 @@ export default function DepartmentsManagementPage() {
                           setShowMemberModal(true);
                           setActiveMenuId(null);
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-200"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm cw-text-muted hover:bg-[var(--color-hover)]"
                       >
                         <UserPlus size={14} />
                         Members
@@ -297,7 +297,7 @@ export default function DepartmentsManagementPage() {
                           setShowEscalationModal(true);
                           setActiveMenuId(null);
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-200"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm cw-text-muted hover:bg-[var(--color-hover)]"
                       >
                         <Route size={14} />
                         Escalation Paths
@@ -308,7 +308,7 @@ export default function DepartmentsManagementPage() {
                             deleteDepartmentMutation.mutate(dept.id);
                           }
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-slate-200"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-[var(--color-hover)]"
                       >
                         <Trash2 size={14} />
                         Delete
@@ -319,11 +319,11 @@ export default function DepartmentsManagementPage() {
               </div>
 
               <div className="flex items-center gap-4 text-sm mb-4">
-                <div className="flex items-center gap-1.5 text-slate-600">
+                <div className="flex items-center gap-1.5 cw-text-muted">
                   <Users size={14} />
                   <span>{dept.member_count || 0} members</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-slate-600">
+                <div className="flex items-center gap-1.5 cw-text-muted">
                   <Bug size={14} />
                   <span>{dept.vulnerability_count || 0} vulnerabilities</span>
                 </div>
@@ -338,21 +338,21 @@ export default function DepartmentsManagementPage() {
               </button>
 
               {selectedDepartment?.id === dept.id && departmentVulnerabilities && (
-                <div className="mt-4 space-y-2 border-t border-slate-200 pt-4">
+                <div className="mt-4 space-y-2 border-t border-[var(--color-border)] pt-4">
                   {departmentVulnerabilities.length === 0 ? (
-                    <p className="text-sm text-slate-500">No vulnerabilities assigned</p>
+                    <p className="text-sm cw-text-muted">No vulnerabilities assigned</p>
                   ) : (
                     departmentVulnerabilities.slice(0, 5).map((vuln) => (
                       <Link
                         key={vuln.id}
-                        href={`/vulnerabilities/${vuln.vulnerability_id}`}
-                        className="flex items-center justify-between p-2 rounded-lg bg-slate-200/50 hover:bg-slate-200 transition-colors"
+                        href={`/vulnerabilities/${vuln.id}`}
+                        className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-subtle)] hover:bg-[var(--color-hover)] transition-colors"
                       >
                         <div className="flex items-center gap-2">
                           <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${severityStyles[vuln.severity] || severityStyles.info}`}>
                             {vuln.severity}
                           </span>
-                          <span className="text-sm text-black truncate max-w-[150px]">{vuln.title}</span>
+                          <span className="text-sm cw-text-default truncate max-w-[150px]">{vuln.title}</span>
                         </div>
                         <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${priorityStyles[vuln.priority] || 'bg-slate-50 text-slate-700'}`}>
                           {vuln.priority}
@@ -361,7 +361,7 @@ export default function DepartmentsManagementPage() {
                     ))
                   )}
                   {departmentVulnerabilities.length > 5 && (
-                    <p className="text-xs text-slate-500 text-center">
+                    <p className="text-xs cw-text-muted text-center">
                       +{departmentVulnerabilities.length - 5} more
                     </p>
                   )}
@@ -374,10 +374,10 @@ export default function DepartmentsManagementPage() {
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Create Department</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-600 hover:text-slate-900">
+              <h2 className="text-xl font-bold cw-text-default">Create Department</h2>
+              <button onClick={() => setShowCreateModal(false)} className="cw-text-muted hover:cw-text-default">
                 <X size={20} />
               </button>
             </div>
@@ -418,10 +418,10 @@ export default function DepartmentsManagementPage() {
 
       {showEditModal && selectedDepartment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Edit Department</h2>
-              <button onClick={() => { setShowEditModal(false); setSelectedDepartment(null); }} className="text-slate-600 hover:text-slate-900">
+              <h2 className="text-xl font-bold cw-text-default">Edit Department</h2>
+              <button onClick={() => { setShowEditModal(false); setSelectedDepartment(null); }} className="cw-text-muted hover:cw-text-default">
                 <X size={20} />
               </button>
             </div>
@@ -465,10 +465,10 @@ export default function DepartmentsManagementPage() {
 
       {showMemberModal && selectedDepartment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Department Members - {selectedDepartment.name}</h2>
-              <button onClick={() => { setShowMemberModal(false); setSelectedDepartment(null); }} className="text-slate-600 hover:text-slate-900">
+              <h2 className="text-xl font-bold cw-text-default">Department Members - {selectedDepartment.name}</h2>
+              <button onClick={() => { setShowMemberModal(false); setSelectedDepartment(null); }} className="cw-text-muted hover:cw-text-default">
                 <X size={20} />
               </button>
             </div>
@@ -522,17 +522,17 @@ export default function DepartmentsManagementPage() {
 
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {(!departmentMembers || departmentMembers.length === 0) ? (
-                <p className="text-sm text-slate-500 text-center py-4">No members in this department</p>
+                <p className="text-sm cw-text-muted text-center py-4">No members in this department</p>
               ) : (
                 departmentMembers.map((member) => (
-                  <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-200/50">
+                  <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-subtle)]">
                     <div className="flex items-center gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-700 text-sm font-medium">
                         {(member.user_name || 'U')[0].toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-black">{member.user_name || `User #${member.user_id}`}</p>
-                        <p className="text-xs text-slate-600">{member.user_email || ''}</p>
+                        <p className="text-sm font-medium cw-text-default">{member.user_name || `User #${member.user_id}`}</p>
+                        <p className="text-xs cw-text-muted">{member.user_email || ''}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -545,12 +545,12 @@ export default function DepartmentsManagementPage() {
                           {member.role}
                         </span>
                         {member.escalation_order && (
-                          <span className="ml-2 text-xs text-slate-500">#{member.escalation_order}</span>
+                          <span className="ml-2 text-xs cw-text-muted">#{member.escalation_order}</span>
                         )}
                       </div>
                       <button
                         onClick={() => removeMemberMutation.mutate({ deptId: selectedDepartment.id, memberId: member.id })}
-                        className="text-slate-600 hover:text-red-600"
+                        className="cw-text-muted hover:text-red-600"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -571,10 +571,10 @@ export default function DepartmentsManagementPage() {
 
       {showEscalationModal && selectedDepartment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-black">Escalation Paths - {selectedDepartment.name}</h2>
-              <button onClick={() => { setShowEscalationModal(false); setSelectedDepartment(null); }} className="text-slate-600 hover:text-slate-900">
+              <h2 className="text-xl font-bold cw-text-default">Escalation Paths - {selectedDepartment.name}</h2>
+              <button onClick={() => { setShowEscalationModal(false); setSelectedDepartment(null); }} className="cw-text-muted hover:cw-text-default">
                 <X size={20} />
               </button>
             </div>
@@ -595,7 +595,7 @@ export default function DepartmentsManagementPage() {
                 });
                 (e.target as HTMLFormElement).reset();
               }}
-              className="space-y-3 mb-4 p-3 rounded-lg bg-slate-200/50"
+              className="space-y-3 mb-4 p-3 rounded-lg bg-[var(--color-subtle)]"
             >
               <div className="grid grid-cols-2 gap-3">
                 <input
@@ -639,17 +639,17 @@ export default function DepartmentsManagementPage() {
 
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {(!escalationPaths || escalationPaths.length === 0) ? (
-                <p className="text-sm text-slate-500 text-center py-4">No escalation paths configured</p>
+                <p className="text-sm cw-text-muted text-center py-4">No escalation paths configured</p>
               ) : (
                 escalationPaths.map((path) => (
-                  <div key={path.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-200/50">
+                  <div key={path.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-subtle)]">
                     <div className="flex items-center gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-700 text-sm font-medium">
                         {path.escalation_order}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-black">{path.name}</p>
-                        <p className="text-xs text-slate-600">
+                        <p className="text-sm font-medium cw-text-default">{path.name}</p>
+                        <p className="text-xs cw-text-muted">
                           {path.target_role && `To: ${path.target_role}`}
                           {path.time_threshold_hours && ` | After ${path.time_threshold_hours}h`}
                         </p>

@@ -2,10 +2,13 @@ import os
 from datetime import datetime
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, ForeignKey, Boolean, 
-    Float, DateTime, JSON, Index, Table, UniqueConstraint
+    Float, DateTime, JSON, Index, Table, UniqueConstraint, inspect, text
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+import logging
+
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost/grc_db")
 
@@ -50,6 +53,7 @@ class Tenant(Base):
     risks = relationship("Risk", back_populates="tenant", cascade="all, delete-orphan")
     governance_objectives = relationship("GovernanceObjective", back_populates="tenant", cascade="all, delete-orphan")
     exceptions = relationship("Exception", back_populates="tenant", cascade="all, delete-orphan")
+    policy_exceptions = relationship("PolicyException", back_populates="tenant", cascade="all, delete-orphan")
     issues = relationship("Issue", back_populates="tenant", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="tenant", cascade="all, delete-orphan")
     governance_documents = relationship("GovernanceDocument", back_populates="tenant", cascade="all, delete-orphan")
@@ -176,6 +180,10 @@ class GRCUser(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     display_name = Column(String(255), nullable=True)
+    department = Column(String(255), nullable=True)
+    group = Column(String(255), nullable=True)
+    division = Column(String(255), nullable=True)
+    designation = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)
@@ -433,6 +441,7 @@ class CommonControlGroupMapping(Base):
     group_id = Column(Integer, ForeignKey("grc_common_control_groups.id"), nullable=False, index=True)
     normalized_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=True, index=True)
     framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=True, index=True)
+    parsed_control_id = Column(Integer, ForeignKey("grc_parsed_framework_controls.id"), nullable=True, index=True)
     mapping_confidence = Column(Float, nullable=True)
     mapping_source = Column(String(50), nullable=False, default="manual")
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -440,13 +449,16 @@ class CommonControlGroupMapping(Base):
     group = relationship("CommonControlGroup", back_populates="control_mappings")
     normalized_control = relationship("NormalizedControl")
     framework_control = relationship("FrameworkControl")
+    parsed_control = relationship("ParsedFrameworkControl")
     
     __table_args__ = (
         Index("ix_common_group_mapping_group", "group_id"),
         Index("ix_common_group_mapping_normalized", "group_id", "normalized_control_id"),
         Index("ix_common_group_mapping_framework", "group_id", "framework_control_id"),
+        Index("ix_common_group_mapping_parsed", "group_id", "parsed_control_id"),
         UniqueConstraint("group_id", "normalized_control_id", name="uq_group_normalized_control"),
         UniqueConstraint("group_id", "framework_control_id", name="uq_group_framework_control"),
+        UniqueConstraint("group_id", "parsed_control_id", name="uq_group_parsed_control"),
     )
 
 
@@ -513,6 +525,7 @@ class AIEvidenceRecommendation(Base):
     group_id = Column(Integer, ForeignKey("grc_common_control_groups.id"), nullable=True, index=True)
     normalized_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=True, index=True)
     framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=True, index=True)
+    parsed_control_id = Column(Integer, ForeignKey("grc_parsed_framework_controls.id"), nullable=True, index=True)
     evidence_type = Column(String(100), nullable=False)
     evidence_description = Column(Text, nullable=True)
     priority = Column(String(20), nullable=False, default="medium")
@@ -525,6 +538,7 @@ class AIEvidenceRecommendation(Base):
     group = relationship("CommonControlGroup", back_populates="ai_evidence_recommendations")
     normalized_control = relationship("NormalizedControl")
     framework_control = relationship("FrameworkControl")
+    parsed_control = relationship("ParsedFrameworkControl")
     
     __table_args__ = (
         Index("ix_ai_evidence_rec_tenant", "tenant_id"),
@@ -894,6 +908,7 @@ class Risk(Base):
     category = Column(String(50), nullable=False)  # strategic, operational, financial, compliance, technology, third_party, project_change
     risk_category = Column(String(50), default="operational")  # strategic, operational, financial, compliance, technology, third_party, project_change
     risk_sub_category = Column(String(100), nullable=True)
+    register_type = Column(String(100), nullable=True)  # PCI-DSS, ISO 27001, SOX, Internal, NIST, GDPR, etc.
     owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     business_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     affected_department_ids = Column(JSON, default=[])
@@ -932,6 +947,7 @@ class Risk(Base):
     mitigation_actions = relationship("RiskMitigationAction", back_populates="risk", cascade="all, delete-orphan")
     audit_finding_links = relationship("RiskAuditFindingLink", back_populates="risk", cascade="all, delete-orphan")
     document_links = relationship("DocumentRiskLink", back_populates="risk", cascade="all, delete-orphan")
+    gap_findings = relationship("PolicyGapFinding", foreign_keys="PolicyGapFinding.risk_register_id", back_populates="risk_register_entry")
     
     __table_args__ = (
         Index("ix_risk_tenant_category", "tenant_id", "category"),
@@ -1306,6 +1322,133 @@ class RiskReport(Base):
     )
 
 
+class RiskAssessment(Base):
+    """Formal risk assessment campaigns/exercises"""
+    __tablename__ = "grc_risk_assessments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    assessment_type = Column(String(50), default="periodic")  # periodic, ad_hoc, incident_driven, regulatory
+    methodology = Column(String(100), nullable=True)  # NIST, ISO31000, FAIR, OCTAVE
+    scope = Column(Text, nullable=True)
+    assessment_period_start = Column(DateTime, nullable=True)
+    assessment_period_end = Column(DateTime, nullable=True)
+    status = Column(String(50), default="draft")  # draft, in_progress, under_review, approved, closed
+    lead_assessor_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    business_unit_id = Column(Integer, ForeignKey("grc_business_units.id"), nullable=True)
+    framework_id = Column(Integer, ForeignKey("grc_frameworks.id"), nullable=True)
+    approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    
+    tenant = relationship("Tenant")
+    lead_assessor = relationship("GRCUser", foreign_keys=[lead_assessor_id])
+    approver = relationship("GRCUser", foreign_keys=[approved_by])
+    business_unit = relationship("BusinessUnit")
+    framework = relationship("Framework")
+    assessed_risks = relationship("RiskAssessmentRisk", back_populates="assessment", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_risk_assessment_tenant_status", "tenant_id", "status"),
+        Index("ix_risk_assessment_dates", "assessment_period_start", "assessment_period_end"),
+    )
+
+
+class RiskAssessmentRisk(Base):
+    """Link between risk assessments and risks with assessment-specific data"""
+    __tablename__ = "grc_risk_assessment_risks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    assessment_id = Column(Integer, ForeignKey("grc_risk_assessments.id"), nullable=False, index=True)
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)    
+    inherent_likelihood = Column(Integer, nullable=True)  # 1-5 scale
+    inherent_impact = Column(Integer, nullable=True)  # 1-5 scale
+    inherent_score = Column(Float, nullable=True)
+    residual_likelihood = Column(Integer, nullable=True)
+    residual_impact = Column(Integer, nullable=True)
+    residual_score = Column(Float, nullable=True)
+    risk_rating = Column(String(50), nullable=True)  # critical, high, medium, low
+    treatment_decision = Column(String(50), nullable=True)  # accept, mitigate, transfer, avoid
+    rationale = Column(Text, nullable=True)
+    control_effectiveness = Column(String(50), nullable=True)  # effective, partially_effective, ineffective
+    notes = Column(Text, nullable=True)
+    assessed_at = Column(DateTime, default=datetime.utcnow)
+    assessed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    
+    assessment = relationship("RiskAssessment", back_populates="assessed_risks")
+    risk = relationship("Risk")
+    assessor = relationship("GRCUser")
+    linked_kris = relationship("RiskAssessmentKRI", back_populates="assessment_risk", cascade="all, delete-orphan")
+    linked_incidents = relationship("RiskAssessmentIncident", back_populates="assessment_risk", cascade="all, delete-orphan")
+    linked_rcsa_findings = relationship("RiskAssessmentRCSAFinding", back_populates="assessment_risk", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("ix_assessment_risk_link", "assessment_id", "risk_id"),
+        UniqueConstraint("assessment_id", "risk_id", name="uq_assessment_risk"),
+    )
+
+
+class RiskAssessmentKRI(Base):
+    """Link between risk assessments and KRIs"""
+    __tablename__ = "grc_risk_assessment_kris"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    assessment_risk_id = Column(Integer, ForeignKey("grc_risk_assessment_risks.id"), nullable=False, index=True)
+    kri_id = Column(Integer, ForeignKey("grc_risk_kris.id"), nullable=False, index=True)
+    observed_value = Column(Float, nullable=True)
+    threshold_status = Column(String(50), nullable=True)  # green, amber, red
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    assessment_risk = relationship("RiskAssessmentRisk", back_populates="linked_kris")
+    kri = relationship("RiskKRI")
+    
+    __table_args__ = (
+        Index("ix_assessment_kri_link", "assessment_risk_id", "kri_id"),
+    )
+
+
+class RiskAssessmentIncident(Base):
+    """Link between risk assessments and incidents"""
+    __tablename__ = "grc_risk_assessment_incidents"
+     
+    id = Column(Integer, primary_key=True, index=True)
+    assessment_risk_id = Column(Integer, ForeignKey("grc_risk_assessment_risks.id"), nullable=False, index=True)
+    incident_id = Column(Integer, ForeignKey("grc_risk_incidents.id"), nullable=False, index=True)
+    impact_on_rating = Column(String(50), nullable=True)  # increased, decreased, no_change
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    assessment_risk = relationship("RiskAssessmentRisk", back_populates="linked_incidents")
+    incident = relationship("RiskIncident")
+    
+    __table_args__ = (
+        Index("ix_assessment_incident_link", "assessment_risk_id", "incident_id"),
+    )
+
+
+class RiskAssessmentRCSAFinding(Base):
+    """Link between risk assessments and RCSA findings"""
+    __tablename__ = "grc_risk_assessment_rcsa_findings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    assessment_risk_id = Column(Integer, ForeignKey("grc_risk_assessment_risks.id"), nullable=False, index=True)
+    rcsa_finding_id = Column(Integer, ForeignKey("grc_rcsa_findings.id"), nullable=False, index=True)
+    relevance_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    assessment_risk = relationship("RiskAssessmentRisk", back_populates="linked_rcsa_findings")
+    rcsa_finding = relationship("RCSAFinding")
+    
+    __table_args__ = (
+        Index("ix_assessment_rcsa_finding_link", "assessment_risk_id", "rcsa_finding_id"),
+    )
+
+
 # =============================================================================
 # 9. Governance
 # =============================================================================
@@ -1347,6 +1490,65 @@ class Exception(Base):
     
     __table_args__ = (
         Index("ix_exception_tenant_status", "tenant_id", "status"),
+    )
+
+
+class PolicyException(Base):
+    __tablename__ = "grc_policy_exceptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=True, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    justification = Column(Text, nullable=True)
+    risk_assessment = Column(Text, nullable=True)
+    compensating_controls = Column(Text, nullable=True)
+    requested_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    status = Column(String(50), default="draft")
+    priority = Column(String(20), default="medium")
+    requested_at = Column(DateTime, default=datetime.utcnow)
+    approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    approved_at = Column(DateTime, nullable=True)
+    rejected_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    rejected_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    effective_date = Column(DateTime, nullable=True)
+    expiry_date = Column(DateTime, nullable=True)
+    review_date = Column(DateTime, nullable=True)
+    is_expired = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    metadata_ = Column("metadata", JSON, default={})
+
+    tenant = relationship("Tenant", back_populates="policy_exceptions")
+    document = relationship("GovernanceDocument")
+    requester = relationship("GRCUser", foreign_keys=[requested_by])
+    approver = relationship("GRCUser", foreign_keys=[approved_by])
+    rejector = relationship("GRCUser", foreign_keys=[rejected_by])
+    comments = relationship("PolicyExceptionComment", back_populates="exception", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_pol_exc_tenant_status", "tenant_id", "status"),
+        Index("ix_pol_exc_tenant_doc", "tenant_id", "document_id"),
+        Index("ix_pol_exc_expiry", "tenant_id", "expiry_date"),
+    )
+
+
+class PolicyExceptionComment(Base):
+    __tablename__ = "grc_policy_exception_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    exception_id = Column(Integer, ForeignKey("grc_policy_exceptions.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    comment = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    exception = relationship("PolicyException", back_populates="comments")
+    user = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_pol_exc_comment_exception", "exception_id"),
     )
 
 
@@ -1589,6 +1791,85 @@ class DocumentAuditLog(Base):
     )
 
 
+class PolicyReviewHistory(Base):
+    """Tracks periodic and ad-hoc reviews for governance documents"""
+    __tablename__ = "grc_policy_review_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
+
+    review_type = Column(String(50), default="periodic")  # periodic, ad_hoc, triggered
+    review_status = Column(String(50), default="scheduled")  # scheduled, in_progress, completed, skipped
+
+    scheduled_date = Column(DateTime, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    reviewer_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    review_notes = Column(Text, nullable=True)
+    changes_made = Column(Text, nullable=True)
+    outcome = Column(String(100), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    document = relationship("GovernanceDocument", backref="review_history")
+    reviewer = relationship("GRCUser", foreign_keys=[reviewer_id])
+
+    __table_args__ = (
+        Index("ix_policy_review_tenant_doc", "tenant_id", "document_id"),
+        Index("ix_policy_review_status", "tenant_id", "review_status"),
+        Index("ix_policy_review_reviewer", "reviewer_id", "review_status"),
+    )
+
+
+class GovernanceActionReview(Base):
+    """Tracks governance actions that require review (drafts, risk acceptance, evidence upload, committee actions, etc.)"""
+    __tablename__ = "grc_governance_action_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    
+    # Action details
+    action_type = Column(String(100), nullable=False)  # document_draft_created, risk_accepted, evidence_uploaded, committee_action, etc.
+    action_description = Column(Text, nullable=False)
+    entity_type = Column(String(100), nullable=False)  # governance_document, risk, evidence, committee, etc.
+    entity_id = Column(Integer, nullable=True)  # ID of the entity (document_id, risk_id, etc.)
+    
+    # Review status
+    review_status = Column(String(50), default="pending_review")  # pending_review, in_review, approved, rejected, archived
+    review_notes = Column(Text, nullable=True)
+    
+    # User information
+    action_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)  # User who took the action
+    reviewer_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)  # User reviewing the action
+    
+    # Timestamps
+    action_date = Column(DateTime, default=datetime.utcnow, index=True)
+    review_started_at = Column(DateTime, nullable=True)
+    review_completed_at = Column(DateTime, nullable=True)
+    
+    # Additional context
+    action_metadata = Column(JSON, nullable=True)  # Store additional data like tags, related entities, etc.
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    action_user = relationship("GRCUser", foreign_keys=[action_user_id], backref="governance_actions_taken")
+    reviewer = relationship("GRCUser", foreign_keys=[reviewer_id], backref="governance_actions_reviewed")
+
+    __table_args__ = (
+        Index("ix_gvn_action_tenant", "tenant_id"),
+        Index("ix_gvn_action_status", "review_status"),
+        Index("ix_gvn_action_type", "action_type"),
+        Index("ix_gvn_action_user", "action_user_id"),
+        Index("ix_gvn_action_date", "action_date"),
+        Index("ix_gvn_action_entity", "entity_type", "entity_id"),
+    )
+
+
 class DocumentControlLink(Base):
     """Links documents to normalized controls"""
     __tablename__ = "grc_document_control_links"
@@ -1798,6 +2079,10 @@ class ITAsset(Base):
     description = Column(Text, nullable=True)
     asset_type = Column(String(50), nullable=False)  # application, infrastructure, data, cloud, third_party
     owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    owner_name = Column(String(255), nullable=True)
+    custodian = Column(String(255), nullable=True)
+    host_name = Column(String(255), nullable=True)
+    ip_address = Column(String(50), nullable=True)
     criticality = Column(String(50), default="medium")  # low, medium, high, critical
     confidentiality_rating = Column(Integer, nullable=True)
     integrity_rating = Column(Integer, nullable=True)
@@ -1806,6 +2091,7 @@ class ITAsset(Base):
     vendor = Column(String(255), nullable=True)
     location = Column(String(255), nullable=True)
     status = Column(String(50), default="active")  # active, inactive, decommissioned
+    cde_environment = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     tenant = relationship("Tenant", back_populates="it_assets")
@@ -1954,6 +2240,8 @@ class CertificationJourney(Base):
     status = Column(String(50), default="in_progress")
     current_phase = Column(Integer, default=1)
     notes = Column(Text, nullable=True)
+    generated_phases = Column(JSON, nullable=True)
+    phases_completion = Column(JSON, nullable=True)  # Tracks completion status of each phase: {1: true, 2: false, ...}
     
     tenant = relationship("Tenant", back_populates="certification_journeys")
     framework = relationship("Framework")
@@ -2180,6 +2468,41 @@ class ParsedFrameworkControl(Base):
     __table_args__ = (
         Index("ix_parsed_control_framework", "uploaded_framework_id"),
         Index("ix_parsed_control_domain", "domain"),
+    )
+
+
+class ClauseApplicability(Base):
+    """Tracks applicability decisions for framework clauses"""
+    __tablename__ = "grc_clause_applicability"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    uploaded_framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id"), nullable=False, index=True)
+    control_id = Column(Integer, ForeignKey("grc_parsed_framework_controls.id"), nullable=False, index=True)
+
+    is_applicable = Column(Boolean, default=True)
+    justification = Column(Text, nullable=True)
+    status = Column(String(50), default="pending")  # pending, approved, rejected
+
+    requested_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    requested_at = Column(DateTime, nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    review_comment = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    framework = relationship("UploadedFramework")
+    control = relationship("ParsedFrameworkControl")
+    requester = relationship("GRCUser", foreign_keys=[requested_by])
+    reviewer = relationship("GRCUser", foreign_keys=[reviewed_by])
+
+    __table_args__ = (
+        Index("ix_clause_applicability_framework", "uploaded_framework_id"),
+        Index("ix_clause_applicability_control", "control_id"),
+        Index("ix_clause_applicability_status", "tenant_id", "status"),
     )
 
 
@@ -2526,11 +2849,47 @@ class PolicyStatement(Base):
     creator = relationship("GRCUser", foreign_keys=[created_by])
     compliance_records = relationship("PolicyStatementCompliance", back_populates="statement", cascade="all, delete-orphan")
     evidence_links = relationship("EvidencePolicyLink", back_populates="policy_statement", cascade="all, delete-orphan")
+    versions = relationship("PolicyStatementVersion", back_populates="statement", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_policy_statement_tenant_doc", "tenant_id", "document_id"),
         Index("ix_policy_statement_category", "category"),
         Index("ix_policy_statement_status", "status"),
+    )
+
+
+class PolicyStatementVersion(Base):
+    """Version history for policy statements"""
+    __tablename__ = "grc_policy_statement_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    statement_id = Column(Integer, ForeignKey("grc_policy_statements.id"), nullable=False, index=True)
+    version_number = Column(Integer, nullable=False, default=1)
+
+    statement_text = Column(Text, nullable=False)
+    statement_summary = Column(String(500), nullable=True)
+    category = Column(String(100), nullable=True)
+    sub_category = Column(String(100), nullable=True)
+    priority = Column(String(20), default="medium")
+    is_mandatory = Column(Boolean, default=True)
+    source_section = Column(String(255), nullable=True)
+    source_page = Column(Integer, nullable=True)
+    ai_confidence = Column(Float, nullable=True)
+    ai_extracted_keywords = Column(JSON, default=[])
+    status = Column(String(50), default="active")
+
+    change_type = Column(String(20), default="edit")
+    change_reason = Column(Text, nullable=True)
+    changed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    changed_at = Column(DateTime, default=datetime.utcnow)
+
+    statement = relationship("PolicyStatement", back_populates="versions")
+    changer = relationship("GRCUser", foreign_keys=[changed_by])
+
+    __table_args__ = (
+        Index("ix_policy_statement_version", "statement_id", "version_number"),
+        Index("ix_policy_statement_version_tenant", "tenant_id", "statement_id"),
     )
 
 
@@ -2572,6 +2931,122 @@ class PolicyStatementCompliance(Base):
         Index("ix_policy_compliance_tenant", "tenant_id"),
         Index("ix_policy_compliance_status", "compliance_status"),
         Index("ix_policy_compliance_owner", "owner_id"),
+    )
+
+
+# =============================================================================
+# 16. Policy Gap Analysis Models
+# =============================================================================
+
+class PolicyGapAnalysisRun(Base):
+    """Tracks a gap analysis execution against a framework"""
+    __tablename__ = "grc_policy_gap_analysis_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
+    uploaded_framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id"), nullable=True, index=True)
+    framework_name = Column(String(255), nullable=True)
+
+    status = Column(String(50), default="queued")  # queued, running, completed, failed
+    run_type = Column(String(50), default="manual")  # manual, scheduled
+
+    total_clauses_analyzed = Column(Integer, default=0)
+    fully_compliant_count = Column(Integer, default=0)
+    partially_compliant_count = Column(Integer, default=0)
+    not_addressed_count = Column(Integer, default=0)
+    not_applicable_count = Column(Integer, default=0)
+    compliance_percentage = Column(Float, default=0.0)
+
+    ai_model_used = Column(String(100), nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    document = relationship("GovernanceDocument")
+    framework = relationship("UploadedFramework")
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+    findings = relationship("PolicyGapFinding", back_populates="analysis_run", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_gap_run_tenant_doc", "tenant_id", "document_id"),
+        Index("ix_gap_run_status", "tenant_id", "status"),
+        Index("ix_gap_run_framework", "uploaded_framework_id"),
+    )
+
+
+class PolicyGapFinding(Base):
+    """Gap analysis finding for a specific framework clause"""
+    __tablename__ = "grc_policy_gap_findings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    analysis_run_id = Column(Integer, ForeignKey("grc_policy_gap_analysis_runs.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
+    uploaded_framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id"), nullable=True, index=True)
+    framework_name = Column(String(255), nullable=True)
+
+    clause_reference = Column(String(255), nullable=True)
+    clause_title = Column(String(500), nullable=True)
+    clause_requirement_text = Column(Text, nullable=True)
+
+    policy_section_reference = Column(String(255), nullable=True)
+    policy_section_text = Column(Text, nullable=True)
+
+    compliance_status = Column(String(50), default="not_addressed")  # fully_compliant, partially_compliant, not_addressed, not_applicable
+    not_applicable_justification = Column(Text, nullable=True)
+    gap_description = Column(Text, nullable=True)
+    missing_requirement = Column(Text, nullable=True)
+    remediation_recommendation = Column(Text, nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    ai_reasoning = Column(Text, nullable=True)
+
+    risk_severity = Column(String(50), default="medium")  # low, medium, high, critical
+    impact_regulatory = Column(Boolean, default=False)
+    impact_operational = Column(Boolean, default=False)
+    impact_financial = Column(Boolean, default=False)
+    impact_reputational = Column(Boolean, default=False)
+
+    remediation_status = Column(String(50), default="open")  # open, in_progress, closed, accepted_risk
+    assigned_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    target_remediation_date = Column(DateTime, nullable=True)
+    actual_close_date = Column(DateTime, nullable=True)
+
+    risk_accepted = Column(Boolean, default=False)
+    risk_acceptance_justification = Column(Text, nullable=True)
+    risk_acceptance_approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    risk_acceptance_approved_at = Column(DateTime, nullable=True)
+    risk_acceptance_expiry_date = Column(DateTime, nullable=True)
+    risk_register_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=True, index=True)  # Link to created risk in risk register
+
+    evidence_ids = Column(JSON, default=[])
+    evidence_notes = Column(Text, nullable=True)
+
+    is_overridden = Column(Boolean, default=False)
+    override_status = Column(String(50), nullable=True)
+    override_justification = Column(Text, nullable=True)
+    overridden_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    overridden_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    analysis_run = relationship("PolicyGapAnalysisRun", back_populates="findings")
+    document = relationship("GovernanceDocument")
+    framework = relationship("UploadedFramework")
+    assigned_owner = relationship("GRCUser", foreign_keys=[assigned_owner_id])
+    risk_acceptance_approver = relationship("GRCUser", foreign_keys=[risk_acceptance_approved_by])
+    override_user = relationship("GRCUser", foreign_keys=[overridden_by])
+    risk_register_entry = relationship("Risk", foreign_keys=[risk_register_id], uselist=False)
+
+    __table_args__ = (
+        Index("ix_gap_finding_doc", "tenant_id", "document_id"),
+        Index("ix_gap_finding_run", "analysis_run_id"),
+        Index("ix_gap_finding_status", "tenant_id", "compliance_status"),
+        Index("ix_gap_finding_remediation", "tenant_id", "remediation_status"),
     )
 
 
@@ -4745,12 +5220,742 @@ class RegulatoryFeedItem(Base):
 
 
 # =============================================================================
+# 25. Audit Management Module
+# =============================================================================
+
+class AuditableEntity(Base):
+    __tablename__ = "grc_auditable_entities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    entity_type = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    business_unit_id = Column(Integer, ForeignKey("grc_business_units.id"), nullable=True)
+    risk_score = Column(Float, default=0)
+    risk_rating = Column(String(20), default="low")
+    audit_cycle_months = Column(Integer, default=12)
+    last_audited_date = Column(DateTime, nullable=True)
+    next_audit_due = Column(DateTime, nullable=True)
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    status = Column(String(50), default="active")
+    linked_risk_ids = Column(JSON, default=[])
+    metadata_json = Column(JSON, default={})
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    business_unit = relationship("BusinessUnit")
+    owner = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_auditable_entity_tenant", "tenant_id"),
+        Index("ix_auditable_entity_risk", "tenant_id", "risk_score"),
+    )
+
+
+class AuditPlan(Base):
+    __tablename__ = "grc_audit_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    fiscal_year = Column(String(10), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(50), default="draft")
+    approval_status = Column(String(50), default="pending")
+    approved_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    total_budget_days = Column(Float, default=0)
+    ai_generated = Column(Boolean, default=False)
+    ai_generation_params = Column(JSON, default={})
+    risk_alignment_score = Column(Float, nullable=True)
+    created_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    approved_by = relationship("GRCUser", foreign_keys=[approved_by_id])
+    created_by = relationship("GRCUser", foreign_keys=[created_by_id])
+    items = relationship("AuditPlanItem", back_populates="plan", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_audit_plan_tenant", "tenant_id"),
+        Index("ix_audit_plan_year", "tenant_id", "fiscal_year"),
+    )
+
+
+class AuditPlanItem(Base):
+    __tablename__ = "grc_audit_plan_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(Integer, ForeignKey("grc_audit_plans.id"), nullable=False, index=True)
+    auditable_entity_id = Column(Integer, ForeignKey("grc_auditable_entities.id"), nullable=True)
+    name = Column(String(255), nullable=False)
+    risk_score = Column(Float, default=0)
+    quarter = Column(String(10), nullable=True)
+    scheduled_start = Column(DateTime, nullable=True)
+    scheduled_end = Column(DateTime, nullable=True)
+    budget_days = Column(Float, default=0)
+    framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id"), nullable=True)
+    assigned_auditor_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    priority = Column(String(20), default="medium")
+    status = Column(String(50), default="scheduled")
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    plan = relationship("AuditPlan", back_populates="items")
+    auditable_entity = relationship("AuditableEntity")
+    framework = relationship("UploadedFramework")
+    assigned_auditor = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_audit_plan_item_plan", "plan_id"),
+    )
+
+
+class AuditEngagement(Base):
+    __tablename__ = "grc_audit_engagements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    plan_item_id = Column(Integer, ForeignKey("grc_audit_plan_items.id"), nullable=True)
+    auditable_entity_id = Column(Integer, ForeignKey("grc_auditable_entities.id"), nullable=True)
+    engagement_number = Column(String(50), nullable=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    engagement_type = Column(String(50), default="assurance")
+    status = Column(String(50), default="planning")
+    scope = Column(Text, nullable=True)
+    objectives = Column(Text, nullable=True)
+    methodology = Column(Text, nullable=True)
+    framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id"), nullable=True)
+    planned_start = Column(DateTime, nullable=True)
+    planned_end = Column(DateTime, nullable=True)
+    actual_start = Column(DateTime, nullable=True)
+    actual_end = Column(DateTime, nullable=True)
+    budget_hours = Column(Float, default=0)
+    actual_hours = Column(Float, default=0)
+    lead_auditor_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    opinion = Column(String(50), nullable=True)
+    opinion_narrative = Column(Text, nullable=True)
+    risk_rating = Column(String(20), nullable=True)
+    created_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    plan_item = relationship("AuditPlanItem")
+    auditable_entity = relationship("AuditableEntity")
+    framework = relationship("UploadedFramework")
+    lead_auditor = relationship("GRCUser", foreign_keys=[lead_auditor_id])
+    created_by = relationship("GRCUser", foreign_keys=[created_by_id])
+    team_members = relationship("AuditTeamMember", back_populates="engagement", cascade="all, delete-orphan")
+    workpapers = relationship("AuditWorkpaper", back_populates="engagement", cascade="all, delete-orphan")
+    findings = relationship("AuditFinding", back_populates="engagement", cascade="all, delete-orphan")
+    time_entries = relationship("AuditTimeEntry", back_populates="engagement", cascade="all, delete-orphan")
+    reports = relationship("AuditReport", back_populates="engagement", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_audit_engagement_tenant", "tenant_id"),
+        Index("ix_audit_engagement_status", "tenant_id", "status"),
+    )
+
+
+class AuditTeamMember(Base):
+    __tablename__ = "grc_audit_team_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    engagement_id = Column(Integer, ForeignKey("grc_audit_engagements.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    role = Column(String(50), default="auditor")
+    skills = Column(JSON, default=[])
+    availability_percent = Column(Float, default=100)
+    conflict_of_interest = Column(Boolean, default=False)
+    coi_declaration = Column(Text, nullable=True)
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+
+    engagement = relationship("AuditEngagement", back_populates="team_members")
+    user = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_audit_team_engagement", "engagement_id"),
+        UniqueConstraint("engagement_id", "user_id", name="uq_audit_team_member"),
+    )
+
+
+class AuditWorkpaper(Base):
+    __tablename__ = "grc_audit_workpapers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    engagement_id = Column(Integer, ForeignKey("grc_audit_engagements.id"), nullable=False, index=True)
+    reference_number = Column(String(50), nullable=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    workpaper_type = Column(String(50), default="test")
+    status = Column(String(50), default="draft")
+    preparer_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    reviewer_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    lead_signoff_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    prepared_at = Column(DateTime, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    lead_signoff_at = Column(DateTime, nullable=True)
+    review_notes = Column(Text, nullable=True)
+    conclusion = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    engagement = relationship("AuditEngagement", back_populates="workpapers")
+    preparer = relationship("GRCUser", foreign_keys=[preparer_id])
+    reviewer = relationship("GRCUser", foreign_keys=[reviewer_id])
+    lead_signoff = relationship("GRCUser", foreign_keys=[lead_signoff_id])
+    procedures = relationship("AuditProcedure", back_populates="workpaper", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_audit_workpaper_engagement", "engagement_id"),
+    )
+
+
+class AuditProcedure(Base):
+    __tablename__ = "grc_audit_procedures"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workpaper_id = Column(Integer, ForeignKey("grc_audit_workpapers.id"), nullable=False, index=True)
+    procedure_number = Column(String(20), nullable=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    test_type = Column(String(50), default="control_test")
+    sampling_methodology = Column(String(100), nullable=True)
+    sample_size = Column(Integer, nullable=True)
+    population_size = Column(Integer, nullable=True)
+    result = Column(String(20), nullable=True)
+    result_details = Column(Text, nullable=True)
+    exceptions_noted = Column(Integer, default=0)
+    control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=True)
+    framework_control_id = Column(Integer, ForeignKey("grc_parsed_framework_controls.id"), nullable=True)
+    evidence_ids = Column(JSON, default=[])
+    ai_generated = Column(Boolean, default=False)
+    performed_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    performed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    workpaper = relationship("AuditWorkpaper", back_populates="procedures")
+    control = relationship("NormalizedControl")
+    framework_control = relationship("ParsedFrameworkControl")
+    performed_by = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_audit_procedure_workpaper", "workpaper_id"),
+    )
+
+
+class AuditFinding(Base):
+    __tablename__ = "grc_audit_findings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    engagement_id = Column(Integer, ForeignKey("grc_audit_engagements.id"), nullable=False, index=True)
+    finding_number = Column(String(50), nullable=True)
+    title = Column(String(255), nullable=False)
+    condition = Column(Text, nullable=True)
+    criteria = Column(Text, nullable=True)
+    cause = Column(Text, nullable=True)
+    effect = Column(Text, nullable=True)
+    root_cause_category = Column(String(50), nullable=True)
+    severity = Column(String(20), default="medium")
+    status = Column(String(50), default="open")
+    framework_mappings = Column(JSON, default=[])
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=True)
+    control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=True)
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    ai_generated = Column(Boolean, default=False)
+    theme = Column(String(100), nullable=True)
+    attachment_file_name = Column(String(255), nullable=True)
+    attachment_file_path = Column(String(500), nullable=True)
+    attachment_content_type = Column(String(100), nullable=True)
+    attachment_file_size = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    engagement = relationship("AuditEngagement", back_populates="findings")
+    risk = relationship("Risk")
+    control = relationship("NormalizedControl")
+    owner = relationship("GRCUser")
+    management_responses = relationship("AuditManagementResponse", back_populates="finding", cascade="all, delete-orphan")
+    recommendations = relationship("AuditRecommendation", back_populates="finding", cascade="all, delete-orphan")
+    follow_ups = relationship("AuditFollowUp", back_populates="finding", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_audit_finding_tenant", "tenant_id"),
+        Index("ix_audit_finding_engagement", "engagement_id"),
+        Index("ix_audit_finding_severity", "tenant_id", "severity"),
+    )
+
+
+class AuditManagementResponse(Base):
+    __tablename__ = "grc_audit_management_responses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    finding_id = Column(Integer, ForeignKey("grc_audit_findings.id"), nullable=False, index=True)
+    response_type = Column(String(20), default="agree")
+    response_text = Column(Text, nullable=True)
+    action_plan = Column(Text, nullable=True)
+    target_date = Column(DateTime, nullable=True)
+    respondent_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    responded_at = Column(DateTime, default=datetime.utcnow)
+
+    finding = relationship("AuditFinding", back_populates="management_responses")
+    respondent = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_audit_mgmt_response_finding", "finding_id"),
+    )
+
+
+class AuditRecommendation(Base):
+    __tablename__ = "grc_audit_recommendations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    finding_id = Column(Integer, ForeignKey("grc_audit_findings.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    priority = Column(String(20), default="medium")
+    status = Column(String(50), default="open")
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    finding = relationship("AuditFinding", back_populates="recommendations")
+    owner = relationship("GRCUser")
+    action_plans = relationship("AuditActionPlan", back_populates="recommendation", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_audit_recommendation_finding", "finding_id"),
+    )
+
+
+class AuditActionPlan(Base):
+    __tablename__ = "grc_audit_action_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recommendation_id = Column(Integer, ForeignKey("grc_audit_recommendations.id"), nullable=False, index=True)
+    milestone = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    completed_date = Column(DateTime, nullable=True)
+    status = Column(String(50), default="pending")
+    evidence_of_completion = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    recommendation = relationship("AuditRecommendation", back_populates="action_plans")
+    owner = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_audit_action_plan_rec", "recommendation_id"),
+    )
+
+
+class AuditFollowUp(Base):
+    __tablename__ = "grc_audit_follow_ups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    finding_id = Column(Integer, ForeignKey("grc_audit_findings.id"), nullable=False, index=True)
+    follow_up_type = Column(String(50), default="retest")
+    retest_result = Column(String(20), nullable=True)
+    retest_details = Column(Text, nullable=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=True)
+    performed_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    performed_at = Column(DateTime, default=datetime.utcnow)
+    closure_approved = Column(Boolean, default=False)
+    closure_approved_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    closure_approved_at = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    finding = relationship("AuditFinding", back_populates="follow_ups")
+    evidence = relationship("Evidence")
+    performed_by = relationship("GRCUser", foreign_keys=[performed_by_id])
+    closure_approved_by = relationship("GRCUser", foreign_keys=[closure_approved_by_id])
+
+    __table_args__ = (
+        Index("ix_audit_follow_up_finding", "finding_id"),
+    )
+
+
+class AuditTimeEntry(Base):
+    __tablename__ = "grc_audit_time_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    engagement_id = Column(Integer, ForeignKey("grc_audit_engagements.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    workpaper_id = Column(Integer, ForeignKey("grc_audit_workpapers.id"), nullable=True)
+    date = Column(DateTime, nullable=False)
+    hours = Column(Float, nullable=False)
+    description = Column(Text, nullable=True)
+    activity_type = Column(String(50), default="fieldwork")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    engagement = relationship("AuditEngagement", back_populates="time_entries")
+    user = relationship("GRCUser")
+    workpaper = relationship("AuditWorkpaper")
+
+    __table_args__ = (
+        Index("ix_audit_time_entry_engagement", "engagement_id"),
+    )
+
+
+class AuditReport(Base):
+    __tablename__ = "grc_audit_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    engagement_id = Column(Integer, ForeignKey("grc_audit_engagements.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    report_type = Column(String(50), default="engagement_report")
+    executive_summary = Column(Text, nullable=True)
+    opinion = Column(String(50), nullable=True)
+    opinion_narrative = Column(Text, nullable=True)
+    scope_summary = Column(Text, nullable=True)
+    findings_summary = Column(JSON, default={})
+    recommendations_summary = Column(JSON, default={})
+    ai_recommendations = Column(Text, nullable=True)
+    status = Column(String(50), default="draft")
+    ai_generated = Column(Boolean, default=False)
+    issued_date = Column(DateTime, nullable=True)
+    issued_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    engagement = relationship("AuditEngagement", back_populates="reports")
+    issued_by = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_audit_report_tenant", "tenant_id"),
+        Index("ix_audit_report_engagement", "engagement_id"),
+    )
+
+
+class AuditBoardPack(Base):
+    __tablename__ = "grc_audit_board_packs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    period = Column(String(50), nullable=True)
+    executive_summary = Column(Text, nullable=True)
+    engagement_ids = Column(JSON, default=[])
+    key_findings = Column(JSON, default=[])
+    kpi_data = Column(JSON, default={})
+    risk_heatmap_data = Column(JSON, default={})
+    opinion_summary = Column(Text, nullable=True)
+    status = Column(String(50), default="draft")
+    ai_generated = Column(Boolean, default=False)
+    prepared_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    presented_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    prepared_by = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_audit_board_pack_tenant", "tenant_id"),
+    )
+
+
+class CCMRule(Base):
+    __tablename__ = "grc_ccm_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    rule_code = Column(String(50), nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    control_area = Column(String(100), nullable=False)
+    control_id = Column(Integer, ForeignKey("grc_internal_controls.id"), nullable=True)
+    rule_type = Column(String(50), default="threshold")
+    threshold_value = Column(Float, nullable=True)
+    threshold_operator = Column(String(20), nullable=True)
+    severity = Column(String(20), default="medium")
+    is_active = Column(Boolean, default=True)
+    parameters = Column(JSON, default={})
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    control = relationship("InternalControl")
+
+    __table_args__ = (
+        Index("ix_ccm_rule_tenant", "tenant_id"),
+        Index("ix_ccm_rule_area", "tenant_id", "control_area"),
+    )
+
+
+class CCMAnomaly(Base):
+    __tablename__ = "grc_ccm_anomalies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    rule_id = Column(Integer, ForeignKey("grc_ccm_rules.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    severity = Column(String(20), default="medium")
+    detected_at = Column(DateTime, default=datetime.utcnow)
+    transaction_ref = Column(String(255), nullable=True)
+    transaction_amount = Column(Float, nullable=True)
+    control_area = Column(String(100), nullable=True)
+    is_false_positive = Column(Boolean, default=False)
+    false_positive_reason = Column(Text, nullable=True)
+    status = Column(String(50), default="flagged")
+    metadata_json = Column(JSON, default={})
+
+    tenant = relationship("Tenant")
+    rule = relationship("CCMRule")
+    exceptions = relationship("CCMException", back_populates="anomaly", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_ccm_anomaly_tenant", "tenant_id"),
+        Index("ix_ccm_anomaly_severity", "tenant_id", "severity"),
+        Index("ix_ccm_anomaly_status", "tenant_id", "status"),
+    )
+
+
+class CCMException(Base):
+    __tablename__ = "grc_ccm_exceptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    anomaly_id = Column(Integer, ForeignKey("grc_ccm_anomalies.id"), nullable=False, index=True)
+    workflow_status = Column(String(50), default="flagged")
+    assigned_to_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    reviewed_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    decision = Column(String(50), nullable=True)
+    decision_notes = Column(Text, nullable=True)
+    escalated_to_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    escalated_at = Column(DateTime, nullable=True)
+    finding_id = Column(Integer, ForeignKey("grc_audit_findings.id"), nullable=True)
+    closed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    anomaly = relationship("CCMAnomaly", back_populates="exceptions")
+    assigned_to = relationship("GRCUser", foreign_keys=[assigned_to_id])
+    reviewed_by = relationship("GRCUser", foreign_keys=[reviewed_by_id])
+    escalated_to = relationship("GRCUser", foreign_keys=[escalated_to_id])
+    finding = relationship("AuditFinding")
+
+    __table_args__ = (
+        Index("ix_ccm_exception_anomaly", "anomaly_id"),
+        Index("ix_ccm_exception_status", "workflow_status"),
+    )
+
+
+class PBCListItem(Base):
+    __tablename__ = "grc_pbc_list_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    engagement_id = Column(Integer, ForeignKey("grc_audit_engagements.id"), nullable=False, index=True)
+    document_name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String(100), nullable=True)
+    requested_by = Column(String(255), nullable=True)
+    assigned_to_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    status = Column(String(50), default="requested")
+    due_date = Column(DateTime, nullable=True)
+    submitted_date = Column(DateTime, nullable=True)
+    reviewed_date = Column(DateTime, nullable=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    engagement = relationship("AuditEngagement")
+    assigned_to = relationship("GRCUser")
+    evidence = relationship("Evidence")
+
+    __table_args__ = (
+        Index("ix_pbc_list_tenant", "tenant_id"),
+        Index("ix_pbc_list_engagement", "engagement_id"),
+    )
+
+
+class QAIPReview(Base):
+    __tablename__ = "grc_qaip_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    engagement_id = Column(Integer, ForeignKey("grc_audit_engagements.id"), nullable=True)
+    review_type = Column(String(50), default="internal")
+    reviewer_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    peer_reviewer_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    checklist = Column(JSON, default=[])
+    iia_conformance = Column(JSON, default={})
+    maturity_score = Column(Float, nullable=True)
+    overall_rating = Column(String(50), nullable=True)
+    findings = Column(Text, nullable=True)
+    recommendations = Column(Text, nullable=True)
+    status = Column(String(50), default="pending")
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    engagement = relationship("AuditEngagement")
+    reviewer = relationship("GRCUser", foreign_keys=[reviewer_id])
+    peer_reviewer = relationship("GRCUser", foreign_keys=[peer_reviewer_id])
+
+    __table_args__ = (
+        Index("ix_qaip_review_tenant", "tenant_id"),
+    )
+
+
+class AuditTemplate(Base):
+    __tablename__ = "grc_audit_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    template_type = Column(String(50), default="general")
+    framework_type = Column(String(100), nullable=True)
+    procedures = Column(JSON, default=[])
+    checklist = Column(JSON, default=[])
+    is_system = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+
+    __table_args__ = (
+        Index("ix_audit_template_type", "framework_type"),
+    )
+
+
+class AuditTestScript(Base):
+    __tablename__ = "grc_audit_test_scripts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    objective = Column(Text, nullable=True)
+    procedure_steps = Column(JSON, default=[])
+    control_area = Column(String(100), nullable=True)
+    entity_type = Column(String(100), nullable=True)
+    framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id"), nullable=True)
+    test_type = Column(String(50), default="control_test")
+    sampling_methodology = Column(String(50), nullable=True)
+    expected_evidence = Column(Text, nullable=True)
+    tags = Column(JSON, default=[])
+    usage_count = Column(Integer, default=0)
+    last_used_date = Column(DateTime, nullable=True)
+    created_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    framework = relationship("UploadedFramework")
+    created_by = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_test_script_tenant", "tenant_id"),
+        Index("ix_test_script_area", "tenant_id", "control_area"),
+    )
+
+
+class AuditorSkill(Base):
+    __tablename__ = "grc_auditor_skills"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    skill_name = Column(String(255), nullable=False)
+    skill_category = Column(String(100), default="general")
+    proficiency_level = Column(String(50), default="intermediate")
+    certification = Column(String(255), nullable=True)
+    certification_expiry = Column(DateTime, nullable=True)
+    years_experience = Column(Float, default=0)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    user = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_auditor_skill_tenant", "tenant_id"),
+        Index("ix_auditor_skill_user", "tenant_id", "user_id"),
+    )
+
+
+class AuditorAllocation(Base):
+    __tablename__ = "grc_auditor_allocations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    engagement_id = Column(Integer, ForeignKey("grc_audit_engagements.id"), nullable=True)
+    allocation_type = Column(String(50), default="audit")
+    allocated_hours = Column(Float, default=0)
+    actual_hours = Column(Float, default=0)
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+    status = Column(String(50), default="planned")
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    user = relationship("GRCUser")
+    engagement = relationship("AuditEngagement")
+
+    __table_args__ = (
+        Index("ix_allocation_tenant", "tenant_id"),
+        Index("ix_allocation_user", "tenant_id", "user_id"),
+        Index("ix_allocation_dates", "tenant_id", "start_date", "end_date"),
+    )
+
+
+# =============================================================================
 # Database Initialization Functions
 # =============================================================================
+
+def _add_missing_columns():
+    """Add any missing columns that may have been added to models but not migrated to database."""
+    inspector = inspect(engine)
+    
+    # Check grc_certification_journeys table for phases_completion column
+    try:
+        columns = {col['name'] for col in inspector.get_columns('grc_certification_journeys')}
+        
+        if 'phases_completion' not in columns:
+            logger.warning("Adding missing 'phases_completion' column to grc_certification_journeys table...")
+            with engine.begin() as conn:
+                if DATABASE_URL.startswith('sqlite'):
+                    sql = text("ALTER TABLE grc_certification_journeys ADD COLUMN phases_completion TEXT")
+                else:
+                    sql = text("ALTER TABLE grc_certification_journeys ADD COLUMN phases_completion JSON")
+                
+                conn.execute(sql)
+                logger.info("✓ Successfully added phases_completion column")
+    except Exception as e:
+        # Table might not exist yet (new installation), which is fine
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            logger.debug("grc_certification_journeys table not found - will be created")
+        else:
+            logger.error(f"Error checking/adding columns: {e}")
+
 
 def init_grc_db():
     """Create all GRC tables in the database and seed framework data."""
     Base.metadata.create_all(bind=engine)
+    
+    # Add any missing columns that may have been added to models
+    _add_missing_columns()
     
     from .seed_frameworks import seed_frameworks, seed_uploaded_frameworks
     seed_frameworks()

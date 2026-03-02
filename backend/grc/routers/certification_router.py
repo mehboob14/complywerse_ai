@@ -1,11 +1,14 @@
 import os
+import json
 import uuid
 import random
 import logging
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
+from sqlalchemy.orm.attributes import flag_modified
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +17,7 @@ from ..models import (
     Framework, FrameworkControl, FrameworkDomain, ControlObjective,
     FrameworkSubControl, Evidence, GRCUser, Tenant, CuratedEvidenceItem, 
     CertificationPhase, UploadedFramework, ParsedFrameworkControl, get_db,
-    EvidenceAIAssessment
+    EvidenceAIAssessment, EvidenceControlMapping, ITAsset
 )
 from ..schemas import (
     CertificationJourneyCreate, CertificationJourneyUpdate, CertificationJourneyResponse,
@@ -22,12 +25,79 @@ from ..schemas import (
     ImplementationEvidenceCreate, ImplementationEvidenceResponse,
     ProgressSummary, GapAnalysis, EvidenceReviewAction, MessageResponse
 )
+from ..modules.framework_upload.routers.evidence import trigger_ocr_and_assessment_background
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/certifications", tags=["Certifications"])
 
 UPLOAD_DIR = "backend/uploads/certification_evidence"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+EVIDENCE_LIBRARY_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads", "evidence")
+os.makedirs(EVIDENCE_LIBRARY_UPLOAD_DIR, exist_ok=True)
+
+
+EVIDENCE_TYPE_KEYWORDS = {
+    "policy": "policy",
+    "procedure": "procedure",
+    "log": "log",
+    "report": "report",
+    "screenshot": "screenshot",
+    "record": "record",
+    "configuration": "configuration",
+    "config": "configuration",
+    "certificate": "certificate",
+    "contract": "contract",
+    "attestation": "attestation",
+    "test": "test_results",
+    "register": "register",
+    "inventory": "inventory",
+    "plan": "plan",
+    "matrix": "matrix",
+    "training": "training",
+    "audit": "log",
+    "approval": "attestation",
+    "review": "report",
+    "assessment": "report",
+    "framework": "policy",
+    "strategy": "policy",
+    "risk": "report",
+    "letter": "attestation",
+    "profile": "report",
+    "description": "procedure",
+}
+
+
+def _infer_evidence_type(text: str) -> str:
+    lower = text.lower()
+    for keyword, ev_type in EVIDENCE_TYPE_KEYWORDS.items():
+        if keyword in lower:
+            return ev_type
+    return "document"
+
+
+def normalize_evidence_requirements(raw_evidence: list) -> list:
+    if not raw_evidence:
+        return []
+    normalized = []
+    for item in raw_evidence:
+        if isinstance(item, dict) and "title" in item:
+            normalized.append(item)
+        elif isinstance(item, str):
+            normalized.append({
+                "type": _infer_evidence_type(item),
+                "title": item,
+                "description": item,
+                "is_required": True
+            })
+        else:
+            normalized.append({
+                "type": "document",
+                "title": str(item),
+                "description": str(item),
+                "is_required": True
+            })
+    return normalized
 
 
 def get_phases_from_document_structure(framework: Optional[UploadedFramework]) -> List[dict]:
@@ -109,8 +179,8 @@ def _parse_sections_array(sections: list, start_phase_num: int = 1) -> List[dict
                     "section_reference": phase_number,
                     "name": phase_name,
                     "description": description,
-                    "key_tasks": [],
-                    "deliverables": []
+                    "key_tasks": section.get("key_tasks", []) if isinstance(section.get("key_tasks"), list) else [],
+                    "deliverables": section.get("deliverables", []) if isinstance(section.get("deliverables"), list) else []
                 })
                 phase_num += 1
             except Exception as e:
@@ -280,6 +350,99 @@ def create_certification(
     return journey
 
 
+@router.get("/cde-systems")
+def get_cde_systems(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    tenant_assets = db.query(ITAsset).options(
+        joinedload(ITAsset.owner)
+    ).filter(
+        ITAsset.tenant_id.in_(user_tenants)
+    ).order_by(ITAsset.asset_type, ITAsset.name).all()
+
+    def _is_cde_enabled(value) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value == 1
+        if isinstance(value, str):
+            return value.strip().lower() in {"true", "1", "yes", "y", "on"}
+        return False
+
+    assets = [asset for asset in tenant_assets if _is_cde_enabled(asset.cde_environment)]
+
+    total = len(assets)
+    type_breakdown = {}
+    criticality_breakdown = {}
+    for asset in assets:
+        asset_type = asset.asset_type or "other"
+        type_breakdown[asset_type] = type_breakdown.get(asset_type, 0) + 1
+        criticality = asset.criticality or "medium"
+        criticality_breakdown[criticality] = criticality_breakdown.get(criticality, 0) + 1
+
+    return {
+        "systems": [
+            {
+                "id": asset.id,
+                "name": asset.name,
+                "asset_type": asset.asset_type,
+                "description": asset.description,
+                "location": asset.location,
+                "owner_name": (
+                    asset.owner.display_name
+                    or asset.owner.username
+                    or asset.owner.email
+                ) if asset.owner else None,
+                "owner_id": asset.owner_id,
+                "vendor": asset.vendor,
+                "criticality": asset.criticality,
+                "status": asset.status,
+                "cde_environment": asset.cde_environment,
+                "created_at": asset.created_at.isoformat() if asset.created_at else None,
+            }
+            for asset in assets
+        ],
+        "summary": {
+            "total": total,
+            "type_breakdown": type_breakdown,
+            "criticality_breakdown": criticality_breakdown,
+        },
+    }
+
+
+@router.put("/cde-systems/{asset_id}/scope")
+def update_cde_system_scope(
+    asset_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IT Asset not found")
+
+    if "cde_environment" in data:
+        asset.cde_environment = data["cde_environment"]
+    elif "in_scope" in data:
+        asset.cde_environment = data["in_scope"]
+
+    db.commit()
+    db.refresh(asset)
+
+    return {
+        "id": asset.id,
+        "name": asset.name,
+        "asset_type": asset.asset_type,
+        "cde_environment": asset.cde_environment,
+    }
+
+
 @router.get("/{journey_id}", response_model=dict)
 def get_certification(
     journey_id: int,
@@ -305,6 +468,7 @@ def get_certification(
         "framework_id": journey.uploaded_framework_id,
         "framework_name": framework.name if framework else None,
         "framework_short_code": framework.name[:10] if framework else None,
+        "framework": {"id": framework.id, "name": framework.name} if framework else None,
         "name": journey.name,
         "target_date": journey.target_date.isoformat() if journey.target_date else None,
         "started_at": journey.started_at.isoformat() if journey.started_at else None,
@@ -313,6 +477,7 @@ def get_certification(
         "current_phase": journey.current_phase,
         "notes": journey.notes,
         "phases": phases_list,
+        "has_generated_phases": bool(journey.generated_phases and len(journey.generated_phases) > 0),
         "progress": {
             "total_controls": total,
             "implemented": implemented,
@@ -379,6 +544,63 @@ def list_journey_controls(
         query = query.filter(ControlImplementation.priority == priority)
     
     implementations = query.all()
+
+    parsed_control_ids = [impl.parsed_control_id for impl in implementations if impl.parsed_control_id]
+    framework_control_ids = [impl.framework_control_id for impl in implementations if impl.framework_control_id]
+
+    mapped_evidence_by_parsed = {}
+    mapped_evidence_by_framework = {}
+
+    if parsed_control_ids or framework_control_ids:
+        mapping_rows = db.query(EvidenceControlMapping, Evidence).join(
+            Evidence,
+            Evidence.id == EvidenceControlMapping.evidence_id
+        ).filter(
+            Evidence.tenant_id == journey.tenant_id,
+            or_(
+                EvidenceControlMapping.parsed_control_id.in_(parsed_control_ids) if parsed_control_ids else False,
+                EvidenceControlMapping.framework_control_id.in_(framework_control_ids) if framework_control_ids else False
+            )
+        ).all()
+
+        for mapping, linked_evidence in mapping_rows:
+            mapped_payload = {
+                "id": mapping.id,
+                "file_name": linked_evidence.file_name or linked_evidence.name,
+                "file_size": getattr(linked_evidence, "file_size", None),
+                "uploaded_at": linked_evidence.uploaded_at.isoformat() if linked_evidence.uploaded_at else None,
+                "ai_confidence_score": mapping.confidence_score,
+                "review_status": "linked",
+                "linked_evidence_id": linked_evidence.id,
+                "ai_assessment_status": "linked",
+                "ai_assessment_summary": None
+            }
+
+            if mapping.parsed_control_id:
+                mapped_evidence_by_parsed.setdefault(mapping.parsed_control_id, []).append(mapped_payload)
+            if mapping.framework_control_id:
+                mapped_evidence_by_framework.setdefault(mapping.framework_control_id, []).append(mapped_payload)
+    
+    def natural_sort_key(impl):
+        """Generate a sort key that handles dotted version numbers naturally (e.g., 3.1.2 before 3.1.10)"""
+        import re
+        parsed = impl.parsed_control
+        fc = impl.framework_control
+        code = ""
+        if parsed:
+            code = parsed.control_id or ""
+        elif fc:
+            code = fc.control_code or ""
+        parts = re.split(r'[.\-_\s]+', code)
+        key = []
+        for p in parts:
+            try:
+                key.append((0, int(p), ''))
+            except ValueError:
+                key.append((1, 0, p.lower()))
+        return key
+    
+    implementations.sort(key=natural_sort_key)
     
     result = []
     for impl in implementations:
@@ -411,7 +633,7 @@ def list_journey_controls(
                 
                 result = []
                 for child in children:
-                    child_evidence = child.evidence_requirements or []
+                    child_evidence = normalize_evidence_requirements(child.evidence_requirements or [])
                     grandchildren = build_control_hierarchy(child.control_id, framework_id, visited.copy())
                     result.append({
                         "id": child.id,
@@ -426,7 +648,7 @@ def list_journey_controls(
                 return result
             
             sub_controls_list = build_control_hierarchy(parsed_control.control_id, parsed_control.uploaded_framework_id)
-            evidence_requirements = parsed_control.evidence_requirements or []
+            evidence_requirements = normalize_evidence_requirements(parsed_control.evidence_requirements or [])
         elif framework_control:
             control = framework_control
             objective = control.objective if control else None
@@ -497,6 +719,23 @@ def list_journey_controls(
                 "ai_assessment_status": ai_assessment_status,
                 "ai_assessment_summary": ai_assessment_summary
             })
+
+        existing_linked_ids = {
+            ev_item.get("linked_evidence_id") for ev_item in evidence_list if ev_item.get("linked_evidence_id")
+        }
+        mapped_items = []
+        if impl.parsed_control_id:
+            mapped_items.extend(mapped_evidence_by_parsed.get(impl.parsed_control_id, []))
+        if impl.framework_control_id:
+            mapped_items.extend(mapped_evidence_by_framework.get(impl.framework_control_id, []))
+
+        for mapped in mapped_items:
+            linked_id = mapped.get("linked_evidence_id")
+            if linked_id and linked_id in existing_linked_ids:
+                continue
+            evidence_list.append(mapped)
+            if linked_id:
+                existing_linked_ids.add(linked_id)
         
         result.append({
             "id": impl.id,
@@ -652,6 +891,7 @@ def update_control_implementation(
 async def upload_control_evidence(
     journey_id: int,
     control_id: int,
+    background_tasks: BackgroundTasks,
     evidence_id: Optional[int] = Form(None),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
@@ -670,6 +910,9 @@ async def upload_control_evidence(
             detail="Control implementation not found"
         )
     
+    library_evidence = None
+    ocr_status_val = None
+
     if evidence_id:
         existing_evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
         if not existing_evidence:
@@ -689,14 +932,34 @@ async def upload_control_evidence(
     elif file:
         file_ext = os.path.splitext(file.filename)[1] if file.filename else ""
         file_id = str(uuid.uuid4())
-        file_path = os.path.join(UPLOAD_DIR, f"{file_id}{file_ext}")
+        tenant_upload_dir = os.path.join(EVIDENCE_LIBRARY_UPLOAD_DIR, str(journey.tenant_id))
+        os.makedirs(tenant_upload_dir, exist_ok=True)
+        file_path = os.path.join(tenant_upload_dir, f"{file_id}{file_ext}")
         
         contents = await file.read()
         with open(file_path, "wb") as f:
             f.write(contents)
         
+        ocr_processable = ['pdf', 'png', 'jpg', 'jpeg']
+        ocr_status_val = "pending" if file_ext and file_ext[1:].lower() in ocr_processable else "not_applicable"
+
+        library_evidence = Evidence(
+            tenant_id=journey.tenant_id,
+            name=file.filename or "Uploaded Evidence",
+            file_path=file_path,
+            file_name=file.filename,
+            file_type=file.content_type,
+            evidence_type="document",
+            status="draft",
+            uploaded_by=current_user.id,
+            ocr_status=ocr_status_val
+        )
+        db.add(library_evidence)
+        db.flush()
+
         impl_evidence = ImplementationEvidence(
             implementation_id=implementation.id,
+            evidence_id=library_evidence.id,
             file_name=file.filename,
             file_path=file_path,
             file_size=len(contents),
@@ -713,6 +976,10 @@ async def upload_control_evidence(
     db.add(impl_evidence)
     db.commit()
     db.refresh(impl_evidence)
+
+    if library_evidence and ocr_status_val == "pending":
+        background_tasks.add_task(trigger_ocr_and_assessment_background, library_evidence.id, current_user.id)
+
     return impl_evidence
 
 
@@ -1006,6 +1273,474 @@ def get_uploaded_framework_phases(
     return phases
 
 
+@router.post("/{journey_id}/generate-phases")
+def generate_journey_phases(
+    journey_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    journey = get_journey_or_404(journey_id, current_user, db)
+
+    if journey.generated_phases and len(journey.generated_phases) > 0:
+        return {"phases": journey.generated_phases, "cached": True}
+
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == journey.uploaded_framework_id
+    ).first()
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework not found for this journey"
+        )
+
+    controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework.id
+    ).all()
+
+    total_controls = len(controls)
+    domains = set()
+    sample_controls = []
+    for ctrl in controls[:30]:
+        domain = ctrl.domain or ctrl.parent_section or "General"
+        domains.add(domain)
+        sample_controls.append(f"- [{ctrl.control_id}] {ctrl.title} (Domain: {domain})")
+
+    domains_text = ", ".join(list(domains)[:15])
+    controls_text = "\n".join(sample_controls[:25])
+
+    doc_structure = framework.document_structure or {}
+    framework_type = doc_structure.get("type", "")
+    framework_desc = doc_structure.get("description", "")
+
+    is_certification = any(kw in (framework.name or "").lower() for kw in [
+        "iso", "soc", "pci", "certification", "27001", "22301", "9001", "20000"
+    ])
+    is_regulatory = any(kw in (framework.name or "").lower() for kw in [
+        "regulation", "gdpr", "mas", "sbp", "sama", "central bank", "monetary",
+        "authority", "basel", "regulatory"
+    ])
+
+    if is_certification:
+        journey_type_hint = "This is a CERTIFICATION framework (e.g., ISO, SOC, PCI). Include phases for formal certification audit preparation, Stage 1 and Stage 2 audits, and surveillance."
+    elif is_regulatory:
+        journey_type_hint = "This is a REGULATORY COMPLIANCE framework. Include phases for regulatory gap assessment, remediation, regulatory submission/reporting, and ongoing regulatory compliance monitoring."
+    else:
+        journey_type_hint = "Determine whether this is a certification, regulatory, or best-practice framework and tailor phases accordingly."
+
+    prompt = f"""You are a senior GRC (Governance, Risk, and Compliance) consultant with 20+ years of experience helping organizations achieve compliance and certification. You are tasked with creating a structured certification/compliance journey for an organization.
+
+FRAMEWORK DETAILS:
+- Framework Name: {framework.name}
+- Description: {framework_desc}
+- Total Controls: {total_controls}
+- Key Domains/Sections: {domains_text}
+{journey_type_hint}
+
+SAMPLE CONTROLS FROM THIS FRAMEWORK:
+{controls_text}
+
+TASK: Generate a comprehensive, realistic set of certification/compliance journey phases that an organization would follow to achieve full compliance with this framework. 
+
+REQUIREMENTS:
+1. Generate 6-10 phases that represent the ACTUAL certification/compliance lifecycle
+2. Each phase should have a clear name, detailed description explaining its purpose and importance
+3. Each phase should have 3-5 specific, actionable key tasks
+4. Each phase should have 2-4 tangible deliverables (documents, reports, artifacts)
+5. Phases should follow a logical sequence from initiation to ongoing compliance
+6. Be specific to THIS framework - reference actual control domains and requirements
+7. Include realistic duration estimates for each phase
+
+TYPICAL GRC JOURNEY PHASES TO CONSIDER (adapt based on framework type):
+- Project Initiation & Scoping (stakeholder alignment, scope definition)
+- Current State Assessment / Gap Analysis (assess existing controls vs requirements)
+- Risk Assessment & Treatment Planning (identify and prioritize risks)
+- Policy & Procedure Development (create/update documentation)
+- Control Implementation & Remediation (implement required controls)
+- Training & Awareness (staff education and competency building)
+- Internal Audit & Testing (verify control effectiveness)
+- Management Review & Pre-Assessment (leadership review, readiness check)
+- External Audit / Certification (formal assessment by certifying body)
+- Continuous Monitoring & Improvement (ongoing compliance maintenance)
+
+Return ONLY valid JSON in this exact format:
+{{
+  "phases": [
+    {{
+      "phase_number": 1,
+      "name": "Phase Name",
+      "description": "Detailed description of this phase, its purpose, importance, and what the organization achieves by completing it.",
+      "estimated_duration": "2-3 weeks",
+      "key_tasks": [
+        "Specific actionable task 1",
+        "Specific actionable task 2",
+        "Specific actionable task 3"
+      ],
+      "deliverables": [
+        "Tangible deliverable/document 1",
+        "Tangible deliverable/document 2",
+        "Tangible deliverable/document 3"
+      ]
+    }}
+  ]
+}}"""
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a world-class GRC consultant specializing in compliance frameworks and certification journeys. Always respond with valid JSON only. Be specific, practical, and actionable."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=4000,
+            temperature=0.4
+        )
+
+        result_text = response.choices[0].message.content.strip()
+        if result_text.startswith("```"):
+            result_text = result_text.split("\n", 1)[1] if "\n" in result_text else result_text
+            result_text = result_text.rsplit("```", 1)[0].strip()
+
+        parsed = json.loads(result_text)
+        ai_phases = parsed.get("phases", [])
+
+        generated_phases = []
+        for i, phase in enumerate(ai_phases):
+            generated_phases.append({
+                "id": i + 1,
+                "phase_number": phase.get("phase_number", i + 1),
+                "name": phase.get("name", f"Phase {i + 1}"),
+                "description": phase.get("description", ""),
+                "estimated_duration": phase.get("estimated_duration", ""),
+                "key_tasks": phase.get("key_tasks", []),
+                "deliverables": phase.get("deliverables", []),
+                "status": "not_started" if i > 0 else "in_progress"
+            })
+
+        journey.generated_phases = generated_phases
+        flag_modified(journey, "generated_phases")
+        db.commit()
+
+        return {"phases": generated_phases, "cached": False}
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse AI response for journey {journey_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="AI generated an invalid response. Please try again."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI phase generation failed for journey {journey_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate phases: {str(e)}"
+        )
+
+
+@router.get("/{journey_id}/journey-phases")
+def get_journey_phases(
+    journey_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    journey = get_journey_or_404(journey_id, current_user, db)
+
+    if journey.generated_phases and len(journey.generated_phases) > 0:
+        return {"phases": journey.generated_phases, "generated": True}
+
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == journey.uploaded_framework_id
+    ).first()
+    fallback_phases = get_phases_from_document_structure(framework) if framework else []
+    return {"phases": fallback_phases, "generated": False}
+
+
+def get_openai_client():
+    from openai import OpenAI
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    is_modelfarm = base_url and "modelfarm" in base_url
+    if not api_key and not is_modelfarm:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    if not is_modelfarm and (api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    return OpenAI(api_key=api_key, base_url=base_url)
+
+
+@router.post("/{journey_id}/phases/{phase_number}/generate-tasks")
+def generate_phase_tasks(
+    journey_id: int,
+    phase_number: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    journey = get_journey_or_404(journey_id, current_user, db)
+
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == journey.uploaded_framework_id
+    ).first()
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework not found for this journey"
+        )
+
+    doc_structure = framework.document_structure or {}
+    sections = doc_structure.get("sections", [])
+
+    phase_index = phase_number - 1
+    if phase_index < 0 or phase_index >= len(sections):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Phase {phase_number} not found. Framework has {len(sections)} phases."
+        )
+
+    section = sections[phase_index]
+    if isinstance(section, dict):
+        phase_name = section.get("name") or section.get("title") or f"Section {phase_number}"
+        phase_description = section.get("description") or ""
+        cached_tasks = section.get("key_tasks", [])
+        cached_deliverables = section.get("deliverables", [])
+        if cached_tasks and cached_deliverables:
+            return {
+                "phase_number": phase_number,
+                "phase_name": phase_name,
+                "key_tasks": cached_tasks,
+                "deliverables": cached_deliverables,
+                "cached": True
+            }
+    else:
+        phase_name = str(section)
+        phase_description = ""
+
+    controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework.id
+    ).all()
+
+    phase_controls = []
+    section_ref = section.get("number", str(phase_number)) if isinstance(section, dict) else str(phase_number)
+    for ctrl in controls:
+        ctrl_section = ctrl.parent_section or ctrl.domain or ""
+        if (str(section_ref) in str(ctrl_section) or
+            phase_name.lower() in (ctrl_section or "").lower()):
+            phase_controls.append(ctrl)
+
+    if not phase_controls:
+        phase_controls = controls[:10]
+
+    controls_text = "\n".join([
+        f"- {c.control_id}: {c.title}" for c in phase_controls[:15]
+    ])
+
+    prompt = f"""You are a GRC (Governance, Risk, Compliance) expert. Generate key tasks and deliverables for a specific certification phase.
+
+Framework: {framework.name}
+Phase: {phase_name}
+Phase Description: {phase_description}
+
+Controls in this phase:
+{controls_text}
+
+Generate 3-5 key tasks that an organization needs to complete for this phase, and 3-5 deliverables (tangible outputs/documents) that should be produced.
+
+Return ONLY valid JSON in this exact format:
+{{
+  "key_tasks": ["task1", "task2", "task3"],
+  "deliverables": ["deliverable1", "deliverable2", "deliverable3"]
+}}"""
+
+    key_tasks = []
+    deliverables = []
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a GRC certification expert. Always respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1000
+        )
+
+        result_text = response.choices[0].message.content.strip()
+        if result_text.startswith("```"):
+            result_text = result_text.split("\n", 1)[1] if "\n" in result_text else result_text
+            result_text = result_text.rsplit("```", 1)[0].strip()
+
+        parsed = json.loads(result_text)
+        key_tasks = parsed.get("key_tasks", [])
+        deliverables = parsed.get("deliverables", [])
+    except Exception as e:
+        logger.error(f"AI generation failed for phase {phase_number}: {str(e)}")
+
+    try:
+        if isinstance(sections[phase_index], str):
+            sections[phase_index] = {
+                "name": sections[phase_index],
+                "description": "",
+                "key_tasks": key_tasks,
+                "deliverables": deliverables
+            }
+        elif isinstance(sections[phase_index], dict):
+            sections[phase_index]["key_tasks"] = key_tasks
+            sections[phase_index]["deliverables"] = deliverables
+        doc_structure["sections"] = sections
+        framework.document_structure = doc_structure
+        flag_modified(framework, "document_structure")
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to cache AI results for phase {phase_number}: {str(e)}")
+        db.rollback()
+
+    return {
+        "phase_number": phase_number,
+        "phase_name": phase_name,
+        "key_tasks": key_tasks,
+        "deliverables": deliverables,
+        "cached": False
+    }
+
+
+@router.post("/{journey_id}/phases/generate-all-tasks")
+def generate_all_phase_tasks(
+    journey_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    journey = get_journey_or_404(journey_id, current_user, db)
+
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == journey.uploaded_framework_id
+    ).first()
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework not found for this journey"
+        )
+
+    doc_structure = framework.document_structure or {}
+    sections = doc_structure.get("sections", [])
+
+    if not sections:
+        return {"phases": [], "message": "No phases found in framework document structure"}
+
+    all_cached = True
+    for section in sections:
+        if isinstance(section, dict):
+            if not section.get("key_tasks") or not section.get("deliverables"):
+                all_cached = False
+                break
+        else:
+            all_cached = False
+            break
+
+    if all_cached:
+        phases = get_phases_from_document_structure(framework)
+        return {"phases": phases, "cached": True}
+
+    controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework.id
+    ).limit(30).all()
+
+    controls_text = "\n".join([
+        f"- {c.control_id}: {c.title}" for c in controls
+    ])
+
+    phases_list = []
+    for i, section in enumerate(sections):
+        if isinstance(section, dict):
+            name = section.get("name") or section.get("title") or f"Section {i+1}"
+            desc = section.get("description") or ""
+        else:
+            name = str(section)
+            desc = ""
+        phases_list.append(f"Phase {i+1}: {name} - {desc}")
+
+    phases_text = "\n".join(phases_list)
+
+    prompt = f"""You are a GRC (Governance, Risk, Compliance) expert. Generate key tasks and deliverables for ALL certification phases of a framework.
+
+Framework: {framework.name}
+
+Phases:
+{phases_text}
+
+Sample controls from this framework:
+{controls_text}
+
+For EACH phase, generate 3-5 key tasks and 3-5 deliverables specific to that phase.
+
+Return ONLY valid JSON in this exact format:
+{{
+  "phases": [
+    {{
+      "phase_number": 1,
+      "key_tasks": ["task1", "task2", "task3"],
+      "deliverables": ["deliverable1", "deliverable2", "deliverable3"]
+    }},
+    {{
+      "phase_number": 2,
+      "key_tasks": ["task1", "task2", "task3"],
+      "deliverables": ["deliverable1", "deliverable2", "deliverable3"]
+    }}
+  ]
+}}"""
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a GRC certification expert. Always respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=3000
+        )
+
+        result_text = response.choices[0].message.content.strip()
+        if result_text.startswith("```"):
+            result_text = result_text.split("\n", 1)[1] if "\n" in result_text else result_text
+            result_text = result_text.rsplit("```", 1)[0].strip()
+
+        parsed = json.loads(result_text)
+        ai_phases = parsed.get("phases", [])
+
+        for ai_phase in ai_phases:
+            idx = ai_phase.get("phase_number", 0) - 1
+            if 0 <= idx < len(sections):
+                if isinstance(sections[idx], str):
+                    sections[idx] = {
+                        "name": sections[idx],
+                        "description": "",
+                        "key_tasks": ai_phase.get("key_tasks", []),
+                        "deliverables": ai_phase.get("deliverables", [])
+                    }
+                elif isinstance(sections[idx], dict):
+                    sections[idx]["key_tasks"] = ai_phase.get("key_tasks", [])
+                    sections[idx]["deliverables"] = ai_phase.get("deliverables", [])
+
+        doc_structure["sections"] = sections
+        framework.document_structure = doc_structure
+        flag_modified(framework, "document_structure")
+        db.commit()
+
+    except Exception as e:
+        logger.error(f"AI generation failed for all phases: {str(e)}")
+        db.rollback()
+
+    phases = get_phases_from_document_structure(framework)
+    return {"phases": phases, "cached": False}
+
+
 @router.put("/evidence/{evidence_id}/review")
 def review_implementation_evidence(
     evidence_id: int,
@@ -1117,6 +1852,127 @@ def delete_implementation_evidence(
     db.commit()
     
     return None
+
+
+@router.get("/frameworks/{framework_id}/auditor-evidence")
+def get_auditor_evidence_for_framework(
+    framework_id: int,
+    status_filter: Optional[str] = None,  # pending, approved, rejected
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get all evidence uploaded against framework controls for auditor review."""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    # Get the framework
+    framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == framework_id
+    ).filter(
+        (UploadedFramework.tenant_id.in_(user_tenants)) | (UploadedFramework.tenant_id.is_(None))
+    ).first()
+    
+    if not framework:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework not found"
+        )
+    
+    # Get all journeys for this framework
+    journeys = db.query(CertificationJourney).filter(
+        CertificationJourney.uploaded_framework_id == framework_id,
+        CertificationJourney.tenant_id.in_(user_tenants)
+    ).all()
+    
+    if not journeys:
+        return {
+            "framework": {
+                "id": framework.id,
+                "name": framework.name,
+                "version": framework.version
+            },
+            "evidence": [],
+            "stats": {
+                "total": 0,
+                "pending": 0,
+                "approved": 0,
+                "rejected": 0
+            }
+        }
+    
+    journey_ids = [j.id for j in journeys]
+    
+    # Get all implementations and evidence
+    query = db.query(ImplementationEvidence).join(
+        ControlImplementation,
+        ImplementationEvidence.implementation_id == ControlImplementation.id
+    ).join(
+        ParsedFrameworkControl,
+        ControlImplementation.parsed_control_id == ParsedFrameworkControl.id
+    ).filter(
+        ControlImplementation.journey_id.in_(journey_ids)
+    )
+    
+    if status_filter:
+        query = query.filter(ImplementationEvidence.review_status == status_filter)
+    
+    evidence_records = query.options(
+        joinedload(ImplementationEvidence.implementation).joinedload(ControlImplementation.parsed_control),
+        joinedload(ImplementationEvidence.uploader),
+        joinedload(ImplementationEvidence.reviewer)
+    ).all()
+    
+    # Build response
+    evidence_list = []
+    for ev in evidence_records:
+        impl = ev.implementation
+        control = impl.parsed_control if impl else None
+        
+        evidence_list.append({
+            "id": ev.id,
+            "file_name": ev.file_name,
+            "file_path": ev.file_path,
+            "file_size": ev.file_size,
+            "mime_type": ev.mime_type,
+            "uploaded_at": ev.uploaded_at.isoformat() if ev.uploaded_at else None,
+            "uploaded_by": {
+                "id": ev.uploader.id,
+                "name": ev.uploader.full_name,
+                "email": ev.uploader.email
+            } if ev.uploader else None,
+            "control": {
+                "id": control.id,
+                "control_id": control.control_id,
+                "title": control.title,
+                "description": control.description
+            } if control else None,
+            "review_status": ev.review_status,
+            "reviewed_by": {
+                "id": ev.reviewer.id,
+                "name": ev.reviewer.full_name
+            } if ev.reviewer else None,
+            "reviewed_at": ev.reviewed_at.isoformat() if ev.reviewed_at else None,
+            "review_notes": ev.review_notes,
+            "ai_confidence_score": ev.ai_confidence_score,
+            "ai_assessment_notes": ev.ai_assessment_notes
+        })
+    
+    # Calculate stats
+    stats = {
+        "total": len(evidence_records),
+        "pending": len([e for e in evidence_records if e.review_status == "pending"]),
+        "approved": len([e for e in evidence_records if e.review_status == "approved"]),
+        "rejected": len([e for e in evidence_records if e.review_status == "rejected"])
+    }
+    
+    return {
+        "framework": {
+            "id": framework.id,
+            "name": framework.name,
+            "version": framework.version
+        },
+        "evidence": evidence_list,
+        "stats": stats
+    }
 
 
 @router.get("/frameworks/{framework_id}/phases", status_code=status.HTTP_410_GONE)

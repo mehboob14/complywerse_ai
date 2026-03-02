@@ -101,19 +101,19 @@ interface FeedItem {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  new: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'New' },
-  analyzed: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Analyzed' },
-  processed: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Processed' },
-  active: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Active' },
-  inactive: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Inactive' },
-  error: { bg: 'bg-rose-50', text: 'text-rose-600', label: 'Error' },
+  new: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'New' },
+  analyzed: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Analyzed' },
+  processed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Processed' },
+  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Active' },
+  inactive: { bg: 'bg-slate-500/20', text: 'text-gray-600', label: 'Inactive' },
+  error: { bg: 'bg-rose-500/20', text: 'text-rose-400', label: 'Error' },
 };
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
-  critical: { bg: 'bg-rose-50', text: 'text-rose-600' },
-  high: { bg: 'bg-orange-50', text: 'text-orange-600' },
-  medium: { bg: 'bg-amber-50', text: 'text-amber-600' },
-  low: { bg: 'bg-blue-50', text: 'text-blue-600' },
+  critical: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
+  high: { bg: 'bg-orange-500/20', text: 'text-orange-400' },
+  medium: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  low: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
 };
 
 const FILTER_OPTIONS = [
@@ -127,6 +127,8 @@ export default function RegulatoryFeedsPage() {
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const [pollingSourceId, setPollingSourceId] = useState<number | null>(null);
+  const [analyzingItemId, setAnalyzingItemId] = useState<number | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newFeed, setNewFeed] = useState({
     name: '',
@@ -204,9 +206,15 @@ export default function RegulatoryFeedsPage() {
       const response = await apiClient.post(`/governance/regulatory-feeds/sources/${sourceId}/poll`);
       return response.data;
     },
+    onMutate: (sourceId: number) => {
+      setPollingSourceId(sourceId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['regulatory-feed-sources'] });
       queryClient.invalidateQueries({ queryKey: ['regulatory-feed-items'] });
+    },
+    onSettled: () => {
+      setPollingSourceId(null);
     },
   });
 
@@ -226,8 +234,14 @@ export default function RegulatoryFeedsPage() {
       const response = await apiClient.post(`/governance/regulatory-feeds/items/${itemId}/analyze`);
       return response.data;
     },
+    onMutate: (itemId: number) => {
+      setAnalyzingItemId(itemId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['regulatory-feed-items'] });
+    },
+    onSettled: () => {
+      setAnalyzingItemId(null);
     },
   });
 
@@ -271,6 +285,12 @@ export default function RegulatoryFeedsPage() {
     });
   };
 
+  const getItemDescription = (item: FeedItem) => {
+    const rawText = item.description || item.content || '';
+    const plainText = rawText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return plainText || 'No description available';
+  };
+
   const newCount = items?.filter(i => i.status === 'new').length || 0;
   const analyzedCount = items?.filter(i => i.status === 'analyzed').length || 0;
   const processedCount = items?.filter(i => i.status === 'processed').length || 0;
@@ -280,7 +300,7 @@ export default function RegulatoryFeedsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-black">Regulatory Feeds</h1>
-          <p className="text-slate-600 mt-1">
+          <p className="text-gray-600 mt-1">
             Manage regulatory update feeds and monitor compliance changes
           </p>
         </div>
@@ -323,7 +343,7 @@ export default function RegulatoryFeedsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <Rss className="h-6 w-6 text-primary-600" />
+              <Rss className="h-6 w-6 text-primary-400" />
             </div>
           </div>
           <p className="stat-value">{sources?.length || 0}</p>
@@ -333,7 +353,7 @@ export default function RegulatoryFeedsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
-              <FileText className="h-6 w-6 text-blue-600" />
+              <FileText className="h-6 w-6 text-blue-400" />
             </div>
           </div>
           <p className="stat-value">{newCount}</p>
@@ -343,7 +363,7 @@ export default function RegulatoryFeedsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 p-3">
-              <Brain className="h-6 w-6 text-amber-600" />
+              <Brain className="h-6 w-6 text-amber-400" />
             </div>
           </div>
           <p className="stat-value">{analyzedCount}</p>
@@ -353,7 +373,7 @@ export default function RegulatoryFeedsPage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-3">
-              <CheckCircle className="h-6 w-6 text-emerald-600" />
+              <CheckCircle className="h-6 w-6 text-emerald-400" />
             </div>
           </div>
           <p className="stat-value">{processedCount}</p>
@@ -367,21 +387,21 @@ export default function RegulatoryFeedsPage() {
           className="w-full flex items-center justify-between p-4 hover:bg-white/50 transition-colors rounded-t-xl"
         >
           <div className="flex items-center gap-3">
-            <Rss className="h-5 w-5 text-primary-600" />
+            <Rss className="h-5 w-5 text-primary-400" />
             <h2 className="text-lg font-semibold text-black">Feed Sources</h2>
-            <span className="badge bg-slate-600/50 text-slate-600">
+            <span className="badge bg-gray-100/50 text-gray-800">
               {sources?.length || 0}
             </span>
           </div>
           {sourcesExpanded ? (
-            <ChevronDown className="h-5 w-5 text-slate-600" />
+            <ChevronDown className="h-5 w-5 text-gray-600" />
           ) : (
-            <ChevronRight className="h-5 w-5 text-slate-600" />
+            <ChevronRight className="h-5 w-5 text-gray-600" />
           )}
         </button>
 
         {sourcesExpanded && (
-          <div className="border-t border-slate-200">
+          <div className="border-t border-gray-300">
             <div className="overflow-x-auto">
               <table className="table">
                 <thead>
@@ -400,15 +420,15 @@ export default function RegulatoryFeedsPage() {
                   {sourcesLoading ? (
                     <tr>
                       <td colSpan={8} className="text-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-600" />
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-400" />
                       </td>
                     </tr>
                   ) : !sources || sources.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="text-center py-8">
-                        <Rss className="h-12 w-12 text-slate-500 mx-auto mb-3" />
-                        <p className="text-slate-600">No feed sources configured</p>
-                        <p className="text-sm text-slate-500 mt-1">
+                        <Rss className="h-12 w-12 text-gray-700 mx-auto mb-3" />
+                        <p className="text-gray-600">No feed sources configured</p>
+                        <p className="text-sm text-gray-700 mt-1">
                           Click "Add Default Feeds" to add regulatory feeds from Federal Reserve and ECB
                         </p>
                       </td>
@@ -423,15 +443,15 @@ export default function RegulatoryFeedsPage() {
                           </td>
                           <td>
                             <div className="flex items-center gap-2">
-                              <Globe className="h-4 w-4 text-slate-500" />
-                              <span className="text-slate-600">{source.regulator}</span>
+                              <Globe className="h-4 w-4 text-gray-700" />
+                              <span className="text-gray-800">{source.regulator}</span>
                             </div>
                           </td>
                           <td>
-                            <span className="text-slate-600">{source.country}</span>
+                            <span className="text-gray-600">{source.country}</span>
                           </td>
                           <td>
-                            <span className="text-slate-600 capitalize">{source.category}</span>
+                            <span className="text-gray-600 capitalize">{source.category}</span>
                           </td>
                           <td>
                             <span className={`badge ${statusStyle.bg} ${statusStyle.text}`}>
@@ -439,13 +459,13 @@ export default function RegulatoryFeedsPage() {
                             </span>
                           </td>
                           <td>
-                            <div className="flex items-center gap-2 text-slate-600">
+                            <div className="flex items-center gap-2 text-gray-600">
                               <Clock className="h-4 w-4" />
                               <span className="text-sm">{formatDateTime(source.last_polled_at)}</span>
                             </div>
                           </td>
                           <td>
-                            <span className="text-slate-600">{source.items_processed}</span>
+                            <span className="text-gray-800">{source.items_processed}</span>
                           </td>
                           <td>
                             <div className="flex items-center gap-1">
@@ -455,7 +475,7 @@ export default function RegulatoryFeedsPage() {
                                 className="btn-ghost btn-sm"
                                 title="Poll Now"
                               >
-                                {pollSourceMutation.isPending ? (
+                                {pollSourceMutation.isPending && pollingSourceId === source.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
                                   <Play className="h-4 w-4" />
@@ -471,7 +491,7 @@ export default function RegulatoryFeedsPage() {
                                   }
                                 }}
                                 disabled={deleteSourceMutation.isPending}
-                                className="btn-ghost btn-sm text-rose-600"
+                                className="btn-ghost btn-sm text-rose-400"
                                 title="Delete"
                               >
                                 {deleteSourceMutation.isPending ? (
@@ -494,14 +514,14 @@ export default function RegulatoryFeedsPage() {
       </div>
 
       <div className="card">
-        <div className="p-4 border-b border-slate-200">
+        <div className="p-4 border-b border-gray-300">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-primary-600" />
+              <FileText className="h-5 w-5 text-primary-400" />
               <h2 className="text-lg font-semibold text-black">Feed Items</h2>
             </div>
             <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-slate-600" />
+              <Filter className="h-4 w-4 text-gray-600" />
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -533,15 +553,15 @@ export default function RegulatoryFeedsPage() {
               {itemsLoading ? (
                 <tr>
                   <td colSpan={6} className="text-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-600" />
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-400" />
                   </td>
                 </tr>
               ) : !items || items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-8">
-                    <FileText className="h-12 w-12 text-slate-500 mx-auto mb-3" />
-                    <p className="text-slate-600">No feed items found</p>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <FileText className="h-12 w-12 text-gray-700 mx-auto mb-3" />
+                    <p className="text-gray-600">No feed items found</p>
+                    <p className="text-sm text-gray-700 mt-1">
                       Poll feeds to retrieve regulatory updates
                     </p>
                   </td>
@@ -556,34 +576,39 @@ export default function RegulatoryFeedsPage() {
                       <tr key={item.id} className="cursor-pointer hover:bg-white/50">
                         <td onClick={() => toggleItemExpanded(item.id)}>
                           {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-slate-600" />
+                            <ChevronDown className="h-4 w-4 text-gray-600" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 text-slate-600" />
+                            <ChevronRight className="h-4 w-4 text-gray-600" />
                           )}
                         </td>
                         <td onClick={() => toggleItemExpanded(item.id)}>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-black">{item.title}</span>
-                            {item.link && (
-                              <a
-                                href={item.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary-600 hover:text-primary-300"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                              </a>
-                            )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-black">{item.title}</span>
+                              {item.link && (
+                                <a
+                                  href={item.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary-400 hover:text-primary-300"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </a>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-700 mt-1 line-clamp-2">
+                              {getItemDescription(item)}
+                            </p>
                           </div>
                         </td>
                         <td>
-                          <span className="text-slate-600 text-sm">
+                          <span className="text-gray-600 text-sm">
                             {formatDate(item.published_date)}
                           </span>
                         </td>
                         <td>
-                          <span className="text-slate-600">{item.feed_source_name}</span>
+                          <span className="text-gray-800">{item.feed_source_name}</span>
                         </td>
                         <td>
                           <span className={`badge ${statusStyle.bg} ${statusStyle.text}`}>
@@ -596,10 +621,10 @@ export default function RegulatoryFeedsPage() {
                               <button
                                 onClick={() => analyzeItemMutation.mutate(item.id)}
                                 disabled={analyzeItemMutation.isPending}
-                                className="btn-ghost btn-sm text-amber-600"
+                                className="btn-ghost btn-sm text-amber-400"
                                 title="Analyze with AI"
                               >
-                                {analyzeItemMutation.isPending ? (
+                                {analyzeItemMutation.isPending && analyzingItemId === item.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
                                   <Brain className="h-4 w-4" />
@@ -610,7 +635,7 @@ export default function RegulatoryFeedsPage() {
                               <button
                                 onClick={() => convertItemMutation.mutate(item.id)}
                                 disabled={convertItemMutation.isPending}
-                                className="btn-ghost btn-sm text-emerald-600"
+                                className="btn-ghost btn-sm text-emerald-400"
                                 title="Convert to Regulatory Change"
                               >
                                 {convertItemMutation.isPending ? (
@@ -635,33 +660,33 @@ export default function RegulatoryFeedsPage() {
                           <td colSpan={6} className="bg-white/30 p-0">
                             <div className="p-4 space-y-4">
                               <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-2">Description</h4>
-                                <p className="text-slate-600 text-sm">{item.description || 'No description available'}</p>
+                                <h4 className="text-sm font-medium text-gray-600 mb-2">Description</h4>
+                                <p className="text-gray-800 text-sm">{getItemDescription(item)}</p>
                               </div>
 
                               {item.ai_analysis && (
-                                <div className="space-y-4 border-t border-slate-200 pt-4">
+                                <div className="space-y-4 border-t border-gray-300 pt-4">
                                   <div className="flex items-center gap-2">
-                                    <Brain className="h-5 w-5 text-amber-600" />
+                                    <Brain className="h-5 w-5 text-amber-400" />
                                     <h4 className="text-sm font-medium text-black">AI Analysis</h4>
                                     {item.ai_analysis.priority && (
-                                      <span className={`badge ${PRIORITY_STYLES[item.ai_analysis.priority.toLowerCase()]?.bg || 'bg-slate-50'} ${PRIORITY_STYLES[item.ai_analysis.priority.toLowerCase()]?.text || 'text-slate-600'}`}>
+                                      <span className={`badge ${PRIORITY_STYLES[item.ai_analysis.priority.toLowerCase()]?.bg || 'bg-slate-500/20'} ${PRIORITY_STYLES[item.ai_analysis.priority.toLowerCase()]?.text || 'text-gray-600'}`}>
                                         {item.ai_analysis.priority} Priority
                                       </span>
                                     )}
                                   </div>
 
                                   <div>
-                                    <h5 className="text-xs font-medium text-slate-500 uppercase mb-1">Summary</h5>
-                                    <p className="text-slate-600 text-sm">{item.ai_analysis.summary}</p>
+                                    <h5 className="text-xs font-medium text-gray-700 uppercase mb-1">Summary</h5>
+                                    <p className="text-gray-800 text-sm">{item.ai_analysis.summary}</p>
                                   </div>
 
                                   {item.ai_analysis.compliance_gaps && item.ai_analysis.compliance_gaps.length > 0 && (
                                     <div>
-                                      <h5 className="text-xs font-medium text-slate-500 uppercase mb-2">Compliance Gaps</h5>
+                                      <h5 className="text-xs font-medium text-gray-700 uppercase mb-2">Compliance Gaps</h5>
                                       <div className="flex flex-wrap gap-2">
                                         {item.ai_analysis.compliance_gaps.map((gap, idx) => (
-                                          <span key={idx} className="badge bg-rose-50 text-rose-700">
+                                          <span key={idx} className="badge bg-rose-500/20 text-rose-400">
                                             {gap}
                                           </span>
                                         ))}
@@ -672,12 +697,12 @@ export default function RegulatoryFeedsPage() {
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     {item.ai_analysis.impacted_frameworks && item.ai_analysis.impacted_frameworks.length > 0 && (
                                       <div>
-                                        <h5 className="text-xs font-medium text-slate-500 uppercase mb-2">Impacted Frameworks</h5>
+                                        <h5 className="text-xs font-medium text-gray-700 uppercase mb-2">Impacted Frameworks</h5>
                                         <div className="space-y-2">
                                           {item.ai_analysis.impacted_frameworks.map((fw, idx) => (
                                             <div key={idx} className="text-sm">
-                                              <div className="text-slate-600 font-medium">{fw.name}</div>
-                                              <div className="text-slate-500 text-xs">{fw.reason}</div>
+                                              <div className="text-gray-800 font-medium">{fw.name}</div>
+                                              <div className="text-gray-700 text-xs">{fw.reason}</div>
                                             </div>
                                           ))}
                                         </div>
@@ -686,12 +711,12 @@ export default function RegulatoryFeedsPage() {
 
                                     {item.ai_analysis.impacted_controls && item.ai_analysis.impacted_controls.length > 0 && (
                                       <div>
-                                        <h5 className="text-xs font-medium text-slate-500 uppercase mb-2">Impacted Controls</h5>
+                                        <h5 className="text-xs font-medium text-gray-700 uppercase mb-2">Impacted Controls</h5>
                                         <div className="space-y-2">
                                           {item.ai_analysis.impacted_controls.map((ctrl, idx) => (
                                             <div key={idx} className="text-sm">
-                                              <div className="text-slate-600 font-medium">{ctrl.id}: {ctrl.name}</div>
-                                              <div className="text-slate-500 text-xs">{ctrl.action_needed}</div>
+                                              <div className="text-gray-800 font-medium">{ctrl.id}: {ctrl.name}</div>
+                                              <div className="text-gray-700 text-xs">{ctrl.action_needed}</div>
                                             </div>
                                           ))}
                                         </div>
@@ -700,12 +725,12 @@ export default function RegulatoryFeedsPage() {
 
                                     {item.ai_analysis.impacted_policies && item.ai_analysis.impacted_policies.length > 0 && (
                                       <div>
-                                        <h5 className="text-xs font-medium text-slate-500 uppercase mb-2">Impacted Policies</h5>
+                                        <h5 className="text-xs font-medium text-gray-700 uppercase mb-2">Impacted Policies</h5>
                                         <div className="space-y-2">
                                           {item.ai_analysis.impacted_policies.map((policy, idx) => (
                                             <div key={idx} className="text-sm">
-                                              <div className="text-slate-600 font-medium">{policy.title}</div>
-                                              <div className="text-slate-500 text-xs capitalize">{policy.action_needed}</div>
+                                              <div className="text-gray-800 font-medium">{policy.title}</div>
+                                              <div className="text-gray-700 text-xs capitalize">{policy.action_needed}</div>
                                             </div>
                                           ))}
                                         </div>
@@ -715,19 +740,19 @@ export default function RegulatoryFeedsPage() {
 
                                   {item.ai_analysis.implementation_tasks && item.ai_analysis.implementation_tasks.length > 0 && (
                                     <div>
-                                      <h5 className="text-xs font-medium text-slate-500 uppercase mb-2">Implementation Tasks</h5>
+                                      <h5 className="text-xs font-medium text-gray-700 uppercase mb-2">Implementation Tasks</h5>
                                       <div className="space-y-2">
                                         {item.ai_analysis.implementation_tasks.map((task, idx) => (
                                           <div key={idx} className="text-sm bg-white/50 p-2 rounded">
                                             <div className="flex items-center justify-between">
-                                              <span className="text-slate-600 font-medium">{task.title}</span>
-                                              <span className={`badge text-xs ${PRIORITY_STYLES[task.priority?.toLowerCase()]?.bg || 'bg-slate-50'} ${PRIORITY_STYLES[task.priority?.toLowerCase()]?.text || 'text-slate-600'}`}>
+                                              <span className="text-gray-800 font-medium">{task.title}</span>
+                                              <span className={`badge text-xs ${PRIORITY_STYLES[task.priority?.toLowerCase()]?.bg || 'bg-slate-500/20'} ${PRIORITY_STYLES[task.priority?.toLowerCase()]?.text || 'text-gray-600'}`}>
                                                 {task.priority}
                                               </span>
                                             </div>
-                                            <div className="text-slate-500 text-xs mt-1">{task.description}</div>
+                                            <div className="text-gray-700 text-xs mt-1">{task.description}</div>
                                             {task.suggested_deadline_days && (
-                                              <div className="text-slate-500 text-xs mt-1">Deadline: {task.suggested_deadline_days} days</div>
+                                              <div className="text-gray-700 text-xs mt-1">Deadline: {task.suggested_deadline_days} days</div>
                                             )}
                                           </div>
                                         ))}
@@ -755,13 +780,13 @@ export default function RegulatoryFeedsPage() {
                               )}
 
                               {item.status === 'new' && (
-                                <div className="border-t border-slate-200 pt-4">
+                                <div className="border-t border-gray-300 pt-4">
                                   <button
                                     onClick={() => analyzeItemMutation.mutate(item.id)}
                                     disabled={analyzeItemMutation.isPending}
                                     className="btn-secondary flex items-center gap-2"
                                   >
-                                    {analyzeItemMutation.isPending ? (
+                                    {analyzeItemMutation.isPending && analyzingItemId === item.id ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
                                       <Brain className="h-4 w-4" />
@@ -786,11 +811,11 @@ export default function RegulatoryFeedsPage() {
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+            <div className="flex items-center justify-between p-4 border-b border-gray-300">
               <h2 className="text-lg font-semibold text-black">Add Custom Feed Source</h2>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="text-slate-600 hover:text-slate-900"
+                className="text-gray-600 hover:text-black"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -803,7 +828,7 @@ export default function RegulatoryFeedsPage() {
               className="p-4 space-y-4"
             >
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">
+                <label className="block text-sm font-medium text-gray-800 mb-1">
                   Feed Name *
                 </label>
                 <input
@@ -816,7 +841,7 @@ export default function RegulatoryFeedsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">
+                <label className="block text-sm font-medium text-gray-800 mb-1">
                   RSS Feed URL *
                 </label>
                 <input
@@ -830,7 +855,7 @@ export default function RegulatoryFeedsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">
+                  <label className="block text-sm font-medium text-gray-800 mb-1">
                     Regulator
                   </label>
                   <input
@@ -842,7 +867,7 @@ export default function RegulatoryFeedsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">
+                  <label className="block text-sm font-medium text-gray-800 mb-1">
                     Country
                   </label>
                   <input
@@ -856,7 +881,7 @@ export default function RegulatoryFeedsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">
+                  <label className="block text-sm font-medium text-gray-800 mb-1">
                     Category
                   </label>
                   <select
@@ -874,7 +899,7 @@ export default function RegulatoryFeedsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">
+                  <label className="block text-sm font-medium text-gray-800 mb-1">
                     Poll Interval (hours)
                   </label>
                   <input
@@ -887,7 +912,7 @@ export default function RegulatoryFeedsPage() {
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-300">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}

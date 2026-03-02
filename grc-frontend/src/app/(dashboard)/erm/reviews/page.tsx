@@ -21,11 +21,11 @@ import {
 } from 'lucide-react';
 
 const REVIEW_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-50 text-yellow-700',
-  in_review: 'bg-blue-50 text-blue-700',
-  completed: 'bg-green-50 text-green-700',
-  skipped: 'bg-slate-50 text-slate-700',
-  overdue: 'bg-red-50 text-red-700',
+  pending: 'bg-yellow-500/20 text-yellow-400',
+  in_review: 'bg-blue-500/20 text-blue-400',
+  completed: 'bg-green-500/20 text-green-400',
+  skipped: 'bg-slate-500/20 text-slate-600',
+  overdue: 'bg-red-500/20 text-red-400',
 };
 
 export default function ReviewsPage() {
@@ -70,7 +70,7 @@ export default function ReviewsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
@@ -78,32 +78,32 @@ export default function ReviewsPage() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
+        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
           <div className="flex items-center gap-3">
-            <Clock className="h-8 w-8 text-yellow-600" />
+            <Clock className="h-8 w-8 text-yellow-400" />
             <div>
-              <p className="text-2xl font-bold text-black">{pendingReviews?.length || 0}</p>
-              <p className="text-sm text-yellow-600">Pending Reviews</p>
+              <p className="text-2xl font-bold text-slate-900">{pendingReviews?.length || 0}</p>
+              <p className="text-sm text-yellow-400">Pending Reviews</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
           <div className="flex items-center gap-3">
-            <AlertCircle className="h-8 w-8 text-red-600" />
+            <AlertCircle className="h-8 w-8 text-red-400" />
             <div>
-              <p className="text-2xl font-bold text-black">{overdueReviews?.length || 0}</p>
-              <p className="text-sm text-red-600">Overdue Reviews</p>
+              <p className="text-2xl font-bold text-slate-900">{overdueReviews?.length || 0}</p>
+              <p className="text-sm text-red-400">Overdue Reviews</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+        <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-4">
           <div className="flex items-center gap-3">
-            <CheckCircle className="h-8 w-8 text-green-600" />
+            <CheckCircle className="h-8 w-8 text-green-400" />
             <div>
-              <p className="text-2xl font-bold text-black">
+              <p className="text-2xl font-bold text-slate-900">
                 {reviews?.filter((r) => r.status === 'completed').length || 0}
               </p>
-              <p className="text-sm text-green-600">Completed This Month</p>
+              <p className="text-sm text-green-400">Completed This Month</p>
             </div>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default function ReviewsPage() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black"
+          className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
@@ -139,7 +139,7 @@ export default function ReviewsPage() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <Calendar className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-black">No reviews scheduled</h3>
+          <h3 className="mt-4 text-lg font-medium text-slate-900">No reviews scheduled</h3>
           <p className="mt-1 text-slate-600">Schedule risk reviews to maintain compliance</p>
         </div>
       )}
@@ -177,7 +177,7 @@ function ReviewCard({ review }: { review: RiskReview }) {
     <div className={`rounded-xl border p-4 ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 bg-white'}`}>
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="font-medium text-black">{review.risk_title || `Risk #${review.risk_id}`}</h3>
+          <h3 className="font-medium text-slate-900">{review.risk_title || `Risk #${review.risk_id}`}</h3>
           <div className="mt-1 flex items-center gap-3">
             <span className={`rounded-full px-2 py-0.5 text-xs ${statusColor}`}>
               {review.status.replace('_', ' ')}
@@ -188,10 +188,10 @@ function ReviewCard({ review }: { review: RiskReview }) {
           </div>
         </div>
         <div className="text-right">
-          <p className={`text-sm font-medium ${isOverdue ? 'text-red-600' : 'text-slate-600'}`}>
+          <p className={`text-sm font-medium ${isOverdue ? 'text-red-400' : 'text-slate-700'}`}>
             Due: {new Date(review.due_date).toLocaleDateString()}
           </p>
-          {isOverdue && <p className="text-xs text-red-600">Overdue</p>}
+          {isOverdue && <p className="text-xs text-red-400">Overdue</p>}
         </div>
       </div>
 
@@ -212,7 +212,7 @@ function ReviewCard({ review }: { review: RiskReview }) {
           <button
             onClick={() => updateMutation.mutate('completed')}
             disabled={updateMutation.isPending}
-            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-500"
+            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-slate-900 hover:bg-green-500"
           >
             Complete Review
           </button>
@@ -220,8 +220,8 @@ function ReviewCard({ review }: { review: RiskReview }) {
       )}
 
       {review.findings && (
-        <div className="mt-3 rounded bg-slate-50 p-3">
-          <p className="text-sm text-slate-600">{review.findings}</p>
+        <div className="mt-3 rounded bg-white p-3">
+          <p className="text-sm text-slate-700">{review.findings}</p>
         </div>
       )}
     </div>
@@ -258,7 +258,7 @@ function ReviewModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-lg rounded-xl bg-white p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black">Schedule Review</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Schedule Review</h2>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
@@ -270,7 +270,7 @@ function ReviewModal({
             <select
               value={formData.risk_id}
               onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               required
             >
               {risks.map((risk) => (
@@ -287,7 +287,7 @@ function ReviewModal({
               <select
                 value={formData.review_cycle}
                 onChange={(e) => setFormData({ ...formData, review_cycle: e.target.value as ReviewCycle })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               >
                 <option value="monthly">Monthly</option>
                 <option value="quarterly">Quarterly</option>
@@ -300,7 +300,7 @@ function ReviewModal({
               <select
                 value={formData.review_type}
                 onChange={(e) => setFormData({ ...formData, review_type: e.target.value as ReviewType })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               >
                 <option value="periodic">Periodic</option>
                 <option value="triggered">Triggered</option>
@@ -316,7 +316,7 @@ function ReviewModal({
               type="date"
               value={formData.due_date}
               onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
               required
             />
           </div>
@@ -325,7 +325,7 @@ function ReviewModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-600"
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
             >
               Cancel
             </button>

@@ -1,9 +1,14 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file FIRST
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from grc.main import app as grc_app
 from grc.models import init_grc_db
-import os
 
 app = FastAPI(title="ComplyVerse GRC Platform API", version="1.0.0")
 
@@ -42,4 +47,4 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=4000)

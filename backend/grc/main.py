@@ -12,6 +12,7 @@ from .routers import (
     documents_router,
     assets_router,
     dashboard_router,
+    enriched_dashboard_router,
     certification_router,
     advanced_erm_router,
     compliance_assessments_router
@@ -24,6 +25,8 @@ from .modules.compliance import compliance_router
 from .modules.evidence import evidence_module_router
 from .modules.control_library import control_library_router
 from .modules.vuln_management import vuln_management_router
+from .modules.chatbot import chatbot_router
+from .modules.audit_management import audit_management_router
 from .middleware.subdomain import TenantMiddleware
 
 app = FastAPI(
@@ -55,6 +58,7 @@ app.include_router(governance_router)
 app.include_router(documents_router)
 app.include_router(assets_router)
 app.include_router(dashboard_router)
+app.include_router(enriched_dashboard_router)
 app.include_router(certification_router)
 app.include_router(advanced_erm_router)
 app.include_router(compliance_assessments_router)
@@ -65,6 +69,8 @@ app.include_router(compliance_router)
 app.include_router(evidence_module_router)
 app.include_router(control_library_router)
 app.include_router(vuln_management_router)
+app.include_router(chatbot_router)
+app.include_router(audit_management_router)
 
 
 @app.on_event("startup")

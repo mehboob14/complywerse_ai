@@ -1,0 +1,41 @@
+from .auth_router import router as auth_router
+from .tenants_router import router as tenants_router
+from .frameworks_router import router as frameworks_router
+from .controls_router import router as controls_router
+from .evidence_router import router as evidence_router
+from .risks_router import router as risks_router
+from .governance_router import router as governance_router
+from .documents_router import router as documents_router
+from .assets_router import router as assets_router
+from .dashboard_router import router as dashboard_router
+from .certification_router import router as certification_router
+from .advanced_erm_router import router as advanced_erm_router
+from .compliance_assessments_router import router as compliance_assessments_router
+from .reports_router import router as reports_router
+from .compliance_calendar_router import router as compliance_calendar_router
+from .policy_acknowledgment_router import router as policy_acknowledgment_router
+from .policy_exception_router import router as policy_exception_router
+from .evidence_approval_router import router as evidence_approval_router
+from .enriched_dashboard_router import router as enriched_dashboard_router
+
+__all__ = [
+    "auth_router",
+    "tenants_router", 
+    "frameworks_router",
+    "controls_router",
+    "evidence_router",
+    "risks_router",
+    "governance_router",
+    "documents_router",
+    "assets_router",
+    "dashboard_router",
+    "certification_router",
+    "advanced_erm_router",
+    "compliance_assessments_router",
+    "reports_router",
+    "compliance_calendar_router",
+    "policy_acknowledgment_router",
+    "policy_exception_router",
+    "evidence_approval_router",
+    "enriched_dashboard_router",
+]

@@ -20,7 +20,8 @@ except ImportError:
 from ....models import (
     CommonControlGroup, CommonControlGroupMapping, NormalizedControl,
     FrameworkControl, FrameworkDomain, ControlObjective, Framework,
-    ControlSimilarityMapping, GRCUser, get_db
+    ControlSimilarityMapping, GRCUser, get_db,
+    UploadedFramework, ParsedFrameworkControl
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -48,13 +49,14 @@ class ExportComparisonRequest(BaseModel):
 
 def check_ai_available() -> bool:
     """Check if OpenAI API key is configured (Replit AI Integrations or direct API key)."""
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    if base_url and "modelfarm" in base_url:
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL", "")
+    is_modelfarm = "modelfarm" in base_url
+    if is_modelfarm:
         return True
     api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return False
-    if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+    if not is_modelfarm and (api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20):
         return False
     return True
 
@@ -313,29 +315,34 @@ def get_frameworks_for_comparison(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    frameworks = db.query(Framework).filter(Framework.is_active == True).all()
+    user_tenants = get_user_tenants(current_user, db)
+    
+    frameworks = db.query(UploadedFramework).filter(
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.tenant_id.is_(None)
+        ),
+        UploadedFramework.is_active == True
+    ).all()
     
     result = []
     for fw in frameworks:
-        control_count = db.query(FrameworkControl).join(
-            ControlObjective, FrameworkControl.objective_id == ControlObjective.id
-        ).join(
-            FrameworkDomain, ControlObjective.domain_id == FrameworkDomain.id
-        ).filter(FrameworkDomain.framework_id == fw.id).count()
-        
-        domain_count = db.query(FrameworkDomain).filter(
-            FrameworkDomain.framework_id == fw.id
+        control_count = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == fw.id
         ).count()
+        
+        domains = db.query(ParsedFrameworkControl.domain).filter(
+            ParsedFrameworkControl.uploaded_framework_id == fw.id,
+            ParsedFrameworkControl.domain != None
+        ).distinct().all()
         
         result.append({
             "id": fw.id,
             "name": fw.name,
-            "short_code": fw.short_code,
+            "short_code": fw.name.split()[0] if fw.name else str(fw.id),
             "version": fw.version,
-            "regulator": fw.regulator,
-            "jurisdiction": fw.jurisdiction,
             "control_count": control_count,
-            "domain_count": domain_count
+            "domain_count": len(domains)
         })
     
     return {"frameworks": result}
@@ -1088,3 +1095,254 @@ def export_comparison(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=framework_comparison.csv"}
     )
+
+
+@router.get("/crosswalk")
+def get_framework_crosswalk(
+    source_framework_id: int = Query(...),
+    destination_framework_id: int = Query(...),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get crosswalk mapping between source and destination frameworks."""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    source_fw = db.query(UploadedFramework).filter(
+        UploadedFramework.id == source_framework_id,
+        or_(UploadedFramework.tenant_id.in_(user_tenants), UploadedFramework.tenant_id.is_(None))
+    ).first()
+    dest_fw = db.query(UploadedFramework).filter(
+        UploadedFramework.id == destination_framework_id,
+        or_(UploadedFramework.tenant_id.in_(user_tenants), UploadedFramework.tenant_id.is_(None))
+    ).first()
+    
+    if not source_fw or not dest_fw:
+        raise HTTPException(status_code=404, detail="Framework not found")
+    
+    source_controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == source_framework_id
+    ).order_by(ParsedFrameworkControl.original_reference).all()
+    
+    dest_controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == destination_framework_id
+    ).all()
+    
+    dest_by_category = {}
+    dest_by_domain = {}
+    for dc in dest_controls:
+        cat = (dc.category or "").lower().strip()
+        dom = (dc.domain or "").lower().strip()
+        if cat:
+            dest_by_category.setdefault(cat, []).append(dc)
+        if dom:
+            dest_by_domain.setdefault(dom, []).append(dc)
+    
+    def _extract_keywords(text):
+        if not text:
+            return set()
+        stop_words = {'the', 'and', 'for', 'of', 'to', 'in', 'a', 'an', 'is', 'are', 'be', 'with', 'that', 'this', 'shall', 'must', 'should', 'or', 'its', 'by', 'on', 'as', 'from', 'all', 'has', 'have', 'not', 'at'}
+        words = set(w.lower().strip('.,;:()[]') for w in text.split() if len(w) > 2)
+        return words - stop_words
+    
+    def _keyword_score(source_ctrl, dest_ctrl):
+        s_keywords = _extract_keywords(f"{source_ctrl.title} {source_ctrl.description or ''}")
+        d_keywords = _extract_keywords(f"{dest_ctrl.title} {dest_ctrl.description or ''}")
+        if not s_keywords or not d_keywords:
+            return 0
+        overlap = s_keywords & d_keywords
+        return len(overlap) / max(len(s_keywords), 1)
+    
+    total = len(source_controls)
+    paginated_source = source_controls[skip:skip+limit]
+    
+    crosswalk_rows = []
+    for sc in paginated_source:
+        matched_dest = []
+        match_type = "category"
+        sc_cat = (sc.category or "").lower().strip()
+        sc_dom = (sc.domain or "").lower().strip()
+        
+        if sc_cat and sc_cat in dest_by_category:
+            matched_dest.extend(dest_by_category[sc_cat])
+        
+        if not matched_dest and sc_dom and sc_dom in dest_by_domain:
+            matched_dest.extend(dest_by_domain[sc_dom])
+            match_type = "domain"
+        
+        if not matched_dest:
+            scored = [(dc, _keyword_score(sc, dc)) for dc in dest_controls]
+            scored.sort(key=lambda x: x[1], reverse=True)
+            matched_dest = [dc for dc, score in scored if score >= 0.15][:5]
+            match_type = "keyword" if matched_dest else "none"
+        
+        seen_ids = set()
+        unique_matched = []
+        for dc in matched_dest:
+            if dc.id not in seen_ids:
+                seen_ids.add(dc.id)
+                unique_matched.append(dc)
+        
+        evidence_recs = []
+        if sc.evidence_requirements:
+            if isinstance(sc.evidence_requirements, list):
+                evidence_recs.extend(sc.evidence_requirements[:3])
+            elif isinstance(sc.evidence_requirements, dict):
+                evidence_recs.append(sc.evidence_requirements)
+        
+        for dc in unique_matched[:3]:
+            if dc.evidence_requirements:
+                if isinstance(dc.evidence_requirements, list):
+                    for er in dc.evidence_requirements[:2]:
+                        if er not in evidence_recs:
+                            evidence_recs.append(er)
+        
+        row = {
+            "source_control": {
+                "id": sc.id,
+                "reference": sc.original_reference or sc.control_id,
+                "title": sc.title,
+                "description": sc.description,
+                "section": sc.section_number or sc.parent_section,
+                "domain": sc.domain,
+                "category": sc.category,
+                "full_text": sc.full_text,
+            },
+            "destination_controls": [{
+                "id": dc.id,
+                "reference": dc.original_reference or dc.control_id,
+                "title": dc.title,
+                "description": dc.description,
+                "section": dc.section_number or dc.parent_section,
+                "domain": dc.domain,
+                "category": dc.category,
+                "full_text": dc.full_text,
+            } for dc in unique_matched[:5]],
+            "match_count": len(unique_matched),
+            "match_type": match_type,
+            "evidence_recommendations": evidence_recs[:5]
+        }
+        crosswalk_rows.append(row)
+    
+    return {
+        "source_framework": {"id": source_fw.id, "name": source_fw.name, "version": source_fw.version},
+        "destination_framework": {"id": dest_fw.id, "name": dest_fw.name, "version": dest_fw.version},
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "crosswalk": crosswalk_rows
+    }
+
+
+@router.post("/crosswalk/ai-map")
+def ai_map_crosswalk(
+    source_framework_id: int = Query(...),
+    destination_framework_id: int = Query(...),
+    source_control_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Use AI to find the best matching controls in destination framework for a source control."""
+    user_tenants = get_user_tenants(current_user, db)
+
+    source_control = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.id == source_control_id,
+        ParsedFrameworkControl.uploaded_framework_id == source_framework_id
+    ).first()
+    if not source_control:
+        raise HTTPException(status_code=404, detail="Source control not found for selected source framework")
+
+    framework_scope_filter = or_(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        UploadedFramework.is_shared == True,
+        UploadedFramework.tenant_id.is_(None)
+    )
+    
+    dest_fw = db.query(UploadedFramework).filter(
+        UploadedFramework.id == destination_framework_id,
+        framework_scope_filter
+    ).first()
+    if not dest_fw:
+        raise HTTPException(status_code=404, detail="Destination framework not found")
+    
+    dest_controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == destination_framework_id
+    ).all()
+    
+    dest_list = "\n".join([
+        f"- [{dc.original_reference or dc.control_id}] {dc.title}: {(dc.description or '')[:150]}"
+        for dc in dest_controls
+    ])
+    
+    try:
+        client = get_openai_client()
+        prompt = f"""You are a compliance expert. Map this source control to the most relevant controls in the destination framework.
+
+SOURCE CONTROL:
+Reference: {source_control.original_reference or source_control.control_id}
+Title: {source_control.title}
+Description: {source_control.description or ''}
+Full Text: {(source_control.full_text or '')[:500]}
+
+DESTINATION FRAMEWORK CONTROLS ({dest_fw.name}):
+{dest_list[:6000]}
+
+Find the best matching controls and recommend evidence that satisfies both.
+
+Return JSON:
+{{
+  "mappings": [
+    {{
+      "destination_reference": "<reference>",
+      "confidence": <0.0-1.0>,
+      "rationale": "<why these map>",
+      "evidence_recommendations": ["<evidence item 1>", "<evidence item 2>"]
+    }}
+  ]
+}}
+
+Return up to 5 best matches. Only include matches with confidence >= 0.5."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a regulatory compliance mapping expert. Respond only with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=2000,
+            temperature=0.2
+        )
+        
+        result = json.loads(response.choices[0].message.content or '{}')
+        
+        enriched_mappings = []
+        dest_map = {(dc.original_reference or dc.control_id): dc for dc in dest_controls}
+        
+        for m in result.get("mappings", []):
+            dest_ref = m.get("destination_reference", "")
+            dest_ctrl = dest_map.get(dest_ref)
+            enriched_mappings.append({
+                "destination_reference": dest_ref,
+                "destination_title": dest_ctrl.title if dest_ctrl else None,
+                "destination_description": dest_ctrl.description if dest_ctrl else None,
+                "destination_section": (dest_ctrl.section_number or dest_ctrl.parent_section) if dest_ctrl else None,
+                "confidence": m.get("confidence", 0),
+                "rationale": m.get("rationale", ""),
+                "evidence_recommendations": m.get("evidence_recommendations", [])
+            })
+        
+        return {
+            "source_control": {
+                "reference": source_control.original_reference or source_control.control_id,
+                "title": source_control.title,
+                "description": source_control.description,
+            },
+            "ai_mappings": enriched_mappings
+        }
+    except Exception as e:
+        error_msg = str(e)
+        if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
+            raise HTTPException(status_code=402, detail="Cloud budget exceeded")
+        raise HTTPException(status_code=500, detail=f"AI mapping failed: {error_msg}")

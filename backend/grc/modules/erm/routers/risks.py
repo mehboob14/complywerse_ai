@@ -4,7 +4,9 @@ from io import BytesIO
 import os
 import json
 import logging
+import re
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from pydantic import BaseModel
@@ -50,6 +52,7 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
 def list_risks(
     tenant_id: Optional[int] = None,
     category: Optional[str] = None,
+    register_type: Optional[str] = None,
     status_filter: Optional[str] = None,
     min_score: Optional[float] = None,
     max_score: Optional[float] = None,
@@ -67,8 +70,48 @@ def list_risks(
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Risk.tenant_id == tenant_id)
+
+    normalized_risk_category = func.replace(
+        func.replace(
+            func.replace(
+                func.replace(
+                    func.lower(func.coalesce(Risk.risk_category, Risk.category, "")),
+                    " ",
+                    ""
+                ),
+                "_",
+                ""
+            ),
+            "-",
+            ""
+        ),
+        "/",
+        ""
+    )
+    normalized_risk_register_type = func.replace(
+        func.replace(
+            func.replace(
+                func.replace(
+                    func.lower(func.coalesce(Risk.register_type, "")),
+                    " ",
+                    ""
+                ),
+                "_",
+                ""
+            ),
+            "-",
+            ""
+        ),
+        "/",
+        ""
+    )
+
     if category:
-        query = query.filter(Risk.category == category)
+        category_value = re.sub(r"[^a-z0-9]", "", category.strip().lower())
+        query = query.filter(normalized_risk_category == category_value)
+    if register_type:
+        register_type_value = re.sub(r"[^a-z0-9]", "", register_type.strip().lower())
+        query = query.filter(normalized_risk_register_type == register_type_value)
     if status_filter:
         query = query.filter(Risk.status == status_filter)
     if min_score is not None:
@@ -915,9 +958,79 @@ def unlink_risk_from_evidence(
     return None
 
 
+@router.get("/template/download")
+def download_risk_register_template(
+    _current_user: GRCUser = Depends(require_auth),
+):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Risk Register"
+
+    headers = [
+        "Ref",
+        "Risk Title",
+        "Risk Description",
+        "Risk Category",
+        "Risk Sub Category",
+        "Register Type",
+        "Asset Name",
+        "Threat",
+        "Vulnerability",
+        "Likelihood",
+        "Impact",
+        "Risk Score",
+        "Post-Treatment Likelihood",
+        "Post-Treatment Impact",
+        "Residual Risk",
+        "Risk Treatment Option",
+        "Mitigating Action Controls",
+        "Action Plan",
+        "Responsibility",
+        "Gaps",
+        "Recommendations",
+    ]
+    ws.append(headers)
+
+    sample_row = [
+        "R-001",
+        "Privileged Access Misconfiguration",
+        "Admin access is not consistently restricted and reviewed.",
+        "Technology",
+        "Cybersecurity",
+        "ISO 27001",
+        "Identity Platform",
+        "Unauthorized privileged access",
+        "No periodic privileged account recertification",
+        4,
+        5,
+        20,
+        3,
+        4,
+        12,
+        "Mitigate",
+        "MFA, PAM, and quarterly recertification",
+        "Implement PAM and enforce quarterly access reviews",
+        "Security Team",
+        "Legacy accounts not monitored",
+        "Automate recertification and alerting",
+    ]
+    ws.append(sample_row)
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=risk_register_template.xlsx"},
+    )
+
+
 @router.post("/upload")
 async def upload_risk_register(
     file: UploadFile = File(...),
+    register_type: Optional[str] = Query(None),
     tenant_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
@@ -952,7 +1065,10 @@ async def upload_risk_register(
         
         headers = []
         header_row = 1
-        header_keywords = ['asset name', 'threat', 'likelihood', 'impact', 'risk score']
+        header_keywords = [
+            'asset name', 'threat', 'likelihood', 'impact', 'risk score',
+            'risk title', 'risk category', 'residual score', 'status'
+        ]
         for row_num in range(1, 10):
             row_values = [cell.value for cell in ws[row_num]]
             row_str = ' '.join([str(v).lower() for v in row_values if v])
@@ -962,15 +1078,19 @@ async def upload_risk_register(
                 header_row = row_num
                 break
         
+        def normalize_header(value: str) -> str:
+            return " ".join("".join(ch if ch.isalnum() else " " for ch in str(value).lower()).split())
+
         header_map = {}
         for idx, h in enumerate(headers):
             if h:
-                header_map[str(h).lower().strip()] = idx
+                header_map[normalize_header(h)] = idx
         
         def get_value(row, *possible_names):
             for name in possible_names:
-                if name.lower() in header_map:
-                    idx = header_map[name.lower()]
+                normalized_name = normalize_header(name)
+                if normalized_name in header_map:
+                    idx = header_map[normalized_name]
                     if idx < len(row):
                         return row[idx]
             return None
@@ -1005,7 +1125,7 @@ async def upload_risk_register(
                 return 'strategic'
             if any(w in text for w in ['financial', 'money', 'cost', 'budget']):
                 return 'financial'
-            if any(w in text for w in ['compliance', 'regulatory', 'legal', 'pci', 'gdpr']):
+            if any(w in text for w in ['compliance', 'regulatory', 'legal', 'pci', 'gdpr', 'privacy', 'lawfulness', 'data subject']):
                 return 'compliance'
             if any(w in text for w in ['technology', 'system', 'network', 'cyber', 'malware', 'phishing', 'security']):
                 return 'technology'
@@ -1038,15 +1158,20 @@ async def upload_risk_register(
                 continue
             
             ref = get_value(row, 'ref', 'ref.', 'id', 'risk id', 'risk_id')
+            risk_title = get_value(row, 'risk title', 'title', 'risk name', 'risk scenario', 'scenario')
+            risk_description = get_value(row, 'risk description', 'description', 'details')
+            risk_category_value = get_value(row, 'risk category', 'category', 'domain', 'threat / category', 'threat category')
             asset_name = get_value(row, 'asset name', 'asset', 'asset_name')
             threat = get_value(row, 'threat', 'threat description')
             vulnerability = get_value(row, 'vulnerabilities', 'vulnerability', 'vuln')
             
-            if not asset_name and not threat and not vulnerability:
+            if not risk_title and not asset_name and not threat and not vulnerability and not risk_description:
                 skipped_count += 1
                 continue
             
             title_parts = []
+            if risk_title:
+                title_parts.append(str(risk_title).strip())
             if asset_name:
                 title_parts.append(str(asset_name).strip())
             if threat:
@@ -1067,6 +1192,8 @@ async def upload_risk_register(
             title = " - ".join(title_parts)[:200]
             
             description_parts = []
+            if risk_description:
+                description_parts.append(str(risk_description).strip())
             if threat:
                 description_parts.append(f"Threat: {threat}")
             if vulnerability:
@@ -1102,8 +1229,21 @@ async def upload_risk_register(
             treatment_plan = "\n\n".join(treatment_parts) if treatment_parts else None
             
             treatment_option = get_value(row, 'risk treatment option', 'treatment option', 'treatment')
-            category = map_category(threat)
-            risk_status = map_status(treatment_option, residual_score)
+            row_register_type = get_value(row, 'register type', 'framework', 'risk type')
+            final_register_type = (
+                register_type.strip() if register_type and register_type.strip()
+                else (str(row_register_type).strip() if row_register_type else None)
+            )
+
+            category = map_category(risk_category_value or threat or risk_title or final_register_type)
+
+            row_status = get_value(row, 'status', 'risk status')
+            if row_status:
+                status_text = str(row_status).strip().lower().replace(' ', '_').replace('-', '_')
+                allowed_statuses = {'open', 'in_treatment', 'mitigated', 'accepted', 'closed'}
+                risk_status = status_text if status_text in allowed_statuses else map_status(treatment_option, residual_score)
+            else:
+                risk_status = map_status(treatment_option, residual_score)
             
             owner_name = get_value(row, 'responsibility', 'owner', 'risk owner')
             
@@ -1121,6 +1261,7 @@ async def upload_risk_register(
                     residual_impact=residual_impact if residual_impact else None,
                     residual_score=residual_score,
                     treatment_plan=treatment_plan,
+                    register_type=final_register_type,
                     status=risk_status,
                     owner_id=current_user.id
                 )
@@ -1603,4 +1744,113 @@ def get_risk_ai_suggestions(
             suggested_likelihood=3,
             suggested_impact=3,
             risk_treatment_options=["Mitigate", "Accept", "Transfer"]
+        )
+
+
+class AITreatmentPlanResponse(BaseModel):
+    treatment_plan: str
+
+
+@router.post("/{risk_id}/ai-treatment-plan", response_model=AITreatmentPlanResponse)
+def generate_ai_treatment_plan(
+    risk_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    risk = db.query(Risk).options(
+        joinedload(Risk.control_links).joinedload(RiskControlLink.normalized_control),
+        joinedload(Risk.framework_control_links).joinedload(RiskFrameworkControlLink.framework_control),
+    ).filter(
+        Risk.id == risk_id,
+        Risk.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Risk not found"
+        )
+
+    linked_controls = []
+    for link in risk.control_links:
+        if link.normalized_control:
+            linked_controls.append(f"{link.normalized_control.code}: {link.normalized_control.name}")
+    for link in risk.framework_control_links:
+        if link.framework_control:
+            linked_controls.append(f"{link.framework_control.code}: {link.framework_control.name}")
+
+    controls_text = "\n".join(f"- {c}" for c in linked_controls) if linked_controls else "No controls currently linked."
+
+    prompt = f"""You are an enterprise risk management expert. Generate a detailed, actionable treatment plan for the following risk.
+
+Risk Title: {risk.title}
+Description: {risk.description or 'N/A'}
+Category: {risk.risk_category or risk.category or 'N/A'}
+Inherent Likelihood: {risk.inherent_likelihood or 'N/A'}/5
+Inherent Impact: {risk.inherent_impact or 'N/A'}/5
+Inherent Score: {risk.inherent_score or 'N/A'}
+Residual Likelihood: {risk.residual_likelihood or 'N/A'}/5
+Residual Impact: {risk.residual_impact or 'N/A'}/5
+Residual Score: {risk.residual_score or 'N/A'}
+Current Status: {risk.status or 'N/A'}
+
+Linked Controls:
+{controls_text}
+
+Generate a comprehensive treatment plan that includes:
+1. Treatment Strategy (mitigate, transfer, accept, or avoid - with justification)
+2. Specific Action Items (3-5 concrete steps with responsible parties and timelines)
+3. Control Improvements (enhancements to existing controls or new controls needed)
+4. Monitoring & Review (KPIs, review frequency, escalation triggers)
+5. Expected Residual Risk (target likelihood and impact after treatment)
+
+Write the plan in clear, professional language suitable for a risk committee. Return ONLY the treatment plan text, no JSON formatting."""
+
+    try:
+        client = get_openai_client()
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an enterprise risk management expert who generates detailed, actionable risk treatment plans."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=1500
+        )
+
+        treatment_plan = response.choices[0].message.content.strip()
+        return AITreatmentPlanResponse(treatment_plan=treatment_plan)
+
+    except Exception as e:
+        logger.error(f"AI treatment plan generation error: {str(e)}")
+        category = risk.risk_category or risk.category or "operational"
+        return AITreatmentPlanResponse(
+            treatment_plan=f"""Treatment Plan for: {risk.title}
+
+1. Treatment Strategy: Mitigate
+   Reduce risk through enhanced controls and monitoring.
+
+2. Action Items:
+   - Conduct detailed risk assessment and root cause analysis (Week 1-2)
+   - Implement additional preventive controls specific to {category} risks (Week 2-4)
+   - Establish monitoring procedures and key risk indicators (Week 3-4)
+   - Train relevant staff on updated procedures (Week 4-6)
+   - Conduct effectiveness review (Week 8)
+
+3. Control Improvements:
+   - Review and strengthen existing control framework
+   - Add detective controls for early warning
+   - Implement automated monitoring where feasible
+
+4. Monitoring & Review:
+   - Monthly KRI reporting
+   - Quarterly treatment plan review
+   - Immediate escalation if risk materializes
+
+5. Expected Residual Risk:
+   - Target Likelihood: {max(1, (risk.inherent_likelihood or 3) - 1)}/5
+   - Target Impact: {max(1, (risk.inherent_impact or 3) - 1)}/5"""
         )

@@ -165,7 +165,7 @@ export interface EvidenceAIAssessment {
   created_at: string;
 }
 
-export type RiskCategory = 'strategic' | 'operational' | 'financial' | 'compliance' | 'technology' | 'third_party' | 'project_change';
+export type RiskCategory = 'strategic' | 'operational' | 'financial' | 'compliance' | 'technology' | 'third_party' | 'project_change' | 'internal';
 export type RiskStatus = 'open' | 'in_treatment' | 'mitigated' | 'accepted' | 'closed';
 
 export interface RiskMitigationAction {
@@ -232,6 +232,7 @@ export interface Risk {
   description?: string;
   risk_category: RiskCategory;
   risk_sub_category?: string;
+  register_type?: string;
   business_owner_id?: number;
   business_owner?: { id: number; email: string; full_name?: string };
   affected_department_ids?: number[];
@@ -252,6 +253,7 @@ export interface Risk {
   owner_name?: string;
   due_date?: string;
   review_date?: string;
+  gap_finding_id?: number;
   mitigation_actions?: RiskMitigationAction[];
   audit_finding_links?: RiskAuditFindingLink[];
   created_at: string;
@@ -259,11 +261,11 @@ export interface Risk {
 }
 
 export interface RiskDetail extends Risk {
-  linked_controls: Array<{id: number; code: string; name: string}>;
-  linked_framework_controls: Array<{id: number; control_ref: string; title: string; mitigation_effectiveness: string}>;
-  linked_assets: Array<{id: number; name: string; asset_type: string}>;
-  linked_evidence: Array<{id: number; name: string; status: string}>;
-  linked_governance: Array<{id: number; name: string; impact_level: string}>;
+  linked_controls: Array<{id: number; control_id: number; code: string; name: string}>;
+  linked_framework_controls: Array<{id: number; framework_control_id: number; code: string; name: string; mitigation_effectiveness?: string; notes?: string; control_ref?: string; title?: string}>;
+  linked_assets: Array<{id: number; asset_id: number; name: string; asset_type: string}>;
+  linked_evidence: Array<{id: number; evidence_id: number; name: string; status: string}>;
+  linked_governance: Array<{id: number; governance_objective_id: number; name: string; impact_level: string}>;
 }
 
 export interface RiskDashboard {
@@ -363,6 +365,9 @@ export interface ITAsset {
   asset_type: AssetType;
   owner_id?: number;
   owner_name?: string;
+  custodian?: string;
+  host_name?: string;
+  ip_address?: string;
   criticality: 'low' | 'medium' | 'high' | 'critical';
   confidentiality_rating?: number;
   integrity_rating?: number;
@@ -371,6 +376,7 @@ export interface ITAsset {
   vendor?: string;
   location?: string;
   status: 'active' | 'inactive' | 'decommissioned';
+  cde_environment?: boolean;
   created_at: string;
 }
 
@@ -821,6 +827,8 @@ export interface IncidentDashboard {
   by_status: Record<string, number>;
   total_financial_impact: number;
   open_incidents: number;
+  investigating?: number;
+  resolved_this_month?: number;
   avg_resolution_time_days: number;
   recent_incidents: Array<{id: number; title: string; severity: string; status: string}>;
 }
@@ -918,6 +926,30 @@ export interface PendingApprovalItem {
   owner_name?: string;
   days_overdue?: number;
 }
+
+export interface GovernanceActionReviewItem {
+  id: number;
+  action_type: string;
+  action_description: string;
+  entity_type: string;
+  entity_id?: number;
+  review_status: string;
+  action_user_id: number;
+  action_user_name?: string;
+  action_date: string;
+  action_metadata?: Record<string, any>;
+  review_notes?: string;
+  reviewer_id?: number;
+  reviewer_name?: string;
+  review_started_at?: string;
+  review_completed_at?: string;
+  // Additional fields when entity is a governance_document
+  document_title?: string;
+  document_code?: string;
+  doc_type?: string;
+  document_status?: string;
+}
+
 
 export type FrameworkUploadStatus = 'pending' | 'processing' | 'text_extracted' | 'parsed' | 'aligned' | 'completed' | 'failed';
 export type ParsedControlStatus = 'pending_review' | 'verified' | 'rejected';

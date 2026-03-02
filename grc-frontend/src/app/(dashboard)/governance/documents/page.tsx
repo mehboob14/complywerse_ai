@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
+import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { 
   FileText, 
@@ -15,6 +17,7 @@ import {
   Trash2,
   Eye,
   ChevronLeft,
+  ChevronDown,
   ChevronRight,
   ArrowUpDown,
   BookOpen,
@@ -98,23 +101,23 @@ interface DocumentListResponse {
 
 const DOCUMENT_TYPES = [
   { value: '', label: 'All Types' },
-  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-50' },
-  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-blue-600', bgColor: 'bg-blue-50' },
-  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-green-600', bgColor: 'bg-green-50' },
-  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
-  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
-  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-orange-600', bgColor: 'bg-orange-50' },
+  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-[var(--color-base)]', bgColor: 'bg-[var(--color-base-soft)]' },
+  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-[var(--color-base)]', bgColor: 'bg-[var(--color-base-soft)]' },
+  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-[var(--color-success)]', bgColor: 'bg-[var(--color-success-soft)]' },
+  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-[var(--color-warning)]', bgColor: 'bg-[var(--color-warning-soft)]' },
+  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-[var(--color-base)]', bgColor: 'bg-[var(--color-base-soft)]' },
+  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-[var(--color-warning)]', bgColor: 'bg-[var(--color-warning-soft)]' },
 ];
 
 const DOCUMENT_STATUSES = [
   { value: '', label: 'All Statuses' },
-  { value: 'draft', label: 'Draft', color: 'text-slate-600', bgColor: 'bg-slate-50' },
-  { value: 'pending_review', label: 'Pending Review', color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
-  { value: 'pending_approval', label: 'Pending Approval', color: 'text-amber-600', bgColor: 'bg-amber-50' },
-  { value: 'approved', label: 'Approved', color: 'text-blue-600', bgColor: 'bg-blue-50' },
-  { value: 'published', label: 'Published', color: 'text-green-600', bgColor: 'bg-green-50' },
-  { value: 'expired', label: 'Expired', color: 'text-red-600', bgColor: 'bg-red-50' },
-  { value: 'archived', label: 'Archived', color: 'text-gray-400', bgColor: 'bg-gray-500/20' },
+  { value: 'draft', label: 'Draft', color: 'text-[var(--color-status-draft)]', bgColor: 'bg-[var(--color-status-draft)]/20' },
+  { value: 'pending_review', label: 'Pending Review', color: 'text-[var(--color-status-review)]', bgColor: 'bg-[var(--color-status-review)]/20' },
+  { value: 'pending_approval', label: 'Pending Approval', color: 'text-[var(--color-status-approval)]', bgColor: 'bg-[var(--color-status-approval)]/20' },
+  { value: 'approved', label: 'Approved', color: 'text-[var(--color-status-approved)]', bgColor: 'bg-[var(--color-status-approved)]/20' },
+  { value: 'published', label: 'Published', color: 'text-[var(--color-status-published)]', bgColor: 'bg-[var(--color-status-published)]/20' },
+  { value: 'expired', label: 'Expired', color: 'text-[var(--color-status-expired)]', bgColor: 'bg-[var(--color-status-expired)]/20' },
+  { value: 'archived', label: 'Archived', color: 'text-[var(--color-status-archived)]', bgColor: 'bg-[var(--color-status-archived)]/20' },
 ];
 
 const CLASSIFICATIONS = [
@@ -134,11 +137,11 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 const getTypeStyle = (type: string) => {
-  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-slate-600', bgColor: 'bg-slate-50', icon: FileText };
+  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-[var(--color-muted)]', bgColor: 'bg-[var(--color-muted)]/20', icon: FileText };
 };
 
 const getStatusStyle = (status: string) => {
-  return DOCUMENT_STATUSES.find(s => s.value === status) || { label: status, color: 'text-slate-600', bgColor: 'bg-slate-50' };
+  return DOCUMENT_STATUSES.find(s => s.value === status) || { label: status, color: 'text-[var(--color-muted)]', bgColor: 'bg-[var(--color-muted)]/20' };
 };
 
 const formatFileSize = (bytes: number | null): string => {
@@ -158,18 +161,19 @@ const getFileIcon = (fileType: string | null) => {
 };
 
 const getFileTypeColor = (fileType: string | null): string => {
-  if (!fileType) return 'text-slate-600';
+  if (!fileType) return 'text-[var(--color-muted)]';
   const type = fileType.toLowerCase();
-  if (type === 'pdf') return 'text-red-600';
-  if (['doc', 'docx'].includes(type)) return 'text-blue-600';
-  if (['xls', 'xlsx'].includes(type)) return 'text-green-600';
-  return 'text-slate-600';
+  if (type === 'pdf') return 'text-[var(--color-danger)]';
+  if (['doc', 'docx'].includes(type)) return 'text-[var(--color-base)]';
+  if (['xls', 'xlsx'].includes(type)) return 'text-[var(--color-success)]';
+  return 'text-[var(--color-muted)]';
 };
 
 type SortField = 'document_code' | 'title' | 'doc_type' | 'status' | 'owner_name' | 'current_version' | 'next_review_date' | 'created_at';
 type SortOrder = 'asc' | 'desc';
 
 export default function GovernanceDocumentsPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -434,19 +438,19 @@ export default function GovernanceDocumentsPage() {
 
   const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
     <th
-      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600 cursor-pointer hover:text-slate-900 transition-colors"
+      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted cursor-pointer hover:cw-text-default transition-colors"
       onClick={() => handleSort(field)}
     >
       <div className="flex items-center gap-1">
         {children}
-        <ArrowUpDown className={`h-3 w-3 ${sortField === field ? 'text-primary-600' : ''}`} />
+        <ArrowUpDown className={`h-3 w-3 ${sortField === field ? 'text-[var(--color-base)]' : ''}`} />
       </div>
     </th>
   );
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-600">
+      <div className="flex h-64 flex-col items-center justify-center gap-4 text-[var(--color-danger)]">
         <AlertCircle className="h-12 w-12" />
         <p>Failed to load documents</p>
       </div>
@@ -457,27 +461,27 @@ export default function GovernanceDocumentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Document Library</h1>
-          <p className="text-slate-600">Manage governance documents, policies, and procedures</p>
+          <h1 className="page-title">Document Library</h1>
+          <p className="page-description">Manage governance documents, policies, and procedures</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setIsAIDraftModalOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-primary-500 bg-gradient-to-r from-purple-500/20 to-blue-500/20 px-4 py-2 font-medium text-primary-600 hover:from-purple-500/30 hover:to-blue-500/30 transition-colors"
+            className="cw-btn-secondary flex items-center gap-2"
           >
             <Wand2 size={18} />
             AI Draft Policy
           </button>
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-primary-600 bg-primary-50 px-4 py-2 font-medium text-primary-600 hover:bg-primary-600/20 transition-colors"
+            className="cw-btn-secondary flex items-center gap-2"
           >
             <Upload size={18} />
             New Document with File
           </button>
           <button
             onClick={handleCreate}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 transition-colors"
+            className="cw-btn-primary flex items-center gap-2"
           >
             <Plus size={18} />
             New Document
@@ -486,14 +490,16 @@ export default function GovernanceDocumentsPage() {
       </div>
 
       {parseResult && (
-        <div className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 p-4">
+        <div className="flex items-center justify-between rounded-xl border border-[var(--color-success)] bg-[var(--color-success-soft)] p-4">
           <div className="flex items-center gap-3">
-                          <CheckCircle className="h-5 w-5 text-green-600" />
+            <div className="rounded-lg bg-[var(--color-success)]/30 p-2">
+              <CheckCircle className="h-5 w-5 text-[var(--color-success)]" />
+            </div>
             <div>
-              <p className="font-medium text-green-600">
+              <p className="font-medium text-[var(--color-success)]">
                 {parseResult.count} policy statement{parseResult.count !== 1 ? 's' : ''} extracted successfully
               </p>
-              <p className="text-sm text-slate-600">
+              <p className="cw-text-muted text-sm">
                 View and manage compliance in the Compliance module
               </p>
             </div>
@@ -501,14 +507,14 @@ export default function GovernanceDocumentsPage() {
           <div className="flex items-center gap-2">
             <a
               href="/compliance/statements"
-              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+              className="cw-btn-success flex items-center gap-1.5 text-sm"
             >
               <ExternalLink className="h-4 w-4" />
               View Statements
             </a>
             <button
               onClick={() => setParseResult(null)}
-              className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
@@ -516,16 +522,16 @@ export default function GovernanceDocumentsPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="cw-card p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 cw-text-muted" />
             <input
               type="text"
               placeholder="Search documents..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="cw-field w-full pl-10"
             />
           </div>
           
@@ -533,7 +539,7 @@ export default function GovernanceDocumentsPage() {
             <select
               value={typeFilter}
               onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="cw-field"
             >
               {DOCUMENT_TYPES.map(type => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -543,7 +549,7 @@ export default function GovernanceDocumentsPage() {
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="cw-field"
             >
               {DOCUMENT_STATUSES.map(status => (
                 <option key={status.value} value={status.value}>{status.label}</option>
@@ -553,7 +559,7 @@ export default function GovernanceDocumentsPage() {
             <select
               value={ownerFilter}
               onChange={(e) => { setOwnerFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="cw-field"
             >
               <option value="">All Owners</option>
               {uniqueOwners.map(owner => (
@@ -564,18 +570,20 @@ export default function GovernanceDocumentsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="cw-card overflow-hidden">
         {isLoading ? (
           <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+            <Loader2 className="h-8 w-8 animate-spin text-[var(--color-base)]" />
           </div>
         ) : filteredDocuments.length === 0 ? (
-          <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-600">
-            <FileText className="h-12 w-12" />
-            <p>No documents found</p>
+          <div className="empty-state h-64">
+            <div className="empty-state-icon">
+              <FileText className="h-12 w-12 cw-text-muted" />
+            </div>
+            <p className="empty-state-title">No documents found</p>
             <button
               onClick={handleCreate}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+              className="cw-btn-primary flex items-center gap-2"
             >
               <Plus size={18} />
               Create First Document
@@ -585,19 +593,19 @@ export default function GovernanceDocumentsPage() {
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-slate-50/50">
+                <thead className="bg-[var(--color-surface)]">
                   <tr>
                     <SortableHeader field="document_code">Code</SortableHeader>
                     <SortableHeader field="title">Title</SortableHeader>
                     <SortableHeader field="doc_type">Type</SortableHeader>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">File</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">File</th>
                     <SortableHeader field="status">Status</SortableHeader>
                     <SortableHeader field="owner_name">Owner</SortableHeader>
                     <SortableHeader field="current_version">Version</SortableHeader>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700">
+                <tbody className="divide-y divide-[var(--color-border)]">
                   {filteredDocuments.map((doc) => {
                     const typeStyle = getTypeStyle(doc.doc_type);
                     const statusStyle = getStatusStyle(doc.status);
@@ -605,15 +613,15 @@ export default function GovernanceDocumentsPage() {
                     const FileIcon = getFileIcon(doc.file_type);
                     
                     return (
-                      <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="whitespace-nowrap px-4 py-4 text-sm font-mono text-slate-600">
+                      <tr key={doc.id} className="hover:bg-[var(--color-hover)] transition-colors">
+                        <td className="whitespace-nowrap px-4 py-4 text-sm font-mono cw-text-default">
                           {doc.document_code || '-'}
                         </td>
                         <td className="px-4 py-4">
                           <div className="max-w-xs">
-                            <p className="font-medium text-black truncate">{doc.title}</p>
+                            <p className="font-medium cw-text-default truncate">{doc.title}</p>
                             {doc.description && (
-                              <p className="text-sm text-slate-600 truncate">{doc.description}</p>
+                              <p className="text-sm cw-text-muted truncate">{doc.description}</p>
                             )}
                           </div>
                         </td>
@@ -628,12 +636,12 @@ export default function GovernanceDocumentsPage() {
                             <div className="flex items-center gap-2">
                               <FileIcon className={`h-4 w-4 ${getFileTypeColor(doc.file_type)}`} />
                               <div className="max-w-[150px]">
-                                <p className="text-sm text-slate-600 truncate" title={doc.file_name}>{doc.file_name}</p>
-                                <p className="text-xs text-slate-500">{formatFileSize(doc.file_size)}</p>
+                                <p className="text-sm cw-text-default truncate" title={doc.file_name}>{doc.file_name}</p>
+                                <p className="text-xs cw-text-muted">{formatFileSize(doc.file_size)}</p>
                               </div>
                             </div>
                           ) : (
-                            <span className="text-sm text-slate-500">No file</span>
+                            <span className="text-sm cw-text-muted">No file</span>
                           )}
                         </td>
                         <td className="whitespace-nowrap px-4 py-4">
@@ -641,24 +649,24 @@ export default function GovernanceDocumentsPage() {
                             {statusStyle.label}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
+                        <td className="whitespace-nowrap px-4 py-4 text-sm cw-text-default">
                           {doc.owner_name || '-'}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">
+                        <td className="whitespace-nowrap px-4 py-4 text-sm cw-text-default">
                           {doc.current_version || '1.0'}
                         </td>
                         <td className="whitespace-nowrap px-4 py-4">
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => setViewingDocument(doc)}
-                              className="rounded p-1.5 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
-                              title="View"
+                              onClick={() => router.push(`/governance/documents/${doc.id}`)}
+                              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
+                              title="View Details"
                             >
                               <Eye className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleEdit(doc)}
-                              className="rounded p-1.5 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
                               title="Edit"
                             >
                               <Edit2 className="h-4 w-4" />
@@ -667,7 +675,7 @@ export default function GovernanceDocumentsPage() {
                               <>
                                 <button
                                   onClick={() => handleDownload(doc)}
-                                  className="rounded p-1.5 text-slate-600 hover:bg-green-50 hover:text-green-600 transition-colors"
+                                  className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
                                   title="Download File"
                                 >
                                   <Download className="h-4 w-4" />
@@ -676,8 +684,8 @@ export default function GovernanceDocumentsPage() {
                                   onClick={() => parsePolicyMutation.mutate(doc.id)}
                                   className={`rounded p-1.5 transition-colors ${
                                     doc.policy_statement_count && doc.policy_statement_count > 0
-                                      ? 'text-green-600 hover:bg-green-50'
-                                      : 'text-primary-600 hover:bg-primary-50 hover:text-primary-500'
+                                        ? 'text-[var(--color-success)] hover:bg-[var(--color-success-soft)]'
+                                        : 'text-[var(--color-base)] hover:bg-[var(--color-base-soft)]'
                                   }`}
                                   title={doc.policy_statement_count && doc.policy_statement_count > 0 
                                     ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
@@ -695,7 +703,7 @@ export default function GovernanceDocumentsPage() {
                             ) : (
                               <button
                                 onClick={() => setUploadingToDocumentId(doc.id)}
-                                className="rounded p-1.5 text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
                                 title="Upload File"
                               >
                                 <Upload className="h-4 w-4" />
@@ -704,7 +712,7 @@ export default function GovernanceDocumentsPage() {
                             {doc.status === 'approved' && (
                               <button
                                 onClick={() => publishMutation.mutate(doc.id)}
-                                className="rounded p-1.5 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
                                 title="Publish Document"
                                 disabled={publishMutation.isPending}
                               >
@@ -718,7 +726,7 @@ export default function GovernanceDocumentsPage() {
                             {doc.status === 'published' && (
                               <button
                                 onClick={() => setAttestationTargetDocument(doc)}
-                                className="rounded p-1.5 text-slate-600 hover:bg-cyan-50 hover:text-cyan-600 transition-colors"
+                                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
                                 title="Request Attestation"
                               >
                                 <Send className="h-4 w-4" />
@@ -726,7 +734,7 @@ export default function GovernanceDocumentsPage() {
                             )}
                             <button
                               onClick={() => handleDelete(doc)}
-                              className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
+                              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-colors"
                               title="Delete"
                               disabled={deleteMutation.isPending}
                             >
@@ -741,25 +749,25 @@ export default function GovernanceDocumentsPage() {
               </table>
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
-              <div className="text-sm text-slate-600">
+            <div className="flex items-center justify-between border-t border-[var(--color-border)] px-4 py-3">
+              <div className="text-sm cw-text-muted">
                 Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalItems)} of {totalItems} documents
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage(p => Math.max(0, p - 1))}
                   disabled={page === 0}
-                  className="rounded-lg border border-slate-300 bg-slate-200 p-2 text-slate-600 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-2 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
-                <span className="text-sm text-slate-600">
+                <span className="text-sm cw-text-muted">
                   Page {page + 1} of {totalPages || 1}
                 </span>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
-                  className="rounded-lg border border-slate-300 bg-slate-200 p-2 text-slate-600 hover:bg-slate-600 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-2 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
@@ -774,7 +782,7 @@ export default function GovernanceDocumentsPage() {
           document={editingDocument}
           onClose={() => { setIsModalOpen(false); setEditingDocument(null); }}
           onSubmit={(data) => {
-            if (editingDocument) {
+            if (editingDocument?.id) {
               updateMutation.mutate({ id: editingDocument.id, data });
             } else {
               createMutation.mutate(data);
@@ -835,10 +843,15 @@ export default function GovernanceDocumentsPage() {
             setAIDraftResult(null);
           }}
           onGenerate={(data) => aiDraftMutation.mutate(data)}
-          onUseContent={(content: string, title: string) => {
+          onUseContent={(content: string, title: string, docType?: string, description?: string) => {
             setIsAIDraftModalOpen(false);
             setAIDraftResult(null);
-            setEditingDocument(null);
+            setEditingDocument({
+              title,
+              content,
+              doc_type: docType || 'policy',
+              description: description || '',
+            } as any);
             setIsModalOpen(true);
           }}
           isLoading={aiDraftMutation.isPending}
@@ -936,12 +949,12 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h2 className="text-xl font-semibold text-black">New Document with File</h2>
+      <div className="cw-card w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl shadow-xl">
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
+          <h2 className="text-xl font-semibold cw-text">New Document with File</h2>
           <button
             onClick={onClose}
-            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -951,12 +964,12 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
           <div
             className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
               dragActive
-                ? 'border-primary-500 bg-primary-50'
+                ? 'border-primary-500 bg-primary-500/10'
                 : file
-                ? 'border-green-500 bg-green-50'
+                ? 'border-green-500 bg-green-500/10'
                 : fileError
-                ? 'border-red-500 bg-red-50'
-                : 'border-slate-300 hover:border-slate-400'
+                ? 'border-red-500 bg-red-500/10'
+                : 'border-[var(--color-border)] hover:border-[var(--color-base)]'
             }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -974,29 +987,29 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
             {file ? (
               <div className="flex flex-col items-center gap-2">
                 <FileIcon className={`h-12 w-12 ${getFileTypeColor(file.name.split('.').pop() || null)}`} />
-                <p className="text-black font-medium">{file.name}</p>
-                <p className="text-sm text-slate-600">{formatFileSize(file.size)}</p>
+                <p className="cw-text font-medium">{file.name}</p>
+                <p className="text-sm cw-text-muted">{formatFileSize(file.size)}</p>
                 <button
                   type="button"
                   onClick={() => setFile(null)}
-                  className="mt-2 text-sm text-red-600 hover:text-red-300"
+                  className="mt-2 text-sm text-red-400 hover:text-red-300"
                 >
                   Remove file
                 </button>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2">
-                <Upload className="h-12 w-12 text-slate-600" />
-                <p className="text-black font-medium">Drag and drop your file here</p>
-                <p className="text-sm text-slate-600">or</p>
+                <Upload className="h-12 w-12 cw-text-muted" />
+                <p className="cw-text font-medium">Drag and drop your file here</p>
+                <p className="text-sm cw-text-muted">or</p>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                  className="cw-btn-primary"
                 >
                   Browse Files
                 </button>
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs cw-text-muted">
                   Supported: PDF, Word (.doc, .docx), Excel (.xls, .xlsx) • Max 50MB
                 </p>
               </div>
@@ -1004,43 +1017,43 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
           </div>
           
           {fileError && (
-            <div className="flex items-center gap-2 text-red-600 text-sm">
+            <div className="flex items-center gap-2 text-red-400 text-sm">
               <AlertCircle className="h-4 w-4" />
               {fileError}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Title *</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
             <input
               type="text"
               required
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full cw-field"
               placeholder="Enter document title"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={2}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full cw-field"
               placeholder="Brief description of the document"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Document Type *</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Document Type *</label>
               <select
                 required
                 value={formData.doc_type}
                 onChange={(e) => setFormData(prev => ({ ...prev, doc_type: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full cw-field"
               >
                 {DOCUMENT_TYPES.filter(t => t.value).map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
@@ -1049,12 +1062,12 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Classification *</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Classification *</label>
               <select
                 required
                 value={formData.classification}
                 onChange={(e) => setFormData(prev => ({ ...prev, classification: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full cw-field"
               >
                 {CLASSIFICATIONS.map(cls => (
                   <option key={cls.value} value={cls.value}>{cls.label}</option>
@@ -1063,18 +1076,18 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+          <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600 transition-colors"
+              className="cw-btn-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading || !file}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+              className="cw-btn-primary flex items-center gap-2 disabled:opacity-50"
             >
               {isLoading ? (
                 <>
@@ -1175,12 +1188,12 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h2 className="text-xl font-semibold text-black">Upload File to Document</h2>
+      <div className="cw-card w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl shadow-xl">
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
+          <h2 className="text-xl font-semibold cw-text">Upload File to Document</h2>
           <button
             onClick={onClose}
-            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1190,12 +1203,12 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
           <div
             className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
               dragActive
-                ? 'border-primary-500 bg-primary-50'
+                ? 'border-primary-500 bg-primary-500/10'
                 : file
-                ? 'border-green-500 bg-green-50'
+                ? 'border-green-500 bg-green-500/10'
                 : fileError
-                ? 'border-red-500 bg-red-50'
-                : 'border-slate-300 hover:border-slate-400'
+                ? 'border-red-500 bg-red-500/10'
+                : 'border-[var(--color-border)] hover:border-[var(--color-base)]'
             }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -1213,29 +1226,29 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
             {file ? (
               <div className="flex flex-col items-center gap-2">
                 <FileIcon className={`h-12 w-12 ${getFileTypeColor(file.name.split('.').pop() || null)}`} />
-                <p className="text-black font-medium">{file.name}</p>
-                <p className="text-sm text-slate-600">{formatFileSize(file.size)}</p>
+                <p className="cw-text font-medium">{file.name}</p>
+                <p className="text-sm cw-text-muted">{formatFileSize(file.size)}</p>
                 <button
                   type="button"
                   onClick={() => setFile(null)}
-                  className="mt-2 text-sm text-red-600 hover:text-red-300"
+                  className="mt-2 text-sm text-red-400 hover:text-red-300"
                 >
                   Remove file
                 </button>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2">
-                <Upload className="h-12 w-12 text-slate-600" />
-                <p className="text-black font-medium">Drag and drop your file here</p>
-                <p className="text-sm text-slate-600">or</p>
+                <Upload className="h-12 w-12 cw-text-muted" />
+                <p className="cw-text font-medium">Drag and drop your file here</p>
+                <p className="text-sm cw-text-muted">or</p>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                  className="cw-btn-primary"
                 >
                   Browse Files
                 </button>
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-gray-700">
                   Supported: PDF, Word (.doc, .docx), Excel (.xls, .xlsx) • Max 50MB
                 </p>
               </div>
@@ -1243,35 +1256,35 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
           </div>
           
           {fileError && (
-            <div className="flex items-center gap-2 text-red-600 text-sm">
+            <div className="flex items-center gap-2 text-red-400 text-sm">
               <AlertCircle className="h-4 w-4" />
               {fileError}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Change Summary (optional)</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Change Summary (optional)</label>
             <textarea
               value={changeSummary}
               onChange={(e) => setChangeSummary(e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full cw-field"
               placeholder="Describe what changed..."
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+          <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600 transition-colors"
+              className="cw-btn-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading || !file}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+              className="cw-btn-primary flex items-center gap-2 disabled:opacity-50"
             >
               {isLoading ? (
                 <>
@@ -1323,14 +1336,14 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h2 className="text-xl font-semibold text-black">
-            {document ? 'Edit Document' : 'New Document'}
+      <div className="cw-card w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl shadow-xl">
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
+          <h2 className="text-xl font-semibold cw-text">
+            {document?.id ? 'Edit Document' : 'New Document'}
           </h2>
           <button
             onClick={onClose}
-            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1338,36 +1351,36 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
         
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Title *</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
             <input
               type="text"
               required
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full cw-field"
               placeholder="Enter document title"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={2}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full cw-field"
               placeholder="Brief description of the document"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Document Type *</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Document Type *</label>
               <select
                 required
                 value={formData.doc_type}
                 onChange={(e) => setFormData(prev => ({ ...prev, doc_type: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full cw-field"
               >
                 {DOCUMENT_TYPES.filter(t => t.value).map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
@@ -1376,11 +1389,11 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Classification</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Classification</label>
               <select
                 value={formData.classification}
                 onChange={(e) => setFormData(prev => ({ ...prev, classification: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full cw-field"
               >
                 {CLASSIFICATIONS.map(cls => (
                   <option key={cls.value} value={cls.value}>{cls.label}</option>
@@ -1390,61 +1403,61 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Content</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Content</label>
             <textarea
               value={formData.content}
               onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
               rows={6}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full cw-field"
               placeholder="Document content..."
             />
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Review Cycle (months)</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Review Cycle (months)</label>
               <input
                 type="number"
                 min={1}
                 value={formData.review_cycle_months}
                 onChange={(e) => setFormData(prev => ({ ...prev, review_cycle_months: parseInt(e.target.value) || 12 }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full cw-field"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Effective Date</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Effective Date</label>
               <input
                 type="date"
                 value={formData.effective_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, effective_date: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full cw-field"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Expiry Date</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Expiry Date</label>
               <input
                 type="date"
                 value={formData.expiry_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, expiry_date: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full cw-field"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+          <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600 transition-colors"
+              className="cw-btn-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+              className="cw-btn-primary flex items-center gap-2 disabled:opacity-50"
             >
               {isLoading ? (
                 <>
@@ -1452,7 +1465,7 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
                   Saving...
                 </>
               ) : (
-                document ? 'Update Document' : 'Create Document'
+                document?.id ? 'Update Document' : 'Create Document'
               )}
             </button>
           </div>
@@ -1477,22 +1490,22 @@ function ViewDocumentModal({ document, onClose, onEdit, onDownload }: ViewDocume
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
+      <div className="cw-card w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl shadow-xl">
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
           <div className="flex items-center gap-3">
             <div className={`rounded-lg ${typeStyle.bgColor} p-2`}>
               <TypeIcon className={`h-5 w-5 ${typeStyle.color}`} />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-black">{document.title}</h2>
+              <h2 className="text-xl font-semibold cw-text">{document.title}</h2>
               {document.document_code && (
-                <p className="text-sm text-slate-600 font-mono">{document.document_code}</p>
+                <p className="text-sm cw-text-muted font-mono">{document.document_code}</p>
               )}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1507,34 +1520,34 @@ function ViewDocumentModal({ document, onClose, onEdit, onDownload }: ViewDocume
             <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
               {statusStyle.label}
             </span>
-            <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-slate-50 text-slate-700">
+            <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-slate-500/20 cw-text-muted">
               v{document.current_version}
             </span>
           </div>
 
           {document.description && (
             <div>
-              <h3 className="text-sm font-medium text-slate-600 mb-1">Description</h3>
-              <p className="text-slate-600">{document.description}</p>
+              <h3 className="text-sm font-medium cw-text-muted mb-1">Description</h3>
+              <p className="cw-text">{document.description}</p>
             </div>
           )}
 
           {document.file_name && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-              <h3 className="text-sm font-medium text-slate-600 mb-3">Attached File</h3>
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/50 p-4">
+              <h3 className="text-sm font-medium cw-text-muted mb-3">Attached File</h3>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <FileIcon className={`h-8 w-8 ${getFileTypeColor(document.file_type)}`} />
                   <div>
-                    <p className="text-black font-medium">{document.file_name}</p>
-                    <p className="text-sm text-slate-600">
+                    <p className="cw-text font-medium">{document.file_name}</p>
+                    <p className="text-sm cw-text-muted">
                       {document.file_type?.toUpperCase()} • {formatFileSize(document.file_size)}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={onDownload}
-                  className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+                  className="cw-btn-success flex items-center gap-2"
                 >
                   <Download className="h-4 w-4" />
                   Download
@@ -1545,22 +1558,22 @@ function ViewDocumentModal({ document, onClose, onEdit, onDownload }: ViewDocume
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <h3 className="text-sm font-medium text-slate-600 mb-1">Owner</h3>
-              <p className="text-slate-600">{document.owner_name || '-'}</p>
+              <h3 className="text-sm font-medium cw-text-muted mb-1">Owner</h3>
+              <p className="cw-text">{document.owner_name || '-'}</p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-slate-600 mb-1">Classification</h3>
-              <p className="text-slate-600 capitalize">{document.classification}</p>
+              <h3 className="text-sm font-medium cw-text-muted mb-1">Classification</h3>
+              <p className="cw-text capitalize">{document.classification}</p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-slate-600 mb-1">Effective Date</h3>
-              <p className="text-slate-600">
+              <h3 className="text-sm font-medium cw-text-muted mb-1">Effective Date</h3>
+              <p className="cw-text">
                 {document.effective_date ? new Date(document.effective_date).toLocaleDateString() : '-'}
               </p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-slate-600 mb-1">Next Review</h3>
-              <p className="text-slate-600">
+              <h3 className="text-sm font-medium cw-text-muted mb-1">Next Review</h3>
+              <p className="cw-text">
                 {document.next_review_date ? new Date(document.next_review_date).toLocaleDateString() : '-'}
               </p>
             </div>
@@ -1568,23 +1581,23 @@ function ViewDocumentModal({ document, onClose, onEdit, onDownload }: ViewDocume
 
           {document.content && (
             <div>
-              <h3 className="text-sm font-medium text-slate-600 mb-1">Content</h3>
-              <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 max-h-64 overflow-y-auto">
-                <p className="text-slate-600 whitespace-pre-wrap">{document.content}</p>
+              <h3 className="text-sm font-medium cw-text-muted mb-1">Content</h3>
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/50 p-4 max-h-64 overflow-y-auto">
+                <p className="cw-text whitespace-pre-wrap">{document.content}</p>
               </div>
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+          <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
             <button
               onClick={onClose}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600 transition-colors"
+              className="cw-btn-secondary"
             >
               Close
             </button>
             <button
               onClick={onEdit}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+              className="cw-btn-primary flex items-center gap-2"
             >
               <Edit2 className="h-4 w-4" />
               Edit Document
@@ -1651,15 +1664,15 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+      <div className="cw-card w-full max-w-lg max-h-[90vh] overflow-hidden shadow-xl">
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-black">Request Attestation</h2>
-            <p className="text-sm text-slate-600 mt-0.5">{document.title}</p>
+            <h2 className="text-lg font-semibold cw-text">Request Attestation</h2>
+            <p className="text-sm cw-text-muted mt-0.5">{document.title}</p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded-lg p-2 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1667,50 +1680,50 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[calc(90vh-180px)]">
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">
+            <label className="block text-sm font-medium cw-text mb-1">
               Due Date (Optional)
             </label>
             <input
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-slate-100 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full cw-field"
               min={new Date().toISOString().split('T')[0]}
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-slate-600">
+              <label className="block text-sm font-medium cw-text">
                 Select Users ({selectedUserIds.length} selected)
               </label>
               <button
                 type="button"
                 onClick={handleSelectAll}
-                className="text-xs text-primary-600 hover:text-primary-300"
+                className="text-xs text-primary-400 hover:text-primary-300"
               >
                 {selectedUserIds.length === filteredUsers.length ? 'Deselect All' : 'Select All'}
               </button>
             </div>
             
             <div className="relative mb-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 cw-text-muted" />
               <input
                 type="text"
                 placeholder="Search users..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-slate-200 pl-10 pr-3 py-2 text-sm text-slate-100 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full cw-field pl-10"
               />
             </div>
 
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-300 bg-slate-50/50">
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/50">
               {usersLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
+                  <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
                 </div>
               ) : filteredUsers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-slate-600">
+                <div className="flex flex-col items-center justify-center py-8 cw-text-muted">
                   <Users className="h-8 w-8 mb-2" />
                   <p className="text-sm">No users found</p>
                 </div>
@@ -1718,23 +1731,23 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
                 filteredUsers.map(tenantUser => (
                   <label
                     key={tenantUser.user_id}
-                    className="flex items-center gap-3 px-3 py-2 hover:bg-white cursor-pointer border-b border-slate-200 last:border-b-0"
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-[var(--color-hover)] cursor-pointer border-b border-[var(--color-border)] last:border-b-0"
                   >
                     <input
                       type="checkbox"
                       checked={selectedUserIds.includes(tenantUser.user_id)}
                       onChange={() => handleToggleUser(tenantUser.user_id)}
-                      className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500 focus:ring-offset-0"
+                      className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-subtle)] text-[var(--color-base)] focus:ring-[var(--color-base)] focus:ring-offset-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-200 truncate">
+                      <p className="text-sm font-medium cw-text truncate">
                         {tenantUser.user?.display_name || 'Unknown User'}
                       </p>
-                      <p className="text-xs text-slate-600 truncate">
+                      <p className="text-xs cw-text-muted truncate">
                         {tenantUser.user?.email || 'No email'}
                       </p>
                     </div>
-                    <span className="text-xs text-slate-500 capitalize">
+                    <span className="text-xs cw-text-muted capitalize">
                       {tenantUser.role}
                     </span>
                   </label>
@@ -1744,11 +1757,11 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
           </div>
         </form>
 
-        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+        <div className="flex justify-end gap-3 border-t border-[var(--color-border)] px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600 transition-colors"
+            className="cw-btn-secondary"
             disabled={isLoading}
           >
             Cancel
@@ -1756,7 +1769,7 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
           <button
             onClick={handleSubmit}
             disabled={isLoading || selectedUserIds.length === 0}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="cw-btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <>
@@ -1779,7 +1792,7 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
 interface AIDraftPolicyModalProps {
   onClose: () => void;
   onGenerate: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string }) => void;
-  onUseContent: (content: string, title: string) => void;
+  onUseContent: (content: string, title: string, docType?: string, description?: string) => void;
   isLoading: boolean;
   result: {
     generated_content: string;
@@ -1795,24 +1808,87 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
   const [formData, setFormData] = useState({
     doc_type: 'policy',
     title: '',
-    regulatory_scope: '',
     description: '',
   });
+  const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>([]);
+  const [showFrameworkDropdown, setShowFrameworkDropdown] = useState(false);
+  const [suggestions, setSuggestions] = useState<any[] | null>(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  const { data: frameworks } = useQuery({
+    queryKey: ['frameworks-for-ai-draft'],
+    queryFn: async () => {
+      const response = await apiClient.get('/framework-upload/upload');
+      const data = response.data;
+      const items = Array.isArray(data) ? data : data?.items || data?.frameworks || [];
+      return items.filter((f: any) => f.is_active && (f.upload_status === 'parsed' || f.upload_status === 'published'));
+    },
+  });
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowFrameworkDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleFramework = (id: number) => {
+    setSelectedFrameworkIds(prev =>
+      prev.includes(id) ? prev.filter(fId => fId !== id) : [...prev, id]
+    );
+    setSuggestions(null);
+    setShowSuggestions(false);
+  };
+
+  const selectedFrameworks = (frameworks || []).filter((f: any) => selectedFrameworkIds.includes(f.id));
+
+  const handleSuggestDocuments = async () => {
+    if (selectedFrameworkIds.length === 0) return;
+    setSuggestionsLoading(true);
+    setShowSuggestions(true);
+    try {
+      const response = await governanceApi.suggestPoliciesForFramework({ framework_ids: selectedFrameworkIds });
+      setSuggestions((response.data as any)?.suggestions || []);
+    } catch (error: any) {
+      toast({
+        type: 'error',
+        title: 'Suggestion Failed',
+        message: error?.response?.data?.detail || 'Failed to get AI suggestions.',
+      });
+      setSuggestions([]);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  };
+
+  const handleSelectSuggestion = (suggestion: any) => {
+    setFormData({
+      doc_type: suggestion.doc_type || 'policy',
+      title: suggestion.title || '',
+      description: suggestion.description || '',
+    });
+    setShowSuggestions(false);
+    toast({
+      type: 'success',
+      title: 'Suggestion Applied',
+      message: `"${suggestion.title}" selected. You can edit the details before generating.`,
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
-    
-    const regulatoryScope = formData.regulatory_scope
-      .split(',')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-    
+
     onGenerate({
       doc_type: formData.doc_type,
       title: formData.title,
-      regulatory_scope: regulatoryScope.length > 0 ? regulatoryScope : undefined,
+      framework_ids: selectedFrameworkIds.length > 0 ? selectedFrameworkIds : undefined,
       description: formData.description || undefined,
     });
   };
@@ -1828,20 +1904,35 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
     }
   };
 
+  const priorityColors: Record<string, string> = {
+    high: 'bg-red-500/20 text-red-300 border-red-500/30',
+    medium: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    low: 'bg-green-500/20 text-green-300 border-green-500/30',
+  };
+
+  const docTypeColors: Record<string, string> = {
+    policy: 'bg-blue-500/20 text-blue-300',
+    standard: 'bg-purple-500/20 text-purple-300',
+    procedure: 'bg-teal-500/20 text-teal-300',
+    guideline: 'bg-indigo-500/20 text-indigo-300',
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl flex flex-col">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10">
+      <div className="cw-card w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-xl flex flex-col">
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10">
           <div className="flex items-center gap-3">
-                          <Wand2 className="h-5 w-5 text-primary-600" />
+            <div className="rounded-lg bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-2">
+              <Wand2 className="h-5 w-5 text-purple-400" />
+            </div>
             <div>
-              <h2 className="text-lg font-semibold text-black">AI Draft Policy</h2>
-              <p className="text-sm text-slate-600">Generate professional policy documents with AI</p>
+              <h2 className="text-lg font-semibold cw-text">AI Draft Policy</h2>
+              <p className="text-sm cw-text-muted">Generate professional policy documents with AI</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="rounded-lg p-2 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1852,11 +1943,11 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Document Type *</label>
+                  <label className="block text-sm font-medium cw-text mb-1">Document Type *</label>
                   <select
                     value={formData.doc_type}
                     onChange={(e) => setFormData(prev => ({ ...prev, doc_type: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full cw-field"
                   >
                     <option value="policy">Policy</option>
                     <option value="standard">Standard</option>
@@ -1864,38 +1955,192 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                     <option value="guideline">Guideline</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Regulatory Frameworks</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., SAMA CSF, ISO 27001, PCI DSS"
-                    value={formData.regulatory_scope}
-                    onChange={(e) => setFormData(prev => ({ ...prev, regulatory_scope: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
+                <div ref={dropdownRef} className="relative">
+                  <label className="block text-sm font-medium cw-text mb-1">Regulatory Frameworks</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowFrameworkDropdown(!showFrameworkDropdown)}
+                    className="w-full cw-field text-left flex items-center justify-between"
+                  >
+                    <span className={selectedFrameworkIds.length === 0 ? 'cw-text-muted' : 'cw-text'}>
+                      {selectedFrameworkIds.length === 0
+                        ? 'Select frameworks...'
+                        : `${selectedFrameworkIds.length} framework${selectedFrameworkIds.length > 1 ? 's' : ''} selected`}
+                    </span>
+                    <ChevronDown className="h-4 w-4 cw-text-muted" />
+                  </button>
+                  {showFrameworkDropdown && (
+                    <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] shadow-xl">
+                      {(frameworks || []).length === 0 ? (
+                        <div className="px-3 py-2 text-sm cw-text-muted">No frameworks available</div>
+                      ) : (
+                        (frameworks || []).map((fw: any) => (
+                          <label
+                            key={fw.id}
+                            className="flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-hover)] cursor-pointer transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedFrameworkIds.includes(fw.id)}
+                              onChange={() => toggleFramework(fw.id)}
+                              className="rounded border-[var(--color-border)] bg-[var(--color-subtle)] text-[var(--color-base)] focus:ring-[var(--color-base)]"
+                            />
+                            <span className="text-sm cw-text truncate">{fw.name}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
+              {selectedFrameworks.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedFrameworks.map((fw: any) => (
+                    <span
+                      key={fw.id}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/20 px-3 py-1 text-xs font-medium text-purple-300"
+                    >
+                      <Shield className="h-3 w-3" />
+                      {fw.name}
+                      <button
+                        type="button"
+                        onClick={() => toggleFramework(fw.id)}
+                        className="ml-0.5 rounded-full hover:bg-purple-500/30 p-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {selectedFrameworkIds.length > 0 && !showSuggestions && (
+                <button
+                  type="button"
+                  onClick={handleSuggestDocuments}
+                  disabled={suggestionsLoading}
+                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 px-4 py-2.5 text-sm font-medium text-purple-300 hover:from-purple-500/30 hover:to-blue-500/30 transition-all w-full justify-center"
+                >
+                  {suggestionsLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      AI is analyzing framework requirements...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="h-4 w-4" />
+                      Suggest Documents Based on Framework
+                    </>
+                  )}
+                </button>
+              )}
+
+              {showSuggestions && (
+                <div className="rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-blue-500/5 overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-purple-500/20 px-4 py-3 bg-purple-500/10">
+                    <div className="flex items-center gap-2">
+                      <Wand2 className="h-4 w-4 text-purple-400" />
+                      <span className="text-sm font-medium text-purple-300">
+                        AI-Suggested Documents
+                        {suggestions && <span className="text-purple-400 ml-1">({suggestions.length})</span>}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSuggestDocuments}
+                        disabled={suggestionsLoading}
+                        className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                      >
+                        <Wand2 className="h-3 w-3" />
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowSuggestions(false)}
+                        className="cw-text-muted hover:cw-text"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto p-3 space-y-2">
+                    {suggestionsLoading ? (
+                      <div className="flex flex-col items-center justify-center py-8 gap-3">
+                        <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+                        <p className="text-sm cw-text-muted">Analyzing framework controls and requirements...</p>
+                      </div>
+                    ) : suggestions && suggestions.length > 0 ? (
+                      suggestions.map((suggestion: any, idx: number) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectSuggestion(suggestion)}
+                          className="w-full text-left rounded-lg border border-[var(--color-border)]/50 bg-[var(--color-surface)]/50 p-3 hover:border-[var(--color-base)]/50 hover:bg-[var(--color-hover)]/50 transition-all group"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${docTypeColors[suggestion.doc_type] || 'bg-slate-500/20 text-gray-800'}`}>
+                                  {suggestion.doc_type}
+                                </span>
+                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${priorityColors[suggestion.priority] || priorityColors.medium}`}>
+                                  {suggestion.priority}
+                                </span>
+                              </div>
+                              <h4 className="text-sm font-medium cw-text group-hover:text-[var(--color-base)] transition-colors">
+                                {suggestion.title}
+                              </h4>
+                              <p className="text-xs cw-text-muted mt-1 line-clamp-2">
+                                {suggestion.description}
+                              </p>
+                              {suggestion.relevant_controls && suggestion.relevant_controls.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {suggestion.relevant_controls.slice(0, 4).map((ctrl: string, cIdx: number) => (
+                                    <span key={cIdx} className="inline-flex items-center rounded bg-[var(--color-subtle)] px-1.5 py-0.5 text-xs cw-text-muted">
+                                      {ctrl}
+                                    </span>
+                                  ))}
+                                  {suggestion.relevant_controls.length > 4 && (
+                                    <span className="text-xs cw-text-muted">+{suggestion.relevant_controls.length - 4} more</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <ChevronRight className="h-4 w-4 cw-text-muted group-hover:text-[var(--color-base)] transition-colors flex-shrink-0 mt-1" />
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="text-center py-4 text-sm cw-text-muted">
+                        No suggestions available. Try selecting different frameworks.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Policy Title *</label>
+                <label className="block text-sm font-medium cw-text mb-1">Policy Title *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g., Information Security Policy"
                   value={formData.title}
                   onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full cw-field"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Description / Requirements</label>
+                <label className="block text-sm font-medium cw-text mb-1">Description / Requirements</label>
                 <textarea
                   rows={3}
                   placeholder="Describe what this policy should cover, any specific requirements, or areas of focus..."
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full cw-field"
                 />
               </div>
 
@@ -1903,14 +2148,14 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600 transition-colors"
+                  className="cw-btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isLoading || !formData.title.trim()}
-                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-black hover:from-purple-700 hover:to-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="cw-btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <>
@@ -1930,11 +2175,11 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <div className="flex items-center gap-2 text-sm cw-text-muted">
                     <FileText className="h-4 w-4" />
                     <span>{result.word_count} words</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <div className="flex items-center gap-2 text-sm cw-text-muted">
                     <Loader2 className="h-4 w-4" />
                     <span>~{result.estimated_review_time} to review</span>
                   </div>
@@ -1942,7 +2187,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleCopyContent}
-                    className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-600 transition-colors"
+                    className="cw-btn-secondary flex items-center gap-2 px-3 py-1.5"
                   >
                     <Paperclip className="h-4 w-4" />
                     Copy Content
@@ -1950,30 +2195,30 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                 </div>
               </div>
 
-              {result.framework_alignment.length > 0 && (
+              {result.framework_alignment && result.framework_alignment.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {result.framework_alignment.map((alignment, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1"
+                      className="flex items-center gap-2 rounded-full bg-purple-500/20 px-3 py-1"
                     >
-                      <Shield className="h-3.5 w-3.5 text-primary-600" />
-                      <span className="text-sm font-medium text-primary-500">{alignment.framework}</span>
-                      <span className="text-xs text-primary-600">({alignment.controls.length} controls)</span>
+                      <Shield className="h-3.5 w-3.5 text-purple-400" />
+                      <span className="text-sm font-medium text-purple-300">{alignment.framework}</span>
+                      <span className="text-xs text-purple-400">({alignment.controls.length} controls)</span>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div className="rounded-xl border border-slate-300 bg-slate-50/50 overflow-hidden">
-                <div className="border-b border-slate-300 px-4 py-2 bg-white/50">
-                  <h3 className="font-medium text-black">{result.suggested_title}</h3>
+              <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/50 overflow-hidden">
+                <div className="border-b border-[var(--color-border)] px-4 py-2 bg-[var(--color-surface)]/50">
+                  <h3 className="font-medium cw-text">{result.suggested_title}</h3>
                 </div>
                 <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
                   {result.suggested_sections.map((section, idx) => (
                     <div key={idx} className="space-y-2">
-                      <h4 className="font-medium text-primary-500">{section.heading}</h4>
-                      <div className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
+                      <h4 className="font-medium text-purple-300">{section.heading}</h4>
+                      <div className="text-sm cw-text whitespace-pre-wrap leading-relaxed">
                         {section.content}
                       </div>
                     </div>
@@ -1981,23 +2226,25 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
                 <button
-                  onClick={() => onGenerate({
-                    doc_type: formData.doc_type,
-                    title: formData.title,
-                    regulatory_scope: formData.regulatory_scope.split(',').map(s => s.trim()).filter(s => s.length > 0),
-                    description: formData.description || undefined,
-                  })}
+                  onClick={() => {
+                    onGenerate({
+                      doc_type: formData.doc_type,
+                      title: formData.title,
+                      framework_ids: selectedFrameworkIds.length > 0 ? selectedFrameworkIds : undefined,
+                      description: formData.description || undefined,
+                    });
+                  }}
                   disabled={isLoading}
-                  className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-600 transition-colors disabled:opacity-50"
+                  className="cw-btn-secondary flex items-center gap-2 disabled:opacity-50"
                 >
                   <Wand2 className="h-4 w-4" />
                   Regenerate
                 </button>
                 <button
-                  onClick={() => onUseContent(result.generated_content, result.suggested_title)}
-                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-black hover:from-purple-700 hover:to-blue-700 transition-colors"
+                  onClick={() => onUseContent(result.generated_content, result.suggested_title, formData.doc_type, formData.description)}
+                  className="cw-btn-primary flex items-center gap-2"
                 >
                   <CheckCircle className="h-4 w-4" />
                   Use This Content

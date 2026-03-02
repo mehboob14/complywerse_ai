@@ -12,7 +12,7 @@ from ....schemas import (
     VulnerabilityCreate, VulnerabilityUpdate, VulnerabilityResponse,
     VulnerabilityAssign, VulnerabilityStatusChange, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 
 router = APIRouter(tags=["Vulnerabilities"])
 
@@ -70,7 +70,8 @@ def list_vulnerabilities(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:view"))
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
@@ -158,7 +159,8 @@ def create_vulnerability(
     request: VulnerabilityCreate,
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:create"))
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
@@ -244,7 +246,8 @@ def create_vulnerability(
 def get_vulnerability(
     vuln_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:view"))
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
@@ -306,7 +309,8 @@ def update_vulnerability(
     vuln_id: int,
     request: VulnerabilityUpdate,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit"))
 ):
     user_tenants = get_user_tenants(current_user, db)
     vuln = get_vuln_or_404(vuln_id, user_tenants, db)
@@ -363,7 +367,8 @@ def update_vulnerability(
 def delete_vulnerability(
     vuln_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:delete"))
 ):
     user_tenants = get_user_tenants(current_user, db)
     vuln = get_vuln_or_404(vuln_id, user_tenants, db)
@@ -379,7 +384,8 @@ def assign_vulnerability(
     vuln_id: int,
     request: VulnerabilityAssign,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit"))
 ):
     user_tenants = get_user_tenants(current_user, db)
     vuln = get_vuln_or_404(vuln_id, user_tenants, db)
@@ -441,7 +447,8 @@ def change_vulnerability_status(
     vuln_id: int,
     request: VulnerabilityStatusChange,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit"))
 ):
     user_tenants = get_user_tenants(current_user, db)
     vuln = get_vuln_or_404(vuln_id, user_tenants, db)

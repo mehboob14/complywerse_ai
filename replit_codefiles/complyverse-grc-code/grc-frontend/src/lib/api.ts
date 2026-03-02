@@ -1,0 +1,1414 @@
+import axios, { AxiosError, AxiosInstance, AxiosResponse } from 'axios';
+import {
+  Framework,
+  Control,
+  Evidence,
+  Risk,
+  RiskDetail,
+  RiskDashboard,
+  HeatmapCell,
+  GovernanceObjective,
+  Exception,
+  Issue,
+  Document,
+  ITAsset,
+  NormalizedControl,
+  ControlMapping,
+  RiskKRI,
+  RiskKRICreate,
+  RiskKRIUpdate,
+  RiskKRIMeasurement,
+  RiskIncident,
+  RiskIncidentCreate,
+  RiskIncidentUpdate,
+  RiskReview,
+  RiskReviewCreate,
+  RiskReviewUpdate,
+  RiskDependency,
+  RiskDependencyCreate,
+  CascadeAnalysis,
+  RiskReport,
+  RiskReportCreate,
+  ExecutiveDashboard,
+  BoardReportData,
+  DepartmentRiskSummary,
+  AggregatedRiskView,
+  AppetiteBreach,
+  RiskTrendData,
+  IncidentDashboard,
+  RiskMitigationAction,
+  RiskAuditFindingLink,
+  LikelihoodImpactScale,
+  GovernanceDocument,
+  GovernanceDocumentVersion,
+  DocumentApprovalStep,
+  GovernanceDashboard,
+} from '@/types';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+
+const apiClient: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  timeout: 300000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => response,
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export const frameworksApi = {
+  getAll: () => apiClient.get<Framework[]>('/frameworks'),
+  getById: (id: string) => apiClient.get<Framework>(`/frameworks/${id}`),
+  create: (data: Partial<Framework>) => apiClient.post<Framework>('/frameworks', data),
+  update: (id: string, data: Partial<Framework>) => apiClient.put<Framework>(`/frameworks/${id}`, data),
+  delete: (id: string) => apiClient.delete(`/frameworks/${id}`),
+};
+
+export const controlsApi = {
+  getAll: () => apiClient.get<Control[]>('/controls'),
+  getById: (id: string) => apiClient.get<Control>(`/controls/${id}`),
+  create: (data: Partial<Control>) => apiClient.post<Control>('/controls', data),
+  update: (id: string, data: Partial<Control>) => apiClient.put<Control>(`/controls/${id}`, data),
+  delete: (id: string) => apiClient.delete(`/controls/${id}`),
+  getNormalized: () => apiClient.get<NormalizedControl[]>('/controls/normalized'),
+  getMappings: () => apiClient.get<ControlMapping[]>('/controls/mappings'),
+  getAIRecommendations: (data: { control_id: number; control_title: string; control_description?: string; framework_name?: string }) =>
+    apiClient.post<{
+      control_id: number;
+      test_procedures: Array<{
+        procedure_type: string;
+        description: string;
+        frequency: string;
+        sample_size: string;
+      }>;
+      evidence_requirements: Array<{
+        evidence_type: string;
+        title: string;
+        description: string;
+        mandatory: boolean;
+      }>;
+      key_risks_addressed: string[];
+      audit_focus_areas: string[];
+    }>('/controls/ai-recommendations', data),
+};
+
+export const evidenceApi = {
+  getAll: () => apiClient.get<Evidence[]>('/evidence'),
+  getById: (id: string) => apiClient.get<Evidence>(`/evidence/${id}`),
+  create: (data: FormData) => apiClient.post<Evidence>('/evidence', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  update: (id: string, data: Partial<Evidence>) => apiClient.put<Evidence>(`/evidence/${id}`, data),
+  delete: (id: string) => apiClient.delete(`/evidence/${id}`),
+  uploadVersion: (id: string, data: FormData) => apiClient.post(`/evidence/${id}/versions`, data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+};
+
+export const risksApi = {
+  getAll: () => apiClient.get<Risk[]>('/risks'),
+  getById: (id: number) => apiClient.get<Risk>(`/risks/${id}`),
+  getDetail: (id: number) => apiClient.get<RiskDetail>(`/risks/${id}/detail`),
+  getDashboard: () => apiClient.get<RiskDashboard>('/risks/dashboard'),
+  getHeatmap: (riskType?: string) => apiClient.get<HeatmapCell[]>(`/risks/heatmap${riskType ? `?risk_type=${riskType}` : ''}`),
+  create: (data: Partial<Risk>) => apiClient.post<Risk>('/risks', data),
+  update: (id: number, data: Partial<Risk>) => apiClient.put<Risk>(`/risks/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/risks/${id}`),
+  assess: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/assess`, data),
+  updateTreatment: (id: number, plan: string) => apiClient.post(`/risks/${id}/treatment`, { treatment_plan: plan }),
+  linkFrameworkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-framework-control`, data),
+  unlinkFrameworkControl: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-framework-control/${linkId}`),
+  linkGovernance: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-governance`, data),
+  unlinkGovernance: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-governance/${linkId}`),
+  linkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/controls`, data),
+  unlinkControl: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/controls/${linkId}`),
+  linkAsset: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/assets`, data),
+  unlinkAsset: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/assets/${linkId}`),
+  linkEvidence: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/evidence`, data),
+  unlinkEvidence: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/evidence/${linkId}`),
+  uploadRiskRegister: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>('/risks/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
+export const governanceApi = {
+  getObjectives: () => apiClient.get<GovernanceObjective[]>('/governance/objectives'),
+  getObjectiveById: (id: string) => apiClient.get<GovernanceObjective>(`/governance/objectives/${id}`),
+  createObjective: (data: Partial<GovernanceObjective>) => apiClient.post<GovernanceObjective>('/governance/objectives', data),
+  updateObjective: (id: string, data: Partial<GovernanceObjective>) => apiClient.put<GovernanceObjective>(`/governance/objectives/${id}`, data),
+  deleteObjective: (id: string) => apiClient.delete(`/governance/objectives/${id}`),
+  
+  getExceptions: () => apiClient.get<Exception[]>('/governance/exceptions'),
+  createException: (data: Partial<Exception>) => apiClient.post<Exception>('/governance/exceptions', data),
+  
+  getIssues: () => apiClient.get<Issue[]>('/governance/issues'),
+  createIssue: (data: Partial<Issue>) => apiClient.post<Issue>('/governance/issues', data),
+
+  getDocuments: (params?: { doc_type?: string; status?: string; owner_id?: number; search?: string; sort_by?: string; sort_order?: string; skip?: number; limit?: number }) =>
+    apiClient.get<GovernanceDocument[]>('/governance/documents', { params }),
+  getDocument: (id: number) => apiClient.get<GovernanceDocument>(`/governance/documents/${id}`),
+  createDocument: (data: Partial<GovernanceDocument>) =>
+    apiClient.post<GovernanceDocument>('/governance/documents', data),
+  updateDocument: (id: number, data: Partial<GovernanceDocument>) =>
+    apiClient.put<GovernanceDocument>(`/governance/documents/${id}`, data),
+  deleteDocument: (id: number) => apiClient.delete(`/governance/documents/${id}`),
+  updateDocumentStatus: (id: number, status: string) => apiClient.put(`/governance/documents/${id}/status`, { status }),
+  getDashboard: () => apiClient.get<GovernanceDashboard>('/governance/dashboard'),
+  getDashboardSummary: () => apiClient.get('/governance/dashboard/summary'),
+  getExpiringSoon: (days: number = 30) => apiClient.get(`/governance/dashboard/expiring-soon?days=${days}`),
+  getDashboardPendingApprovals: () => apiClient.get('/governance/dashboard/pending-approvals'),
+  getDashboardOverdueReviews: () => apiClient.get('/governance/dashboard/overdue-reviews'),
+  getRecentlyPublished: (limit: number = 10) => apiClient.get(`/governance/dashboard/recently-published?limit=${limit}`),
+  getDocumentVersions: (documentId: number) =>
+    apiClient.get<GovernanceDocumentVersion[]>(`/governance/versions/document/${documentId}`),
+  getPendingApprovals: (params?: { include_delegated?: boolean; skip?: number; limit?: number }) =>
+    apiClient.get('/governance/workflows/pending', { params }),
+  getWorkflowDashboard: () => apiClient.get('/governance/workflows/dashboard'),
+  getOverdueApprovals: (params?: { skip?: number; limit?: number }) =>
+    apiClient.get('/governance/workflows/overdue', { params }),
+  getUpcomingReviews: (params?: { days?: number; doc_type?: string }) => 
+    apiClient.get('/governance/reviews/upcoming', { params }),
+  getOverdueReviews: (params?: { doc_type?: string }) => 
+    apiClient.get('/governance/reviews/overdue', { params }),
+  getReviewStatistics: () => apiClient.get('/governance/reviews/statistics'),
+  completeReview: (documentId: number, data?: { notes?: string; next_review_date?: string }) => 
+    apiClient.post(`/governance/reviews/${documentId}/complete`, data || {}),
+  getReviewCalendar: (params?: { year?: number; month?: number; group_by?: string }) =>
+    apiClient.get('/governance/reviews/calendar', { params }),
+  approveStep: (stepId: number, comments?: string) =>
+    apiClient.post(`/governance/workflows/steps/${stepId}/approve`, { comments }),
+  rejectStep: (stepId: number, comments?: string) =>
+    apiClient.post(`/governance/workflows/steps/${stepId}/reject`, { comments }),
+  delegateStep: (stepId: number, delegateToUserId: number, reason?: string) =>
+    apiClient.post(`/governance/workflows/steps/${stepId}/delegate`, { delegate_to_user_id: delegateToUserId, reason }),
+  getApprovalHistory: (status?: string, skip?: number, limit?: number) =>
+    apiClient.get('/governance/workflows/history', { params: { status, skip, limit } }),
+  uploadDocumentWithFile: (formData: FormData) =>
+    apiClient.post('/governance/documents/upload-with-file', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  uploadFileToDocument: (documentId: number, formData: FormData) =>
+    apiClient.post(`/governance/documents/${documentId}/upload-file`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  downloadDocumentFile: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/download-file`, {
+      responseType: 'blob',
+    }),
+  parsePolicy: (documentId: number) =>
+    apiClient.post(`/governance/documents/${documentId}/parse-policy`),
+  getParseStatus: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/parse-status`),
+  getDocumentPolicyStatements: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/policy-statements`),
+  generatePolicyDraft: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; include_sections?: string[] }) =>
+    apiClient.post('/governance/documents/ai-draft', data),
+  suggestPoliciesForFramework: (data: { framework_ids: number[] }) =>
+    apiClient.post('/governance/documents/ai-suggest-policies', data),
+  getWorkflowTemplates: (params?: { tenant_id?: number; is_active?: boolean; doc_type?: string; skip?: number; limit?: number }) =>
+    apiClient.get('/governance/workflows/templates', { params }),
+  getWorkflowTemplate: (id: number) =>
+    apiClient.get(`/governance/workflows/templates/${id}`),
+  createWorkflowTemplate: (data: { tenant_id: number; name: string; description?: string; doc_types?: string[]; is_default?: boolean; is_active?: boolean; allow_skip?: boolean; require_all_approvers?: boolean; auto_publish_on_complete?: boolean }) =>
+    apiClient.post('/governance/workflows/templates', data, { params: { tenant_id: data.tenant_id } }),
+  updateWorkflowTemplate: (id: number, data: { name?: string; description?: string; doc_types?: string[]; is_default?: boolean; is_active?: boolean; allow_skip?: boolean; require_all_approvers?: boolean; auto_publish_on_complete?: boolean }) =>
+    apiClient.put(`/governance/workflows/templates/${id}`, data),
+  deleteWorkflowTemplate: (id: number) =>
+    apiClient.delete(`/governance/workflows/templates/${id}`),
+  createWorkflowStep: (templateId: number, data: { name: string; description?: string; sequence: number; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number }) =>
+    apiClient.post(`/governance/workflows/templates/${templateId}/steps`, data),
+  updateWorkflowStep: (templateId: number, stepId: number, data: { name?: string; description?: string; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number }) =>
+    apiClient.put(`/governance/workflows/templates/${templateId}/steps/${stepId}`, data),
+  deleteWorkflowStep: (templateId: number, stepId: number) =>
+    apiClient.delete(`/governance/workflows/templates/${templateId}/steps/${stepId}`),
+  reorderWorkflowSteps: (templateId: number, steps: { step_id: number; sequence: number }[]) =>
+    apiClient.put(`/governance/workflows/templates/${templateId}/steps/reorder`, { steps }),
+  addStepApprover: (templateId: number, stepId: number, data: { approver_type: string; user_id?: number; role_id?: number; is_required?: boolean; sequence?: number }) =>
+    apiClient.post(`/governance/workflows/templates/${templateId}/steps/${stepId}/approvers`, data),
+  removeStepApprover: (templateId: number, stepId: number, approverId: number) =>
+    apiClient.delete(`/governance/workflows/templates/${templateId}/steps/${stepId}/approvers/${approverId}`),
+  seedDefaultTemplates: (tenantId: number) =>
+    apiClient.post('/governance/workflows/templates/seed-defaults', null, { params: { tenant_id: tenantId } }),
+  getDocumentMappings: (documentId: number) =>
+    apiClient.get(`/governance/mappings/document/${documentId}`),
+  linkControl: (data: { document_id: number; normalized_control_id: number; link_type?: string; notes?: string }) =>
+    apiClient.post('/governance/mappings/control', data),
+  unlinkControl: (linkId: number) =>
+    apiClient.delete(`/governance/mappings/control/${linkId}`),
+  getMappingCoverage: () =>
+    apiClient.get('/governance/mappings/coverage'),
+  getComplianceCoverage: () =>
+    apiClient.get('/governance/dashboard/compliance-coverage'),
+  getTrends: (months: number = 12) =>
+    apiClient.get(`/governance/dashboard/trends?months=${months}`),
+  publishDocument: (documentId: number) =>
+    apiClient.post(`/governance/documents/${documentId}/publish`),
+  requestAttestation: (documentId: number, data: { user_ids: number[]; attestation_type?: string; due_date?: string }) =>
+    apiClient.post('/governance/attestations/request', {
+      document_id: documentId,
+      user_ids: data.user_ids,
+      attestation_type: data.attestation_type || 'acknowledgment',
+      due_date: data.due_date,
+    }),
+  getTenantUsers: (tenantId: number) =>
+    apiClient.get(`/tenants/${tenantId}/users`),
+
+  // Gap Analysis
+  getDocumentViewHtml: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/view-html`),
+  runGapAnalysis: (data: { document_id: number; framework_ids?: number[]; run_all?: boolean }) =>
+    apiClient.post('/governance/gap-analysis/run', data),
+  getGapAnalysisRuns: (documentId: number) =>
+    apiClient.get(`/governance/gap-analysis/runs/${documentId}`),
+  getGapFindings: (runId: number, params?: { compliance_status?: string; risk_severity?: string; remediation_status?: string; sort_by?: string; sort_order?: string; skip?: number; limit?: number }) =>
+    apiClient.get(`/governance/gap-analysis/findings/${runId}`, { params }),
+  getDocumentGapFindings: (documentId: number, params?: { compliance_status?: string; risk_severity?: string; remediation_status?: string; framework_name?: string; sort_by?: string; sort_order?: string; skip?: number; limit?: number }) =>
+    apiClient.get(`/governance/gap-analysis/findings/document/${documentId}`, { params }),
+  updateGapFinding: (findingId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/governance/gap-analysis/findings/${findingId}`, data),
+  overrideGapFinding: (findingId: number, data: { override_status: string; override_justification: string }) =>
+    apiClient.put(`/governance/gap-analysis/findings/${findingId}/override`, data),
+  acceptGapRisk: (findingId: number, data: { justification: string; expiry_date?: string }) =>
+    apiClient.put(`/governance/gap-analysis/findings/${findingId}/accept-risk`, {
+      risk_acceptance_justification: data.justification,
+      ...(data.expiry_date ? { risk_acceptance_expiry_date: data.expiry_date } : {}),
+    }),
+  getComplianceSummary: (documentId: number) =>
+    apiClient.get(`/governance/gap-analysis/compliance-summary/${documentId}`),
+  exportGapFindings: (documentId: number) =>
+    apiClient.get(`/governance/gap-analysis/export/${documentId}`, { responseType: 'blob' }),
+  addStatement: (documentId: number, data: any) => apiClient.post(`/governance/documents/${documentId}/statements`, data),
+  updateStatement: (documentId: number, statementId: number, data: any) => apiClient.put(`/governance/documents/${documentId}/statements/${statementId}`, data),
+  deleteStatement: (documentId: number, statementId: number) => apiClient.delete(`/governance/documents/${documentId}/statements/${statementId}`),
+  getStatementVersions: (documentId: number, statementId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/statements/${statementId}/versions`),
+  rollbackStatement: (documentId: number, statementId: number, versionId: number) =>
+    apiClient.post(`/governance/documents/${documentId}/statements/${statementId}/rollback`, { version_id: versionId }),
+  getStatementDiff: (documentId: number, statementId: number, versionA: number, versionB: number) =>
+    apiClient.get(`/governance/documents/${documentId}/statements/${statementId}/diff`, { params: { version_a: versionA, version_b: versionB } }),
+  getReparseProposals: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/reparse-proposals`),
+  applyReparseProposals: (documentId: number, decisions: Array<{index: number, action: string}>) =>
+    apiClient.post(`/governance/documents/${documentId}/reparse-proposals/apply`, { decisions }),
+
+  getDocumentUpcomingReviews: (days?: number) => apiClient.get(`/governance/documents/reviews/upcoming${days ? `?days=${days}` : ''}`),
+  getDocumentReviewHistory: (documentId: number) => apiClient.get(`/governance/documents/${documentId}/review-history`),
+  startDocumentReview: (documentId: number) => apiClient.post(`/governance/documents/${documentId}/start-review`),
+  completeDocumentReview: (documentId: number, data: { review_notes: string; changes_made: string; outcome: string }) => apiClient.post(`/governance/documents/${documentId}/complete-review`, data),
+
+  getComplianceByFramework: () => apiClient.get('/governance/dashboard/compliance-by-framework'),
+  getOpenGapsSummary: () => apiClient.get('/governance/dashboard/open-gaps-summary'),
+  getRemediationProgress: () => apiClient.get('/governance/dashboard/remediation-progress'),
+  getUpcomingReviewsDashboard: () => apiClient.get('/governance/dashboard/upcoming-reviews'),
+  getAcceptedRisks: () => apiClient.get('/governance/dashboard/accepted-risks'),
+
+  getFrameworkApplicability: (frameworkId: number) =>
+    apiClient.get(`/governance/applicability/framework/${frameworkId}`),
+  setClauseApplicability: (data: { control_id: number; uploaded_framework_id: number; is_applicable: boolean; justification: string }) =>
+    apiClient.post('/governance/applicability', data),
+  reviewApplicability: (id: number, data: { status: string; review_comment?: string }) =>
+    apiClient.put(`/governance/applicability/${id}/review`, data),
+  getApplicabilityAuditLog: (frameworkId: number) =>
+    apiClient.get(`/governance/applicability/audit-log/${frameworkId}`),
+
+  exportGapReport: (runId: number) => apiClient.get(`/governance/reports/gap-analysis/${runId}/csv`, { responseType: 'blob' }),
+  exportComplianceSummary: () => apiClient.get('/governance/reports/compliance-summary/csv', { responseType: 'blob' }),
+  exportAuditLog: (days?: number) => apiClient.get(`/governance/reports/audit-log/csv${days ? `?days=${days}` : ''}`, { responseType: 'blob' }),
+  exportPolicyStatements: (documentId: number) => apiClient.get(`/governance/reports/policy-statements/${documentId}/csv`, { responseType: 'blob' }),
+};
+
+export const documentsApi = {
+  getAll: () => apiClient.get<Document[]>('/documents'),
+  getById: (id: string) => apiClient.get<Document>(`/documents/${id}`),
+  create: (data: FormData) => apiClient.post<Document>('/documents', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  update: (id: string, data: Partial<Document>) => apiClient.put<Document>(`/documents/${id}`, data),
+  delete: (id: string) => apiClient.delete(`/documents/${id}`),
+};
+
+export const assetsApi = {
+  getAll: () => apiClient.get<ITAsset[]>('/assets'),
+  getById: (id: number) => apiClient.get<ITAsset>(`/assets/${id}`),
+  getDetail: (id: number) => apiClient.get(`/assets/${id}/detail`),
+  getDashboard: () => apiClient.get('/assets/dashboard'),
+  create: (data: {
+    name: string;
+    description?: string;
+    asset_type: string;
+    owner_id?: number;
+    criticality?: string;
+    confidentiality_rating?: number;
+    integrity_rating?: number;
+    availability_rating?: number;
+    valuation?: number;
+    vendor?: string;
+    location?: string;
+  }) => apiClient.post<ITAsset>('/assets', data),
+  update: (id: number, data: Partial<ITAsset>) => apiClient.put<ITAsset>(`/assets/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/assets/${id}`),
+  linkFrameworkControl: (id: number, data: {framework_control_id: number, coverage_status?: string}) => 
+    apiClient.post(`/assets/${id}/link-framework-control`, data),
+  unlinkFrameworkControl: (id: number, linkId: number) => 
+    apiClient.delete(`/assets/${id}/link-framework-control/${linkId}`),
+  linkEvidence: (id: number, data: {evidence_id: number, relationship_type?: string}) => 
+    apiClient.post(`/assets/${id}/link-evidence`, data),
+  unlinkEvidence: (id: number, linkId: number) => 
+    apiClient.delete(`/assets/${id}/link-evidence/${linkId}`),
+  getCoverageAnalysis: (id: number) => apiClient.get(`/assets/${id}/coverage-analysis`),
+  assessRisk: (id: number) => apiClient.post(`/assets/${id}/assess`),
+  downloadTemplate: async () => {
+    const response = await apiClient.get('/assets/template/download', {
+      responseType: 'blob'
+    });
+    const blob = new Blob([response.data], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'it_assets_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+  importAssets: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post<{
+      success: boolean;
+      imported: number;
+      total_rows: number;
+      errors: string[];
+      total_errors: number;
+      message: string;
+    }>('/assets/import/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
+export const certificationsApi = {
+  getAll: (params?: { status?: string; framework_id?: number }) => 
+    apiClient.get('/certifications', { params }),
+  getById: (id: number) => apiClient.get(`/certifications/${id}`),
+  getFrameworkPhases: (frameworkId: number) => apiClient.get(`/certifications/uploaded-frameworks/${frameworkId}/phases`),
+  create: (data: { framework_id: number; name: string; target_date?: string }) => 
+    apiClient.post('/certifications', data),
+  update: (id: number, data: { status?: string; target_date?: string; notes?: string }) => 
+    apiClient.patch(`/certifications/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/certifications/${id}`),
+  
+  getControls: (id: number, params?: { status?: string; domain_id?: number }) => 
+    apiClient.get(`/certifications/${id}/controls`, { params }),
+  getControlDetail: (journeyId: number, controlId: number) => 
+    apiClient.get(`/certifications/${journeyId}/controls/${controlId}`),
+  updateControl: (journeyId: number, controlId: number, data: { status?: string; notes?: string; priority?: number; is_applicable?: boolean }) => 
+    apiClient.patch(`/certifications/${journeyId}/controls/${controlId}`, data),
+  
+  uploadEvidence: (journeyId: number, controlId: number, formData: FormData) => 
+    apiClient.post(`/certifications/${journeyId}/controls/${controlId}/evidence`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+  assessEvidence: (journeyId: number, controlId: number, evidenceId: number) => 
+    apiClient.post(`/certifications/${journeyId}/controls/${controlId}/evidence/${evidenceId}/assess`),
+  reviewEvidence: (journeyId: number, controlId: number, evidenceId: number, data: { action: string; notes?: string }) => 
+    apiClient.post(`/certifications/${journeyId}/controls/${controlId}/evidence/${evidenceId}/review`, data),
+  
+  getProgress: (id: number) => apiClient.get(`/certifications/${id}/progress`),
+  getGaps: (id: number) => apiClient.get(`/certifications/${id}/gaps`),
+  getCDESystems: () => apiClient.get('/certifications/cde-systems'),
+  updateCDESystemScope: (assetId: number, data: { cde_environment: boolean }) => apiClient.put(`/certifications/cde-systems/${assetId}/scope`, data),
+};
+
+export const ermApi = {
+  risks: {
+    getAll: () => apiClient.get<Risk[]>('/erm/risks'),
+    getById: (id: number) => apiClient.get<Risk>(`/erm/risks/${id}`),
+    getDetail: (id: number) => apiClient.get<RiskDetail>(`/erm/risks/${id}/detail`),
+    getDashboard: () => apiClient.get<RiskDashboard>('/erm/risks/dashboard'),
+    getHeatmap: (riskType?: string) => apiClient.get<HeatmapCell[]>(`/erm/risks/heatmap${riskType ? `?risk_type=${riskType}` : ''}`),
+    create: (data: Partial<Risk>) => apiClient.post<Risk>('/erm/risks', data),
+    update: (id: number, data: Partial<Risk>) => apiClient.put<Risk>(`/erm/risks/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/erm/risks/${id}`),
+    uploadRiskRegister: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>('/erm/risks/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    closeRisk: (riskId: number, notes: string) => 
+      apiClient.post<Risk>(`/erm/risks/${riskId}/close`, { notes }),
+    reopenRisk: (riskId: number) => 
+      apiClient.post<Risk>(`/erm/risks/${riskId}/reopen`),
+    getRiskAging: () => 
+      apiClient.get<Array<{ risk_id: number; title: string; days_open: number; status: string }>>('/erm/risks/aging'),
+    getAISuggestions: (data: { name: string; category?: string; sub_category?: string; description?: string }) =>
+      apiClient.post<{
+        suggested_description: string;
+        suggested_causes: string[];
+        suggested_consequences: string[];
+        recommended_controls: Array<{
+          control_id: number;
+          control_name: string;
+          control_code?: string;
+          relevance: string;
+          rationale: string;
+        }>;
+        suggested_likelihood: number;
+        suggested_impact: number;
+        risk_treatment_options: string[];
+      }>('/erm/risks/ai-suggest', data),
+    generateTreatmentPlan: (riskId: number) =>
+      apiClient.post<{ treatment_plan: string }>(`/erm/risks/${riskId}/ai-treatment-plan`),
+  },
+  mitigationActions: {
+    getAll: (riskId: number) => 
+      apiClient.get<RiskMitigationAction[]>(`/erm/risks/${riskId}/mitigation-actions`),
+    create: (riskId: number, data: Partial<RiskMitigationAction>) => 
+      apiClient.post<RiskMitigationAction>(`/erm/risks/${riskId}/mitigation-actions`, data),
+    update: (actionId: number, data: Partial<RiskMitigationAction>) => 
+      apiClient.put<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}`, data),
+    delete: (actionId: number) => 
+      apiClient.delete(`/erm/mitigation-actions/${actionId}`),
+    complete: (actionId: number, actualReduction?: number) => 
+      apiClient.post<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}/complete`, { actual_residual_reduction: actualReduction }),
+    getOverdue: () => 
+      apiClient.get<RiskMitigationAction[]>('/erm/mitigation-actions/overdue'),
+    aiSuggest: (riskId: number) =>
+      apiClient.post<{
+        suggestions: Array<{
+          title: string;
+          description: string;
+          action_type: string;
+          priority: string;
+          expected_residual_reduction: number;
+        }>;
+      }>('/erm/mitigation-actions/ai-suggest', { risk_id: riskId }),
+  },
+  auditFindings: {
+    link: (riskId: number, issueId: number, notes?: string) => 
+      apiClient.post<RiskAuditFindingLink>(`/erm/risks/${riskId}/audit-findings`, { issue_id: issueId, notes }),
+    unlink: (riskId: number, linkId: number) => 
+      apiClient.delete(`/erm/risks/${riskId}/audit-findings/${linkId}`),
+  },
+  scales: {
+    getAll: () => 
+      apiClient.get<LikelihoodImpactScale[]>('/erm/scales'),
+    seedDefaults: () => 
+      apiClient.post<{ message: string }>('/erm/scales/seed-defaults'),
+  },
+  kris: {
+    getAll: (params?: { risk_id?: number; status_filter?: string; is_active?: boolean }) => 
+      apiClient.get<RiskKRI[]>('/erm/kris', { params }),
+    getById: (id: number) => apiClient.get<RiskKRI>(`/erm/kris/${id}`),
+    create: (data: RiskKRICreate) => apiClient.post<RiskKRI>('/erm/kris', data),
+    update: (id: number, data: RiskKRIUpdate) => apiClient.put<RiskKRI>(`/erm/kris/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/erm/kris/${id}`),
+    measure: (id: number, data: { value: number; notes?: string }) => 
+      apiClient.post<RiskKRIMeasurement>(`/erm/kris/${id}/measure`, data),
+    getTrend: (id: number, days?: number) => 
+      apiClient.get<RiskKRIMeasurement[]>(`/erm/kris/${id}/trend`, { params: { days } }),
+    getAlerts: () => apiClient.get<RiskKRI[]>('/erm/kris/alerts'),
+    upload: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>('/erm/kris/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+  },
+  incidents: {
+    getAll: (params?: { risk_id?: number; severity?: string; status_filter?: string; start_date?: string; end_date?: string }) => 
+      apiClient.get<RiskIncident[]>('/erm/incidents', { params }),
+    getById: (id: number) => apiClient.get<RiskIncident>(`/erm/incidents/${id}`),
+    create: (data: RiskIncidentCreate) => apiClient.post<RiskIncident>('/erm/incidents', data),
+    update: (id: number, data: RiskIncidentUpdate) => apiClient.put<RiskIncident>(`/erm/incidents/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/erm/incidents/${id}`),
+    getDashboard: () => apiClient.get<IncidentDashboard>('/erm/incidents/dashboard'),
+    analyzeWithAI: (data: { title: string; description: string; severity?: string; incident_date?: string; department?: string }) =>
+      apiClient.post<{
+        root_cause_analysis: {
+          primary_cause: string;
+          contributing_factors: string[];
+          category: string;
+          preventability: string;
+        };
+        related_risks: Array<{
+          risk_id: number;
+          risk_title: string;
+          relevance: string;
+          explanation: string;
+        }>;
+        related_controls: Array<{
+          control_id: number;
+          control_title: string;
+          framework: string;
+          relevance: string;
+          status_recommendation: string;
+        }>;
+        recommended_actions: string[];
+        similar_incidents: Array<{
+          incident_id: number;
+          title: string;
+          similarity: number;
+        }>;
+        impact_assessment: {
+          financial_impact: string;
+          reputational_impact: string;
+          regulatory_impact: string;
+          operational_impact: string;
+        };
+      }>('/erm/incidents/ai-analyze', data),
+  },
+  reviews: {
+    getAll: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number }) => 
+      apiClient.get<RiskReview[]>('/erm/reviews', { params }),
+    getById: (id: number) => apiClient.get<RiskReview>(`/erm/reviews/${id}`),
+    create: (data: RiskReviewCreate) => apiClient.post<RiskReview>('/erm/reviews', data),
+    update: (id: number, data: RiskReviewUpdate) => apiClient.put<RiskReview>(`/erm/reviews/${id}`, data),
+    complete: (id: number, data: { findings?: string; recommendations?: string; new_inherent_score?: number; new_residual_score?: number }) => 
+      apiClient.post<RiskReview>(`/erm/reviews/${id}/complete`, data),
+    getPending: () => apiClient.get<RiskReview[]>('/erm/reviews/pending'),
+    getOverdue: () => apiClient.get<RiskReview[]>('/erm/reviews/overdue'),
+  },
+  dependencies: {
+    getAll: (params?: { risk_id?: number }) => 
+      apiClient.get<RiskDependency[]>('/erm/dependencies', { params }),
+    create: (data: RiskDependencyCreate) => apiClient.post<RiskDependency>('/erm/dependencies', data),
+    delete: (id: number) => apiClient.delete(`/erm/dependencies/${id}`),
+    getCascadeAnalysis: (riskId: number) => apiClient.get<CascadeAnalysis>(`/erm/dependencies/${riskId}/cascade`),
+    getGraph: (riskId?: number) => 
+      apiClient.get(`/erm/dependencies/graph`, { params: { risk_id: riskId } }),
+  },
+  reports: {
+    getAll: (params?: { report_type?: string; status?: string }) => 
+      apiClient.get<RiskReport[]>('/erm/reports', { params }),
+    getById: (id: number) => apiClient.get<RiskReport>(`/erm/reports/${id}`),
+    generate: (data: RiskReportCreate) => apiClient.post<RiskReport>('/erm/reports', data),
+    delete: (id: number) => apiClient.delete(`/erm/reports/${id}`),
+    getExecutiveDashboard: () => apiClient.get<ExecutiveDashboard>('/erm/reports/executive-dashboard'),
+    getBoardSummary: (params?: { period?: string }) => 
+      apiClient.get<BoardReportData>('/erm/reports/board-summary', { params }),
+    getDepartmentSummary: (departmentId: number) => 
+      apiClient.get<DepartmentRiskSummary>(`/erm/reports/department/${departmentId}`),
+    getAggregatedView: (groupBy?: string) => 
+      apiClient.get<AggregatedRiskView[]>('/erm/analytics/aggregated', { params: { group_by: groupBy } }),
+    getAppetiteBreaches: () => apiClient.get<AppetiteBreach[]>('/erm/analytics/appetite-breaches'),
+    getRiskTrends: (days?: number) => 
+      apiClient.get<RiskTrendData[]>('/erm/analytics/trends', { params: { days } }),
+  },
+  appetite: {
+    getAll: () => apiClient.get('/erm/appetite'),
+    getWithStats: () => apiClient.get('/erm/appetite/with-stats'),
+    getBreaches: () => apiClient.get('/erm/appetite/breaches'),
+    update: (id: number, data: Record<string, unknown>) => 
+      apiClient.put(`/erm/appetite/${id}`, data),
+    create: (tenantId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/erm/appetite?tenant_id=${tenantId}`, data),
+    seedDefaults: (tenantId: number) => 
+      apiClient.post(`/erm/appetite/seed-defaults?tenant_id=${tenantId}`),
+    aiSuggest: (data: { category: string; description?: string }) =>
+      apiClient.post<{
+        category: string;
+        appetite_level: string;
+        tolerance_threshold: number;
+        max_acceptable_score: number;
+        description: string;
+        escalation_criteria: string;
+        rationale: string;
+      }>('/erm/appetite/ai-suggest', data),
+  },
+  internalControls: {
+    getAll: (params?: { status_filter?: string; category?: string; department_id?: number; control_type?: string; is_key_control?: boolean }) =>
+      apiClient.get('/erm/internal-controls', { params }),
+    getById: (id: number) => apiClient.get(`/erm/internal-controls/${id}`),
+    getDashboard: () => apiClient.get('/erm/internal-controls/dashboard'),
+    create: (data: Record<string, unknown>) => apiClient.post('/erm/internal-controls', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/internal-controls/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/erm/internal-controls/${id}`),
+    submit: (id: number, comments?: string) => apiClient.post(`/erm/internal-controls/${id}/submit`, { comments }),
+    approve: (id: number, comments?: string) => apiClient.post(`/erm/internal-controls/${id}/approve`, { comments }),
+    reject: (id: number, comments?: string) => apiClient.post(`/erm/internal-controls/${id}/reject`, { comments }),
+    getTests: (id: number) => apiClient.get(`/erm/internal-controls/${id}/tests`),
+    createTest: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/internal-controls/${id}/tests`, data),
+    getRisks: (id: number) => apiClient.get(`/erm/internal-controls/${id}/risks`),
+    linkRisk: (id: number, data: { risk_id: number; link_type?: string; effectiveness_rating?: string }) => 
+      apiClient.post(`/erm/internal-controls/${id}/risks`, data),
+    unlinkRisk: (id: number, linkId: number) => apiClient.delete(`/erm/internal-controls/${id}/risks/${linkId}`),
+    getEscalations: (id: number) => apiClient.get(`/erm/internal-controls/${id}/escalations`),
+    createEscalation: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/internal-controls/${id}/escalations`, data),
+    deleteEscalation: (id: number, escId: number) => apiClient.delete(`/erm/internal-controls/${id}/escalations/${escId}`),
+    getWorkflowHistory: (id: number) => apiClient.get(`/erm/internal-controls/${id}/workflow-history`),
+    getFrameworkLinks: (id: number) => apiClient.get(`/erm/internal-controls/${id}/framework-links`),
+    createFrameworkLink: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/internal-controls/${id}/framework-links`, data),
+    deleteFrameworkLink: (id: number, linkId: number) => apiClient.delete(`/erm/internal-controls/${id}/framework-links/${linkId}`),
+  },
+  analytics: {
+    getInteractiveHeatmap: (params?: { risk_type?: string; category?: string; treatment?: string; business_unit_id?: number; score_type?: string }) =>
+      apiClient.get('/erm/analytics/heatmap', { params }),
+    getBowTie: (riskId: number) =>
+      apiClient.get(`/erm/analytics/bowtie/${riskId}`),
+    runScenarioAnalysis: (data: { scenarios: Array<{ risk_id: number; adjusted_likelihood: number; adjusted_impact: number; scenario_name?: string; notes?: string }> }, scoreType?: string) =>
+      apiClient.post(`/erm/analytics/scenario-analysis${scoreType ? `?score_type=${scoreType}` : ''}`, data),
+    getScenarioPresets: () =>
+      apiClient.get('/erm/analytics/scenario-presets'),
+    getAggregation: () =>
+      apiClient.get('/erm/analytics/aggregation'),
+    getKRITriggers: (params?: { severity?: string; acknowledged?: boolean }) =>
+      apiClient.get('/erm/analytics/kri-triggers', { params }),
+    generateBowTieNarrative: (riskId: number) =>
+      apiClient.post(`/erm/analytics/bowtie/${riskId}/ai-narrative`),
+    aiExplainScenario: (data: { results: any[]; summary: any; scenario_type?: string }) =>
+      apiClient.post<{ explanation: string }>('/erm/analytics/scenario-analysis/ai-explain', data),
+  },
+};
+
+export const frameworkUploadApi = {
+  uploadFramework: (formData: FormData) => 
+    apiClient.post('/framework-upload/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  getFrameworks: (params?: { status?: string; search?: string; skip?: number; limit?: number }) => 
+    apiClient.get('/framework-upload/upload', { params }),
+  getFramework: (id: number) => 
+    apiClient.get(`/framework-upload/upload/${id}`),
+  deleteFramework: (id: number) => 
+    apiClient.delete(`/framework-upload/upload/${id}`),
+  extractText: (id: number) => 
+    apiClient.post(`/framework-upload/upload/${id}/extract-text`),
+  parseFramework: (id: number) => 
+    apiClient.post(`/framework-upload/parser/${id}/parse`),
+  getParsedControls: (frameworkId: number, params?: { status?: string; category?: string; search?: string; skip?: number; limit?: number }) => 
+    apiClient.get(`/framework-upload/parser/${frameworkId}/controls`, { params }),
+  updateControl: (id: number, data: Record<string, unknown>) => 
+    apiClient.put(`/framework-upload/parser/controls/${id}`, data),
+  verifyControl: (id: number) => 
+    apiClient.post(`/framework-upload/parser/controls/${id}/verify`),
+  analyzeAlignment: (frameworkId: number) => 
+    apiClient.post(`/framework-upload/alignment/${frameworkId}/analyze`),
+  getAlignments: (frameworkId: number, params?: { alignment_type?: string; is_verified?: boolean; skip?: number; limit?: number }) => 
+    apiClient.get(`/framework-upload/alignment/${frameworkId}`, { params }),
+  getAlignmentSummary: (frameworkId: number) => 
+    apiClient.get(`/framework-upload/alignment/summary/${frameworkId}`),
+  confirmAlignment: (alignmentId: number) => 
+    apiClient.post(`/framework-upload/alignment/${alignmentId}/confirm`),
+  updateAlignment: (alignmentId: number, data: { alignment_type?: string; normalized_control_id?: number; framework_control_id?: number; match_reason?: string }) => 
+    apiClient.put(`/framework-upload/alignment/${alignmentId}`, data),
+  createNewControls: (frameworkId: number) => 
+    apiClient.post(`/framework-upload/alignment/${frameworkId}/create-new-controls`),
+  listFrameworks: (params?: { status?: string; search?: string; skip?: number; limit?: number }) => 
+    apiClient.get('/framework-upload/upload', { params }),
+  createAssessment: (data: { uploaded_framework_id: number; name: string; description?: string; target_completion_date?: string }) => 
+    apiClient.post('/framework-upload/assessment', data),
+  getAssessments: (params?: { uploaded_framework_id?: number; status?: string; skip?: number; limit?: number }) => 
+    apiClient.get('/framework-upload/assessment', { params }),
+  getAssessment: (id: number) => 
+    apiClient.get(`/framework-upload/assessment/${id}`),
+  getAssessmentItems: (assessmentId: number, params?: { status?: string; skip?: number; limit?: number }) => 
+    apiClient.get(`/framework-upload/assessment/${assessmentId}/items`, { params }),
+  updateAssessmentItem: (id: number, data: Record<string, unknown>) => 
+    apiClient.put(`/framework-upload/assessment/items/${id}`, data),
+  getAssessmentDashboard: (id: number) => 
+    apiClient.get(`/framework-upload/assessment/${id}/dashboard`),
+  uploadEvidence: (itemId: number, formData: FormData) => 
+    apiClient.post(`/framework-upload/evidence/item/${itemId}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  getItemEvidence: (itemId: number) => 
+    apiClient.get(`/framework-upload/evidence/item/${itemId}`),
+  getEvidenceTypes: () => 
+    apiClient.get('/framework-upload/evidence/types'),
+  updateAssessment: (id: number, data: Record<string, unknown>) => 
+    apiClient.put(`/framework-upload/assessment/${id}`, data),
+  createRemediation: (itemId: number, data: { title: string; description?: string; priority?: string; due_date?: string; owner_id?: number; estimated_effort?: string }) => 
+    apiClient.post(`/framework-upload/assessment/items/${itemId}/remediation`, data),
+  getRemediations: (itemId: number) => 
+    apiClient.get(`/framework-upload/assessment/items/${itemId}/remediation`),
+  getPublishStatus: (frameworkId: number) => 
+    apiClient.get(`/framework-upload/publish/${frameworkId}/status`),
+  publishFramework: (frameworkId: number, data: { short_code: string; regulator?: string; jurisdiction?: string; region?: string; is_mandatory?: boolean; enforcement_type?: string }) => 
+    apiClient.post(`/framework-upload/publish/${frameworkId}`, data),
+  unpublishFramework: (frameworkId: number) => 
+    apiClient.delete(`/framework-upload/publish/${frameworkId}/unpublish`),
+};
+
+export const complianceApi = {
+  dashboard: {
+    getSummary: (params?: { tenant_id?: number; document_id?: number }) =>
+      apiClient.get('/compliance/policies/dashboard/summary', { params }),
+    getTrends: (params?: { tenant_id?: number; months?: number }) =>
+      apiClient.get('/compliance/policies/dashboard/trends', { params }),
+    getOverdue: (params?: { tenant_id?: number; limit?: number }) =>
+      apiClient.get('/compliance/policies/dashboard/overdue', { params }),
+    getByDocument: (params?: { tenant_id?: number; limit?: number }) =>
+      apiClient.get('/compliance/policies/dashboard/by-document', { params }),
+  },
+  statements: {
+    getAll: (params?: {
+      tenant_id?: number;
+      document_id?: number;
+      category?: string;
+      compliance_status?: string;
+      priority?: string;
+      statement_status?: string;
+      skip?: number;
+      limit?: number;
+    }) => apiClient.get('/compliance/policies/statements', { params }),
+    getById: (id: number) =>
+      apiClient.get(`/compliance/policies/statements/${id}`),
+    getByDocument: (documentId: number, params?: { category?: string; compliance_status?: string }) =>
+      apiClient.get(`/compliance/policies/statements/by-document/${documentId}`, { params }),
+    update: (id: number, data: {
+      category?: string;
+      sub_category?: string;
+      priority?: string;
+      status?: string;
+      is_mandatory?: boolean;
+      review_date?: string;
+    }) => apiClient.put(`/compliance/policies/statements/${id}`, data),
+    updateCompliance: (id: number, data: {
+      compliance_status: string;
+      compliance_score?: number;
+      findings?: string;
+      remediation_notes?: string;
+      remediation_due_date?: string;
+      next_assessment_date?: string;
+      owner_id?: number;
+      department?: string;
+    }) => apiClient.put(`/compliance/policies/statements/${id}/compliance`, data),
+    linkEvidence: (id: number, evidenceIds: number[]) =>
+      apiClient.post(`/compliance/policies/statements/${id}/evidence`, { evidence_ids: evidenceIds }),
+    convertToControls: (documentId: number, data: { statement_ids: number[]; category?: string; priority?: string }) =>
+      apiClient.post(`/governance/documents/${documentId}/statements/convert-to-controls`, data),
+  },
+};
+
+export const advancedErmApi = {
+  // KRI endpoints
+  getKRIs: (params?: { risk_id?: number; status_filter?: string; is_active?: boolean }) => 
+    apiClient.get<RiskKRI[]>('/advanced-erm/kris', { params }),
+  getKRI: (id: number) => apiClient.get<RiskKRI>(`/advanced-erm/kris/${id}`),
+  createKRI: (data: RiskKRICreate) => apiClient.post<RiskKRI>('/advanced-erm/kris', data),
+  updateKRI: (id: number, data: RiskKRIUpdate) => apiClient.put<RiskKRI>(`/advanced-erm/kris/${id}`, data),
+  deleteKRI: (id: number) => apiClient.delete(`/advanced-erm/kris/${id}`),
+  measureKRI: (id: number, data: { value: number; notes?: string }) => 
+    apiClient.post<RiskKRIMeasurement>(`/advanced-erm/kris/${id}/measure`, data),
+  getKRITrend: (id: number, days?: number) => 
+    apiClient.get<RiskKRIMeasurement[]>(`/advanced-erm/kris/${id}/trend`, { params: { days } }),
+  getKRIAlerts: () => apiClient.get<RiskKRI[]>('/advanced-erm/kris/alerts'),
+
+  // Incident endpoints
+  getIncidents: (params?: { risk_id?: number; severity?: string; status_filter?: string; start_date?: string; end_date?: string }) => 
+    apiClient.get<RiskIncident[]>('/advanced-erm/incidents', { params }),
+  getIncident: (id: number) => apiClient.get<RiskIncident>(`/advanced-erm/incidents/${id}`),
+  createIncident: (data: RiskIncidentCreate) => apiClient.post<RiskIncident>('/advanced-erm/incidents', data),
+  updateIncident: (id: number, data: RiskIncidentUpdate) => apiClient.put<RiskIncident>(`/advanced-erm/incidents/${id}`, data),
+  deleteIncident: (id: number) => apiClient.delete(`/advanced-erm/incidents/${id}`),
+  getIncidentDashboard: () => apiClient.get<IncidentDashboard>('/advanced-erm/incidents/dashboard'),
+
+  // Review endpoints
+  getReviews: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number }) => 
+    apiClient.get<RiskReview[]>('/advanced-erm/reviews', { params }),
+  getReview: (id: number) => apiClient.get<RiskReview>(`/advanced-erm/reviews/${id}`),
+  createReview: (data: RiskReviewCreate) => apiClient.post<RiskReview>('/advanced-erm/reviews', data),
+  updateReview: (id: number, data: RiskReviewUpdate) => apiClient.put<RiskReview>(`/advanced-erm/reviews/${id}`, data),
+  completeReview: (id: number, data: { findings?: string; recommendations?: string; new_inherent_score?: number; new_residual_score?: number }) => 
+    apiClient.post<RiskReview>(`/advanced-erm/reviews/${id}/complete`, data),
+  getPendingReviews: () => apiClient.get<RiskReview[]>('/advanced-erm/reviews/pending'),
+  getOverdueReviews: () => apiClient.get<RiskReview[]>('/advanced-erm/reviews/overdue'),
+
+  // Dependency endpoints
+  getDependencies: (params?: { risk_id?: number }) => 
+    apiClient.get<RiskDependency[]>('/advanced-erm/dependencies', { params }),
+  createDependency: (data: RiskDependencyCreate) => apiClient.post<RiskDependency>('/advanced-erm/dependencies', data),
+  deleteDependency: (id: number) => apiClient.delete(`/advanced-erm/dependencies/${id}`),
+  getCascadeAnalysis: (riskId: number) => apiClient.get<CascadeAnalysis>(`/advanced-erm/dependencies/${riskId}/cascade`),
+  getDependencyGraph: (riskId?: number) => 
+    apiClient.get(`/advanced-erm/dependencies/graph`, { params: { risk_id: riskId } }),
+
+  // Report endpoints
+  getReports: (params?: { report_type?: string; status?: string }) => 
+    apiClient.get<RiskReport[]>('/advanced-erm/reports', { params }),
+  getReport: (id: number) => apiClient.get<RiskReport>(`/advanced-erm/reports/${id}`),
+  generateReport: (data: RiskReportCreate) => apiClient.post<RiskReport>('/advanced-erm/reports', data),
+  deleteReport: (id: number) => apiClient.delete(`/advanced-erm/reports/${id}`),
+  getExecutiveDashboard: () => apiClient.get<ExecutiveDashboard>('/advanced-erm/reports/executive-dashboard'),
+  getBoardSummary: (params?: { period?: string }) => 
+    apiClient.get<BoardReportData>('/advanced-erm/reports/board-summary', { params }),
+  getDepartmentSummary: (departmentId: number) => 
+    apiClient.get<DepartmentRiskSummary>(`/advanced-erm/reports/department/${departmentId}`),
+
+  // Analytics endpoints
+  getAggregatedView: (groupBy?: string) => 
+    apiClient.get<AggregatedRiskView[]>('/advanced-erm/analytics/aggregated', { params: { group_by: groupBy } }),
+  getAppetiteBreaches: () => apiClient.get<AppetiteBreach[]>('/advanced-erm/analytics/appetite-breaches'),
+  getRiskTrends: (days?: number) => 
+    apiClient.get<RiskTrendData[]>('/advanced-erm/analytics/trends', { params: { days } }),
+  getScoreHistory: (riskId: number, days?: number) => 
+    apiClient.get(`/advanced-erm/risks/${riskId}/score-history`, { params: { days } }),
+};
+
+export const vulnManagementApi = {
+  reports: {
+    getAll: () => apiClient.get('/vuln-management/reports'),
+    create: (formData: FormData) => 
+      apiClient.post('/vuln-management/reports', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    getById: (id: number) => apiClient.get(`/vuln-management/reports/${id}`),
+    delete: (id: number) => apiClient.delete(`/vuln-management/reports/${id}`),
+  },
+  vulnerabilities: {
+    getAll: (params?: { status?: string; severity?: string; report_id?: number; search?: string }) => 
+      apiClient.get('/vuln-management/vulnerabilities', { 
+        params: params ? {
+          status_filter: params.status,
+          severity: params.severity,
+          report_id: params.report_id,
+          search: params.search
+        } : undefined 
+      }),
+    getById: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}`),
+    create: (data: Record<string, unknown>) => 
+      apiClient.post('/vuln-management/vulnerabilities', data),
+    update: (id: number, data: Record<string, unknown>) => 
+      apiClient.put(`/vuln-management/vulnerabilities/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/vuln-management/vulnerabilities/${id}`),
+    assign: (id: number, userId: number) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/assign`, { user_id: userId }),
+    changeStatus: (id: number, status: string, notes?: string) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/status`, { status, notes }),
+  },
+  mitigations: {
+    list: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/mitigations`),
+    create: (vulnId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/mitigations`, data),
+    update: (vulnId: number, mitigationId: number, data: Record<string, unknown>) => 
+      apiClient.put(`/vuln-management/vulnerabilities/${vulnId}/mitigations/${mitigationId}`, data),
+    delete: (vulnId: number, mitigationId: number) => 
+      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/mitigations/${mitigationId}`),
+  },
+  assetLinks: {
+    list: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/assets`),
+    create: (vulnId: number, data: { asset_id: number; relationship_type?: string }) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/assets`, data),
+    delete: (vulnId: number, linkId: number) => 
+      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/assets/${linkId}`),
+  },
+  controlLinks: {
+    list: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/controls`),
+    create: (vulnId: number, data: { control_type: string; framework_control_id?: number; internal_control_id?: number }) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/controls`, data),
+    delete: (vulnId: number, linkId: number) => 
+      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/controls/${linkId}`),
+  },
+  retests: {
+    list: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/retests`),
+    create: (vulnId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/retests`, data),
+  },
+  ai: {
+    analyzeReport: (reportId: number) => 
+      apiClient.post(`/vuln-management/ai/analyze-report/${reportId}`),
+    suggestFix: (vulnId: number) => 
+      apiClient.post(`/vuln-management/ai/suggest-fix/${vulnId}`),
+    getJobs: () => apiClient.get('/vuln-management/ai/jobs'),
+    getJob: (jobId: string) => apiClient.get(`/vuln-management/ai/jobs/${jobId}`),
+  },
+  sla: {
+    get: () => apiClient.get('/vuln-management/sla'),
+    create: (data: Record<string, unknown>) => 
+      apiClient.post('/vuln-management/sla', data),
+    update: (id: number, data: Record<string, unknown>) => 
+      apiClient.put(`/vuln-management/sla/${id}`, data),
+  },
+  exceptions: {
+    list: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/exceptions`),
+    create: (vulnId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/exceptions`, data),
+    update: (vulnId: number, exceptionId: number, data: Record<string, unknown>) => 
+      apiClient.put(`/vuln-management/vulnerabilities/${vulnId}/exceptions/${exceptionId}`, data),
+  },
+  departments: {
+    getAll: () => apiClient.get('/vuln-management/departments'),
+    getById: (id: number) => apiClient.get(`/vuln-management/departments/${id}`),
+    create: (data: Record<string, unknown>) => 
+      apiClient.post('/vuln-management/departments', data),
+    update: (id: number, data: Record<string, unknown>) => 
+      apiClient.put(`/vuln-management/departments/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/vuln-management/departments/${id}`),
+    addMember: (deptId: number, data: { user_id: number; role?: string; email_notifications_enabled?: boolean; escalation_order?: number }) => 
+      apiClient.post(`/vuln-management/departments/${deptId}/members`, data),
+    removeMember: (deptId: number, memberId: number) => 
+      apiClient.delete(`/vuln-management/departments/${deptId}/members/${memberId}`),
+    getMembers: (deptId: number) =>
+      apiClient.get(`/vuln-management/departments/${deptId}/members`),
+    getVulnerabilityDepartments: (vulnId: number) => 
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/departments`),
+    assignDepartment: (vulnId: number, data: { department_id: number; priority?: string; sla_override_days?: number; notes?: string }) => 
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/assign-department`, data),
+    removeDepartmentAssignment: (vulnId: number, assignmentId: number) => 
+      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/assign-department/${assignmentId}`),
+    getDepartmentVulnerabilities: (deptId: number) =>
+      apiClient.get(`/vuln-management/departments/${deptId}/vulnerabilities`),
+    getEscalationPaths: (deptId: number) =>
+      apiClient.get(`/vuln-management/departments/${deptId}/escalation-paths`),
+    createEscalationPath: (deptId: number, data: Record<string, unknown>) =>
+      apiClient.post(`/vuln-management/departments/${deptId}/escalation-paths`, data),
+    bulkAssign: (data: { vulnerability_ids: number[]; department_id: number; priority?: string; notes?: string }) =>
+      apiClient.post('/vuln-management/vulnerabilities/bulk-assign', data),
+  },
+  workflows: {
+    getAvailableTransitions: (vulnId: number) => 
+      apiClient.get(`/vuln-management/workflows/vulnerabilities/${vulnId}/available-transitions`),
+    getHistory: (vulnId: number) => 
+      apiClient.get(`/vuln-management/workflows/vulnerabilities/${vulnId}/history`),
+    transition: (vulnId: number, data: { transition_name: string; comment?: string }) => 
+      apiClient.post(`/vuln-management/workflows/vulnerabilities/${vulnId}/transition`, data),
+  },
+  escalations: {
+    getVulnerabilityEscalations: (vulnId: number) => 
+      apiClient.get(`/vuln-management/escalations/vulnerabilities/${vulnId}/escalations`),
+  },
+  notifications: {
+    getAll: () => apiClient.get('/vuln-management/notifications'),
+    getUnreadCount: () => apiClient.get('/vuln-management/notifications/unread-count'),
+    markAsRead: (id: number) => 
+      apiClient.put(`/vuln-management/notifications/${id}/read`),
+    markAllAsRead: () => 
+      apiClient.put('/vuln-management/notifications/read-all'),
+  },
+  dashboard: {
+    get: () => apiClient.get('/vuln-management/dashboard'),
+    getOverdue: () => apiClient.get('/vuln-management/dashboard/overdue'),
+    getAssetExposure: () => apiClient.get('/vuln-management/dashboard/asset-exposure'),
+    getDepartmentMetrics: () => apiClient.get('/vuln-management/dashboard/department-metrics'),
+    getSLATrends: () => apiClient.get('/vuln-management/dashboard/sla-trends'),
+    getWorkflowMetrics: () => apiClient.get('/vuln-management/dashboard/workflow-metrics'),
+    getControlCoverage: () => apiClient.get('/vuln-management/dashboard/control-coverage'),
+    getSLAComplianceTrends: (weeks?: number) => 
+      apiClient.get('/vuln-management/dashboard/sla-compliance-trends', { params: { weeks } }),
+    getDepartmentWorkload: () => apiClient.get('/vuln-management/dashboard/department-workload'),
+    getAgingByDepartment: () => apiClient.get('/vuln-management/dashboard/aging-by-department'),
+    getEscalationMetrics: () => apiClient.get('/vuln-management/dashboard/escalation-metrics'),
+  },
+};
+
+export const regulatoryApi = {
+  getChanges: (params?: { source?: string; status?: string; priority?: string; search?: string }) => 
+    apiClient.get('/governance/regulatory-changes/changes', { params }),
+  getChange: (id: number) => apiClient.get(`/governance/regulatory-changes/changes/${id}`),
+  createChange: (data: Record<string, unknown>) => apiClient.post('/governance/regulatory-changes/changes', data),
+  updateChange: (id: number, data: Record<string, unknown>) => apiClient.put(`/governance/regulatory-changes/changes/${id}`, data),
+  deleteChange: (id: number) => apiClient.delete(`/governance/regulatory-changes/changes/${id}`),
+  getAssessments: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/assessments`),
+  createAssessment: (changeId: number, data: Record<string, unknown>) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/assessments`, data),
+  getTasks: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/tasks`),
+  createTask: (changeId: number, data: Record<string, unknown>) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/tasks`, data),
+  updateTask: (taskId: number, data: Record<string, unknown>) => apiClient.patch(`/governance/regulatory-changes/tasks/${taskId}`, data),
+  deleteTask: (taskId: number) => apiClient.delete(`/governance/regulatory-changes/tasks/${taskId}`),
+  getDashboard: () => apiClient.get('/governance/regulatory-changes/dashboard'),
+  getGapAnalysis: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/gap-analysis`),
+  getClosureReadiness: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/closure-readiness`),
+  closeChange: (changeId: number) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/close`),
+};
+
+export const rcsaApi = {
+  getTemplates: () => apiClient.get('/erm/rcsa/templates'),
+  getTemplate: (id: number) => apiClient.get(`/erm/rcsa/templates/${id}`),
+  createTemplate: (data: Record<string, unknown>) => apiClient.post('/erm/rcsa/templates', data),
+  updateTemplate: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/rcsa/templates/${id}`, data),
+  deleteTemplate: (id: number) => apiClient.delete(`/erm/rcsa/templates/${id}`),
+  cloneTemplate: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/templates/${id}/clone`, data),
+  uploadTemplate: (formData: FormData, params: { name: string; category: string }) => apiClient.post('/erm/rcsa/templates/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' }, params }),
+  downloadTemplate: (id: number) => apiClient.get(`/erm/rcsa/templates/download/${id}`, { responseType: 'blob' }),
+  
+  getCampaigns: (params?: { status?: string; period?: string }) => apiClient.get('/erm/rcsa/campaigns', { params }),
+  getCampaign: (id: number) => apiClient.get(`/erm/rcsa/campaigns/${id}/detail`),
+  createCampaign: (data: Record<string, unknown>) => apiClient.post('/erm/rcsa/campaigns', data),
+  updateCampaign: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/rcsa/campaigns/${id}`, data),
+  deleteCampaign: (id: number) => apiClient.delete(`/erm/rcsa/campaigns/${id}`),
+  activateCampaign: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/activate`),
+  closeCampaign: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/close`),
+  assignBusinessUnits: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/campaigns/${id}/assign`, data),
+  sendReminders: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/reminders`),
+  exportResults: (id: number) => apiClient.get(`/erm/rcsa/campaigns/${id}/export`, { responseType: 'blob' }),
+  
+  getDashboardSummary: () => apiClient.get('/erm/rcsa/dashboard/summary'),
+  getFindingsBySeverity: () => apiClient.get('/erm/rcsa/dashboard/findings-by-severity'),
+  getBUProgress: () => apiClient.get('/erm/rcsa/dashboard/business-unit-progress'),
+  getRecentCampaigns: () => apiClient.get('/erm/rcsa/dashboard/recent-campaigns'),
+
+  getAssessments: (params?: Record<string, unknown>) => apiClient.get('/erm/rcsa/assessments', { params }),
+  getAssessment: (id: number) => apiClient.get(`/erm/rcsa/assessments/${id}/detail`),
+  startAssessment: (id: number) => apiClient.post(`/erm/rcsa/assessments/${id}/start`),
+  saveResponses: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/save`, data),
+  submitAssessment: (id: number) => apiClient.post(`/erm/rcsa/assessments/${id}/submit`),
+  getAISuggestions: (id: number) => apiClient.get(`/erm/rcsa/assessments/${id}/ai-suggestions`),
+
+  approveAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/approve`, data),
+  rejectAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/reject`, data),
+  returnAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/return`, data),
+  delegateAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/delegate`, data),
+  getPendingApprovals: (params?: Record<string, unknown>) => apiClient.get('/erm/rcsa/assessments/pending-approvals', { params }),
+
+  getFindings: (params?: Record<string, unknown>) => apiClient.get('/erm/rcsa/findings', { params }),
+  getFinding: (id: number) => apiClient.get(`/erm/rcsa/findings/${id}`),
+  createFinding: (data: Record<string, unknown>) => apiClient.post('/erm/rcsa/findings', data),
+  updateFinding: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/rcsa/findings/${id}`, data),
+  linkFindingToRisk: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/link-risk`, data),
+  linkFindingToControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/link-control`, data),
+  createFindingAction: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/create-action`, data),
+
+  getApprovalWorkflows: () => apiClient.get('/erm/rcsa/approval-workflows'),
+  createApprovalWorkflow: (data: Record<string, unknown>) => apiClient.post('/erm/rcsa/approval-workflows', data),
+  updateApprovalWorkflow: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/rcsa/approval-workflows/${id}`, data),
+};
+
+export const dashboardApi = {
+  getStats: () => apiClient.get('/dashboard/stats'),
+  getFrameworkCompliance: (frameworkId: number) => apiClient.get(`/dashboard/compliance/${frameworkId}`),
+  getUnified: (tenantId?: number) => apiClient.get('/dashboard/unified', { params: tenantId ? { tenant_id: tenantId } : {} }),
+  getAIInsights: (tenantId?: number) => apiClient.get('/dashboard/ai-insights', { params: tenantId ? { tenant_id: tenantId } : {} }),
+  getEnhancedStats: (tenantId?: number) => apiClient.get('/dashboard/enhanced-stats', { params: tenantId ? { tenant_id: tenantId } : {} }),
+};
+
+export const enrichedDashboardApi = {
+  getExecutiveRiskVelocity: (days?: number) => apiClient.get('/enriched-dashboard/executive/risk-velocity', { params: days ? { days } : {} }),
+  getExecutiveRiskAppetiteGauge: () => apiClient.get('/enriched-dashboard/executive/risk-appetite-gauge'),
+  getExecutiveEmergingRisks: () => apiClient.get('/enriched-dashboard/executive/emerging-risks'),
+  getExecutiveRiskConcentration: () => apiClient.get('/enriched-dashboard/executive/risk-concentration'),
+  getExecutiveBoardReadiness: () => apiClient.get('/enriched-dashboard/executive/board-readiness'),
+  getExecutiveSummary: () => apiClient.get('/enriched-dashboard/executive/summary'),
+  getCompliancePosture: () => apiClient.get('/enriched-dashboard/compliance-health/posture'),
+  getControlEffectiveness: () => apiClient.get('/enriched-dashboard/compliance-health/control-effectiveness'),
+  getAuditReadiness: () => apiClient.get('/enriched-dashboard/compliance-health/audit-readiness'),
+  getAttestationStatus: () => apiClient.get('/enriched-dashboard/compliance-health/attestation-status'),
+  getExceptionAging: () => apiClient.get('/enriched-dashboard/compliance-health/exception-aging'),
+  getEvidenceStatus: () => apiClient.get('/enriched-dashboard/compliance-health/evidence-status'),
+  getTreatmentPortfolio: () => apiClient.get('/enriched-dashboard/treatment/portfolio'),
+  getTreatmentEffectiveness: () => apiClient.get('/enriched-dashboard/treatment/effectiveness'),
+  getTreatmentStrategyMix: () => apiClient.get('/enriched-dashboard/treatment/strategy-mix'),
+  getTreatmentActionVelocity: () => apiClient.get('/enriched-dashboard/treatment/action-velocity'),
+  getTreatmentBurndown: (months?: number) => apiClient.get('/enriched-dashboard/treatment/burndown', { params: months ? { months } : {} }),
+  getIncidentSummary: () => apiClient.get('/enriched-dashboard/incidents/summary'),
+  getIncidentResponseTimes: () => apiClient.get('/enriched-dashboard/incidents/response-times'),
+  getIncidentRootCauses: () => apiClient.get('/enriched-dashboard/incidents/root-causes'),
+  getIncidentTrends: (months?: number) => apiClient.get('/enriched-dashboard/incidents/trends', { params: months ? { months } : {} }),
+  getIncidentLessonsLearned: () => apiClient.get('/enriched-dashboard/incidents/lessons-learned'),
+  getControlTestingSummary: () => apiClient.get('/enriched-dashboard/controls/testing-summary'),
+  getControlDeficiencyTracker: () => apiClient.get('/enriched-dashboard/controls/deficiency-tracker'),
+  getControlEffectivenessByType: () => apiClient.get('/enriched-dashboard/controls/effectiveness-by-type'),
+  getControlUpcomingTests: () => apiClient.get('/enriched-dashboard/controls/upcoming-tests'),
+  getRegulatoryChangeTracker: () => apiClient.get('/enriched-dashboard/regulatory/change-tracker'),
+  getRegulatoryImpactSummary: () => apiClient.get('/enriched-dashboard/regulatory/impact-summary'),
+  getRegulatoryImplementationProgress: () => apiClient.get('/enriched-dashboard/regulatory/implementation-progress'),
+  getRegulatoryFeedAnalysis: () => apiClient.get('/enriched-dashboard/regulatory/feed-analysis'),
+};
+
+export const attestationApi = {
+  getCampaigns: (params?: { status?: string }) => apiClient.get('/governance/attestation-campaigns/campaigns', { params }),
+  getCampaign: (id: number) => apiClient.get(`/governance/attestation-campaigns/campaigns/${id}`),
+  createCampaign: (data: Record<string, unknown>) => apiClient.post('/governance/attestation-campaigns/campaigns', data),
+  updateCampaign: (id: number, data: Record<string, unknown>) => apiClient.put(`/governance/attestation-campaigns/campaigns/${id}`, data),
+  deleteCampaign: (id: number) => apiClient.delete(`/governance/attestation-campaigns/campaigns/${id}`),
+  activateCampaign: (id: number) => apiClient.post(`/governance/attestation-campaigns/campaigns/${id}/activate`),
+  closeCampaign: (id: number) => apiClient.post(`/governance/attestation-campaigns/campaigns/${id}/close`),
+  getCampaignRequests: (id: number, params?: { status?: string }) => apiClient.get(`/governance/attestation-campaigns/campaigns/${id}/requests`, { params }),
+  completeAttestation: (id: number, data: Record<string, unknown>) => apiClient.post(`/governance/attestation-campaigns/requests/${id}/complete`, data),
+  sendReminder: (id: number) => apiClient.post(`/governance/attestation-campaigns/requests/${id}/remind`),
+  escalateRequest: (id: number) => apiClient.post(`/governance/attestation-campaigns/requests/${id}/escalate`),
+  getMyAttestations: (params?: { status?: string }) => apiClient.get('/governance/attestation-campaigns/my-attestations', { params }),
+  getDashboard: () => apiClient.get('/governance/attestation-campaigns/dashboard'),
+  getAttestation: (id: number) => apiClient.get(`/governance/attestation-campaigns/requests/${id}`),
+  linkToEvidence: (id: number) => apiClient.post(`/governance/attestations/${id}/link-to-evidence`),
+  bulkLinkToEvidence: (attestationIds: number[]) => apiClient.post('/governance/attestations/bulk-link-evidence', { attestation_ids: attestationIds }),
+};
+
+export const committeeApi = {
+  getCommittees: () => apiClient.get('/governance/committees'),
+  getCommittee: (id: number) => apiClient.get(`/governance/committees/${id}`),
+  createCommittee: (data: any) => apiClient.post('/governance/committees', data),
+  updateCommittee: (id: number, data: any) => apiClient.put(`/governance/committees/${id}`, data),
+  deleteCommittee: (id: number) => apiClient.delete(`/governance/committees/${id}`),
+  getMembers: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/members`),
+  addMember: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/members`, data),
+  removeMember: (committeeId: number, userId: number) => apiClient.delete(`/governance/committees/${committeeId}/members/${userId}`),
+  getCharters: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/charters`),
+  createCharter: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/charters`, data),
+  updateCharter: (charterId: number, data: any) => apiClient.put(`/governance/committees/charters/${charterId}`, data),
+  deleteCharter: (committeeId: number, charterId: number) => apiClient.delete(`/governance/committees/${committeeId}/charters/${charterId}`),
+  uploadCharterFile: (committeeId: number, charterId: number, formData: FormData) => 
+    apiClient.post(`/governance/committees/${committeeId}/charters/${charterId}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+  downloadCharterFile: (charterId: number) => 
+    apiClient.get(`/governance/committees/charters/${charterId}/download`, { responseType: 'blob' }),
+  getMeetings: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/meetings`),
+  createMeeting: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/meetings`, data),
+  getMeeting: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}`),
+  updateMeeting: (meetingId: number, data: any) => apiClient.put(`/governance/committees/meetings/${meetingId}`, data),
+  getAgenda: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}/agenda`),
+  addAgendaItem: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/agenda`, data),
+  updateAgendaItem: (itemId: number, data: any) => apiClient.put(`/governance/committees/agenda/${itemId}`, data),
+  createMinutes: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/minutes`, data),
+  updateMinutes: (minutesId: number, data: any) => apiClient.put(`/governance/committees/minutes/${minutesId}`, data),
+  createAction: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/actions`, data),
+  getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean }) => apiClient.get('/governance/committees/actions', { params }),
+  updateAction: (actionId: number, data: any) => apiClient.patch(`/governance/committees/actions/${actionId}`, data),
+  getDashboard: () => apiClient.get('/governance/committees/dashboard'),
+  aiGenerateCharter: (committeeId: number) => apiClient.post(`/governance/committees/${committeeId}/ai-generate-charter`),
+  aiCompareCharter: (committeeId: number, data: { charter_id?: number; charter_text?: string }) =>
+    apiClient.post(`/governance/committees/${committeeId}/ai-compare-charter`, data),
+  getSuggestedAgendaItems: (meetingId: number) => 
+    apiClient.get(`/grc/committees/meetings/${meetingId}/suggested-agenda-items`),
+  autoPopulateAgenda: (meetingId: number, data: { include_documents?: boolean; include_exceptions?: boolean; include_regulatory_changes?: boolean }) => 
+    apiClient.post(`/grc/committees/meetings/${meetingId}/auto-populate-agenda`, data),
+};
+
+export interface QuickAssessRequest {
+  evidence_name: string;
+  file_name: string;
+  file_type: string;
+  description?: string;
+  evidence_type?: string;
+}
+
+export interface QuickAssessResponse {
+  initial_assessment: {
+    relevance_estimate: 'high' | 'medium' | 'low';
+    suggested_type: string;
+    detected_frameworks: string[];
+    suggested_controls: string[];
+    quality_tips: string[];
+    completeness_check: {
+      has_date: boolean;
+      has_version: boolean;
+      has_approval: boolean;
+    };
+  };
+}
+
+export const evidenceAIApi = {
+  quickAssess: async (data: QuickAssessRequest): Promise<QuickAssessResponse> => {
+    const response = await apiClient.post<QuickAssessResponse>('/evidence-mgmt/ai/quick-assess', data);
+    return response.data;
+  },
+};
+
+export const controlLibraryApi = {
+  gapAnalysis: {
+    prioritizeWithAI: async (data?: { framework_id?: number; max_gaps?: number }) => {
+      const response = await apiClient.post('/control-library/gap-analysis/ai-prioritize', data || {});
+      return response.data;
+    },
+    getDashboard: () => apiClient.get('/control-library/gap-analysis/dashboard'),
+    getUnmappedControls: (params?: { framework_id?: number; skip?: number; limit?: number }) => 
+      apiClient.get('/control-library/gap-analysis/unmapped-controls', { params }),
+    getControlsWithoutEvidence: (params?: { framework_id?: number; skip?: number; limit?: number }) => 
+      apiClient.get('/control-library/gap-analysis/controls-without-evidence', { params }),
+  },
+  comparison: {
+    getFrameworks: () => apiClient.get('/control-library/comparison/frameworks'),
+    getCrosswalk: (sourceId: number, destId: number, skip?: number, limit?: number) =>
+      apiClient.get(`/control-library/comparison/crosswalk?source_framework_id=${sourceId}&destination_framework_id=${destId}&skip=${skip || 0}&limit=${limit || 50}`),
+    aiMapControl: (sourceFrameworkId: number, destFrameworkId: number, sourceControlId: number) =>
+      apiClient.post(`/control-library/comparison/crosswalk/ai-map?source_framework_id=${sourceFrameworkId}&destination_framework_id=${destFrameworkId}&source_control_id=${sourceControlId}`),
+  },
+};
+
+export const reportsApi = {
+  getRiskRegisterSummary: (params?: Record<string, string>) => apiClient.get('/reports/risk/register-summary', { params }),
+  getRiskHeatmap: (params?: Record<string, string>) => apiClient.get('/reports/risk/heatmap', { params }),
+  getRiskTreatmentStatus: (params?: Record<string, string>) => apiClient.get('/reports/risk/treatment-status', { params }),
+  getRiskAcceptedRisks: (params?: Record<string, string>) => apiClient.get('/reports/risk/accepted-risks', { params }),
+  getRiskKRIStatus: (params?: Record<string, string>) => apiClient.get('/reports/risk/kri-status', { params }),
+  exportRisk: (reportType: string) => apiClient.get(`/reports/risk/export`, { params: { report_type: reportType }, responseType: 'blob' }),
+
+  getComplianceFrameworkStatus: (params?: Record<string, string>) => apiClient.get('/reports/compliance/framework-status', { params }),
+  getComplianceControlImplementation: (params?: Record<string, string>) => apiClient.get('/reports/compliance/control-implementation', { params }),
+  getComplianceAssessmentResults: (params?: Record<string, string>) => apiClient.get('/reports/compliance/assessment-results', { params }),
+  getComplianceApplicability: (params?: Record<string, string>) => apiClient.get('/reports/compliance/applicability', { params }),
+  exportCompliance: (reportType: string) => apiClient.get(`/reports/compliance/export`, { params: { report_type: reportType }, responseType: 'blob' }),
+
+  getGovernanceGapAnalysis: (params?: Record<string, string>) => apiClient.get('/reports/governance/gap-analysis-summary', { params }),
+  getGovernancePolicyStatus: (params?: Record<string, string>) => apiClient.get('/reports/governance/policy-status', { params }),
+  getGovernanceAttestationTracking: (params?: Record<string, string>) => apiClient.get('/reports/governance/attestation-tracking', { params }),
+  getGovernanceCommitteeActions: (params?: Record<string, string>) => apiClient.get('/reports/governance/committee-actions', { params }),
+  getGovernanceRegulatoryChanges: (params?: Record<string, string>) => apiClient.get('/reports/governance/regulatory-changes', { params }),
+  exportGovernance: (reportType: string) => apiClient.get(`/reports/governance/export`, { params: { report_type: reportType }, responseType: 'blob' }),
+
+  getERMInternalControls: (params?: Record<string, string>) => apiClient.get('/reports/erm/internal-controls', { params }),
+  getERMIncidents: (params?: Record<string, string>) => apiClient.get('/reports/erm/incidents', { params }),
+  getERMKRIDashboard: (params?: Record<string, string>) => apiClient.get('/reports/erm/kri-dashboard', { params }),
+  exportERM: (reportType: string) => apiClient.get(`/reports/erm/export`, { params: { report_type: reportType }, responseType: 'blob' }),
+
+  getAssetsInventory: (params?: Record<string, string>) => apiClient.get('/reports/assets/inventory', { params }),
+  getAssetsRiskAssessment: (params?: Record<string, string>) => apiClient.get('/reports/assets/risk-assessment', { params }),
+  getVulnerabilityStatus: (params?: Record<string, string>) => apiClient.get('/reports/vulnerability/status', { params }),
+  getVulnerabilityAging: (params?: Record<string, string>) => apiClient.get('/reports/vulnerability/aging', { params }),
+  exportAssets: (reportType: string) => apiClient.get(`/reports/assets/export`, { params: { report_type: reportType }, responseType: 'blob' }),
+
+  getEvidenceCollectionStatus: (params?: Record<string, string>) => apiClient.get('/reports/evidence/collection-status', { params }),
+  getEvidenceExpiryReview: (params?: Record<string, string>) => apiClient.get('/reports/evidence/expiry-review', { params }),
+  getEvidenceAIAssessment: (params?: Record<string, string>) => apiClient.get('/reports/evidence/ai-assessment', { params }),
+  exportEvidence: (reportType: string) => apiClient.get(`/reports/evidence/export`, { params: { report_type: reportType }, responseType: 'blob' }),
+};
+
+export const riskAssessmentApi = {
+  getAll: (params?: { skip?: number; limit?: number; status?: string; assessment_type?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.skip) searchParams.append('skip', params.skip.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.assessment_type) searchParams.append('assessment_type', params.assessment_type);
+    const query = searchParams.toString();
+    return apiClient.get(`/erm/risk-assessments${query ? `?${query}` : ''}`);
+  },
+  getById: (id: number) => apiClient.get(`/erm/risk-assessments/${id}`),
+  create: (data: Record<string, unknown>) => apiClient.post('/erm/risk-assessments', data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/risk-assessments/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/erm/risk-assessments/${id}`),
+  updateStatus: (id: number, data: { status: string; notes?: string }) => apiClient.post(`/erm/risk-assessments/${id}/status`, data),
+  getSummary: (id: number) => apiClient.get(`/erm/risk-assessments/${id}/summary`),
+  getAvailableRisks: (id: number) => apiClient.get(`/erm/risk-assessments/${id}/available-risks`),
+  addRisk: (assessmentId: number, data: Record<string, unknown>) => apiClient.post(`/erm/risk-assessments/${assessmentId}/risks`, data),
+  updateRisk: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => apiClient.put(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}`, data),
+  removeRisk: (assessmentId: number, assessmentRiskId: number) => apiClient.delete(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}`),
+  bulkAddRisks: (assessmentId: number, riskIds: number[]) => apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/bulk`, { risk_ids: riskIds }),
+  linkKRI: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/kris`, data),
+  unlinkKRI: (assessmentId: number, assessmentRiskId: number, linkId: number) => apiClient.delete(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/kris/${linkId}`),
+  linkIncident: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/incidents`, data),
+  unlinkIncident: (assessmentId: number, assessmentRiskId: number, linkId: number) => apiClient.delete(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/incidents/${linkId}`),
+  linkRCSAFinding: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/rcsa-findings`, data),
+  unlinkRCSAFinding: (assessmentId: number, assessmentRiskId: number, linkId: number) => apiClient.delete(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/rcsa-findings/${linkId}`),
+  aiSuggestRisk: (assessmentId: number, assessmentRiskId: number) => apiClient.post<{ treatment_decision: string; control_effectiveness: string; rationale: string; notes: string }>(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/ai-suggest`),
+  uploadExcel: (formData: FormData) => apiClient.post<{
+    assessment_id: number;
+    assessment_name: string;
+    risks_created: number;
+    rows_skipped: number;
+    rows_errored: number;
+    skipped_details: { row: number; reason: string }[];
+    error_details: { row: number; error: string }[];
+    mapped_columns: string[];
+  }>('/erm/risk-assessments/upload-excel', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  getCDEAssets: (id: number) => apiClient.get(`/erm/risk-assessments/${id}/cde-assets`),
+};
+
+export const complianceCalendarApi = {
+  getEvents: (params?: { date_from?: string; date_to?: string; event_type?: string; status?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.date_from) searchParams.append('date_from', params.date_from);
+    if (params?.date_to) searchParams.append('date_to', params.date_to);
+    if (params?.event_type) searchParams.append('event_type', params.event_type);
+    if (params?.status) searchParams.append('status', params.status);
+    const query = searchParams.toString();
+    return apiClient.get(`/compliance-calendar/events${query ? `?${query}` : ''}`);
+  },
+  createEvent: (data: Record<string, unknown>) => apiClient.post('/compliance-calendar/events', data),
+  updateEvent: (id: number, data: Record<string, unknown>) => apiClient.put(`/compliance-calendar/events/${id}`, data),
+  deleteEvent: (id: number) => apiClient.delete(`/compliance-calendar/events/${id}`),
+  getUpcoming: () => apiClient.get('/compliance-calendar/upcoming'),
+  getOverdue: () => apiClient.get('/compliance-calendar/overdue'),
+  completeEvent: (id: number) => apiClient.post(`/compliance-calendar/events/${id}/complete`),
+  getSummary: (params?: { date_from?: string; date_to?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.date_from) searchParams.append('date_from', params.date_from);
+    if (params?.date_to) searchParams.append('date_to', params.date_to);
+    const query = searchParams.toString();
+    return apiClient.get(`/compliance-calendar/summary${query ? `?${query}` : ''}`);
+  },
+};
+
+export const policyAcknowledgmentApi = {
+  getDashboard: () => apiClient.get('/policy-acknowledgments/dashboard'),
+  getPolicyUsers: (documentId: number) => apiClient.get(`/policy-acknowledgments/policy/${documentId}/users`),
+  sendReminders: (documentId: number) => apiClient.post(`/policy-acknowledgments/policy/${documentId}/send-reminders`),
+  getUserStatus: (userId: number) => apiClient.get(`/policy-acknowledgments/user/${userId}/status`),
+  getOverdue: () => apiClient.get('/policy-acknowledgments/overdue'),
+};
+
+export const policyExceptionApi = {
+  getAll: (params?: { status?: string; document_id?: number; priority?: string; skip?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.document_id) searchParams.append('document_id', params.document_id.toString());
+    if (params?.priority) searchParams.append('priority', params.priority);
+    if (params?.skip) searchParams.append('skip', params.skip.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return apiClient.get(`/policy-exceptions${query ? `?${query}` : ''}`);
+  },
+  create: (data: Record<string, unknown>) => apiClient.post('/policy-exceptions', data),
+  getById: (id: number) => apiClient.get(`/policy-exceptions/${id}`),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/policy-exceptions/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/policy-exceptions/${id}`),
+  submit: (id: number) => apiClient.post(`/policy-exceptions/${id}/submit`),
+  approve: (id: number, data?: { comments?: string }) => apiClient.post(`/policy-exceptions/${id}/approve`, data || {}),
+  reject: (id: number, data: { rejection_reason: string }) => apiClient.post(`/policy-exceptions/${id}/reject`, data),
+  revoke: (id: number, data?: { reason?: string }) => apiClient.post(`/policy-exceptions/${id}/revoke`, data || {}),
+  getComments: (id: number) => apiClient.get(`/policy-exceptions/${id}/comments`),
+  addComment: (id: number, data: { comment: string }) => apiClient.post(`/policy-exceptions/${id}/comments`, data),
+  getExpiringSoon: () => apiClient.get('/policy-exceptions/expiring-soon'),
+  getSummary: () => apiClient.get('/policy-exceptions/summary'),
+};
+
+export const evidenceApprovalApi = {
+  createWorkflow: (evidenceId: number, data: { reviewer_ids: number[] }) => apiClient.post(`/evidence-approvals/evidence/${evidenceId}/workflow`, data),
+  getWorkflow: (evidenceId: number) => apiClient.get(`/evidence-approvals/evidence/${evidenceId}/workflow`),
+  getMyReviews: () => apiClient.get('/evidence-approvals/my-reviews'),
+  approveStep: (stepId: number, data?: { comments?: string }) => apiClient.post(`/evidence-approvals/steps/${stepId}/approve`, data || {}),
+  rejectStep: (stepId: number, data: { comments: string }) => apiClient.post(`/evidence-approvals/steps/${stepId}/reject`, data),
+  requestChanges: (stepId: number, data: { comments: string }) => apiClient.post(`/evidence-approvals/steps/${stepId}/request-changes`, data),
+  getAllWorkflows: (params?: { status?: string; skip?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.skip) searchParams.append('skip', params.skip.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return apiClient.get(`/evidence-approvals/workflows${query ? `?${query}` : ''}`);
+  },
+  getWorkflowById: (workflowId: number) => apiClient.get(`/evidence-approvals/workflows/${workflowId}`),
+  cancelWorkflow: (workflowId: number) => apiClient.delete(`/evidence-approvals/workflows/${workflowId}`),
+};
+
+export default apiClient;

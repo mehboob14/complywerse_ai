@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Shield, ArrowRight, ArrowLeft, Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
@@ -75,6 +75,11 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // CRITICAL: Clear ALL localStorage on page load to prevent cross-tenant data leakage
+  useEffect(() => {
+    localStorage.clear();
+  }, []);
 
   const [formData, setFormData] = useState<FormData>({
     email: '',
@@ -224,6 +229,9 @@ export default function RegisterPage() {
 
       if (response.ok) {
         const data = await response.json();
+        // CRITICAL: Clear ALL previous localStorage to prevent cross-tenant data leakage
+        localStorage.clear();
+        
         if (data.tenant) {
           localStorage.setItem('tenant_slug', data.tenant.subdomain || data.tenant.slug);
           localStorage.setItem('tenant_subdomain', data.tenant.subdomain || data.tenant.slug);

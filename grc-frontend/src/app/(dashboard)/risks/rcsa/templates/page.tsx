@@ -36,16 +36,16 @@ interface Template {
 }
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string }> = {
-  system: { bg: 'bg-blue-50', text: 'text-blue-600' },
-  custom: { bg: 'bg-primary-50', text: 'text-primary-600' },
+  system: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  custom: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
 };
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
-  'Cybersecurity': { bg: 'bg-cyan-50', text: 'text-cyan-600' },
-  'Operational Risk': { bg: 'bg-amber-50', text: 'text-amber-600' },
-  'Compliance': { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  'Cybersecurity': { bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
+  'Operational Risk': { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  'Compliance': { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
   'IT Risk': { bg: 'bg-violet-500/20', text: 'text-violet-400' },
-  'Financial Risk': { bg: 'bg-rose-50', text: 'text-rose-600' },
+  'Financial Risk': { bg: 'bg-rose-500/20', text: 'text-rose-400' },
 };
 
 export default function RCSATemplatesPage() {
@@ -53,6 +53,10 @@ export default function RCSATemplatesPage() {
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [uploadName, setUploadName] = useState('');
+  const [uploadCategory, setUploadCategory] = useState('Operational Risk');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [uploadResult, setUploadResult] = useState<{ success: boolean; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -94,23 +98,22 @@ export default function RCSATemplatesPage() {
     },
   });
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleUploadSubmit = async () => {
+    if (!uploadFile || !uploadName.trim()) return;
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', uploadFile);
 
     try {
-      await rcsaApi.uploadTemplate(formData);
+      await rcsaApi.uploadTemplate(formData, { name: uploadName.trim(), category: uploadCategory });
       setUploadResult({ success: true, message: 'Template uploaded successfully' });
       queryClient.invalidateQueries({ queryKey: ['rcsa-templates'] });
+      setIsUploadModalOpen(false);
+      setUploadName('');
+      setUploadCategory('Operational Risk');
+      setUploadFile(null);
     } catch {
       setUploadResult({ success: false, message: 'Failed to upload template' });
-    }
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
     }
   };
 
@@ -163,19 +166,12 @@ export default function RCSATemplatesPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-black">RCSA Templates</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">RCSA Templates</h1>
             <p className="text-slate-600 mt-1">Manage Risk & Control Self-Assessment templates</p>
           </div>
           <div className="flex items-center gap-3">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-            />
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setIsUploadModalOpen(true)}
               className="btn-secondary flex items-center gap-2"
             >
               <Upload className="h-4 w-4" />
@@ -193,13 +189,13 @@ export default function RCSATemplatesPage() {
       </div>
 
       {uploadResult && (
-        <div className={`p-4 rounded-lg flex items-center gap-3 ${uploadResult.success ? 'bg-emerald-50 border border-emerald-500/30' : 'bg-rose-50 border border-rose-500/30'}`}>
+        <div className={`p-4 rounded-lg flex items-center gap-3 ${uploadResult.success ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-rose-500/20 border border-rose-500/30'}`}>
           {uploadResult.success ? (
-            <CheckCircle className="h-5 w-5 text-emerald-600" />
+            <CheckCircle className="h-5 w-5 text-emerald-400" />
           ) : (
-            <AlertCircle className="h-5 w-5 text-rose-600" />
+            <AlertCircle className="h-5 w-5 text-rose-400" />
           )}
-          <p className={uploadResult.success ? 'text-emerald-600' : 'text-rose-600'}>{uploadResult.message}</p>
+          <p className={uploadResult.success ? 'text-emerald-400' : 'text-rose-400'}>{uploadResult.message}</p>
           <button onClick={() => setUploadResult(null)} className="ml-auto">
             <X className="h-4 w-4 text-slate-600 hover:text-slate-900" />
           </button>
@@ -233,11 +229,11 @@ export default function RCSATemplatesPage() {
           <div key={template.id} className="card p-6 hover:border-primary-500/50 transition-all">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
-                  <FileText className="h-5 w-5 text-primary-600" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
+                  <FileText className="h-5 w-5 text-primary-400" />
                 </div>
                 <div>
-                  <h3 className="text-black font-medium">{template.name}</h3>
+                  <h3 className="text-slate-900 font-medium">{template.name}</h3>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${SOURCE_COLORS[template.source]?.bg} ${SOURCE_COLORS[template.source]?.text}`}>
                     {template.source}
                   </span>
@@ -259,7 +255,7 @@ export default function RCSATemplatesPage() {
             </div>
 
             <div className="mb-4">
-              <span className={`text-xs px-2 py-1 rounded-full ${CATEGORY_COLORS[template.category]?.bg || 'bg-slate-50'} ${CATEGORY_COLORS[template.category]?.text || 'text-slate-600'}`}>
+              <span className={`text-xs px-2 py-1 rounded-full ${CATEGORY_COLORS[template.category]?.bg || 'bg-slate-500/20'} ${CATEGORY_COLORS[template.category]?.text || 'text-slate-600'}`}>
                 {template.category}
               </span>
             </div>
@@ -286,7 +282,7 @@ export default function RCSATemplatesPage() {
                 <>
                   <Link
                     href={`/risks/rcsa/templates/${template.id}?edit=true`}
-                    className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded"
+                    className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded"
                   >
                     <Edit2 className="h-4 w-4" />
                   </Link>
@@ -296,7 +292,7 @@ export default function RCSATemplatesPage() {
                         deleteMutation.mutate(template.id);
                       }
                     }}
-                    className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded"
+                    className="p-1.5 text-slate-600 hover:text-rose-400 hover:bg-rose-500/20 rounded"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -304,7 +300,7 @@ export default function RCSATemplatesPage() {
               )}
               <button
                 onClick={() => handleDownload(template)}
-                className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded"
+                className="p-1.5 text-slate-600 hover:text-emerald-400 hover:bg-emerald-500/20 rounded"
                 title="Download Template"
               >
                 <Download className="h-4 w-4" />
@@ -318,7 +314,7 @@ export default function RCSATemplatesPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-black">Clone Template</h3>
+              <h3 className="text-lg font-medium text-slate-900">Clone Template</h3>
               <button onClick={() => setIsCloneModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
@@ -338,7 +334,7 @@ export default function RCSATemplatesPage() {
             >
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">New Template Name</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">New Template Name</label>
                   <input
                     type="text"
                     name="name"
@@ -348,7 +344,7 @@ export default function RCSATemplatesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
                   <textarea
                     name="description"
                     defaultValue={selectedTemplate.description}
@@ -370,11 +366,85 @@ export default function RCSATemplatesPage() {
         </div>
       )}
 
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-medium text-slate-900">Upload Template</h3>
+              <button onClick={() => { setIsUploadModalOpen(false); setUploadFile(null); setUploadName(''); }} className="text-slate-600 hover:text-slate-900">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Template Name *</label>
+                <input
+                  type="text"
+                  value={uploadName}
+                  onChange={(e) => setUploadName(e.target.value)}
+                  className="input w-full"
+                  placeholder="Enter template name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Category *</label>
+                <select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)} className="input w-full">
+                  <option value="Cybersecurity">Cybersecurity</option>
+                  <option value="Operational Risk">Operational Risk</option>
+                  <option value="Compliance">Compliance</option>
+                  <option value="IT Risk">IT Risk</option>
+                  <option value="Financial Risk">Financial Risk</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">File (Excel or CSV) *</label>
+                <div
+                  className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${uploadFile ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-300 hover:border-slate-500'}`}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                  />
+                  {uploadFile ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <FileSpreadsheet className="h-5 w-5 text-blue-400" />
+                      <span className="text-blue-300 text-sm">{uploadFile.name}</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <Upload className="h-8 w-8 text-slate-500 mx-auto mb-2" />
+                      <p className="text-sm text-slate-600">Click to select a file</p>
+                      <p className="text-xs text-slate-500 mt-1">Supports .xlsx, .xls, .csv</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => { setIsUploadModalOpen(false); setUploadFile(null); setUploadName(''); }} className="btn-secondary">
+                Cancel
+              </button>
+              <button
+                onClick={handleUploadSubmit}
+                className="btn-primary"
+                disabled={!uploadFile || !uploadName.trim()}
+              >
+                Upload Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-black">Create New Template</h3>
+              <h3 className="text-lg font-medium text-slate-900">Create New Template</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
@@ -399,7 +469,7 @@ export default function RCSATemplatesPage() {
             >
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Template Name</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Template Name</label>
                   <input
                     type="text"
                     name="name"
@@ -409,7 +479,7 @@ export default function RCSATemplatesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
                   <textarea
                     name="description"
                     className="input w-full"
@@ -418,7 +488,7 @@ export default function RCSATemplatesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Category</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
                   <select name="category" className="input w-full" required>
                     <option value="">Select category</option>
                     <option value="Cybersecurity">Cybersecurity</option>
@@ -429,7 +499,7 @@ export default function RCSATemplatesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Framework Type</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Framework Type</label>
                   <input
                     type="text"
                     name="framework_type"

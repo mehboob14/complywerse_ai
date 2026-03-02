@@ -19,6 +19,8 @@ import {
   Layers,
   Filter,
   CalendarDays,
+  CheckCircle2,
+  Eye,
 } from 'lucide-react';
 
 interface ReviewDocument {
@@ -62,25 +64,119 @@ interface ReviewStatistics {
   never_reviewed: number;
 }
 
+interface GovernanceActionReview {
+  id: number;
+  action_type: string;
+  action_description: string;
+  entity_type: string;
+  entity_id: number | null;
+  review_status: string;
+  action_user_id: number;
+  action_user_name: string | null;
+  action_date: string;
+  action_metadata: Record<string, any>;
+  review_notes: string | null;
+  reviewer_id: number | null;
+  reviewer_name: string | null;
+  review_started_at: string | null;
+  review_completed_at: string | null;
+}
+
+interface GovernanceActionsResponse {
+  items: GovernanceActionReview[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
 const DOCUMENT_TYPES = [
   { value: '', label: 'All Types' },
-  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-50' },
-  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-blue-600', bgColor: 'bg-blue-50' },
-  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-green-600', bgColor: 'bg-green-50' },
-  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
-  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
-  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-orange-600', bgColor: 'bg-orange-50' },
+  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-green-400', bgColor: 'bg-green-500/20' },
+  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
+  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
+  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
 ];
 
 const getTypeStyle = (type: string) => {
-  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-slate-600', bgColor: 'bg-slate-50', icon: FileText };
+  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-gray-600', bgColor: 'bg-slate-500/20', icon: FileText };
 };
 
 type TabType = 'overdue' | 'upcoming' | 'completed' | 'all';
+type ReviewsSection = 'documents' | 'actions';
+
+const formatDate = (dateStr: string | null) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleDateString();
+};
+
+const getDaysDisplay = (days: number | null, isOverdue: boolean) => {
+  if (days === null) return { text: '-', className: 'text-gray-600' };
+
+  if (isOverdue || days < 0) {
+    const absDays = Math.abs(days);
+    return {
+      text: `${absDays} day${absDays !== 1 ? 's' : ''} overdue`,
+      className: 'text-red-400 font-medium',
+    };
+  }
+
+  if (days === 0) {
+    return { text: 'Due today', className: 'text-amber-400 font-medium' };
+  }
+
+  if (days <= 7) {
+    return { text: `${days} day${days !== 1 ? 's' : ''} left`, className: 'text-amber-400' };
+  }
+
+  return { text: `${days} days left`, className: 'text-green-400' };
+};
+
+const getActionTypeLabel = (actionType: string): string => {
+  const actionLabels: Record<string, string> = {
+    'document_draft_created': 'Document Draft',
+    'document_uploaded': 'Document Upload',
+    'policy_statement_created': 'Policy Statement',
+    'risk_acceptance': 'Risk Acceptance',
+    'evidence_uploaded': 'Evidence Upload',
+    'committee_action': 'Committee Action',
+    'attestation_created': 'Attestation',
+    'certification_submitted': 'Certification',
+  };
+  return actionLabels[actionType] || actionType.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+};
+
+const getActionTypeColor = (actionType: string) => {
+  const colorMap: Record<string, { bgColor: string; textColor: string; icon: any }> = {
+    'document_draft_created': { bgColor: 'bg-blue-500/20', textColor: 'text-blue-400', icon: FileText },
+    'document_uploaded': { bgColor: 'bg-blue-500/20', textColor: 'text-blue-400', icon: FileText },
+    'policy_statement_created': { bgColor: 'bg-purple-500/20', textColor: 'text-purple-400', icon: BookOpen },
+    'risk_acceptance': { bgColor: 'bg-red-500/20', textColor: 'text-red-400', icon: AlertTriangle },
+    'evidence_uploaded': { bgColor: 'bg-green-500/20', textColor: 'text-green-400', icon: CheckCircle },
+    'committee_action': { bgColor: 'bg-yellow-500/20', textColor: 'text-yellow-400', icon: ClipboardList },
+    'attestation_created': { bgColor: 'bg-cyan-500/20', textColor: 'text-cyan-400', icon: FileCheck },
+    'certification_submitted': { bgColor: 'bg-orange-500/20', textColor: 'text-orange-400', icon: Shield },
+  };
+  return colorMap[actionType] || { bgColor: 'bg-gray-500/20', textColor: 'text-gray-400', icon: FileText };
+};
+
+const getStatusColor = (status: string) => {
+  const statusColors: Record<string, string> = {
+    'pending_review': 'bg-amber-500/20 text-amber-400 border-amber-500/50',
+    'in_review': 'bg-blue-500/20 text-blue-400 border-blue-500/50',
+    'approved': 'bg-green-500/20 text-green-400 border-green-500/50',
+    'rejected': 'bg-red-500/20 text-red-400 border-red-500/50',
+    'archived': 'bg-gray-500/20 text-gray-400 border-gray-500/50',
+  };
+  return statusColors[status] || 'bg-gray-500/20 text-gray-400';
+};
 
 export default function GovernanceReviewsPage() {
+  const [reviewsSection, setReviewsSection] = useState<ReviewsSection>('actions');
   const [activeTab, setActiveTab] = useState<TabType>('overdue');
   const [typeFilter, setTypeFilter] = useState('');
+  const [actionStatusFilter, setActionStatusFilter] = useState('pending_review');
   const [completingId, setCompletingId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
@@ -89,7 +185,7 @@ export default function GovernanceReviewsPage() {
     queryFn: async () => {
       const response = await governanceApi.getReviewStatistics();
       return response.data as ReviewStatistics;
-    },
+    }
   });
 
   const { data: overdueData, isLoading: overdueLoading } = useQuery({
@@ -99,7 +195,7 @@ export default function GovernanceReviewsPage() {
       if (typeFilter) params.doc_type = typeFilter;
       const response = await governanceApi.getOverdueReviews(params);
       return response.data as ReviewListResponse;
-    },
+    }
   });
 
   const { data: upcomingData, isLoading: upcomingLoading } = useQuery({
@@ -109,7 +205,26 @@ export default function GovernanceReviewsPage() {
       if (typeFilter) params.doc_type = typeFilter;
       const response = await governanceApi.getUpcomingReviews(params);
       return response.data as ReviewListResponse;
-    },
+    }
+  });
+
+  const { data: governanceActions, isLoading: actionsLoading } = useQuery({
+    queryKey: ['my-pending-reviews', actionStatusFilter],
+    queryFn: async () => {
+      if (actionStatusFilter === 'pending_review' || actionStatusFilter === 'all') {
+        // For pending reviews, use my-pending-reviews endpoint
+        const response = await governanceApi.getMyPendingReviews({});
+        return response.data as GovernanceActionsResponse;
+      } else {
+        // For other statuses, use the general endpoint
+        const params: Record<string, string> = {};
+        if (actionStatusFilter && actionStatusFilter !== 'all') {
+          params.status_filter = actionStatusFilter;
+        }
+        const response = await governanceApi.getAllGovernanceActions(params);
+        return response.data as GovernanceActionsResponse;
+      }
+    }
   });
 
   const completeMutation = useMutation({
@@ -124,7 +239,7 @@ export default function GovernanceReviewsPage() {
     },
     onError: () => {
       setCompletingId(null);
-    },
+    }
   });
 
   const handleCompleteReview = (documentId: number) => {
@@ -159,65 +274,218 @@ export default function GovernanceReviewsPage() {
   };
 
   const isLoading = statsLoading || overdueLoading || upcomingLoading;
+  const pendingActionsCount = governanceActions?.items?.filter(a => a.review_status === 'pending_review').length || 0;
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString();
-  };
-
-  const getDaysDisplay = (days: number | null, isOverdue: boolean) => {
-    if (days === null) return { text: '-', className: 'text-slate-600' };
-    
-    if (isOverdue || days < 0) {
-      const absDays = Math.abs(days);
-      return {
-        text: `${absDays} day${absDays !== 1 ? 's' : ''} overdue`,
-        className: 'text-red-600 font-medium',
-      };
-    }
-    
-    if (days === 0) {
-      return { text: 'Due today', className: 'text-amber-600 font-medium' };
-    }
-    
-    if (days <= 7) {
-      return { text: `${days} day${days !== 1 ? 's' : ''} left`, className: 'text-amber-600' };
-    }
-    
-    return { text: `${days} days left`, className: 'text-green-600' };
-  };
-
-  const tabs: { key: TabType; label: string; count: number }[] = [
+  const tabs = [
     { key: 'overdue', label: 'Overdue', count: statistics?.overdue || 0 },
     { key: 'upcoming', label: 'Upcoming', count: statistics?.due_next_30_days || 0 },
     { key: 'completed', label: 'Completed', count: 0 },
     { key: 'all', label: 'All', count: allDocuments.length },
   ];
 
+  if (reviewsSection === 'actions') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-black">My Reviews</h1>
+            <p className="text-gray-600">Track and manage your submitted actions requiring review</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setReviewsSection('actions')}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-black"
+            >
+              <Eye className="h-4 w-4" />
+              Actions {pendingActionsCount > 0 && <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs text-white">{pendingActionsCount}</span>}
+            </button>
+            <button
+              onClick={() => setReviewsSection('documents')}
+              className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-100"
+            >
+              <FileCheck className="h-4 w-4" />
+              Documents
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-amber-500/30 bg-white p-5">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-amber-500/20 p-3">
+                <Clock className="h-6 w-6 text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Pending Review</p>
+                <p className="text-3xl font-bold text-amber-400">
+                  {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : pendingActionsCount}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-blue-500/30 bg-white p-5">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-blue-500/20 p-3">
+                <Eye className="h-6 w-6 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">In Review</p>
+                <p className="text-3xl font-bold text-blue-400">
+                  {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : governanceActions?.items?.filter(a => a.review_status === 'in_review').length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-green-500/30 bg-white p-5">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-green-500/20 p-3">
+                <CheckCircle2 className="h-6 w-6 text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Approved</p>
+                <p className="text-3xl font-bold text-green-400">
+                  {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : governanceActions?.items?.filter(a => a.review_status === 'approved').length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-300 bg-white">
+          <div className="flex flex-col gap-4 border-b border-gray-300 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-2 overflow-x-auto">
+              {['all', 'pending_review', 'in_review', 'approved', 'rejected'].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setActionStatusFilter(status)}
+                  className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${actionStatusFilter === status
+                      ? 'bg-primary-600 text-black'
+                      : 'bg-gray-100 text-gray-800 hover:bg-gray-100'
+                    }`}
+                >
+                  {status === 'all' ? 'All Actions' : status.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-4">
+            {actionsLoading ? (
+              <div className="flex h-64 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+              </div>
+            ) : !governanceActions?.items || governanceActions.items.length === 0 ? (
+              <div className="flex h-64 flex-col items-center justify-center gap-4 text-gray-600">
+                <CheckCircle className="h-12 w-12" />
+                <p>No governance actions found</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {governanceActions.items.map((action) => {
+                  const actionColor = getActionTypeColor(action.action_type);
+                  const ActionIcon = actionColor.icon;
+                  const statusColor = getStatusColor(action.review_status);
+
+                  return (
+                    <div
+                      key={action.id}
+                      className={`rounded-lg border p-4 transition-colors hover:bg-gray-100/50 ${action.review_status === 'pending_review'
+                          ? 'border-amber-500/50 bg-amber-500/5'
+                          : 'border-gray-300 bg-white/50'
+                        }`}
+                    >
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex items-start gap-4 flex-1 min-w-0">
+                          <div className={`rounded-lg p-2.5 ${actionColor.bgColor}`}>
+                            <ActionIcon className={`h-5 w-5 ${actionColor.textColor}`} />
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-medium text-black">{action.action_description}</h3>
+                              <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusColor}`}>
+                                {action.review_status.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                              </span>
+                            </div>
+
+                            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+                              <span className={`inline-flex items-center gap-1 ${actionColor.textColor}`}>
+                                <ActionIcon className="h-3.5 w-3.5" />
+                                {getActionTypeLabel(action.action_type)}
+                              </span>
+                              {action.action_user_name && (
+                                <span>By: {action.action_user_name}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-700 text-xs">Action Date</p>
+                              <p className="text-gray-800">{formatDate(action.action_date)}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-700 text-xs">Entity Type</p>
+                              <p className="text-gray-800 capitalize">{action.entity_type.replace(/_/g, ' ')}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-black">Document Reviews</h1>
-          <p className="text-slate-600">Track and complete document review schedules</p>
+          <p className="text-gray-600">Track and complete document review schedules</p>
         </div>
-        <a
-          href="/governance/reviews/calendar"
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
-        >
-          <CalendarDays className="h-4 w-4" />
-          Calendar View
-        </a>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setReviewsSection('actions')}
+            className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-100"
+          >
+            <Eye className="h-4 w-4" />
+            Actions {pendingActionsCount > 0 && <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs text-white">{pendingActionsCount}</span>}
+          </button>
+          <button
+            onClick={() => setReviewsSection('documents')}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-black"
+          >
+            <FileCheck className="h-4 w-4" />
+            Documents
+          </button>
+          <a
+            href="/governance/reviews/calendar"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-black hover:bg-primary-700 transition-colors"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Calendar View
+          </a>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-gray-300 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary-50 p-3">
-              <Calendar className="h-6 w-6 text-primary-600" />
+            <div className="rounded-lg bg-primary-500/20 p-3">
+              <Calendar className="h-6 w-6 text-primary-400" />
             </div>
             <div>
-              <p className="text-sm text-slate-600">Upcoming (30 days)</p>
+              <p className="text-sm text-gray-600">Upcoming (30 days)</p>
               <p className="text-3xl font-bold text-black">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.due_next_30_days || 0}
               </p>
@@ -225,27 +493,27 @@ export default function GovernanceReviewsPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-red-200 bg-white p-5">
+        <div className="rounded-xl border border-red-500/30 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-50 p-3">
-              <AlertTriangle className="h-6 w-6 text-red-600" />
+            <div className="rounded-lg bg-red-500/20 p-3">
+              <AlertTriangle className="h-6 w-6 text-red-400" />
             </div>
             <div>
-              <p className="text-sm text-slate-600">Overdue Reviews</p>
-              <p className="text-3xl font-bold text-red-600">
+              <p className="text-sm text-gray-600">Overdue Reviews</p>
+              <p className="text-3xl font-bold text-red-400">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.overdue || 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-gray-300 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-50 p-3">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+            <div className="rounded-lg bg-green-500/20 p-3">
+              <CheckCircle className="h-6 w-6 text-green-400" />
             </div>
             <div>
-              <p className="text-sm text-slate-600">Completed This Month</p>
+              <p className="text-sm text-gray-600">Completed This Month</p>
               <p className="text-3xl font-bold text-black">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.by_status?.on_track || 0}
               </p>
@@ -255,12 +523,12 @@ export default function GovernanceReviewsPage() {
 
         <div className="rounded-xl border border-amber-500/30 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-amber-50 p-3">
-              <Clock className="h-6 w-6 text-amber-600" />
+            <div className="rounded-lg bg-amber-500/20 p-3">
+              <Clock className="h-6 w-6 text-amber-400" />
             </div>
             <div>
-              <p className="text-sm text-slate-600">Due This Week</p>
-              <p className="text-3xl font-bold text-amber-600">
+              <p className="text-sm text-gray-600">Due This Week</p>
+              <p className="text-3xl font-bold text-amber-400">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.due_this_week || 0}
               </p>
             </div>
@@ -268,24 +536,22 @@ export default function GovernanceReviewsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="rounded-xl border border-gray-300 bg-white">
+        <div className="flex flex-col gap-4 border-b border-gray-300 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2 overflow-x-auto">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === tab.key
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-slate-200 text-slate-600 hover:bg-slate-600'
-                }`}
+                onClick={() => setActiveTab(tab.key as TabType)}
+                className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === tab.key
+                    ? 'bg-primary-600 text-black'
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-100'
+                  }`}
               >
                 {tab.label}
                 {tab.count > 0 && (
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${
-                    activeTab === tab.key ? 'bg-primary-500' : 'bg-slate-600'
-                  } ${tab.key === 'overdue' && activeTab !== tab.key ? 'bg-red-100 text-red-600' : ''}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-xs ${activeTab === tab.key ? 'bg-primary-500' : 'bg-gray-100'
+                    } ${tab.key === 'overdue' && activeTab !== tab.key ? 'bg-red-500/30 text-red-400' : ''}`}>
                     {tab.count}
                   </span>
                 )}
@@ -294,11 +560,11 @@ export default function GovernanceReviewsPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Filter className="h-4 w-4 text-slate-600" />
+            <Filter className="h-4 w-4 text-gray-600" />
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {DOCUMENT_TYPES.map(type => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -310,15 +576,15 @@ export default function GovernanceReviewsPage() {
         <div className="p-4">
           {isLoading ? (
             <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+              <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
             </div>
           ) : activeTab === 'completed' ? (
-            <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-600">
+            <div className="flex h-64 flex-col items-center justify-center gap-4 text-gray-600">
               <CheckCircle className="h-12 w-12" />
               <p>Completed reviews will appear here</p>
             </div>
           ) : getDisplayedDocuments().length === 0 ? (
-            <div className="flex h-64 flex-col items-center justify-center gap-4 text-slate-600">
+            <div className="flex h-64 flex-col items-center justify-center gap-4 text-gray-600">
               <CalendarDays className="h-12 w-12" />
               <p>No documents found for this filter</p>
             </div>
@@ -332,29 +598,28 @@ export default function GovernanceReviewsPage() {
                 return (
                   <div
                     key={doc.id}
-                    className={`rounded-lg border p-4 transition-colors hover:bg-slate-50 ${
-                      doc.is_overdue
+                    className={`rounded-lg border p-4 transition-colors hover:bg-gray-100/50 ${doc.is_overdue
                         ? 'border-red-500/50 bg-red-500/5'
-                        : 'border-slate-200 bg-slate-50/50'
-                    }`}
+                        : 'border-gray-300 bg-white/50'
+                      }`}
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex items-start gap-4 flex-1 min-w-0">
                         <div className={`rounded-lg p-2.5 ${typeStyle.bgColor}`}>
                           <TypeIcon className={`h-5 w-5 ${typeStyle.color}`} />
                         </div>
-                        
+
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-medium text-black truncate">{doc.title}</h3>
                             {doc.is_overdue && (
-                              <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
+                              <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400">
                                 Overdue
                               </span>
                             )}
                           </div>
-                          
-                          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
+
+                          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
                             <span className={`inline-flex items-center gap-1 ${typeStyle.color}`}>
                               <TypeIcon className="h-3.5 w-3.5" />
                               {typeStyle.label}
@@ -372,31 +637,30 @@ export default function GovernanceReviewsPage() {
                       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
-                            <p className="text-slate-500 text-xs">Next Review</p>
-                            <p className="text-slate-600">{formatDate(doc.next_review_date)}</p>
+                            <p className="text-gray-700 text-xs">Next Review</p>
+                            <p className="text-gray-800">{formatDate(doc.next_review_date)}</p>
                           </div>
                           <div>
-                            <p className="text-slate-500 text-xs">Status</p>
+                            <p className="text-gray-700 text-xs">Status</p>
                             <p className={daysDisplay.className}>{daysDisplay.text}</p>
                           </div>
                           <div>
-                            <p className="text-slate-500 text-xs">Last Reviewed</p>
-                            <p className="text-slate-600">{formatDate(doc.last_reviewed_at)}</p>
+                            <p className="text-gray-700 text-xs">Last Reviewed</p>
+                            <p className="text-gray-800">{formatDate(doc.last_reviewed_at)}</p>
                           </div>
                           <div>
-                            <p className="text-slate-500 text-xs">Cycle</p>
-                            <p className="text-slate-600">{doc.review_cycle_months} months</p>
+                            <p className="text-gray-700 text-xs">Cycle</p>
+                            <p className="text-gray-800">{doc.review_cycle_months} months</p>
                           </div>
                         </div>
 
                         <button
                           onClick={() => handleCompleteReview(doc.id)}
                           disabled={completingId === doc.id}
-                          className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 font-medium transition-colors ${
-                            doc.is_overdue
-                              ? 'bg-red-600 text-white hover:bg-red-700'
-                              : 'bg-primary-600 text-white hover:bg-primary-700'
-                          } disabled:opacity-50`}
+                          className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 font-medium transition-colors ${doc.is_overdue
+                              ? 'bg-red-600 text-black hover:bg-red-700'
+                              : 'bg-primary-600 text-black hover:bg-primary-700'
+                            } disabled:opacity-50`}
                         >
                           {completingId === doc.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -416,17 +680,17 @@ export default function GovernanceReviewsPage() {
       </div>
 
       {statistics && Object.keys(statistics.by_doc_type).length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-gray-300 bg-white p-5">
           <h3 className="mb-4 text-lg font-semibold text-black">Reviews by Document Type</h3>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Object.entries(statistics.by_doc_type).map(([docType, data]) => {
               const typeStyle = getTypeStyle(docType);
               const TypeIcon = typeStyle.icon || FileText;
-              
+
               return (
                 <div
                   key={docType}
-                  className="rounded-lg border border-slate-200 bg-slate-50/50 p-4"
+                  className="rounded-lg border border-gray-300 bg-white/50 p-4"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <div className={`rounded-lg p-2 ${typeStyle.bgColor}`}>
@@ -434,21 +698,21 @@ export default function GovernanceReviewsPage() {
                     </div>
                     <span className="font-medium text-black">{typeStyle.label}</span>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600">Total</span>
+                      <span className="text-sm text-gray-600">Total</span>
                       <span className="text-sm font-medium text-black">{data.total}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600">Overdue</span>
-                      <span className={`text-sm font-medium ${data.overdue > 0 ? 'text-red-600' : 'text-slate-600'}`}>
+                      <span className="text-sm text-gray-600">Overdue</span>
+                      <span className={`text-sm font-medium ${data.overdue > 0 ? 'text-red-400' : 'text-gray-600'}`}>
                         {data.overdue}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600">Due Soon</span>
-                      <span className={`text-sm font-medium ${data.due_soon > 0 ? 'text-amber-600' : 'text-slate-600'}`}>
+                      <span className="text-sm text-gray-600">Due Soon</span>
+                      <span className={`text-sm font-medium ${data.due_soon > 0 ? 'text-amber-400' : 'text-gray-600'}`}>
                         {data.due_soon}
                       </span>
                     </div>

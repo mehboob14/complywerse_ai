@@ -72,30 +72,30 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-black">{title}</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
-        <p className="mb-4 text-sm text-slate-600">
+        <p className="mb-4 text-sm text-slate-700">
           {actionType === 'approve'
             ? `You are about to approve the assessment for "${assessmentName}".`
             : `You are about to reject the assessment for "${assessmentName}". Please provide a reason.`}
         </p>
 
         <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-slate-600">
-            Comments {actionType === 'reject' && <span className="text-red-600">*</span>}
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Comments {actionType === 'reject' && <span className="text-red-400">*</span>}
           </label>
           <textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}
             placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
-            className="h-24 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="h-24 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
           {actionType === 'reject' && !comments.trim() && (
-            <p className="mt-1 text-xs text-red-600">Comments are required when rejecting</p>
+            <p className="mt-1 text-xs text-red-400">Comments are required when rejecting</p>
           )}
         </div>
 
@@ -103,14 +103,14 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+            className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={isLoading || (actionType === 'reject' && !comments.trim())}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-black disabled:opacity-50 ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-slate-900 disabled:opacity-50 ${
               actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
             }`}
           >
@@ -139,11 +139,7 @@ export default function RCSAApprovalsPage() {
         const response = await rcsaApi.getPendingApprovals(params);
         return response.data as PendingApproval[];
       } catch {
-        return [
-          { id: 2, campaign_id: 1, campaign_name: 'Q4 2025 RCSA', business_unit: 'Finance', assessor_name: 'Jane Doe', submission_date: '2025-01-18', current_tier: 1, total_tiers: 2, score: 78, ai_quality_score: 85 },
-          { id: 5, campaign_id: 2, campaign_name: 'Annual IT Risk', business_unit: 'Cybersecurity', assessor_name: 'Tom Brown', submission_date: '2025-01-20', current_tier: 2, total_tiers: 2, score: 72, ai_quality_score: 78 },
-          { id: 7, campaign_id: 1, campaign_name: 'Q4 2025 RCSA', business_unit: 'Corporate Banking', assessor_name: 'Lisa Chen', submission_date: '2025-01-22', current_tier: 1, total_tiers: 2, score: 82, ai_quality_score: 90 },
-        ] as PendingApproval[];
+        return [] as PendingApproval[];
       }
     },
   });
@@ -155,10 +151,7 @@ export default function RCSAApprovalsPage() {
         const response = await rcsaApi.getCampaigns();
         return response.data as Campaign[];
       } catch {
-        return [
-          { id: 1, name: 'Q4 2025 RCSA' },
-          { id: 2, name: 'Annual IT Risk Assessment' },
-        ] as Campaign[];
+        return [] as Campaign[];
       }
     },
   });
@@ -209,7 +202,7 @@ export default function RCSAApprovalsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
@@ -217,8 +210,8 @@ export default function RCSAApprovalsPage() {
   if (error) {
     return (
       <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
-        <p className="mt-2 text-red-600">Failed to load pending approvals</p>
+        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
+        <p className="mt-2 text-red-400">Failed to load pending approvals</p>
       </div>
     );
   }
@@ -228,7 +221,7 @@ export default function RCSAApprovalsPage() {
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-black">RCSA Approvals</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">RCSA Approvals</h1>
             <p className="text-slate-600 mt-1">Review and approve submitted risk assessments</p>
           </div>
         </div>
@@ -262,11 +255,11 @@ export default function RCSAApprovalsPage() {
           <div key={approval.id} className="card p-4 hover:border-primary-500/50 transition-all">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50">
-                  <Clock className="h-6 w-6 text-primary-600" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-500/20">
+                  <Clock className="h-6 w-6 text-primary-400" />
                 </div>
                 <div>
-                  <h3 className="text-black font-medium">{approval.campaign_name}</h3>
+                  <h3 className="text-slate-900 font-medium">{approval.campaign_name}</h3>
                   <div className="flex items-center gap-4 text-sm text-slate-600 mt-1">
                     <span className="flex items-center gap-1">
                       <Building2 className="h-3.5 w-3.5" />
@@ -287,13 +280,13 @@ export default function RCSAApprovalsPage() {
               <div className="flex items-center gap-6">
                 <div className="text-center">
                   <p className="text-xs text-slate-600">Approval Tier</p>
-                  <p className="text-black font-medium">{approval.current_tier} of {approval.total_tiers}</p>
+                  <p className="text-slate-900 font-medium">{approval.current_tier} of {approval.total_tiers}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-xs text-slate-600">Score</p>
                   <p className={`font-medium ${
-                    approval.score >= 80 ? 'text-green-600' : 
-                    approval.score >= 60 ? 'text-yellow-600' : 'text-red-600'
+                    approval.score >= 80 ? 'text-green-400' : 
+                    approval.score >= 60 ? 'text-yellow-400' : 'text-red-400'
                   }`}>
                     {approval.score}%
                   </p>
@@ -302,8 +295,8 @@ export default function RCSAApprovalsPage() {
                   <div className="text-center">
                     <p className="text-xs text-slate-600">AI Quality</p>
                     <p className={`font-medium ${
-                      approval.ai_quality_score >= 80 ? 'text-green-600' : 
-                      approval.ai_quality_score >= 60 ? 'text-yellow-600' : 'text-red-600'
+                      approval.ai_quality_score >= 80 ? 'text-green-400' : 
+                      approval.ai_quality_score >= 60 ? 'text-yellow-400' : 'text-red-400'
                     }`}>
                       {approval.ai_quality_score}%
                     </p>
@@ -313,21 +306,21 @@ export default function RCSAApprovalsPage() {
                 <div className="flex items-center gap-2">
                   <Link
                     href={`/risks/rcsa/approvals/${approval.id}`}
-                    className="p-2 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-600 hover:text-slate-900"
+                    className="p-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900"
                     title="Review Details"
                   >
                     <Eye className="h-4 w-4" />
                   </Link>
                   <button
                     onClick={() => handleAction(approval, 'approve')}
-                    className="p-2 rounded-lg bg-green-50 text-green-700 hover:bg-green-100"
+                    className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30"
                     title="Approve"
                   >
                     <CheckCircle className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => handleAction(approval, 'reject')}
-                    className="p-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100"
+                    className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30"
                     title="Reject"
                   >
                     <XCircle className="h-4 w-4" />
@@ -342,7 +335,7 @@ export default function RCSAApprovalsPage() {
       {filteredApprovals.length === 0 && (
         <div className="card p-12 text-center">
           <CheckCircle className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-black mb-2">No Pending Approvals</h3>
+          <h3 className="text-lg font-medium text-slate-900 mb-2">No Pending Approvals</h3>
           <p className="text-slate-600">
             {searchTerm || campaignFilter
               ? 'No approvals match your filters'

@@ -7,6 +7,10 @@ class UserBase(BaseModel):
     username: str
     email: EmailStr
     display_name: Optional[str] = None
+    department: Optional[str] = None
+    group: Optional[str] = None
+    division: Optional[str] = None
+    designation: Optional[str] = None
 
 
 class UserCreate(UserBase):
@@ -36,6 +40,10 @@ class UserResponse(BaseModel):
     username: str
     email: str
     display_name: Optional[str]
+    department: Optional[str]
+    group: Optional[str]
+    division: Optional[str]
+    designation: Optional[str]
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime]
@@ -306,7 +314,7 @@ class NormalizedControlResponse(BaseModel):
     control_owner: Optional[str]
     implementation_guidance: Optional[str]
     testing_guidance: Optional[str]
-    maturity_level: int
+    maturity_level: Optional[int]
     created_at: datetime
 
     class Config:
@@ -436,16 +444,26 @@ class EvidenceReview(BaseModel):
 class RiskBase(BaseModel):
     title: str
     description: Optional[str] = None
-    category: str
+    category: Optional[str] = None
     risk_category: Optional[str] = None
     risk_sub_category: Optional[str] = None
+    register_type: Optional[str] = None  # PCI-DSS, ISO 27001, SOX, Internal, etc.
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
 
 
 class RiskCreate(RiskBase):
-    pass
+    inherent_likelihood: Optional[int] = None
+    inherent_impact: Optional[int] = None
+    inherent_score: Optional[float] = None
+    residual_likelihood: Optional[int] = None
+    residual_impact: Optional[int] = None
+    residual_score: Optional[float] = None
+    risk_appetite: Optional[str] = None
+    status: Optional[str] = "open"
+    treatment_plan: Optional[str] = None
+    closure_status: Optional[str] = None
 
 
 class RiskUpdate(BaseModel):
@@ -454,6 +472,7 @@ class RiskUpdate(BaseModel):
     category: Optional[str] = None
     risk_category: Optional[str] = None
     risk_sub_category: Optional[str] = None
+    register_type: Optional[str] = None
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = None
@@ -469,6 +488,7 @@ class RiskResponse(BaseModel):
     description: Optional[str]
     category: str
     risk_sub_category: Optional[str] = None
+    register_type: Optional[str] = None
     owner_id: Optional[int]
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
@@ -777,9 +797,14 @@ class ITAssetBase(BaseModel):
     description: Optional[str] = None
     asset_type: str
     owner_id: Optional[int] = None
+    owner_name: Optional[str] = None
+    custodian: Optional[str] = None
+    host_name: Optional[str] = None
+    ip_address: Optional[str] = None
     criticality: str = "medium"
     vendor: Optional[str] = None
     location: Optional[str] = None
+    cde_environment: bool = False
 
 
 class ITAssetCreate(ITAssetBase):
@@ -794,10 +819,15 @@ class ITAssetUpdate(BaseModel):
     description: Optional[str] = None
     asset_type: Optional[str] = None
     owner_id: Optional[int] = None
+    owner_name: Optional[str] = None
+    custodian: Optional[str] = None
+    host_name: Optional[str] = None
+    ip_address: Optional[str] = None
     criticality: Optional[str] = None
     vendor: Optional[str] = None
     location: Optional[str] = None
     status: Optional[str] = None
+    cde_environment: Optional[bool] = None
 
 
 class ITAssetResponse(BaseModel):
@@ -807,6 +837,10 @@ class ITAssetResponse(BaseModel):
     description: Optional[str]
     asset_type: str
     owner_id: Optional[int]
+    owner_name: Optional[str] = None
+    custodian: Optional[str] = None
+    host_name: Optional[str] = None
+    ip_address: Optional[str] = None
     criticality: str
     confidentiality_rating: Optional[int]
     integrity_rating: Optional[int]
@@ -815,6 +849,7 @@ class ITAssetResponse(BaseModel):
     vendor: Optional[str]
     location: Optional[str]
     status: str
+    cde_environment: bool = False
     created_at: datetime
 
     class Config:
@@ -851,6 +886,9 @@ class AssetDetailResponse(BaseModel):
     asset_type: str
     owner_id: Optional[int]
     owner_name: Optional[str] = None
+    custodian: Optional[str] = None
+    host_name: Optional[str] = None
+    ip_address: Optional[str] = None
     criticality: str
     confidentiality_rating: Optional[int]
     integrity_rating: Optional[int]
@@ -1229,6 +1267,7 @@ class RiskScoreHistoryResponse(BaseModel):
 
 
 class RiskDependencyCreate(BaseModel):
+    source_risk_id: Optional[int] = None  # Optional, can be provided in body or as query param
     target_risk_id: int
     dependency_type: str = "causes"
     impact_factor: float = 1.0
@@ -3053,12 +3092,19 @@ class RCSABUProgress(BaseModel):
     avg_risk_score: Optional[float]
 
 
+class EvidenceRecommendation(BaseModel):
+    evidence_type: str
+    description: str
+    example_files: List[str] = []
+
+
 class RCSAAISuggestionResponse(BaseModel):
     question_id: int
     suggestion: str
     confidence: float
     reasoning: Optional[str] = None
     gaps_detected: List[str] = []
+    evidence_recommendations: List[EvidenceRecommendation] = []
 
 
 # =============================================================================

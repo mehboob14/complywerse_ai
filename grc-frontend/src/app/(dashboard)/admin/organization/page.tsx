@@ -7,16 +7,15 @@ import { adminApi, OrganizationProfile } from '@/lib/api';
 async function ensureTenantContext(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   
-  const existingSlug = localStorage.getItem('tenant_slug');
-  if (existingSlug) return true;
-  
   try {
     const response = await fetch('/api/auth/me', { credentials: 'include' });
     if (!response.ok) return false;
     
     const data = await response.json();
     if (data.authenticated && data.tenant) {
-      localStorage.setItem('tenant_slug', data.tenant.slug || '');
+      const resolvedSlug = data.tenant.subdomain || data.tenant.slug || '';
+      localStorage.setItem('tenant_slug', resolvedSlug);
+      localStorage.setItem('tenant_subdomain', resolvedSlug);
       localStorage.setItem('tenant_name', data.tenant.name || '');
       localStorage.setItem('tenant_id', String(data.tenant.id || ''));
       return true;

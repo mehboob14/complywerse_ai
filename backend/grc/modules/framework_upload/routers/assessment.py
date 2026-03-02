@@ -556,7 +556,15 @@ def get_assessment_dashboard(
             "progress_percentage": 0,
             "total_items": 0,
             "assessed_items": 0,
-            "remediation_stats": {"open": 0, "in_progress": 0, "completed": 0, "deferred": 0}
+            "remediation_stats": {"open": 0, "in_progress": 0, "completed": 0, "deferred": 0},
+            "evidence_stats": {
+                "controls_with_evidence": 0,
+                "controls_without_evidence": 0,
+                "total_evidence_uploaded": 0,
+                "reviewed_evidence": 0,
+                "not_reviewed_evidence": 0,
+                "review_breakdown": {"accepted": 0, "rejected": 0, "pending": 0}
+            }
         }
     
     compliance_breakdown = {
@@ -608,6 +616,39 @@ def get_assessment_dashboard(
     
     applicable_items = total_items - compliance_breakdown.get("not_applicable", 0)
     progress_percentage = (assessed_count / applicable_items * 100) if applicable_items > 0 else 0
+
+    item_ids = [item.id for item in items]
+    evidence_stats = {
+        "controls_with_evidence": 0,
+        "controls_without_evidence": total_items,
+        "total_evidence_uploaded": 0,
+        "reviewed_evidence": 0,
+        "not_reviewed_evidence": 0,
+        "review_breakdown": {"accepted": 0, "rejected": 0, "pending": 0}
+    }
+
+    if item_ids:
+        evidence_rows = db.query(
+            AssessmentEvidence.assessment_item_id,
+            AssessmentEvidence.review_status
+        ).filter(AssessmentEvidence.assessment_item_id.in_(item_ids)).all()
+
+        evidence_stats["total_evidence_uploaded"] = len(evidence_rows)
+
+        covered_item_ids = set()
+        for evidence_item_id, review_status in evidence_rows:
+            covered_item_ids.add(evidence_item_id)
+
+            normalized_status = (review_status or "").lower()
+            if normalized_status in {"accepted", "rejected"}:
+                evidence_stats["reviewed_evidence"] += 1
+                evidence_stats["review_breakdown"][normalized_status] += 1
+            else:
+                evidence_stats["not_reviewed_evidence"] += 1
+                evidence_stats["review_breakdown"]["pending"] += 1
+
+        evidence_stats["controls_with_evidence"] = len(covered_item_ids)
+        evidence_stats["controls_without_evidence"] = max(0, total_items - len(covered_item_ids))
     
     return {
         "assessment_id": assessment_id,
@@ -619,7 +660,8 @@ def get_assessment_dashboard(
         "progress_percentage": round(progress_percentage, 1),
         "total_items": total_items,
         "assessed_items": assessed_count,
-        "remediation_stats": remediation_stats
+        "remediation_stats": remediation_stats,
+        "evidence_stats": evidence_stats
     }
 
 

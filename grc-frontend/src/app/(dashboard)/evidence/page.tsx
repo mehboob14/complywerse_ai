@@ -96,20 +96,20 @@ interface EvidenceType {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
-  pending_review: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Pending Review' },
-  approved: { bg: 'bg-green-50', text: 'text-green-600', label: 'Approved' },
-  rejected: { bg: 'bg-red-50', text: 'text-red-600', label: 'Rejected' },
-  expired: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'Expired' },
-  archived: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Archived' },
+  draft: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
+  pending_review: { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Pending Review' },
+  approved: { bg: 'bg-green-50', text: 'text-green-700', label: 'Approved' },
+  rejected: { bg: 'bg-red-50', text: 'text-red-700', label: 'Rejected' },
+  expired: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Expired' },
+  archived: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Archived' },
 };
 
 const OCR_STATUS_STYLES: Record<string, { bg: string; text: string; label: string; icon: typeof ScanText }> = {
-  pending: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'OCR Pending', icon: Clock },
-  processing: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'Processing', icon: RefreshCw },
-  completed: { bg: 'bg-green-50', text: 'text-green-600', label: 'OCR Done', icon: CheckCircle },
-  failed: { bg: 'bg-red-50', text: 'text-red-600', label: 'OCR Failed', icon: XCircle },
-  not_applicable: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'N/A', icon: FileText },
+  pending: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'OCR Pending', icon: Clock },
+  processing: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Processing', icon: RefreshCw },
+  completed: { bg: 'bg-green-50', text: 'text-green-700', label: 'OCR Done', icon: CheckCircle },
+  failed: { bg: 'bg-red-50', text: 'text-red-700', label: 'OCR Failed', icon: XCircle },
+  not_applicable: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'N/A', icon: FileText },
 };
 
 const TYPE_ICONS: Record<string, typeof FileText> = {
@@ -236,7 +236,7 @@ export default function EvidencePage() {
   };
 
   const getQualityScoreColor = (score: number | null) => {
-    if (score === null) return 'bg-slate-600';
+    if (score === null) return 'bg-gray-400';
     if (score >= 80) return 'bg-green-500';
     if (score >= 60) return 'bg-yellow-500';
     if (score >= 40) return 'bg-orange-500';
@@ -281,16 +281,16 @@ export default function EvidencePage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-black">Evidence Library</h1>
-          <p className="text-slate-600">Manage compliance evidence and documentation</p>
+          <p className="text-gray-600">Manage compliance evidence and documentation</p>
         </div>
         <div className="flex items-center gap-3">
           {selectedItems.length > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-600">{selectedItems.length} selected</span>
+              <span className="text-sm text-gray-600">{selectedItems.length} selected</span>
               <button
                 onClick={() => batchProcessOCRMutation.mutate(selectedItems)}
                 disabled={batchProcessOCRMutation.isPending}
-                className="flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-200 px-3 py-1.5 text-sm text-black hover:bg-slate-600"
+                className="flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-black hover:bg-gray-50"
               >
                 <ScanText size={14} />
                 Batch OCR
@@ -311,7 +311,7 @@ export default function EvidencePage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <FileCheck className="h-6 w-6 text-primary-600" />
+              <FileCheck className="h-6 w-6 text-primary-400" />
             </div>
           </div>
           <p className="stat-value">{summaryLoading ? '-' : summary?.total_count || 0}</p>
@@ -321,7 +321,7 @@ export default function EvidencePage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/10 p-3">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+              <CheckCircle className="h-6 w-6 text-green-400" />
             </div>
           </div>
           <p className="stat-value">{summaryLoading ? '-' : summary?.by_status?.approved || 0}</p>
@@ -331,7 +331,7 @@ export default function EvidencePage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 p-3">
-              <Clock className="h-6 w-6 text-yellow-600" />
+              <Clock className="h-6 w-6 text-yellow-400" />
             </div>
           </div>
           <p className="stat-value">{summaryLoading ? '-' : summary?.pending_review_count || 0}</p>
@@ -341,7 +341,7 @@ export default function EvidencePage() {
         <div className="stat-card group">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/10 p-3">
-              <AlertTriangle className="h-6 w-6 text-red-600" />
+              <AlertTriangle className="h-6 w-6 text-red-400" />
             </div>
             {(summary?.stale_count || 0) > 0 && (
               <span className="flex h-2 w-2">
@@ -357,7 +357,7 @@ export default function EvidencePage() {
         <div className="stat-card">
           <div className="flex items-start justify-between">
             <div className="rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 p-3">
-              <Calendar className="h-6 w-6 text-orange-600" />
+              <Calendar className="h-6 w-6 text-orange-400" />
             </div>
           </div>
           <p className="stat-value">{summaryLoading ? '-' : summary?.expiring_soon_count || 0}</p>
@@ -369,20 +369,20 @@ export default function EvidencePage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1 sm:max-w-xs">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
               <input
                 type="text"
                 placeholder="Search by name or description..."
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-black placeholder-gray-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
 
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-blue-500 focus:outline-none"
             >
               <option value="all">All Status</option>
               <option value="draft">Draft</option>
@@ -395,7 +395,7 @@ export default function EvidencePage() {
             <select
               value={typeFilter}
               onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-blue-500 focus:outline-none"
             >
               <option value="">All Types</option>
               {evidenceTypes?.map(type => (
@@ -405,21 +405,21 @@ export default function EvidencePage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-gray-600">
               <input
                 type="checkbox"
                 checked={staleFilter === true}
                 onChange={(e) => { setStaleFilter(e.target.checked ? true : null); setPage(0); }}
-                className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
+                className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
               />
               Stale Only
             </label>
-            <label className="flex items-center gap-2 text-sm text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-gray-600">
               <input
                 type="checkbox"
                 checked={showExpired}
                 onChange={(e) => setShowExpired(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
+                className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
               />
               Show Expired
             </label>
@@ -429,73 +429,73 @@ export default function EvidencePage() {
 
       {isLoading ? (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
         </div>
       ) : error ? (
-        <div className="flex h-64 flex-col items-center justify-center text-red-600">
+        <div className="flex h-64 flex-col items-center justify-center text-red-400">
           <AlertCircle className="mb-2 h-8 w-8" />
           <p>Failed to load evidence</p>
-          <button onClick={() => refetch()} className="mt-2 text-sm text-primary-600 hover:underline">
+          <button onClick={() => refetch()} className="mt-2 text-sm text-primary-400 hover:underline">
             Try again
           </button>
         </div>
       ) : filteredItems.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-12 text-center">
-          <FileCheck className="mb-4 h-12 w-12 text-slate-600" />
+          <FileCheck className="mb-4 h-12 w-12 text-gray-400" />
           <h3 className="text-lg font-medium text-black">No evidence found</h3>
-          <p className="mt-1 text-slate-600">Upload your first evidence item to get started</p>
+          <p className="mt-1 text-gray-600">Upload your first evidence item to get started</p>
         </div>
       ) : (
         <>
-          <div className="overflow-hidden rounded-lg border border-slate-200">
+          <div className="overflow-hidden rounded-lg border border-gray-200">
             <table className="w-full">
-              <thead className="bg-white/50">
+              <thead className="bg-gray-50">
                 <tr>
                   <th className="w-12 px-4 py-3 text-left">
                     <input
                       type="checkbox"
                       checked={selectedItems.length === filteredItems.length && filteredItems.length > 0}
                       onChange={toggleSelectAll}
-                      className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
+                      className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Evidence</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">OCR</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Quality</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Controls</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Dates</th>
-                  <th className="w-24 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-600">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Evidence</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">OCR</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Quality</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Controls</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Dates</th>
+                  <th className="w-24 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-600">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700 bg-white">
+              <tbody className="divide-y divide-gray-200 bg-white">
                 {filteredItems.map((item) => {
                   const TypeIcon = TYPE_ICONS[item.evidence_type || 'other'] || FileCheck;
                   return (
-                    <tr key={item.id} className={`hover:bg-slate-50 ${selectedItems.includes(item.id) ? 'bg-primary-900/20' : ''}`}>
+                    <tr key={item.id} className={`hover:bg-gray-50 ${selectedItems.includes(item.id) ? 'bg-blue-50' : ''}`}>
                       <td className="px-4 py-3">
                         <input
                           type="checkbox"
                           checked={selectedItems.includes(item.id)}
                           onChange={() => toggleSelectItem(item.id)}
-                          className="h-4 w-4 rounded border-slate-300 bg-slate-200 text-primary-600 focus:ring-primary-500"
+                          className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
                         />
                       </td>
                       <td className="px-4 py-3">
                         <Link href={`/evidence/${item.id}`} className="block">
                           <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
-                            <div className="rounded-lg bg-slate-200 p-2">
-                              <TypeIcon className="h-4 w-4 text-primary-600" />
+                            <div className="rounded-lg bg-gray-100 p-2">
+                              <TypeIcon className="h-4 w-4 text-blue-600" />
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <p className="truncate text-sm font-medium text-black hover:text-primary-600 transition-colors">{item.name}</p>
+                                <p className="truncate text-sm font-medium text-black hover:text-blue-600 transition-colors">{item.name}</p>
                                 {item.is_stale && (
                                   <span className="flex h-2 w-2 rounded-full bg-red-500" title="Stale evidence"></span>
                                 )}
                               </div>
-                              <p className="truncate text-xs text-slate-600 max-w-xs">
+                              <p className="truncate text-xs text-gray-600 max-w-xs">
                                 {item.description || 'No description'}
                               </p>
                             </div>
@@ -503,7 +503,7 @@ export default function EvidencePage() {
                         </Link>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-sm text-slate-600 capitalize">
+                        <span className="text-sm text-black capitalize">
                           {(item.evidence_type || 'Other').replace(/_/g, ' ')}
                         </span>
                       </td>
@@ -515,30 +515,30 @@ export default function EvidencePage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="h-2 w-16 overflow-hidden rounded-full bg-slate-600">
+                          <div className="h-2 w-16 overflow-hidden rounded-full bg-gray-200">
                             <div 
                               className={`h-full ${getQualityScoreColor(item.quality_score)} transition-all`}
                               style={{ width: `${item.quality_score || 0}%` }}
                             />
                           </div>
-                          <span className="text-xs text-slate-600">
+                          <span className="text-xs text-gray-600">
                             {item.quality_score !== null ? `${item.quality_score}%` : '-'}
                           </span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          <Link2 className="h-3 w-3 text-slate-600" />
-                          <span className="text-sm text-slate-600">{item.control_mappings_count || 0}</span>
+                          <Link2 className="h-3 w-3 text-gray-600" />
+                          <span className="text-sm text-black">{item.control_mappings_count || 0}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="text-xs">
-                          <div className="text-slate-600">
+                          <div className="text-black">
                             {item.collection_date ? new Date(item.collection_date).toLocaleDateString() : '-'}
                           </div>
                           {item.expiry_date && (
-                            <div className={`${new Date(item.expiry_date) < new Date() ? 'text-red-600' : 'text-slate-500'}`}>
+                            <div className={`${new Date(item.expiry_date) < new Date() ? 'text-red-600' : 'text-gray-500'}`}>
                               Exp: {new Date(item.expiry_date).toLocaleDateString()}
                             </div>
                           )}
@@ -549,14 +549,14 @@ export default function EvidencePage() {
                           <Link
                             href={`/evidence/${item.id}`}
                             title="View"
-                            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                            className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
                           >
                             <Eye size={14} />
                           </Link>
                           <Link
                             href={`/evidence/${item.id}`}
                             title="Edit"
-                            className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                            className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
                           >
                             <Edit2 size={14} />
                           </Link>
@@ -565,7 +565,7 @@ export default function EvidencePage() {
                               title="Process OCR"
                               onClick={() => processOCRMutation.mutate(item.id)}
                               disabled={processOCRMutation.isPending}
-                              className="rounded p-1.5 text-slate-600 hover:bg-slate-200 hover:text-primary-600"
+                              className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-blue-600"
                             >
                               <ScanText size={14} />
                             </button>
@@ -573,7 +573,7 @@ export default function EvidencePage() {
                           <button
                             title="Delete"
                             onClick={() => handleDelete(item)}
-                            className="rounded p-1.5 text-slate-600 hover:bg-red-900/50 hover:text-red-600"
+                            className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-600"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -587,25 +587,25 @@ export default function EvidencePage() {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-              <div className="text-sm text-slate-600">
+            <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+              <div className="text-sm text-gray-600">
                 Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalItems)} of {totalItems} results
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage(p => Math.max(0, p - 1))}
                   disabled={page === 0}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-black hover:bg-slate-200 disabled:opacity-50"
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-black hover:bg-gray-50 disabled:opacity-50"
                 >
                   Previous
                 </button>
-                <span className="text-sm text-slate-600">
+                <span className="text-sm text-gray-600">
                   Page {page + 1} of {totalPages}
                 </span>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-black hover:bg-slate-200 disabled:opacity-50"
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-black hover:bg-gray-50 disabled:opacity-50"
                 >
                   Next
                 </button>
@@ -716,9 +716,9 @@ function UploadModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <h2 className="text-lg font-semibold text-black">Upload Evidence</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
+          <button onClick={onClose} className="text-gray-600 hover:text-black">
             <X size={20} />
           </button>
         </div>
@@ -731,10 +731,10 @@ function UploadModal({
             onClick={() => fileInputRef.current?.click()}
             className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors ${
               isDragging 
-                ? 'border-primary-400 bg-primary-900/20' 
+                ? 'border-blue-500 bg-blue-50' 
                 : file 
-                  ? 'border-green-500 bg-green-900/20'
-                  : 'border-slate-300 hover:border-slate-400'
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-gray-300 hover:border-gray-400'
             }`}
           >
             <input
@@ -758,37 +758,37 @@ function UploadModal({
               <>
                 <FileCheck className="mb-2 h-10 w-10 text-green-600" />
                 <p className="text-sm font-medium text-black">{file.name}</p>
-                <p className="text-xs text-slate-600">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                <p className="text-xs text-gray-600">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
               </>
             ) : (
               <>
-                <Upload className="mb-2 h-10 w-10 text-slate-600" />
-                <p className="text-sm text-slate-600">Drag and drop or click to upload</p>
-                <p className="text-xs text-slate-500">PDF, DOC, DOCX, XLS, XLSX, PNG, JPG</p>
+                <Upload className="mb-2 h-10 w-10 text-gray-500" />
+                <p className="text-sm text-black">Drag and drop or click to upload</p>
+                <p className="text-xs text-gray-500">PDF, DOC, DOCX, XLS, XLSX, PNG, JPG</p>
               </>
             )}
           </div>
 
           {(isAiLoading || aiAssessment || aiError) && (
-            <div className="animate-in fade-in slide-in-from-top-2 duration-300 rounded-lg border border-primary-200 bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-indigo-900/20 p-4">
+            <div className="animate-in fade-in slide-in-from-top-2 duration-300 rounded-lg border border-purple-500/30 bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-indigo-900/20 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-500">
-                  <Sparkles className="h-3.5 w-3.5 text-black" />
+                  <Sparkles className="h-3.5 w-3.5 text-white" />
                 </div>
-                <span className="text-sm font-medium text-primary-500">AI suggests:</span>
-                {isAiLoading && <Loader2 className="h-4 w-4 animate-spin text-primary-600" />}
+                <span className="text-sm font-medium text-purple-300">AI suggests:</span>
+                {isAiLoading && <Loader2 className="h-4 w-4 animate-spin text-purple-400" />}
               </div>
 
               {isAiLoading && (
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <Brain className="h-4 w-4 animate-pulse text-primary-600" />
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Brain className="h-4 w-4 animate-pulse text-purple-600" />
                   <span>Analyzing evidence metadata...</span>
                 </div>
               )}
 
               {aiError && (
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <AlertCircle className="h-4 w-4 text-slate-500" />
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <AlertCircle className="h-4 w-4 text-gray-500" />
                   <span>{aiError}</span>
                 </div>
               )}
@@ -796,7 +796,7 @@ function UploadModal({
               {aiAssessment && !isAiLoading && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-slate-600">Relevance:</span>
+                    <span className="text-xs text-gray-600">Relevance:</span>
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                       aiAssessment.initial_assessment.relevance_estimate === 'high' 
                         ? 'bg-green-50 text-green-700' 
@@ -813,10 +813,10 @@ function UploadModal({
 
                   {aiAssessment.initial_assessment.detected_frameworks.length > 0 && (
                     <div>
-                      <span className="text-xs text-slate-600 block mb-1.5">Detected Frameworks:</span>
+                      <span className="text-xs text-gray-600 block mb-1.5">Detected Frameworks:</span>
                       <div className="flex flex-wrap gap-1.5">
                         {aiAssessment.initial_assessment.detected_frameworks.slice(0, 5).map((fw, idx) => (
-                          <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-300">
+                          <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
                             <Tag size={10} />
                             {fw}
                           </span>
@@ -827,10 +827,10 @@ function UploadModal({
 
                   {aiAssessment.initial_assessment.suggested_controls.length > 0 && (
                     <div>
-                      <span className="text-xs text-slate-600 block mb-1.5">Suggested Controls:</span>
+                      <span className="text-xs text-gray-600 block mb-1.5">Suggested Controls:</span>
                       <div className="flex flex-wrap gap-1.5">
                         {aiAssessment.initial_assessment.suggested_controls.slice(0, 4).map((ctrl, idx) => (
-                          <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-indigo-500/20 px-2 py-0.5 text-xs text-indigo-300">
+                          <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700">
                             <ShieldCheck size={10} />
                             {ctrl}
                           </span>
@@ -841,10 +841,10 @@ function UploadModal({
 
                   {aiAssessment.initial_assessment.quality_tips.length > 0 && (
                     <div>
-                      <span className="text-xs text-slate-600 block mb-1.5">Quality Tips:</span>
+                      <span className="text-xs text-gray-600 block mb-1.5">Quality Tips:</span>
                       <ul className="space-y-1">
                         {aiAssessment.initial_assessment.quality_tips.slice(0, 3).map((tip, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-xs text-slate-600">
+                          <li key={idx} className="flex items-start gap-2 text-xs text-black">
                             <Lightbulb size={12} className="mt-0.5 text-yellow-600 flex-shrink-0" />
                             <span>{tip}</span>
                           </li>
@@ -854,12 +854,12 @@ function UploadModal({
                   )}
 
                   <div>
-                    <span className="text-xs text-slate-600 block mb-1.5">Completeness Check:</span>
+                    <span className="text-xs text-gray-600 block mb-1.5">Completeness Check:</span>
                     <div className="flex flex-wrap gap-2">
                       <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
                         aiAssessment.initial_assessment.completeness_check.has_date 
                           ? 'bg-green-50 text-green-700' 
-                          : 'bg-slate-600/50 text-slate-600'
+                          : 'bg-gray-100 text-gray-600'
                       }`}>
                         {aiAssessment.initial_assessment.completeness_check.has_date ? <CheckCircle size={10} /> : <XCircle size={10} />}
                         Date
@@ -867,7 +867,7 @@ function UploadModal({
                       <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
                         aiAssessment.initial_assessment.completeness_check.has_version 
                           ? 'bg-green-50 text-green-700' 
-                          : 'bg-slate-600/50 text-slate-600'
+                          : 'bg-gray-100 text-gray-600'
                       }`}>
                         {aiAssessment.initial_assessment.completeness_check.has_version ? <CheckCircle size={10} /> : <XCircle size={10} />}
                         Version
@@ -875,7 +875,7 @@ function UploadModal({
                       <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
                         aiAssessment.initial_assessment.completeness_check.has_approval 
                           ? 'bg-green-50 text-green-700' 
-                          : 'bg-slate-600/50 text-slate-600'
+                          : 'bg-gray-100 text-gray-600'
                       }`}>
                         {aiAssessment.initial_assessment.completeness_check.has_approval ? <CheckCircle size={10} /> : <XCircle size={10} />}
                         Approval
@@ -889,34 +889,34 @@ function UploadModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-600">Name *</label>
+              <label className="block text-sm font-medium text-gray-700">Name *</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-500 focus:border-blue-500 focus:outline-none"
                 placeholder="Evidence name"
                 required
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-600">Description</label>
+              <label className="block text-sm font-medium text-gray-700">Description</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-500 focus:border-blue-500 focus:outline-none"
                 placeholder="Describe this evidence..."
                 rows={2}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600">Evidence Type</label>
+              <label className="block text-sm font-medium text-gray-700">Evidence Type</label>
               <select
                 value={evidenceType}
                 onChange={(e) => setEvidenceType(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-blue-500 focus:outline-none"
               >
                 <option value="">Select type...</option>
                 {evidenceTypes.map(type => (
@@ -926,44 +926,44 @@ function UploadModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600">Collection Date</label>
+              <label className="block text-sm font-medium text-gray-700">Collection Date</label>
               <input
                 type="date"
                 value={collectionDate}
                 onChange={(e) => setCollectionDate(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-blue-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600">Validity Period (Days)</label>
+              <label className="block text-sm font-medium text-gray-700">Validity Period (Days)</label>
               <input
                 type="number"
                 value={validityPeriodDays}
                 onChange={(e) => setValidityPeriodDays(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-blue-500 focus:outline-none"
                 placeholder="365"
                 min="1"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600">Source System</label>
+              <label className="block text-sm font-medium text-gray-700">Source System</label>
               <input
                 type="text"
                 value={sourceSystem}
                 onChange={(e) => setSourceSystem(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-500 focus:border-blue-500 focus:outline-none"
                 placeholder="e.g., Splunk, AWS"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-200"
+              className="rounded-lg border border-gray-300 px-4 py-2 text-black hover:bg-gray-50"
             >
               Cancel
             </button>

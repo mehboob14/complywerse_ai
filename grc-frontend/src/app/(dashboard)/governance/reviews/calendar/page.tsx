@@ -80,16 +80,16 @@ interface ReviewListResponse {
 }
 
 const DOCUMENT_TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; bgColor: string; label: string }> = {
-  policy: { icon: BookOpen, color: 'text-primary-600', bgColor: 'bg-primary-50', label: 'Policy' },
-  standard: { icon: FileCheck, color: 'text-blue-600', bgColor: 'bg-blue-50', label: 'Standard' },
-  procedure: { icon: ClipboardList, color: 'text-green-600', bgColor: 'bg-green-50', label: 'Procedure' },
-  guideline: { icon: Lightbulb, color: 'text-yellow-600', bgColor: 'bg-yellow-50', label: 'Guideline' },
-  charter: { icon: Shield, color: 'text-cyan-600', bgColor: 'bg-cyan-50', label: 'Charter' },
-  framework: { icon: Layers, color: 'text-orange-600', bgColor: 'bg-orange-50', label: 'Framework' },
+  policy: { icon: BookOpen, color: 'text-purple-700', bgColor: 'bg-purple-100', label: 'Policy' },
+  standard: { icon: FileCheck, color: 'text-blue-700', bgColor: 'bg-blue-100', label: 'Standard' },
+  procedure: { icon: ClipboardList, color: 'text-green-700', bgColor: 'bg-green-100', label: 'Procedure' },
+  guideline: { icon: Lightbulb, color: 'text-yellow-700', bgColor: 'bg-yellow-100', label: 'Guideline' },
+  charter: { icon: Shield, color: 'text-cyan-700', bgColor: 'bg-cyan-100', label: 'Charter' },
+  framework: { icon: Layers, color: 'text-orange-700', bgColor: 'bg-orange-100', label: 'Framework' },
 };
 
 const getTypeConfig = (type: string) => {
-  return DOCUMENT_TYPE_CONFIG[type] || { icon: FileText, color: 'text-slate-600', bgColor: 'bg-slate-50', label: type };
+  return DOCUMENT_TYPE_CONFIG[type] || { icon: FileText, color: 'text-gray-700', bgColor: 'bg-gray-100', label: type };
 };
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -280,7 +280,7 @@ export default function ReviewCalendarPage() {
   };
 
   const getDaysUntilDisplay = (days: number | null, isOverdue: boolean) => {
-    if (days === null) return { text: '-', className: 'text-slate-600' };
+    if (days === null) return { text: '-', className: 'text-gray-600' };
     
     if (isOverdue || days < 0) {
       const absDays = Math.abs(days);
@@ -291,14 +291,14 @@ export default function ReviewCalendarPage() {
     }
     
     if (days === 0) {
-      return { text: 'Due today', className: 'text-yellow-600 font-medium' };
+      return { text: 'Due today', className: 'text-yellow-700 font-medium' };
     }
     
     if (days <= 7) {
-      return { text: `${days} day${days !== 1 ? 's' : ''} left`, className: 'text-yellow-600' };
+      return { text: `${days} day${days !== 1 ? 's' : ''} left`, className: 'text-yellow-700' };
     }
     
-    return { text: `${days} days left`, className: 'text-green-600' };
+    return { text: `${days} days left`, className: 'text-green-700' };
   };
 
   const isLoading = calendarLoading || overdueLoading || upcomingLoading;
@@ -316,24 +316,26 @@ export default function ReviewCalendarPage() {
           <div className="flex items-center gap-3 mb-1">
             <Link
               href="/governance/reviews"
-              className="flex items-center gap-1 text-slate-600 hover:text-slate-900 transition-colors"
+              className="flex items-center gap-1 text-gray-600 hover:text-black transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="text-sm">Back to Reviews</span>
             </Link>
           </div>
           <h1 className="text-2xl font-bold text-black">Review Calendar</h1>
-          <p className="text-slate-600">Visual overview of upcoming document reviews</p>
+          <p className="text-gray-600">Visual overview of upcoming document reviews</p>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-red-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <AlertTriangle className="h-5 w-5 text-red-600" />
+            <div className="rounded-lg bg-red-500/20 p-2">
+              <AlertTriangle className="h-5 w-5 text-red-400" />
+            </div>
             <div>
-              <p className="text-xs text-slate-600">Overdue</p>
-              <p className="text-2xl font-bold text-red-600">
+              <p className="text-xs text-gray-600">Overdue</p>
+              <p className="text-2xl font-bold text-red-700">
                 {overdueLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : overdueDocuments.length}
               </p>
             </div>
@@ -342,10 +344,12 @@ export default function ReviewCalendarPage() {
 
         <div className="rounded-xl border border-yellow-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <Clock className="h-5 w-5 text-yellow-600" />
+            <div className="rounded-lg bg-yellow-500/20 p-2">
+              <Clock className="h-5 w-5 text-yellow-400" />
+            </div>
             <div>
-              <p className="text-xs text-slate-600">Due This Week</p>
-              <p className="text-2xl font-bold text-yellow-600">
+              <p className="text-xs text-gray-600">Due This Week</p>
+              <p className="text-2xl font-bold text-yellow-700">
                 {upcomingLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
@@ -358,10 +362,12 @@ export default function ReviewCalendarPage() {
 
         <div className="rounded-xl border border-green-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <CheckCircle className="h-5 w-5 text-green-600" />
+            <div className="rounded-lg bg-green-500/20 p-2">
+              <CheckCircle className="h-5 w-5 text-green-400" />
+            </div>
             <div>
-              <p className="text-xs text-slate-600">Upcoming (30 days)</p>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-xs text-gray-600">Upcoming (30 days)</p>
+              <p className="text-2xl font-bold text-green-700">
                 {upcomingLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : upcomingDocuments.length}
               </p>
             </div>
@@ -369,19 +375,19 @@ export default function ReviewCalendarPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
+      <div className="rounded-xl border border-gray-300 bg-white overflow-hidden">
+        <div className="flex items-center justify-between border-b border-gray-200 p-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <button
                 onClick={navigateToPreviousMonth}
-                className="rounded-lg bg-slate-200 p-2 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                className="rounded-lg bg-gray-100 p-2 text-gray-700 hover:bg-gray-200 hover:text-black transition-colors"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
               <button
                 onClick={navigateToNextMonth}
-                className="rounded-lg bg-slate-200 p-2 text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+                className="rounded-lg bg-gray-100 p-2 text-gray-700 hover:bg-gray-200 hover:text-black transition-colors"
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
@@ -395,20 +401,20 @@ export default function ReviewCalendarPage() {
             <div className="flex items-center gap-3 text-xs">
               <div className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-full bg-red-500"></span>
-                <span className="text-slate-600">Overdue</span>
+                <span className="text-gray-600">Overdue</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-full bg-yellow-500"></span>
-                <span className="text-slate-600">Due Soon</span>
+                <span className="text-gray-600">Due Soon</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-full bg-green-500"></span>
-                <span className="text-slate-600">Upcoming</span>
+                <span className="text-gray-600">Upcoming</span>
               </div>
             </div>
             <button
               onClick={navigateToToday}
-              className="rounded-lg bg-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-600 hover:text-slate-900 transition-colors"
+              className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-200 hover:text-black transition-colors"
             >
               Today
             </button>
@@ -417,13 +423,13 @@ export default function ReviewCalendarPage() {
 
         {calendarLoading ? (
           <div className="flex h-96 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
           </div>
         ) : (
           <div className="p-4">
             <div className="grid grid-cols-7 gap-px mb-2">
               {WEEKDAYS.map(day => (
-                <div key={day} className="p-2 text-center text-sm font-medium text-slate-600">
+                <div key={day} className="p-2 text-center text-sm font-medium text-gray-600">
                   {day}
                 </div>
               ))}
@@ -442,18 +448,18 @@ export default function ReviewCalendarPage() {
                     onClick={() => handleDateClick(day)}
                     className={`
                       min-h-[80px] rounded-lg border p-2 transition-all
-                      ${day.isCurrentMonth ? 'bg-slate-50/50' : 'bg-slate-50/20'}
-                      ${day.isToday ? 'border-primary-500 ring-1 ring-primary-500/50' : 'border-slate-200'}
-                      ${hasDocuments ? 'cursor-pointer hover:bg-slate-50' : ''}
+                      ${day.isCurrentMonth ? 'bg-white' : 'bg-gray-50'}
+                      ${day.isToday ? 'border-primary-500 ring-1 ring-primary-500/50' : 'border-gray-200'}
+                      ${hasDocuments ? 'cursor-pointer hover:bg-gray-100' : ''}
                       ${selectedDate && day.date.toDateString() === selectedDate.toDateString() ? 'ring-2 ring-primary-400' : ''}
                     `}
                   >
                     <div className={`text-sm font-medium mb-1 ${
                       day.isCurrentMonth 
                         ? day.isToday 
-                          ? 'text-primary-600' 
+                          ? 'text-primary-400' 
                           : 'text-black'
-                        : 'text-slate-600'
+                        : 'text-gray-500'
                     }`}>
                       {day.date.getDate()}
                     </div>
@@ -465,15 +471,15 @@ export default function ReviewCalendarPage() {
                           return (
                             <div
                               key={docIndex}
-                              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-xs truncate border ${getStatusBorderColor(status)} bg-white/80`}
+                              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-xs truncate border ${getStatusBorderColor(status)} bg-gray-100`}
                             >
                               <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusColor(status)}`}></span>
-                              <span className="truncate text-slate-600">{doc.title}</span>
+                              <span className="truncate text-gray-800">{doc.title}</span>
                             </div>
                           );
                         })}
                         {day.documents.length > 2 && (
-                          <div className="text-xs text-slate-500 px-1">
+                          <div className="text-xs text-gray-600 px-1">
                             +{day.documents.length - 2} more
                           </div>
                         )}
@@ -495,7 +501,7 @@ export default function ReviewCalendarPage() {
             </h3>
             <button
               onClick={() => setSelectedDate(null)}
-              className="text-sm text-slate-600 hover:text-slate-900"
+              className="text-sm text-gray-600 hover:text-black"
             >
               Clear selection
             </button>
@@ -510,7 +516,7 @@ export default function ReviewCalendarPage() {
                 <div
                   key={doc.id}
                   onClick={() => handleDocumentClick(doc.id)}
-                  className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-colors hover:bg-slate-50 ${getStatusBorderColor(status)} bg-slate-50/50`}
+                  className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-colors hover:bg-gray-100 ${getStatusBorderColor(status)} bg-gray-50`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`rounded-lg p-2 ${typeConfig.bgColor}`}>
@@ -518,12 +524,12 @@ export default function ReviewCalendarPage() {
                     </div>
                     <div>
                       <p className="font-medium text-black">{doc.title}</p>
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-gray-600">
                         {typeConfig.label} {doc.owner_name && `• ${doc.owner_name}`}
                       </p>
                     </div>
                   </div>
-                  <ExternalLink className="h-4 w-4 text-slate-600" />
+                  <ExternalLink className="h-4 w-4 text-gray-600" />
                 </div>
               );
             })}
@@ -533,10 +539,10 @@ export default function ReviewCalendarPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-red-200 bg-white overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-slate-200 p-4">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
+          <div className="flex items-center gap-3 border-b border-gray-200 p-4">
+            <AlertTriangle className="h-5 w-5 text-red-400" />
             <h3 className="text-lg font-semibold text-black">Overdue Reviews</h3>
-            <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
               {overdueDocuments.length}
             </span>
           </div>
@@ -544,10 +550,10 @@ export default function ReviewCalendarPage() {
           <div className="p-4">
             {overdueLoading ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
               </div>
             ) : overdueDocuments.length === 0 ? (
-              <div className="flex h-32 flex-col items-center justify-center text-slate-500">
+              <div className="flex h-32 flex-col items-center justify-center text-gray-600">
                 <CheckCircle className="h-8 w-8 mb-2" />
                 <p className="text-sm">No overdue reviews</p>
               </div>
@@ -562,7 +568,7 @@ export default function ReviewCalendarPage() {
                     <div
                       key={doc.id}
                       onClick={() => handleDocumentClick(doc.id)}
-                      className="flex items-center justify-between rounded-lg border border-red-200 bg-slate-50/50 p-3 cursor-pointer transition-colors hover:bg-slate-50"
+                      className="flex items-center justify-between rounded-lg border border-red-200 bg-gray-50 p-3 cursor-pointer transition-colors hover:bg-gray-100"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`rounded-lg p-2 ${typeConfig.bgColor} flex-shrink-0`}>
@@ -570,14 +576,14 @@ export default function ReviewCalendarPage() {
                         </div>
                         <div className="min-w-0">
                           <p className="font-medium text-black truncate">{doc.title}</p>
-                          <p className="text-xs text-slate-600">
+                          <p className="text-xs text-gray-600">
                             Due: {formatDate(doc.next_review_date || '')}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className={`text-xs ${daysDisplay.className}`}>{daysDisplay.text}</span>
-                        <ExternalLink className="h-4 w-4 text-slate-600" />
+                        <ExternalLink className="h-4 w-4 text-gray-600" />
                       </div>
                     </div>
                   );
@@ -588,10 +594,10 @@ export default function ReviewCalendarPage() {
         </div>
 
         <div className="rounded-xl border border-green-200 bg-white overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-slate-200 p-4">
-            <CalendarIcon className="h-5 w-5 text-green-600" />
+          <div className="flex items-center gap-3 border-b border-gray-200 p-4">
+            <CalendarIcon className="h-5 w-5 text-green-400" />
             <h3 className="text-lg font-semibold text-black">Upcoming Reviews</h3>
-            <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600">
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
               {upcomingDocuments.length}
             </span>
           </div>
@@ -599,10 +605,10 @@ export default function ReviewCalendarPage() {
           <div className="p-4">
             {upcomingLoading ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
               </div>
             ) : upcomingDocuments.length === 0 ? (
-              <div className="flex h-32 flex-col items-center justify-center text-slate-500">
+              <div className="flex h-32 flex-col items-center justify-center text-gray-600">
                 <CalendarIcon className="h-8 w-8 mb-2" />
                 <p className="text-sm">No upcoming reviews</p>
               </div>
@@ -618,9 +624,9 @@ export default function ReviewCalendarPage() {
                     <div
                       key={doc.id}
                       onClick={() => handleDocumentClick(doc.id)}
-                      className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-colors hover:bg-slate-50 ${
+                      className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-colors hover:bg-gray-100 ${
                         isDueSoon ? 'border-yellow-200' : 'border-green-200'
-                      } bg-slate-50/50`}
+                      } bg-gray-50`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`rounded-lg p-2 ${typeConfig.bgColor} flex-shrink-0`}>
@@ -628,14 +634,14 @@ export default function ReviewCalendarPage() {
                         </div>
                         <div className="min-w-0">
                           <p className="font-medium text-black truncate">{doc.title}</p>
-                          <p className="text-xs text-slate-600">
+                          <p className="text-xs text-gray-600">
                             Due: {formatDate(doc.next_review_date || '')}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className={`text-xs ${daysDisplay.className}`}>{daysDisplay.text}</span>
-                        <ExternalLink className="h-4 w-4 text-slate-600" />
+                        <ExternalLink className="h-4 w-4 text-gray-600" />
                       </div>
                     </div>
                   );

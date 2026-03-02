@@ -25,13 +25,13 @@ import {
 import Link from 'next/link';
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-slate-500',
-  pending_review: 'bg-yellow-500',
-  pending_approval: 'bg-amber-500',
-  approved: 'bg-blue-500',
-  published: 'bg-emerald-500',
-  expired: 'bg-rose-500',
-  archived: 'bg-gray-500',
+  draft: 'var(--color-status-draft)',
+  pending_review: 'var(--color-status-review)',
+  pending_approval: 'var(--color-status-approval)',
+  approved: 'var(--color-status-approved)',
+  published: 'var(--color-status-published)',
+  expired: 'var(--color-status-expired)',
+  archived: 'var(--color-status-archived)',
 };
 
 const TYPE_ICONS: Record<string, React.ElementType> = {
@@ -44,15 +44,22 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
 };
 
 const TYPE_COLORS: Record<string, { bg: string; text: string; fill: string }> = {
-  policy: { bg: '', text: 'text-blue-600', fill: '#3b82f6' },
-  standard: { bg: '', text: 'text-emerald-600', fill: '#10b981' },
-  procedure: { bg: '', text: 'text-primary-600', fill: '#a855f7' },
-  guideline: { bg: '', text: 'text-cyan-600', fill: '#06b6d4' },
-  charter: { bg: '', text: 'text-amber-600', fill: '#f59e0b' },
-  framework: { bg: '', text: 'text-rose-600', fill: '#f43f5e' },
+  policy: { bg: 'var(--color-base-soft)', text: 'var(--color-base)', fill: 'var(--color-base)' },
+  standard: { bg: 'var(--color-success-soft)', text: 'var(--color-success)', fill: 'var(--color-success)' },
+  procedure: { bg: 'var(--color-base-soft-strong)', text: 'var(--color-base)', fill: 'var(--color-base)' },
+  guideline: { bg: 'var(--color-warning-soft)', text: 'var(--color-warning)', fill: 'var(--color-warning)' },
+  charter: { bg: 'var(--color-warning-soft)', text: 'var(--color-warning)', fill: 'var(--color-warning)' },
+  framework: { bg: 'var(--color-danger-soft)', text: 'var(--color-danger)', fill: 'var(--color-danger)' },
 };
 
-const DONUT_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#06b6d4', '#f59e0b', '#f43f5e'];
+const DONUT_COLORS = [
+  'var(--color-base)',
+  'var(--color-success)',
+  'var(--color-warning)',
+  'var(--color-danger)',
+  'var(--color-muted)',
+  'var(--color-base-soft-strong)',
+];
 
 function DonutChart({ data, total }: { data: { label: string; value: number; color: string }[]; total: number }) {
   let cumulativePercent = 0;
@@ -71,7 +78,7 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
   });
 
   const getConicGradient = () => {
-    if (total === 0) return 'conic-gradient(#475569 0% 100%)';
+    if (total === 0) return 'conic-gradient(var(--color-muted) 0% 100%)';
     
     const stops = segments.map((seg) => 
       `${seg.color} ${seg.startPercent}% ${seg.endPercent}%`
@@ -86,10 +93,10 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
         className="relative h-36 w-36 rounded-full"
         style={{ background: getConicGradient() }}
       >
-        <div className="absolute inset-4 rounded-full bg-white flex items-center justify-center">
+        <div className="absolute inset-4 rounded-full bg-[var(--color-surface)] flex items-center justify-center">
           <div className="text-center">
-            <p className="text-2xl font-bold text-black">{total}</p>
-            <p className="text-xs text-slate-600">Total</p>
+            <p className="cw-text-default text-2xl font-bold">{total}</p>
+            <p className="cw-text-muted text-xs">Total</p>
           </div>
         </div>
       </div>
@@ -97,8 +104,8 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
         {segments.filter(s => s.value > 0).map((seg, idx) => (
           <div key={idx} className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-full" style={{ backgroundColor: seg.color }}></div>
-            <span className="text-sm text-slate-600 flex-1">{seg.label}</span>
-            <span className="text-sm font-medium text-black">{seg.value}</span>
+            <span className="cw-text-default text-sm flex-1">{seg.label}</span>
+            <span className="cw-text-default text-sm font-medium">{seg.value}</span>
           </div>
         ))}
       </div>
@@ -111,13 +118,13 @@ function TrendBarChart({ data }: { data: { month: string; created: number; publi
   
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4 text-xs text-slate-600 mb-4">
+      <div className="cw-text-muted flex items-center gap-4 text-xs mb-4">
         <div className="flex items-center gap-1.5">
-          <div className="h-2.5 w-2.5 rounded bg-primary-500"></div>
+          <div className="h-2.5 w-2.5 rounded bg-[var(--color-base)]"></div>
           <span>Created</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-2.5 w-2.5 rounded bg-emerald-500"></div>
+          <div className="h-2.5 w-2.5 rounded bg-[var(--color-success)]"></div>
           <span>Published</span>
         </div>
       </div>
@@ -130,17 +137,17 @@ function TrendBarChart({ data }: { data: { month: string; created: number; publi
           return (
             <div key={idx} className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-600 w-16">{monthLabel}</span>
-                <span className="text-slate-500">{item.created + item.published} docs</span>
+                <span className="cw-text-muted w-16">{monthLabel}</span>
+                <span className="cw-text-default">{item.created + item.published} docs</span>
               </div>
               <div className="flex gap-1 h-4">
                 <div 
-                  className="bg-primary-500 rounded-sm transition-all duration-300"
+                  className="bg-[var(--color-base)] rounded-sm transition-all duration-300"
                   style={{ width: `${createdWidth}%`, minWidth: item.created > 0 ? '4px' : '0' }}
                   title={`Created: ${item.created}`}
                 ></div>
                 <div 
-                  className="bg-emerald-500 rounded-sm transition-all duration-300"
+                  className="bg-[var(--color-success)] rounded-sm transition-all duration-300"
                   style={{ width: `${publishedWidth}%`, minWidth: item.published > 0 ? '4px' : '0' }}
                   title={`Published: ${item.published}`}
                 ></div>
@@ -255,32 +262,32 @@ export default function GovernanceDashboardPage() {
       name: 'Total Documents',
       value: totalDocuments,
       icon: FileText,
-      iconColor: 'text-primary-600',
-      bgColor: 'from-primary-500/20 to-primary-600/10',
+      iconColor: 'text-[var(--color-base)]',
+      bgColor: 'bg-[var(--color-base-soft)]',
       href: '/governance/documents',
     },
     {
       name: 'Published',
       value: publishedCount,
       icon: CheckCircle,
-      iconColor: 'text-emerald-600',
-      bgColor: 'from-emerald-500/20 to-emerald-600/10',
+      iconColor: 'text-[var(--color-success)]',
+      bgColor: 'bg-[var(--color-success-soft)]',
       href: '/governance/documents?status=published',
     },
     {
       name: 'Pending Approvals',
       value: pendingCount,
       icon: Clock,
-      iconColor: 'text-amber-600',
-      bgColor: 'from-amber-500/20 to-amber-600/10',
+      iconColor: 'text-[var(--color-warning)]',
+      bgColor: 'bg-[var(--color-warning-soft)]',
       href: '/governance/approvals',
     },
     {
       name: 'Overdue Reviews',
       value: overdueCount,
       icon: AlertTriangle,
-      iconColor: 'text-rose-600',
-      bgColor: 'from-rose-500/20 to-rose-600/10',
+      iconColor: 'text-[var(--color-danger)]',
+      bgColor: 'bg-[var(--color-danger-soft)]',
       href: '/governance/reviews',
     },
   ];
@@ -290,32 +297,32 @@ export default function GovernanceDashboardPage() {
       name: 'Reviews This Month',
       value: reviewsDueThisMonth,
       icon: Calendar,
-      iconColor: 'text-cyan-600',
-      bgColor: 'from-cyan-500/20 to-cyan-600/10',
+      iconColor: 'text-[var(--color-base)]',
+      bgColor: 'bg-[var(--color-base-soft)]',
       description: 'Documents due for review',
     },
     {
       name: 'Compliance Coverage',
       value: `${complianceRate}%`,
       icon: Shield,
-      iconColor: 'text-primary-600',
-      bgColor: 'from-purple-500/20 to-purple-600/10',
+      iconColor: 'text-[var(--color-base)]',
+      bgColor: 'bg-[var(--color-base-soft)]',
       description: 'Documents linked to controls/frameworks',
     },
     {
       name: 'Expiring Soon',
       value: expiringCount,
       icon: AlertCircle,
-      iconColor: 'text-orange-600',
-      bgColor: 'from-orange-500/20 to-orange-600/10',
+      iconColor: 'text-[var(--color-warning)]',
+      bgColor: 'bg-[var(--color-warning-soft)]',
       description: 'Within next 30 days',
     },
     {
       name: 'Active Policies',
       value: byType['policy'] || 0,
       icon: BookOpen,
-      iconColor: 'text-blue-600',
-      bgColor: 'from-blue-500/20 to-blue-600/10',
+      iconColor: 'text-[var(--color-base)]',
+      bgColor: 'bg-[var(--color-base-soft)]',
       description: 'Total policy documents',
     },
   ];
@@ -353,11 +360,13 @@ export default function GovernanceDashboardPage() {
           <Link
             key={stat.name}
             href={stat.href}
-            className="stat-card group hover:border-slate-300 transition-all duration-200 hover:shadow-xl cursor-pointer"
+            className="stat-card group hover:border-[var(--color-border)] transition-all duration-200 hover:shadow-xl cursor-pointer"
           >
             <div className="flex items-start justify-between mb-4">
-                              <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
-              <ArrowRight className="h-4 w-4 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className={`rounded-xl ${stat.bgColor} p-3`}>
+                <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
+              </div>
+              <ArrowRight className="h-4 w-4 text-[var(--color-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <p className="stat-value">{stat.value.toLocaleString()}</p>
             <p className="stat-label">{stat.name}</p>
@@ -369,14 +378,16 @@ export default function GovernanceDashboardPage() {
         {secondaryKpis.map((stat) => (
           <div
             key={stat.name}
-            className="stat-card hover:border-slate-300 transition-all duration-200"
+            className="stat-card hover:border-[var(--color-border)] transition-all duration-200"
           >
             <div className="flex items-start justify-between mb-3">
-                              <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
+              <div className={`rounded-xl bg-gradient-to-br ${stat.bgColor} p-2.5`}>
+                <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
+              </div>
             </div>
-            <p className="text-2xl font-bold text-black">{stat.value}</p>
-            <p className="text-sm text-slate-600">{stat.name}</p>
-            <p className="text-xs text-slate-500 mt-1">{stat.description}</p>
+            <p className="stat-value">{stat.value}</p>
+            <p className="stat-label">{stat.name}</p>
+            <p className="cw-text-muted text-xs mt-1">{stat.description}</p>
           </div>
         ))}
       </div>
@@ -391,34 +402,40 @@ export default function GovernanceDashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Link
             href="/governance/approvals"
-            className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 hover:border-amber-500/50 transition-all duration-200 group"
+            className="flex items-center gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:bg-[var(--color-hover)] hover:border-[var(--color-warning)] transition-all duration-200 group"
           >
-                          <Eye className="h-5 w-5 text-amber-600" />
+            <div className="rounded-lg bg-[var(--color-warning-soft)] p-3 group-hover:bg-[var(--color-warning)]/30 transition-colors">
+              <Eye className="h-5 w-5 text-[var(--color-warning)]" />
+            </div>
             <div>
-              <p className="font-medium text-black">View Pending Approvals</p>
-              <p className="text-sm text-slate-600">{pendingCount} items awaiting action</p>
+              <p className="cw-text-default font-medium">View Pending Approvals</p>
+              <p className="cw-text-muted text-sm">{pendingCount} items awaiting action</p>
             </div>
           </Link>
           
           <Link
             href="/governance/reviews"
-            className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 hover:border-rose-500/50 transition-all duration-200 group"
+            className="flex items-center gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:bg-[var(--color-hover)] hover:border-[var(--color-danger)] transition-all duration-200 group"
           >
-                          <AlertTriangle className="h-5 w-5 text-rose-600" />
+            <div className="rounded-lg bg-[var(--color-danger-soft)] p-3 group-hover:bg-[var(--color-danger)]/30 transition-colors">
+              <AlertTriangle className="h-5 w-5 text-[var(--color-danger)]" />
+            </div>
             <div>
-              <p className="font-medium text-black">View Overdue Reviews</p>
-              <p className="text-sm text-slate-600">{overdueCount} reviews overdue</p>
+              <p className="cw-text-default font-medium">View Overdue Reviews</p>
+              <p className="cw-text-muted text-sm">{overdueCount} reviews overdue</p>
             </div>
           </Link>
           
           <Link
             href="/governance/documents?action=upload"
-            className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 hover:border-primary-500/50 transition-all duration-200 group"
+            className="flex items-center gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:bg-[var(--color-hover)] hover:border-[var(--color-base)] transition-all duration-200 group"
           >
-                          <Upload className="h-5 w-5 text-primary-600" />
+            <div className="rounded-lg bg-[var(--color-base-soft)] p-3 group-hover:bg-[var(--color-base)]/30 transition-colors">
+              <Upload className="h-5 w-5 text-[var(--color-base)]" />
+            </div>
             <div>
-              <p className="font-medium text-black">Upload New Document</p>
-              <p className="text-sm text-slate-600">Add policies, standards & more</p>
+              <p className="cw-text-default font-medium">Upload New Document</p>
+              <p className="cw-text-muted text-sm">Add policies, standards & more</p>
             </div>
           </Link>
         </div>
@@ -428,7 +445,7 @@ export default function GovernanceDashboardPage() {
         <div className="card">
           <div className="card-header">
             <div className="flex items-center gap-2">
-              <PieChart className="h-5 w-5 text-primary-600" />
+              <PieChart className="h-5 w-5 text-[var(--color-base)]" />
               <div>
                 <h2 className="card-title">Documents by Type</h2>
                 <p className="card-description">Distribution of governance artifacts</p>
@@ -441,7 +458,7 @@ export default function GovernanceDashboardPage() {
         <div className="card">
           <div className="card-header">
             <div className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-emerald-600" />
+              <BarChart3 className="h-5 w-5 text-[var(--color-success)]" />
               <div>
                 <h2 className="card-title">Document Trends</h2>
                 <p className="card-description">Created vs published over time</p>
@@ -452,8 +469,8 @@ export default function GovernanceDashboardPage() {
             <TrendBarChart data={trendData} />
           ) : (
             <div className="empty-state py-8">
-              <TrendingUp className="h-8 w-8 text-slate-500" />
-              <p className="text-sm text-slate-600 mt-2">No trend data available</p>
+              <TrendingUp className="h-8 w-8 text-[var(--color-muted)]" />
+              <p className="cw-text-muted text-sm mt-2">No trend data available</p>
             </div>
           )}
         </div>
@@ -483,9 +500,9 @@ export default function GovernanceDashboardPage() {
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <span className={`h-3 w-3 rounded-full ${STATUS_COLORS[key]}`}></span>
-                      <span className="text-sm text-slate-600">{label}</span>
+                      <span className="cw-text-default text-sm">{label}</span>
                     </span>
-                    <span className="text-sm font-semibold text-black">{count}</span>
+                    <span className="cw-text-default text-sm font-semibold">{count}</span>
                   </div>
                   <div className="progress-bar">
                     <div
@@ -516,17 +533,19 @@ export default function GovernanceDashboardPage() {
               { key: 'framework', label: 'Frameworks' },
             ].map(({ key, label }) => {
               const Icon = TYPE_ICONS[key] || FileText;
-              const colors = TYPE_COLORS[key] || { bg: 'bg-slate-50', text: 'text-slate-600' };
+              const colors = TYPE_COLORS[key] || { bg: 'bg-[var(--color-muted)]', text: 'text-[var(--color-muted)]' };
               const count = byType[key] || 0;
               return (
                 <div
                   key={key}
-                  className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white/50 p-4 hover:bg-slate-50 transition-all duration-200"
+                  className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:bg-[var(--color-hover)] transition-all duration-200"
                 >
-                                      <Icon className={`h-5 w-5 ${colors.text}`} />
+                  <div className={`rounded-lg ${colors.bg} p-2.5`}>
+                    <Icon className={`h-5 w-5 ${colors.text}`} />
+                  </div>
                   <div>
-                    <p className="text-xl font-bold text-black">{count}</p>
-                    <p className="text-xs text-slate-600">{label}</p>
+                    <p className="cw-text-default text-xl font-bold">{count}</p>
+                    <p className="cw-text-muted text-xs">{label}</p>
                   </div>
                 </div>
               );
@@ -550,7 +569,7 @@ export default function GovernanceDashboardPage() {
           {recentlyPublished?.documents?.length === 0 ? (
             <div className="empty-state py-8">
               <div className="empty-state-icon">
-                <FileText className="h-8 w-8 text-slate-500" />
+                <FileText className="h-8 w-8 text-[var(--color-muted)]" />
               </div>
               <p className="empty-state-title">No recent activity</p>
               <p className="empty-state-description text-sm">
@@ -562,13 +581,15 @@ export default function GovernanceDashboardPage() {
               {recentlyPublished?.documents?.slice(0, 5).map((doc: any) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/50 p-3 hover:bg-slate-50 transition-all duration-200"
+                  className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 hover:bg-[var(--color-hover)] transition-all duration-200"
                 >
                   <div className="flex items-center gap-3">
-                                          <CheckCircle className="h-4 w-4 text-emerald-600" />
+                    <div className="rounded-lg bg-[var(--color-success-soft)] p-2">
+                      <CheckCircle className="h-4 w-4 text-[var(--color-success)]" />
+                    </div>
                     <div>
-                      <p className="font-medium text-black text-sm">{doc.title}</p>
-                      <p className="text-xs text-slate-600">
+                      <p className="cw-text-default font-medium text-sm">{doc.title}</p>
+                      <p className="cw-text-muted text-xs">
                         <span className="capitalize">{doc.doc_type}</span> • {doc.document_code}
                       </p>
                     </div>
@@ -635,7 +656,7 @@ export default function GovernanceDashboardPage() {
                   {pendingApprovals?.approvals?.slice(0, 3).map((approval: any) => (
                     <div key={approval.id} className="mt-2 text-xs opacity-70">
                       • {approval.document_title} - Step: {approval.step_name}
-                      {approval.is_overdue && <span className="text-rose-600 ml-1 font-medium">(Overdue)</span>}
+                      {approval.is_overdue && <span className="text-[var(--color-danger)] ml-1 font-medium">(Overdue)</span>}
                     </div>
                   ))}
                 </div>
@@ -644,8 +665,8 @@ export default function GovernanceDashboardPage() {
 
             {expiringCount === 0 && overdueCount === 0 && pendingCount === 0 && (
               <div className="empty-state py-8">
-                <div className="empty-state-icon bg-emerald-50">
-                  <CheckCircle className="h-8 w-8 text-emerald-600" />
+                <div className="empty-state-icon bg-[var(--color-success-soft)]">
+                  <CheckCircle className="h-8 w-8 text-[var(--color-success)]" />
                 </div>
                 <p className="empty-state-title">All caught up!</p>
                 <p className="empty-state-description text-sm">

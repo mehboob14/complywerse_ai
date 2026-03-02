@@ -4,6 +4,19 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Shield, LogIn, AlertCircle, Building2 } from 'lucide-react';
 
+function getTenantSlugFromHost(): string | null {
+  if (typeof window === 'undefined') return null;
+  const host = window.location.hostname.toLowerCase();
+  if (host === 'localhost' || host === '127.0.0.1') return null;
+  if (host.endsWith('.localhost')) {
+    const parts = host.split('.');
+    if (parts.length === 2) return parts[0];
+  }
+  const parts = host.split('.');
+  if (parts.length >= 3) return parts[0];
+  return null;
+}
+
 function getTenantSlug(): string | null {
   if (typeof window === 'undefined') return null;
   
@@ -13,8 +26,16 @@ function getTenantSlug(): string | null {
     localStorage.setItem('tenant_slug', urlTenant);
     return urlTenant;
   }
-  
-  return localStorage.getItem('tenant_slug');
+
+  const hostTenant = getTenantSlugFromHost();
+  if (hostTenant) {
+    localStorage.setItem('tenant_slug', hostTenant);
+    return hostTenant;
+  }
+
+  // Do not reuse stale tenant_slug for login; let backend resolve by email domain
+  localStorage.removeItem('tenant_slug');
+  return null;
 }
 
 export default function LoginPage() {
@@ -44,6 +65,8 @@ export default function LoginPage() {
       
       if (tenantSlug) {
         headers['X-Tenant-Slug'] = tenantSlug;
+      } else {
+        localStorage.removeItem('tenant_slug');
       }
       
       const response = await fetch('/api/auth/login', {
@@ -56,6 +79,9 @@ export default function LoginPage() {
       if (response.ok) {
         const data = await response.json();
         
+        // CRITICAL: Clear ALL previous localStorage to prevent cross-tenant data leakage
+        localStorage.clear();
+        
         if (data.tenant) {
           localStorage.setItem('tenant_slug', data.tenant.slug || data.tenant.subdomain || '');
           localStorage.setItem('tenant_name', data.tenant.name || '');
@@ -65,7 +91,11 @@ export default function LoginPage() {
         router.push('/dashboard');
       } else {
         const data = await response.json();
-        setError(data.detail || 'Invalid credentials');
+        if (response.status === 409) {
+          setError(data.detail || 'Multiple organizations found. Please select your company and try again.');
+        } else {
+          setError(data.detail || 'Invalid credentials');
+        }
       }
     } catch {
       setError('An error occurred. Please try again.');
@@ -75,9 +105,8 @@ export default function LoginPage() {
   };
   
   const clearTenantContext = () => {
-    localStorage.removeItem('tenant_slug');
-    localStorage.removeItem('tenant_name');
-    localStorage.removeItem('tenant_id');
+    // Clear ALL localStorage to ensure clean state
+    localStorage.clear();
     setTenantSlug(null);
     setTenantName(null);
   };

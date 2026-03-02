@@ -39,6 +39,10 @@ export default function UsersManagementPage() {
     email: '',
     password: '',
     display_name: '',
+    department: '',
+    group: '',
+    division: '',
+    designation: '',
     role_ids: [] as number[],
   });
   const [saving, setSaving] = useState(false);
@@ -79,6 +83,10 @@ export default function UsersManagementPage() {
       email: '',
       password: '',
       display_name: '',
+      department: '',
+      group: '',
+      division: '',
+      designation: '',
       role_ids: [],
     });
     setShowModal(true);
@@ -91,6 +99,10 @@ export default function UsersManagementPage() {
       email: user.email,
       password: '',
       display_name: user.display_name,
+      department: user.department || '',
+      group: user.group || '',
+      division: user.division || '',
+      designation: user.designation || '',
       role_ids: user.roles.map((r) => r.id),
     });
     setShowModal(true);
@@ -116,6 +128,10 @@ export default function UsersManagementPage() {
         await adminApi.updateUser(editingUser.id, {
           display_name: formData.display_name,
           email: formData.email,
+          department: formData.department,
+          group: formData.group,
+          division: formData.division,
+          designation: formData.designation,
           role_ids: formData.role_ids,
         });
       } else {
@@ -124,6 +140,10 @@ export default function UsersManagementPage() {
           email: formData.email,
           password: formData.password,
           display_name: formData.display_name,
+          department: formData.department,
+          group: formData.group,
+          division: formData.division,
+          designation: formData.designation,
           role_ids: formData.role_ids,
         });
       }
@@ -326,6 +346,70 @@ export default function UsersManagementPage() {
                   }
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-2">
+                    Department
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.department}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, department: e.target.value }))
+                    }
+                    placeholder="e.g., IT, Finance, HR"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-2">
+                    Group
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.group}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, group: e.target.value }))
+                    }
+                    placeholder="e.g., Engineering, Operations"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-2">
+                    Division
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.division}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, division: e.target.value }))
+                    }
+                    placeholder="e.g., North America, EMEA"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-2">
+                    Designation
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.designation}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, designation: e.target.value }))
+                    }
+                    placeholder="e.g., Senior Manager, Director"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
+                  />
+                </div>
               </div>
 
               <div>

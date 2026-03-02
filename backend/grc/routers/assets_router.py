@@ -1,15 +1,18 @@
 import random
 import csv
 import io
+import os
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request, Cookie
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import text
+from pydantic import BaseModel
 
 from ..models import (
     ITAsset, AssetControlLink, AssetRiskAssessment, AssetFrameworkControlLink,
-    AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, GRCUser, Tenant, get_db
+    AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, GRCUser, Tenant, TenantUser, get_db
 )
 from ..schemas import (
     ITAssetCreate, ITAssetUpdate, ITAssetResponse,
@@ -18,7 +21,9 @@ from ..schemas import (
     AssetFrameworkControlLinkCreate, AssetEvidenceLinkCreate,
     AssetDetailResponse, AssetCoverageAnalysis
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token
+from ..tenant_manager import get_tenant_session, IS_SQLITE
+from ..tenant_models import TenantUser as TenantSchemaUser
 
 router = APIRouter(prefix="/assets", tags=["IT Assets"])
 
@@ -30,6 +35,220 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this tenant's data"
         )
+
+
+@router.get("/tenant-users")
+def get_tenant_users(
+    http_request: Request,
+    token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get all users from the tenant schema for owner selection"""
+    try:
+        auth_token = token
+        if not auth_token:
+            auth_header = http_request.headers.get("authorization", "")
+            if auth_header.startswith("Bearer "):
+                auth_token = auth_header[7:]
+        
+        if auth_token:
+            payload = decode_token(auth_token)
+            schema_name = payload.get("schema")
+            if schema_name:
+                TenantSession = get_tenant_session(schema_name)
+                tenant_session = TenantSession()
+                try:
+                    tenant_session.execute(text(f'SET search_path TO \"{schema_name}\", public'))
+                    tenant_users = tenant_session.query(TenantSchemaUser).filter(
+                        TenantSchemaUser.is_active == True
+                    ).all()
+                    return [
+                        {
+                            "id": u.id,
+                            "display_name": u.display_name or u.username,
+                            "email": u.email
+                        }
+                        for u in tenant_users
+                    ]
+                finally:
+                    tenant_session.close()
+    except Exception as e:
+        print(f"[tenant-users] Tenant schema lookup failed: {e}")
+    
+    # Fallback: return public GRCUser users
+    users = db.query(GRCUser).filter(GRCUser.is_active == True).all()
+    return [
+        {
+            "id": u.id,
+            "display_name": u.display_name or u.username,
+            "email": u.email
+        }
+        for u in users
+    ]
+
+
+class CIARecommendationRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    asset_type: str
+    vendor: Optional[str] = None
+    location: Optional[str] = None
+    criticality: Optional[str] = None
+
+
+@router.post("/cia-recommendation")
+def get_cia_recommendation(
+    request: CIARecommendationRequest,
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get AI-driven CIA rating recommendations based on asset details"""
+    
+    # Check if OpenAI API key is available
+    openai_key = os.getenv("OPENAI_API_KEY")
+    
+    if not openai_key:
+        # Fallback to rule-based recommendations
+        return get_rule_based_cia_recommendation(request)
+    
+    try:
+        import openai
+        openai.api_key = openai_key
+        
+        # Build prompt for AI
+        prompt = f"""Based on the following IT asset information, recommend appropriate CIA (Confidentiality, Integrity, Availability) ratings on a scale of 1-5 where:
+- 1 = Very Low
+- 2 = Low  
+- 3 = Medium
+- 4 = High
+- 5 = Very High/Critical
+
+Asset Details:
+- Name: {request.name}
+- Type: {request.asset_type}
+- Description: {request.description or 'Not provided'}
+- Vendor: {request.vendor or 'Not provided'}
+- Location: {request.location or 'Not provided'}
+- Business Criticality: {request.criticality or 'Not specified'}
+
+Provide a brief 2-line recommendation explaining the suggested CIA ratings (Confidentiality, Integrity, Availability) and the specific numeric ratings.
+Format: First line with explanation, second line with ratings in format "Recommended: C=X, I=Y, A=Z"
+"""
+        
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an IT security expert specializing in asset risk assessment and CIA triad ratings."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=200
+        )
+        
+        recommendation_text = response.choices[0].message.content.strip()
+        
+        # Parse ratings from response
+        lines = recommendation_text.split('\n')
+        rating_line = next((line for line in lines if 'C=' in line and 'I=' in line and 'A=' in line), '')
+        
+        conf_rating = 3
+        int_rating = 3
+        avail_rating = 3
+        
+        if rating_line:
+            import re
+            conf_match = re.search(r'C=(\d)', rating_line)
+            int_match = re.search(r'I=(\d)', rating_line)
+            avail_match = re.search(r'A=(\d)', rating_line)
+            
+            if conf_match:
+                conf_rating = int(conf_match.group(1))
+            if int_match:
+                int_rating = int(int_match.group(1))
+            if avail_match:
+                avail_rating = int(avail_match.group(1))
+        
+        # Format recommendation as 2 lines
+        recommendation_lines = [line for line in lines if line.strip() and not line.startswith('Recommended:')][:2]
+        if len(recommendation_lines) < 2 and rating_line:
+            recommendation_lines.append(rating_line)
+        
+        recommendation = '\n'.join(recommendation_lines[:2])
+        
+        return {
+            "recommendation": recommendation,
+            "confidentiality_rating": conf_rating,
+            "integrity_rating": int_rating,
+            "availability_rating": avail_rating
+        }
+        
+    except Exception as e:
+        # Fallback to rule-based on error
+        return get_rule_based_cia_recommendation(request)
+
+
+def get_rule_based_cia_recommendation(request: CIARecommendationRequest):
+    """Rule-based CIA recommendations when AI is unavailable"""
+    
+    asset_type = request.asset_type.lower()
+    criticality = (request.criticality or 'medium').lower()
+    
+    # Base ratings
+    conf_rating = 3
+    int_rating = 3
+    avail_rating = 3
+    
+    # Adjust by asset type
+    if asset_type == 'data':
+        conf_rating = 5
+        int_rating = 5
+        avail_rating = 4
+        recommendation = "Data assets require maximum protection for confidentiality and integrity to prevent unauthorized access and corruption.\nRecommended: C=5, I=5, A=4"
+    
+    elif asset_type == 'application':
+        conf_rating = 4
+        int_rating = 4
+        avail_rating = 4
+        recommendation = "Business applications need high protection across all CIA dimensions to ensure secure and reliable operations.\nRecommended: C=4, I=4, A=4"
+    
+    elif asset_type == 'infrastructure':
+        conf_rating = 3
+        int_rating = 4
+        avail_rating = 5
+        recommendation = "Infrastructure assets prioritize availability and integrity to maintain operational continuity and system reliability.\nRecommended: C=3, I=4, A=5"
+    
+    elif asset_type == 'cloud':
+        conf_rating = 4
+        int_rating = 4
+        avail_rating = 5
+        recommendation = "Cloud resources require high availability and strong confidentiality controls due to shared responsibility model.\nRecommended: C=4, I=4, A=5"
+    
+    elif asset_type == 'third_party':
+        conf_rating = 4
+        int_rating = 3
+        avail_rating = 3
+        recommendation = "Third-party systems need elevated confidentiality controls due to external access and data sharing requirements.\nRecommended: C=4, I=3, A=3"
+    
+    else:
+        recommendation = "Standard protection levels recommended based on general IT asset best practices and industry standards.\nRecommended: C=3, I=3, A=3"
+    
+    # Adjust by criticality
+    if criticality == 'critical':
+        conf_rating = min(5, conf_rating + 1)
+        int_rating = min(5, int_rating + 1)
+        avail_rating = min(5, avail_rating + 1)
+    elif criticality == 'high':
+        avail_rating = min(5, avail_rating + 1)
+    elif criticality == 'low':
+        conf_rating = max(1, conf_rating - 1)
+        int_rating = max(1, int_rating - 1)
+    
+    return {
+        "recommendation": recommendation,
+        "confidentiality_rating": conf_rating,
+        "integrity_rating": int_rating,
+        "availability_rating": avail_rating
+    }
 
 
 @router.get("", response_model=List[ITAssetResponse])
@@ -96,14 +315,26 @@ def create_asset(
         description=asset.description,
         asset_type=asset.asset_type,
         owner_id=asset.owner_id,
+        owner_name=asset.owner_name,
+        custodian=asset.custodian,
+        host_name=asset.host_name,
+        ip_address=asset.ip_address,
         criticality=asset.criticality,
         vendor=asset.vendor,
         location=asset.location,
         confidentiality_rating=asset.confidentiality_rating,
         integrity_rating=asset.integrity_rating,
         availability_rating=asset.availability_rating,
-        valuation=asset.valuation
+        valuation=asset.valuation,
+        cde_environment=asset.cde_environment
     )
+    
+    # Auto-resolve owner_name from owner_id if not provided
+    if asset.owner_id and not asset.owner_name:
+        owner = db.query(GRCUser).filter(GRCUser.id == asset.owner_id).first()
+        if owner:
+            db_asset.owner_name = owner.display_name or owner.username
+    
     db.add(db_asset)
     db.commit()
     db.refresh(db_asset)
@@ -224,6 +455,7 @@ ASSET_TEMPLATE_COLUMNS = [
     ("availability_rating", "Availability Rating (1-5)", "5"),
     ("valuation", "Valuation (USD)", "500000"),
     ("status", "Status (active/inactive/decommissioned)", "active"),
+    ("cde_environment", "CDE Environment (true/false)", "false"),
 ]
 
 
@@ -381,6 +613,9 @@ async def upload_assets_file(
                 return None
         
         try:
+            cde_raw = str(row.get("cde_environment", "")).strip().lower() if row.get("cde_environment") else ""
+            cde_flag = cde_raw in ("true", "yes", "1", "y")
+
             asset = ITAsset(
                 tenant_id=tenant_id,
                 name=name,
@@ -393,7 +628,8 @@ async def upload_assets_file(
                 integrity_rating=parse_int(row.get("integrity_rating"), 1, 5),
                 availability_rating=parse_int(row.get("availability_rating"), 1, 5),
                 valuation=parse_float(row.get("valuation")),
-                status=asset_status
+                status=asset_status,
+                cde_environment=cde_flag
             )
             db.add(asset)
             db.flush()
@@ -459,6 +695,9 @@ def get_asset(
         "description": asset.description,
         "asset_type": asset.asset_type,
         "owner_id": asset.owner_id,
+        "custodian": asset.custodian,
+        "host_name": asset.host_name,
+        "ip_address": asset.ip_address,
         "criticality": asset.criticality,
         "confidentiality_rating": asset.confidentiality_rating,
         "integrity_rating": asset.integrity_rating,
@@ -467,6 +706,7 @@ def get_asset(
         "vendor": asset.vendor,
         "location": asset.location,
         "status": asset.status,
+        "cde_environment": asset.cde_environment or False,
         "created_at": asset.created_at.isoformat(),
         "linked_controls": [link.normalized_control_id for link in asset.control_links],
         "linked_risks": [link.risk_id for link in asset.risk_links],
@@ -496,6 +736,12 @@ def update_asset(
     update_data = asset_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(asset, field, value)
+    
+    # Auto-resolve owner_name when owner_id is updated without owner_name
+    if 'owner_id' in update_data and 'owner_name' not in update_data and update_data.get('owner_id'):
+        owner = db.query(GRCUser).filter(GRCUser.id == update_data['owner_id']).first()
+        if owner:
+            asset.owner_name = owner.display_name or owner.username
     
     db.commit()
     db.refresh(asset)
@@ -776,6 +1022,9 @@ def get_asset_detail(
         asset_type=asset.asset_type,
         owner_id=asset.owner_id,
         owner_name=asset.owner.display_name if asset.owner else None,
+        custodian=asset.custodian,
+        host_name=asset.host_name,
+        ip_address=asset.ip_address,
         criticality=asset.criticality,
         confidentiality_rating=asset.confidentiality_rating,
         integrity_rating=asset.integrity_rating,

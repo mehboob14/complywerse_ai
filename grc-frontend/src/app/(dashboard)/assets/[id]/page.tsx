@@ -185,12 +185,12 @@ export default function AssetDetailPage() {
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      active: 'bg-green-900/50 text-green-600 border-green-700',
-      inactive: 'bg-yellow-900/50 text-yellow-600 border-yellow-700',
-      decommissioned: 'bg-slate-200 text-slate-500 border-slate-300',
+      active: 'bg-green-900/50 text-green-400 border-green-700',
+      inactive: 'bg-yellow-900/50 text-yellow-400 border-yellow-700',
+      decommissioned: 'bg-slate-700 text-slate-400 border-slate-600',
     };
     return (
-      <span className={`rounded-full border px-3 py-1 text-sm ${colors[status] || 'bg-slate-200 text-slate-500 border-slate-300'}`}>
+      <span className={`rounded-full border px-3 py-1 text-sm ${colors[status] || 'bg-slate-700 text-slate-400 border-slate-600'}`}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     );
@@ -198,13 +198,13 @@ export default function AssetDetailPage() {
 
   const getCriticalityBadge = (criticality: string) => {
     const colors: Record<string, string> = {
-      critical: 'bg-red-900/50 text-red-600 border-red-700',
-      high: 'bg-orange-900/50 text-orange-600 border-orange-700',
-      medium: 'bg-yellow-900/50 text-yellow-600 border-yellow-700',
-      low: 'bg-green-900/50 text-green-600 border-green-700',
+      critical: 'bg-red-900/50 text-red-400 border-red-700',
+      high: 'bg-orange-900/50 text-orange-400 border-orange-700',
+      medium: 'bg-yellow-900/50 text-yellow-400 border-yellow-700',
+      low: 'bg-green-900/50 text-green-400 border-green-700',
     };
     return (
-      <span className={`rounded-full border px-3 py-1 text-sm ${colors[criticality] || 'bg-slate-200 text-slate-500 border-slate-300'}`}>
+      <span className={`rounded-full border px-3 py-1 text-sm ${colors[criticality] || 'bg-slate-700 text-slate-400 border-slate-600'}`}>
         {criticality.charAt(0).toUpperCase() + criticality.slice(1)}
       </span>
     );
@@ -232,16 +232,16 @@ export default function AssetDetailPage() {
     const value = rating || 0;
     return (
       <div className="flex items-center gap-3">
-        <span className="w-32 text-sm text-slate-600">{label}</span>
+        <span className="w-32 text-sm text-slate-400">{label}</span>
         <div className="flex gap-1">
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className={`h-4 w-6 rounded ${i <= value ? color : 'bg-slate-200'}`}
+              className={`h-4 w-6 rounded ${i <= value ? color : 'bg-slate-700'}`}
             />
           ))}
         </div>
-        <span className="text-sm text-black">{value}/5</span>
+        <span className="text-sm text-white">{value}/5</span>
       </div>
     );
   };
@@ -249,17 +249,17 @@ export default function AssetDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
 
   if (error || !asset) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-600">
+      <div className="flex h-64 flex-col items-center justify-center text-red-400">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load asset details</p>
-        <Link href="/assets" className="mt-4 text-primary-600 hover:underline">
+        <Link href="/assets" className="mt-4 text-primary-400 hover:underline">
           Back to Assets
         </Link>
       </div>
@@ -279,27 +279,27 @@ export default function AssetDetailPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="assets-light space-y-6">
       <div className="flex items-center gap-4">
         <Link
           href="/assets"
-          className="rounded-lg p-2 text-slate-600 hover:bg-white hover:text-slate-900"
+          className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-900/50 text-primary-600">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-900/50 text-primary-400">
               {getAssetIcon(asset.asset_type)}
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-black">{asset.name}</h1>
-              <p className="text-slate-600">{asset.description || 'No description'}</p>
+              <h1 className="text-2xl font-bold text-white">{asset.name}</h1>
+              <p className="text-slate-400">{asset.description || 'No description'}</p>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="rounded-full bg-primary-900/50 px-3 py-1 text-sm text-primary-600">
+          <span className="rounded-full bg-primary-900/50 px-3 py-1 text-sm text-primary-400">
             {ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}
           </span>
           {getStatusBadge(asset.status)}
@@ -307,7 +307,7 @@ export default function AssetDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-black hover:bg-slate-600"
+            className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-white hover:bg-slate-600"
             title="Edit Asset"
           >
             <Edit className="h-4 w-4" />
@@ -328,7 +328,7 @@ export default function AssetDetailPage() {
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center gap-2 rounded-lg bg-red-900/50 px-4 py-2 text-red-600 hover:bg-red-900/80"
+            className="flex items-center gap-2 rounded-lg bg-red-900/50 px-4 py-2 text-red-400 hover:bg-red-900/80"
             title="Delete Asset"
           >
             <Trash2 className="h-4 w-4" />
@@ -338,8 +338,8 @@ export default function AssetDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-600">
+        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-400">
             <Lock className="h-4 w-4" />
             <span className="text-sm font-medium">CIA Ratings</span>
           </div>
@@ -350,27 +350,27 @@ export default function AssetDetailPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-600">
+        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-400">
             <DollarSign className="h-4 w-4" />
             <span className="text-sm font-medium">Valuation</span>
           </div>
-          <div className="text-3xl font-bold text-green-600">
+          <div className="text-3xl font-bold text-green-400">
             {formatCurrency(asset.valuation)}
           </div>
           <p className="mt-2 text-sm text-slate-500">Estimated asset value</p>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-600">
+        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-400">
             <Target className="h-4 w-4" />
             <span className="text-sm font-medium">Control Coverage</span>
           </div>
-          <div className="text-3xl font-bold text-primary-600">
+          <div className="text-3xl font-bold text-primary-400">
             {coverage?.coverage_percentage ?? asset.coverage_percentage ?? 0}%
           </div>
           <div className="mt-2">
-            <div className="h-2 w-full rounded-full bg-slate-200">
+            <div className="h-2 w-full rounded-full bg-slate-700">
               <div 
                 className="h-2 rounded-full bg-primary-500 transition-all"
                 style={{ width: `${coverage?.coverage_percentage ?? asset.coverage_percentage ?? 0}%` }}
@@ -382,16 +382,16 @@ export default function AssetDetailPage() {
           </p>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-600">
+        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-400">
             <TrendingUp className="h-4 w-4" />
             <span className="text-sm font-medium">Risk Score</span>
           </div>
           {latestAssessment ? (
             <>
               <div className={`text-3xl font-bold ${
-                latestAssessment.risk_score >= 7 ? 'text-red-600' :
-                latestAssessment.risk_score >= 4 ? 'text-yellow-600' : 'text-green-600'
+                latestAssessment.risk_score >= 7 ? 'text-red-400' :
+                latestAssessment.risk_score >= 4 ? 'text-yellow-400' : 'text-green-400'
               }`}>
                 {latestAssessment.risk_score.toFixed(1)}
               </div>
@@ -408,7 +408,7 @@ export default function AssetDetailPage() {
         </div>
       </div>
 
-      <div className="border-b border-slate-200">
+      <div className="border-b border-slate-700">
         <nav className="flex gap-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -418,8 +418,8 @@ export default function AssetDetailPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                    ? 'border-primary-500 text-primary-400'
+                    : 'border-transparent text-slate-400 hover:text-white'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -430,7 +430,7 @@ export default function AssetDetailPage() {
         </nav>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-6">
+      <div className="rounded-lg border border-slate-700 bg-slate-800 p-6">
         {activeTab === 'details' && (
           <DetailsTab asset={asset} />
         )}
@@ -504,64 +504,64 @@ function DetailsTab({ asset }: { asset: AssetDetailData }) {
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
-          <ClipboardList className="h-5 w-5 text-primary-600" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <ClipboardList className="h-5 w-5 text-primary-400" />
           Basic Information
         </h3>
         <div className="space-y-3">
           <div>
-            <span className="text-sm text-slate-600">Asset Name</span>
-            <p className="text-black">{asset.name}</p>
+            <span className="text-sm text-slate-400">Asset Name</span>
+            <p className="text-white">{asset.name}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-600">Description</span>
-            <p className="text-black">{asset.description || 'No description provided'}</p>
+            <span className="text-sm text-slate-400">Description</span>
+            <p className="text-white">{asset.description || 'No description provided'}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-600">Asset Type</span>
-            <p className="text-black">{ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}</p>
+            <span className="text-sm text-slate-400">Asset Type</span>
+            <p className="text-white">{ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-600">Criticality</span>
-            <p className="text-black capitalize">{asset.criticality}</p>
+            <span className="text-sm text-slate-400">Criticality</span>
+            <p className="text-white capitalize">{asset.criticality}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-600">Status</span>
-            <p className="text-black capitalize">{asset.status}</p>
+            <span className="text-sm text-slate-400">Status</span>
+            <p className="text-white capitalize">{asset.status}</p>
           </div>
         </div>
       </div>
 
       <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
-          <User className="h-5 w-5 text-primary-600" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <User className="h-5 w-5 text-primary-400" />
           Ownership & Vendor
         </h3>
         <div className="space-y-3">
           <div>
-            <span className="text-sm text-slate-600">Owner</span>
-            <p className="text-black">{asset.owner_name || 'Not assigned'}</p>
+            <span className="text-sm text-slate-400">Owner</span>
+            <p className="text-white">{asset.owner_name || 'Not assigned'}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-600">Vendor</span>
-            <p className="text-black">{asset.vendor || 'N/A'}</p>
+            <span className="text-sm text-slate-400">Vendor</span>
+            <p className="text-white">{asset.vendor || 'N/A'}</p>
           </div>
         </div>
       </div>
 
       <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
-          <MapPin className="h-5 w-5 text-primary-600" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <MapPin className="h-5 w-5 text-primary-400" />
           Location & Timestamps
         </h3>
         <div className="space-y-3">
           <div>
-            <span className="text-sm text-slate-600">Location</span>
-            <p className="text-black">{asset.location || 'Unknown'}</p>
+            <span className="text-sm text-slate-400">Location</span>
+            <p className="text-white">{asset.location || 'Unknown'}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-600">Created</span>
-            <p className="text-black">
+            <span className="text-sm text-slate-400">Created</span>
+            <p className="text-white">
               {new Date(asset.created_at).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
@@ -593,8 +593,8 @@ function ControlsTab({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
-          <Shield className="h-5 w-5 text-primary-600" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <Shield className="h-5 w-5 text-primary-400" />
           Linked Controls ({totalControls})
         </h3>
         <button
@@ -608,15 +608,15 @@ function ControlsTab({
 
       {asset.linked_controls && asset.linked_controls.length > 0 && (
         <div>
-          <h4 className="mb-3 text-sm font-medium text-slate-600">Normalized Controls</h4>
+          <h4 className="mb-3 text-sm font-medium text-slate-400">Normalized Controls</h4>
           <div className="space-y-2">
             {asset.linked_controls.map((control) => (
-              <div key={control.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
+              <div key={control.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
                 <div className="flex items-center gap-3">
-                  <ShieldCheck className="h-5 w-5 text-primary-600" />
+                  <ShieldCheck className="h-5 w-5 text-primary-400" />
                   <div>
-                    <span className="text-sm font-medium text-primary-600">{control.code}</span>
-                    <p className="text-black">{control.name}</p>
+                    <span className="text-sm font-medium text-primary-400">{control.code}</span>
+                    <p className="text-white">{control.name}</p>
                   </div>
                 </div>
               </div>
@@ -627,20 +627,20 @@ function ControlsTab({
 
       {asset.linked_framework_controls && asset.linked_framework_controls.length > 0 && (
         <div>
-          <h4 className="mb-3 text-sm font-medium text-slate-600">Framework Controls</h4>
+          <h4 className="mb-3 text-sm font-medium text-slate-400">Framework Controls</h4>
           <div className="space-y-2">
             {asset.linked_framework_controls.map((control) => (
-              <div key={control.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
+              <div key={control.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
                 <div className="flex items-center gap-3">
-                  <Shield className="h-5 w-5 text-blue-600" />
+                  <Shield className="h-5 w-5 text-blue-400" />
                   <div>
-                    <span className="text-sm font-medium text-blue-600">{control.code}</span>
-                    <p className="text-black">{control.name}</p>
+                    <span className="text-sm font-medium text-blue-400">{control.code}</span>
+                    <p className="text-white">{control.name}</p>
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-xs ${
-                    control.coverage_status === 'full' ? 'bg-green-900/50 text-green-600' :
-                    control.coverage_status === 'partial' ? 'bg-yellow-900/50 text-yellow-600' :
-                    'bg-slate-200 text-slate-500'
+                    control.coverage_status === 'full' ? 'bg-green-900/50 text-green-400' :
+                    control.coverage_status === 'partial' ? 'bg-yellow-900/50 text-yellow-400' :
+                    'bg-slate-700 text-slate-400'
                   }`}>
                     {control.coverage_status || 'Not set'}
                   </span>
@@ -648,7 +648,7 @@ function ControlsTab({
                 <button
                   onClick={() => onUnlinkControl(control.id)}
                   disabled={isUnlinking}
-                  className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-red-600 disabled:opacity-50"
+                  className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-red-400 disabled:opacity-50"
                   title="Unlink Control"
                 >
                   <X className="h-4 w-4" />
@@ -662,8 +662,8 @@ function ControlsTab({
       {totalControls === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Shield className="mb-4 h-12 w-12 text-slate-600" />
-          <h4 className="text-lg font-medium text-black">No Controls Linked</h4>
-          <p className="mt-1 text-slate-600">Link controls to this asset for compliance tracking</p>
+          <h4 className="text-lg font-medium text-white">No Controls Linked</h4>
+          <p className="mt-1 text-slate-400">Link controls to this asset for compliance tracking</p>
           <button
             onClick={onLinkControl}
             className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
@@ -689,16 +689,16 @@ function EvidenceTab({
   isUnlinking: boolean;
 }) {
   const relationshipColors: Record<string, string> = {
-    supports: 'bg-green-900/50 text-green-600',
-    validates: 'bg-blue-900/50 text-blue-600',
-    documents: 'bg-primary-50 text-primary-600',
+    supports: 'bg-green-900/50 text-green-400',
+    validates: 'bg-blue-900/50 text-blue-400',
+    documents: 'bg-purple-900/50 text-purple-400',
   };
   
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
-          <FileCheck className="h-5 w-5 text-primary-600" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <FileCheck className="h-5 w-5 text-primary-400" />
           Linked Evidence ({asset.linked_evidence?.length || 0})
         </h3>
         <button
@@ -713,20 +713,20 @@ function EvidenceTab({
       {asset.linked_evidence && asset.linked_evidence.length > 0 ? (
         <div className="space-y-2">
           {asset.linked_evidence.map((evidence) => (
-            <div key={evidence.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
+            <div key={evidence.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
               <div className="flex items-center gap-3">
-                <FileCheck className="h-5 w-5 text-emerald-600" />
+                <FileCheck className="h-5 w-5 text-emerald-400" />
                 <div>
-                  <p className="text-black">{evidence.name}</p>
+                  <p className="text-white">{evidence.name}</p>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-xs ${relationshipColors[evidence.relationship_type] || 'bg-slate-200 text-slate-500'}`}>
+                <span className={`rounded-full px-2 py-0.5 text-xs ${relationshipColors[evidence.relationship_type] || 'bg-slate-700 text-slate-400'}`}>
                   {evidence.relationship_type}
                 </span>
               </div>
               <button
                 onClick={() => onUnlinkEvidence(evidence.id)}
                 disabled={isUnlinking}
-                className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-red-600 disabled:opacity-50"
+                className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-red-400 disabled:opacity-50"
                 title="Unlink Evidence"
               >
                 <X className="h-4 w-4" />
@@ -737,8 +737,8 @@ function EvidenceTab({
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <FileCheck className="mb-4 h-12 w-12 text-slate-600" />
-          <h4 className="text-lg font-medium text-black">No Evidence Linked</h4>
-          <p className="mt-1 text-slate-600">Link evidence items to document this asset</p>
+          <h4 className="text-lg font-medium text-white">No Evidence Linked</h4>
+          <p className="mt-1 text-slate-400">Link evidence items to document this asset</p>
           <button
             onClick={onLinkEvidence}
             className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
@@ -756,8 +756,8 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
-          <AlertTriangle className="h-5 w-5 text-primary-600" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <AlertTriangle className="h-5 w-5 text-primary-400" />
           Associated Risks ({asset.linked_risks?.length || 0})
         </h3>
       </div>
@@ -765,14 +765,14 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
       {asset.linked_risks && asset.linked_risks.length > 0 ? (
         <div className="space-y-2">
           {asset.linked_risks.map((risk, idx) => (
-            <div key={idx} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
+            <div key={idx} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
               <div className="flex items-center gap-3">
-                <AlertTriangle className="h-5 w-5 text-orange-600" />
-                <p className="text-black">Risk ID: {risk.risk_id}</p>
+                <AlertTriangle className="h-5 w-5 text-orange-400" />
+                <p className="text-white">Risk ID: {risk.risk_id}</p>
               </div>
               <Link 
                 href={`/risks/${risk.risk_id}`}
-                className="text-sm text-primary-600 hover:underline"
+                className="text-sm text-primary-400 hover:underline"
               >
                 View Details
               </Link>
@@ -782,8 +782,8 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertTriangle className="mb-4 h-12 w-12 text-slate-600" />
-          <h4 className="text-lg font-medium text-black">No Associated Risks</h4>
-          <p className="mt-1 text-slate-600">No risks have been linked to this asset</p>
+          <h4 className="text-lg font-medium text-white">No Associated Risks</h4>
+          <p className="mt-1 text-slate-400">No risks have been linked to this asset</p>
         </div>
       )}
     </div>
@@ -802,8 +802,8 @@ function AssessmentsTab({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
-          <History className="h-5 w-5 text-primary-600" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <History className="h-5 w-5 text-primary-400" />
           Risk Assessment History ({asset.risk_assessments?.length || 0})
         </h3>
         <button
@@ -825,18 +825,18 @@ function AssessmentsTab({
           {asset.risk_assessments
             .sort((a, b) => new Date(b.assessment_date).getTime() - new Date(a.assessment_date).getTime())
             .map((assessment) => (
-              <div key={assessment.id} className="rounded-lg bg-slate-50 p-4">
+              <div key={assessment.id} className="rounded-lg bg-slate-900 p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${
-                      assessment.risk_score >= 7 ? 'bg-red-900/50 text-red-600' :
-                      assessment.risk_score >= 4 ? 'bg-yellow-900/50 text-yellow-600' : 
-                      'bg-green-900/50 text-green-600'
+                      assessment.risk_score >= 7 ? 'bg-red-900/50 text-red-400' :
+                      assessment.risk_score >= 4 ? 'bg-yellow-900/50 text-yellow-400' : 
+                      'bg-green-900/50 text-green-400'
                     }`}>
                       <span className="text-lg font-bold">{assessment.risk_score.toFixed(1)}</span>
                     </div>
                     <div>
-                      <p className="font-medium text-black">
+                      <p className="font-medium text-white">
                         {new Date(assessment.assessment_date).toLocaleDateString('en-US', {
                           year: 'numeric',
                           month: 'long',
@@ -845,14 +845,14 @@ function AssessmentsTab({
                           minute: '2-digit',
                         })}
                       </p>
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-slate-400">
                         Coverage: {assessment.coverage_percentage.toFixed(0)}%
                       </p>
                     </div>
                   </div>
                   {assessment.gaps && (
                     <div className="text-right">
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-slate-400">
                         Missing Controls: {(assessment.gaps as Record<string, number>).missing_controls || 0}
                       </p>
                     </div>
@@ -860,11 +860,11 @@ function AssessmentsTab({
                 </div>
                 {assessment.gaps && (assessment.gaps as Record<string, string[]>).recommendations?.length > 0 && (
                   <div className="mt-3 border-t border-slate-800 pt-3">
-                    <p className="mb-2 text-sm font-medium text-slate-600">Recommendations</p>
+                    <p className="mb-2 text-sm font-medium text-slate-400">Recommendations</p>
                     <ul className="space-y-1">
                       {((assessment.gaps as Record<string, string[]>).recommendations || []).map((rec: string, idx: number) => (
-                        <li key={idx} className="flex items-center gap-2 text-sm text-slate-600">
-                          <Zap className="h-3 w-3 text-yellow-600" />
+                        <li key={idx} className="flex items-center gap-2 text-sm text-slate-300">
+                          <Zap className="h-3 w-3 text-yellow-400" />
                           {rec}
                         </li>
                       ))}
@@ -877,8 +877,8 @@ function AssessmentsTab({
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <History className="mb-4 h-12 w-12 text-slate-600" />
-          <h4 className="text-lg font-medium text-black">No Assessments Yet</h4>
-          <p className="mt-1 text-slate-600">Run a risk assessment to evaluate this asset</p>
+          <h4 className="text-lg font-medium text-white">No Assessments Yet</h4>
+          <p className="mt-1 text-slate-400">Run a risk assessment to evaluate this asset</p>
           <button
             onClick={onAssess}
             disabled={isAssessing}
@@ -924,47 +924,47 @@ function LinkControlModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-slate-50 p-6">
+      <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-black">Link Control</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
+          <h2 className="text-xl font-bold text-white">Link Control</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search controls..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
 
-        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-200">
+        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-700">
           {filteredControls.length > 0 ? (
             filteredControls.map((control) => (
               <button
                 key={control.id}
                 onClick={() => setSelectedControl(Number(control.id))}
-                className={`flex w-full items-center gap-3 border-b border-slate-200 p-3 text-left last:border-0 ${
-                  selectedControl === Number(control.id) ? 'bg-primary-900/30' : 'hover:bg-white'
+                className={`flex w-full items-center gap-3 border-b border-slate-700 p-3 text-left last:border-0 ${
+                  selectedControl === Number(control.id) ? 'bg-primary-900/30' : 'hover:bg-slate-800'
                 }`}
               >
-                <Shield className={`h-5 w-5 ${selectedControl === Number(control.id) ? 'text-primary-600' : 'text-slate-600'}`} />
+                <Shield className={`h-5 w-5 ${selectedControl === Number(control.id) ? 'text-primary-400' : 'text-slate-400'}`} />
                 <div>
-                  <span className="text-sm font-medium text-primary-600">{control.internal_id || control.id}</span>
-                  <p className="text-black">{control.name}</p>
+                  <span className="text-sm font-medium text-primary-400">{control.internal_id || control.id}</span>
+                  <p className="text-white">{control.name}</p>
                   {control.category && (
-                    <span className="text-xs text-slate-600">{control.category}</span>
+                    <span className="text-xs text-slate-400">{control.category}</span>
                   )}
                 </div>
               </button>
             ))
           ) : (
-            <div className="p-4 text-center text-slate-600">
+            <div className="p-4 text-center text-slate-400">
               {allControls.length === 0 ? 'Loading controls...' : 'No controls found'}
             </div>
           )}
@@ -972,11 +972,11 @@ function LinkControlModal({
 
         {selectedControl && (
           <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-slate-600">Coverage Status</label>
+            <label className="mb-2 block text-sm font-medium text-slate-300">Coverage Status</label>
             <select
               value={coverageStatus}
               onChange={(e) => setCoverageStatus(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
             >
               <option value="full">Full Coverage</option>
               <option value="partial">Partial Coverage</option>
@@ -988,7 +988,7 @@ function LinkControlModal({
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-white"
+            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-800"
           >
             Cancel
           </button>
@@ -1036,46 +1036,46 @@ function LinkEvidenceModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-slate-50 p-6">
+      <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-black">Link Evidence</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
+          <h2 className="text-xl font-bold text-white">Link Evidence</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search evidence..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
 
-        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-200">
+        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-700">
           {filteredEvidence.length > 0 ? (
             filteredEvidence.map((evidence) => (
               <button
                 key={evidence.id}
                 onClick={() => setSelectedEvidence(Number(evidence.id))}
-                className={`flex w-full items-center gap-3 border-b border-slate-200 p-3 text-left last:border-0 ${
-                  selectedEvidence === Number(evidence.id) ? 'bg-primary-900/30' : 'hover:bg-white'
+                className={`flex w-full items-center gap-3 border-b border-slate-700 p-3 text-left last:border-0 ${
+                  selectedEvidence === Number(evidence.id) ? 'bg-primary-900/30' : 'hover:bg-slate-800'
                 }`}
               >
-                <FileCheck className={`h-5 w-5 ${selectedEvidence === Number(evidence.id) ? 'text-primary-600' : 'text-slate-600'}`} />
+                <FileCheck className={`h-5 w-5 ${selectedEvidence === Number(evidence.id) ? 'text-primary-400' : 'text-slate-400'}`} />
                 <div>
-                  <p className="text-black">{evidence.title || evidence.name}</p>
+                  <p className="text-white">{evidence.title || evidence.name}</p>
                   {evidence.evidence_type && (
-                    <span className="text-xs text-slate-600">{evidence.evidence_type}</span>
+                    <span className="text-xs text-slate-400">{evidence.evidence_type}</span>
                   )}
                 </div>
               </button>
             ))
           ) : (
-            <div className="p-4 text-center text-slate-600">
+            <div className="p-4 text-center text-slate-400">
               {allEvidence.length === 0 ? 'Loading evidence...' : 'No evidence found'}
             </div>
           )}
@@ -1083,11 +1083,11 @@ function LinkEvidenceModal({
 
         {selectedEvidence && (
           <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-slate-600">Relationship Type</label>
+            <label className="mb-2 block text-sm font-medium text-slate-300">Relationship Type</label>
             <select
               value={relationshipType}
               onChange={(e) => setRelationshipType(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
             >
               <option value="supports">Supports</option>
               <option value="validates">Validates</option>
@@ -1099,7 +1099,7 @@ function LinkEvidenceModal({
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-white"
+            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-800"
           >
             Cancel
           </button>
@@ -1134,22 +1134,22 @@ function DeleteConfirmModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-lg border border-slate-200 bg-slate-50 p-6">
+      <div className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-6">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-900/50">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <AlertTriangle className="h-5 w-5 text-red-400" />
           </div>
-          <h2 className="text-xl font-bold text-black">Delete Asset</h2>
+          <h2 className="text-xl font-bold text-white">Delete Asset</h2>
         </div>
 
-        <p className="mb-6 text-slate-600">
-          Are you sure you want to delete <strong className="text-black">{assetName}</strong>? This action cannot be undone. All linked controls, evidence, and assessments will be unlinked.
+        <p className="mb-6 text-slate-300">
+          Are you sure you want to delete <strong className="text-white">{assetName}</strong>? This action cannot be undone. All linked controls, evidence, and assessments will be unlinked.
         </p>
 
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 hover:bg-white"
+            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-800"
           >
             Cancel
           </button>

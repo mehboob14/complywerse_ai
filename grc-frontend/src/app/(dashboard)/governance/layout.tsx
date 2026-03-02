@@ -10,6 +10,7 @@ import {
   CheckSquare,
   Link2,
   Users,
+  AlertTriangle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -20,6 +21,7 @@ const governanceNavigation = [
   { name: 'Mappings', href: '/governance/mappings', icon: Link2 },
   { name: 'Workflows', href: '/governance/workflows', icon: GitPullRequest },
   { name: 'Approvals', href: '/governance/approvals', icon: CheckSquare },
+  { name: 'Exceptions', href: '/governance/exceptions', icon: AlertTriangle },
   { name: 'Reviews', href: '/governance/reviews', icon: Calendar },
 ];
 
@@ -31,13 +33,18 @@ export default function GovernanceLayout({
   const pathname = usePathname();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-black">Governance</h1>
-        <p className="text-slate-600">Policy and document lifecycle management</p>
+    <div className="governance-light space-y-6">
+      <div className="gov-header-row">
+        <div>
+          <h1 className="text-[18px] font-semibold text-[var(--color-text)]">Governance</h1>
+          <p className="helper-text">Policy and document lifecycle management</p>
+        </div>
+        <button className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-[13px] font-medium text-[var(--color-text)]">
+          More Filters
+        </button>
       </div>
 
-      <div className="flex flex-wrap gap-1 rounded-xl bg-white p-1">
+      <div className="filters-row rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
         {governanceNavigation.map((item) => {
           const isActive = pathname === item.href || 
             (item.href !== '/governance' && pathname.startsWith(item.href));
@@ -46,13 +53,13 @@ export default function GovernanceLayout({
               key={item.name}
               href={item.href}
               className={clsx(
-                'flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors',
+                'gov-tab flex items-center gap-2 rounded-[var(--radius-md)] px-4 py-2.5 text-[13px] transition-colors',
                 isActive
-                  ? 'bg-primary-600 text-white'
-                  : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                  ? 'gov-tab-active bg-[var(--color-subtle)] text-[var(--color-text)]'
+                  : 'text-[var(--color-muted)] hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]'
               )}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon size={18} strokeWidth={1.5} />
               {item.name}
             </Link>
           );

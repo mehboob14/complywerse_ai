@@ -59,11 +59,19 @@ interface EvidenceFile {
   uploaded_at: string;
 }
 
+interface EvidenceRecommendation {
+  evidence_type: string;
+  description: string;
+  example_files: string[];
+}
+
 interface AISuggestion {
   question_id: number;
   suggested_value: unknown;
+  suggestion: string;
   reasoning: string;
   confidence: number;
+  evidence_recommendations?: EvidenceRecommendation[];
 }
 
 interface Assessment {
@@ -80,12 +88,12 @@ interface Assessment {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  not_started: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Not Started' },
-  in_progress: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Progress' },
-  submitted: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: 'Submitted' },
-  under_review: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'Under Review' },
-  approved: { bg: 'bg-green-50', text: 'text-green-600', label: 'Approved' },
-  rejected: { bg: 'bg-red-50', text: 'text-red-600', label: 'Rejected' },
+  not_started: { bg: 'bg-slate-500/20', text: 'text-slate-600', label: 'Not Started' },
+  in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },
+  submitted: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Submitted' },
+  under_review: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Under Review' },
+  approved: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Approved' },
+  rejected: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rejected' },
 };
 
 const LIKELIHOOD_OPTIONS = [
@@ -135,29 +143,7 @@ export default function AssessmentDetailPage() {
         const response = await rcsaApi.getAssessment(assessmentId);
         return response.data as Assessment;
       } catch {
-        return {
-          id: assessmentId,
-          campaign_id: 1,
-          campaign_name: 'Q4 2025 RCSA',
-          business_unit: 'IT Operations',
-          assessor_name: 'John Smith',
-          status: 'in_progress',
-          due_date: '2025-12-31',
-          progress: 45,
-          questions: [
-            { id: 1, section: 'Risk Identification', question_text: 'Rate the likelihood and impact of cybersecurity threats to your business unit', guidance: 'Consider recent incidents and industry trends', question_type: 'risk_rating', is_required: true, sequence: 1 },
-            { id: 2, section: 'Risk Identification', question_text: 'Rate the likelihood and impact of operational disruptions', guidance: 'Include system failures, process breakdowns', question_type: 'risk_rating', is_required: true, sequence: 2 },
-            { id: 3, section: 'Control Assessment', question_text: 'How effective is your access control management?', guidance: 'Consider user provisioning, deprovisioning, and periodic reviews', question_type: 'control_rating', is_required: true, sequence: 3 },
-            { id: 4, section: 'Control Assessment', question_text: 'How effective is your change management process?', guidance: 'Consider approval workflows, testing, and rollback procedures', question_type: 'control_rating', is_required: true, sequence: 4 },
-            { id: 5, section: 'Compliance', question_text: 'Are all regulatory requirements documented and tracked?', guidance: 'Include applicable frameworks like SAMA CSF, PCI-DSS', question_type: 'yes_no', is_required: true, sequence: 5 },
-            { id: 6, section: 'Compliance', question_text: 'Is there an established incident response procedure?', guidance: 'Should include escalation paths and communication plans', question_type: 'yes_no', is_required: true, sequence: 6 },
-            { id: 7, section: 'Additional Comments', question_text: 'Describe any emerging risks or concerns for your business unit', guidance: 'Include any risks not covered in previous sections', question_type: 'text', is_required: false, sequence: 7 },
-          ],
-          responses: [
-            { question_id: 1, likelihood: 3, impact: 4 },
-            { question_id: 3, effectiveness: 'effective' },
-          ],
-        } as Assessment;
+        throw new Error('Failed to load assessment');
       }
     },
   });
@@ -169,11 +155,7 @@ export default function AssessmentDetailPage() {
         const response = await rcsaApi.getAISuggestions(assessmentId);
         return response.data as AISuggestion[];
       } catch {
-        return [
-          { question_id: 2, suggested_value: { likelihood: 2, impact: 3 }, reasoning: 'Based on industry benchmarks and historical data for IT Operations', confidence: 0.85 },
-          { question_id: 4, suggested_value: { effectiveness: 'partially_effective' }, reasoning: 'Common rating for organizations without automated testing', confidence: 0.72 },
-          { question_id: 5, suggested_value: { yes_no_value: true }, reasoning: 'Most organizations at this maturity level have documentation', confidence: 0.68 },
-        ] as AISuggestion[];
+        return [] as AISuggestion[];
       }
     },
     enabled: !!assessment,
@@ -323,6 +305,9 @@ export default function AssessmentDetailPage() {
   }, {} as Record<string, Question[]>);
 
   const currentQuestion = sortedQuestions[currentQuestionIndex];
+  const currentAISuggestion = currentQuestion
+    ? aiSuggestions?.find((s) => s.question_id === currentQuestion.id)
+    : null;
   const totalQuestions = sortedQuestions.length;
   const answeredCount = Object.keys(responses).filter(qId => {
     const q = sortedQuestions.find(sq => sq.id === Number(qId));
@@ -399,14 +384,14 @@ export default function AssessmentDetailPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const isEditable = assessment?.status === 'in_progress' || assessment?.status === 'rejected';
+  const isEditable = assessment?.status === 'in_progress' || assessment?.status === 'rejected' || assessment?.status === 'not_started';
   const isReviewMode = assessment?.status === 'submitted' || assessment?.status === 'under_review';
   const statusStyle = STATUS_STYLES[assessment?.status || 'not_started'];
 
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
@@ -414,8 +399,8 @@ export default function AssessmentDetailPage() {
   if (error || !assessment) {
     return (
       <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
-        <p className="mt-2 text-red-600">Failed to load assessment</p>
+        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
+        <p className="mt-2 text-red-400">Failed to load assessment</p>
       </div>
     );
   }
@@ -425,12 +410,12 @@ export default function AssessmentDetailPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/risks/rcsa/assessments"
-          className="p-2 rounded-lg hover:bg-slate-200 text-slate-500 hover:text-slate-900"
+          className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-black">{assessment.campaign_name}</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">{assessment.campaign_name}</h1>
           <div className="flex items-center gap-4 mt-1">
             <span className="flex items-center gap-1.5 text-slate-600">
               <Building2 className="h-4 w-4" />
@@ -478,7 +463,7 @@ export default function AssessmentDetailPage() {
             <button
               onClick={() => setShowRejectModal(true)}
               disabled={rejectMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-slate-900 transition-colors"
             >
               {rejectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
               Reject
@@ -491,18 +476,18 @@ export default function AssessmentDetailPage() {
       {showRejectModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 border border-slate-200">
-            <h3 className="text-lg font-medium text-black mb-4">Reject Assessment</h3>
+            <h3 className="text-lg font-medium text-slate-900 mb-4">Reject Assessment</h3>
             <p className="text-slate-600 text-sm mb-4">Please provide a reason for rejecting this assessment. This will be shared with the assessor.</p>
             <textarea
               value={reviewComments}
               onChange={(e) => setReviewComments(e.target.value)}
               placeholder="Enter rejection reason..."
-              className="w-full h-32 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none"
+              className="w-full h-32 bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
             />
             <div className="flex justify-end gap-3 mt-4">
               <button
                 onClick={() => setShowRejectModal(false)}
-                className="px-4 py-2 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-600 transition-colors"
+                className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
               >
                 Cancel
               </button>
@@ -514,7 +499,7 @@ export default function AssessmentDetailPage() {
                   }
                 }}
                 disabled={!reviewComments.trim() || rejectMutation.isPending}
-                className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {rejectMutation.isPending ? 'Rejecting...' : 'Confirm Rejection'}
               </button>
@@ -527,24 +512,24 @@ export default function AssessmentDetailPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-600">Progress</span>
-            <span className="text-sm font-medium text-black">{answeredCount} of {totalQuestions} questions answered ({Math.round((answeredCount / Math.max(totalQuestions, 1)) * 100)}%)</span>
+            <span className="text-sm font-medium text-slate-900">{answeredCount} of {totalQuestions} questions answered ({Math.round((answeredCount / Math.max(totalQuestions, 1)) * 100)}%)</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 text-xs rounded-lg ${viewMode === 'list' ? 'bg-primary-500 text-white' : 'bg-slate-200 text-slate-500'}`}
+              className={`px-3 py-1.5 text-xs rounded-lg ${viewMode === 'list' ? 'bg-primary-500 text-slate-900' : 'bg-slate-100 text-slate-600'}`}
             >
               List View
             </button>
             <button
               onClick={() => setViewMode('step')}
-              className={`px-3 py-1.5 text-xs rounded-lg ${viewMode === 'step' ? 'bg-primary-500 text-white' : 'bg-slate-200 text-slate-500'}`}
+              className={`px-3 py-1.5 text-xs rounded-lg ${viewMode === 'step' ? 'bg-primary-500 text-slate-900' : 'bg-slate-100 text-slate-600'}`}
             >
               Step View
             </button>
           </div>
         </div>
-        <div className="mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
+        <div className="mt-2 h-2 bg-slate-100 rounded-full overflow-hidden">
           <div
             className="h-full bg-primary-500 rounded-full transition-all duration-300"
             style={{ width: `${(answeredCount / Math.max(totalQuestions, 1)) * 100}%` }}
@@ -557,14 +542,14 @@ export default function AssessmentDetailPage() {
               <button
                 onClick={goToPrevQuestion}
                 disabled={currentQuestionIndex === 0}
-                className="p-1.5 rounded-lg bg-slate-200 text-slate-500 hover:text-slate-900 disabled:opacity-50"
+                className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 disabled:opacity-50"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 onClick={goToNextQuestion}
                 disabled={currentQuestionIndex === totalQuestions - 1}
-                className="p-1.5 rounded-lg bg-slate-200 text-slate-500 hover:text-slate-900 disabled:opacity-50"
+                className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 disabled:opacity-50"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -575,8 +560,8 @@ export default function AssessmentDetailPage() {
 
       {validationErrors.size > 0 && (
         <div className="rounded-xl border border-red-700 bg-red-900/20 p-4 flex items-center gap-3">
-          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
-          <p className="text-red-600">Please complete all required fields before submitting.</p>
+          <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
+          <p className="text-red-400">Please complete all required fields before submitting.</p>
         </div>
       )}
 
@@ -586,22 +571,83 @@ export default function AssessmentDetailPage() {
           <div className="flex items-start justify-between gap-4 mb-6">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-medium px-2 py-1 bg-slate-200 rounded text-slate-600">
+                <span className="text-xs font-medium px-2 py-1 bg-slate-100 rounded text-slate-700">
                   {currentQuestion.section}
                 </span>
                 <span className="text-xs text-slate-500">Question {currentQuestionIndex + 1}</span>
               </div>
-              <p className="text-xl text-black font-medium">
+              <p className="text-xl text-slate-900 font-medium">
                 {currentQuestion.question_text}
-                {currentQuestion.is_required && <span className="text-red-600 ml-1">*</span>}
+                {currentQuestion.is_required && <span className="text-red-400 ml-1">*</span>}
               </p>
               {currentQuestion.guidance && (
-                <p className="text-sm text-slate-600 mt-3 flex items-start gap-1.5 bg-slate-200/30 p-3 rounded-lg">
+                <p className="text-sm text-slate-600 mt-3 flex items-start gap-1.5 bg-slate-100/30 p-3 rounded-lg">
                   <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                   {currentQuestion.guidance}
                 </p>
               )}
             </div>
+            {currentQuestion.ai_suggestion_enabled && (
+              <div className="relative">
+                <button
+                  onClick={() =>
+                    setShowAISuggestions((prev) => ({
+                      ...prev,
+                      [currentQuestion.id]: !prev[currentQuestion.id],
+                    }))
+                  }
+                  className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                  title="AI Assistant"
+                >
+                  <Sparkles className="h-4 w-4" />
+                </button>
+                {showAISuggestions[currentQuestion.id] && (
+                  <div className="absolute right-0 top-10 z-10 w-96 p-4 rounded-lg bg-slate-100 border border-slate-300 shadow-xl max-h-80 overflow-y-auto">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="h-4 w-4 text-purple-400" />
+                      <span className="text-sm font-medium text-slate-900">AI Assistant</span>
+                      {currentAISuggestion && (
+                        <span className="text-xs text-slate-600">({Math.round(currentAISuggestion.confidence * 100)}% confidence)</span>
+                      )}
+                    </div>
+
+                    {currentAISuggestion ? (
+                      <>
+                        {currentAISuggestion.suggestion && (
+                          <p className="text-sm text-slate-700 mb-2">{currentAISuggestion.suggestion}</p>
+                        )}
+                        {currentAISuggestion.evidence_recommendations && currentAISuggestion.evidence_recommendations.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-xs font-medium text-purple-300 mb-2">Recommended Evidence to Upload:</p>
+                            <div className="space-y-2">
+                              {currentAISuggestion.evidence_recommendations.map((rec, idx) => (
+                                <div key={idx} className="bg-white rounded p-2">
+                                  <p className="text-sm font-medium text-slate-900">{rec.evidence_type}</p>
+                                  <p className="text-xs text-slate-600">{rec.description}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {!currentAISuggestion.suggestion && !currentAISuggestion.evidence_recommendations?.length && (
+                          <p className="text-sm text-slate-700 mb-3">{currentAISuggestion.reasoning}</p>
+                        )}
+                        {isEditable && (
+                          <button
+                            onClick={() => acceptAISuggestion(currentQuestion.id)}
+                            className="w-full btn-primary text-sm py-1.5"
+                          >
+                            Accept Suggestion
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-700">No AI suggestion available yet for this question.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-6">
@@ -612,12 +658,12 @@ export default function AssessmentDetailPage() {
                   {EFFECTIVENESS_OPTIONS.map(opt => {
                     const isSelected = (responses[currentQuestion.id] || {}).effectiveness === opt.value;
                     const colorClass = opt.value === 'effective' 
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' 
                       : opt.value === 'partially_effective'
-                      ? 'border-amber-500 bg-amber-50 text-amber-700'
+                      ? 'border-amber-500 bg-amber-500/20 text-amber-400'
                       : opt.value === 'ineffective'
-                      ? 'border-rose-500 bg-rose-50 text-rose-700'
-                      : 'border-slate-500 bg-slate-50 text-slate-700';
+                      ? 'border-rose-500 bg-rose-500/20 text-rose-400'
+                      : 'border-slate-500 bg-slate-500/20 text-slate-600';
                     return (
                       <button
                         key={opt.value}
@@ -627,7 +673,7 @@ export default function AssessmentDetailPage() {
                         className={`p-4 rounded-xl border-2 font-medium transition-all text-center ${
                           isSelected 
                             ? colorClass
-                            : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400 hover:bg-slate-200'
+                            : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500 hover:bg-slate-100'
                         }`}
                       >
                         <span className="flex flex-col items-center gap-2">
@@ -653,8 +699,8 @@ export default function AssessmentDetailPage() {
                         onClick={() => isEditable && updateResponse(currentQuestion.id, 'likelihood', opt.value)}
                         className={`w-full p-3 rounded-lg text-left border-2 transition-all ${
                           (responses[currentQuestion.id] || {}).likelihood === opt.value
-                            ? 'border-primary-500 bg-primary-50 text-primary-700'
-                            : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
+                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                            : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500'
                         }`}
                       >
                         {opt.label}
@@ -672,8 +718,8 @@ export default function AssessmentDetailPage() {
                         onClick={() => isEditable && updateResponse(currentQuestion.id, 'impact', opt.value)}
                         className={`w-full p-3 rounded-lg text-left border-2 transition-all ${
                           (responses[currentQuestion.id] || {}).impact === opt.value
-                            ? 'border-primary-500 bg-primary-50 text-primary-700'
-                            : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
+                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                            : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500'
                         }`}
                       >
                         {opt.label}
@@ -691,8 +737,8 @@ export default function AssessmentDetailPage() {
                   onClick={() => isEditable && updateResponse(currentQuestion.id, 'yes_no_value', true)}
                   className={`flex-1 p-4 rounded-xl border-2 font-medium transition-all ${
                     (responses[currentQuestion.id] || {}).yes_no_value === true
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                      : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
+                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
+                      : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500'
                   }`}
                 >
                   {(responses[currentQuestion.id] || {}).yes_no_value === true && <CheckCircle className="h-5 w-5 mx-auto mb-2" />}
@@ -703,8 +749,8 @@ export default function AssessmentDetailPage() {
                   onClick={() => isEditable && updateResponse(currentQuestion.id, 'yes_no_value', false)}
                   className={`flex-1 p-4 rounded-xl border-2 font-medium transition-all ${
                     (responses[currentQuestion.id] || {}).yes_no_value === false
-                      ? 'border-rose-500 bg-rose-50 text-rose-700'
-                      : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400'
+                      ? 'border-rose-500 bg-rose-500/20 text-rose-400'
+                      : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500'
                   }`}
                 >
                   {(responses[currentQuestion.id] || {}).yes_no_value === false && <CheckCircle className="h-5 w-5 mx-auto mb-2" />}
@@ -745,7 +791,7 @@ export default function AssessmentDetailPage() {
               </div>
               
               {uploadingQuestion === currentQuestion.id && (
-                <div className="flex items-center gap-2 text-sm text-primary-600">
+                <div className="flex items-center gap-2 text-sm text-primary-400">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Uploading...
                 </div>
@@ -754,16 +800,16 @@ export default function AssessmentDetailPage() {
               {(evidenceFiles[currentQuestion.id] || []).length > 0 ? (
                 <div className="space-y-2">
                   {evidenceFiles[currentQuestion.id].map(file => (
-                    <div key={file.id} className="flex items-center justify-between p-2 bg-slate-200/50 rounded-lg">
+                    <div key={file.id} className="flex items-center justify-between p-2 bg-slate-100/50 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-primary-600" />
-                        <span className="text-sm text-black">{file.filename}</span>
+                        <FileText className="h-4 w-4 text-primary-400" />
+                        <span className="text-sm text-slate-900">{file.filename}</span>
                         <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
                       </div>
                       {isEditable && (
                         <button
                           onClick={() => handleRemoveEvidence(currentQuestion.id, file.id)}
-                          className="p-1 text-slate-600 hover:text-rose-600"
+                          className="p-1 text-slate-600 hover:text-rose-400"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -820,7 +866,7 @@ export default function AssessmentDetailPage() {
               onClick={() => toggleSection(section)}
               className="w-full flex items-center justify-between p-4 bg-white/50 hover:bg-white"
             >
-              <h3 className="text-lg font-medium text-black">{section}</h3>
+              <h3 className="text-lg font-medium text-slate-900">{section}</h3>
               {expandedSections.has(section) ? (
                 <ChevronUp className="h-5 w-5 text-slate-600" />
               ) : (
@@ -839,9 +885,9 @@ export default function AssessmentDetailPage() {
                     <div key={question.id} className={`p-4 ${hasError ? 'bg-red-900/10' : ''}`}>
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div className="flex-1">
-                          <p className="text-black font-medium">
+                          <p className="text-slate-900 font-medium">
                             {question.question_text}
-                            {question.is_required && <span className="text-red-600 ml-1">*</span>}
+                            {question.is_required && <span className="text-red-400 ml-1">*</span>}
                           </p>
                           {question.guidance && (
                             <p className="text-sm text-slate-600 mt-1 flex items-start gap-1.5">
@@ -850,29 +896,64 @@ export default function AssessmentDetailPage() {
                             </p>
                           )}
                         </div>
-                        {aiSuggestion && isEditable && (
+                        {question.ai_suggestion_enabled && (
                           <div className="relative">
                             <button
                               onClick={() => setShowAISuggestions(prev => ({ ...prev, [question.id]: !prev[question.id] }))}
-                              className="p-2 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100"
-                              title="AI Suggestion"
+                              className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                              title="AI Assistant"
                             >
                               <Sparkles className="h-4 w-4" />
                             </button>
                             {showAISuggestions[question.id] && (
-                              <div className="absolute right-0 top-10 z-10 w-80 p-4 rounded-lg bg-slate-200 border border-slate-300 shadow-xl">
+                              <div className="absolute right-0 top-10 z-10 w-96 p-4 rounded-lg bg-slate-100 border border-slate-300 shadow-xl max-h-80 overflow-y-auto">
                                 <div className="flex items-center gap-2 mb-2">
-                                  <Sparkles className="h-4 w-4 text-primary-600" />
-                                  <span className="text-sm font-medium text-black">AI Suggestion</span>
-                                  <span className="text-xs text-slate-600">({Math.round(aiSuggestion.confidence * 100)}% confidence)</span>
+                                  <Sparkles className="h-4 w-4 text-purple-400" />
+                                  <span className="text-sm font-medium text-slate-900">AI Assistant</span>
+                                  {aiSuggestion && (
+                                    <span className="text-xs text-slate-600">({Math.round(aiSuggestion.confidence * 100)}% confidence)</span>
+                                  )}
                                 </div>
-                                <p className="text-sm text-slate-600 mb-3">{aiSuggestion.reasoning}</p>
-                                <button
-                                  onClick={() => acceptAISuggestion(question.id)}
-                                  className="w-full btn-primary text-sm py-1.5"
-                                >
-                                  Accept Suggestion
-                                </button>
+                                {aiSuggestion ? (
+                                  <>
+                                    {aiSuggestion.suggestion && (
+                                      <p className="text-sm text-slate-700 mb-2">{aiSuggestion.suggestion}</p>
+                                    )}
+                                    {aiSuggestion.evidence_recommendations && aiSuggestion.evidence_recommendations.length > 0 && (
+                                      <div className="mb-3">
+                                        <p className="text-xs font-medium text-purple-300 mb-2">Recommended Evidence to Upload:</p>
+                                        <div className="space-y-2">
+                                          {aiSuggestion.evidence_recommendations.map((rec, idx) => (
+                                            <div key={idx} className="bg-white rounded p-2">
+                                              <p className="text-sm font-medium text-slate-900">{rec.evidence_type}</p>
+                                              <p className="text-xs text-slate-600">{rec.description}</p>
+                                              {rec.example_files.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                  {rec.example_files.map((f, i) => (
+                                                    <span key={i} className="text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">{f}</span>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {!aiSuggestion.suggestion && !aiSuggestion.evidence_recommendations?.length && (
+                                      <p className="text-sm text-slate-700 mb-3">{aiSuggestion.reasoning}</p>
+                                    )}
+                                    {isEditable && (
+                                      <button
+                                        onClick={() => acceptAISuggestion(question.id)}
+                                        className="w-full btn-primary text-sm py-1.5"
+                                      >
+                                        Accept Suggestion
+                                      </button>
+                                    )}
+                                  </>
+                                ) : (
+                                  <p className="text-sm text-slate-700">No AI suggestion available yet for this question.</p>
+                                )}
                               </div>
                             )}
                           </div>
@@ -920,12 +1001,12 @@ export default function AssessmentDetailPage() {
                               {EFFECTIVENESS_OPTIONS.map(opt => {
                                 const isSelected = response.effectiveness === opt.value;
                                 const colorClass = opt.value === 'effective' 
-                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                                  ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' 
                                   : opt.value === 'partially_effective'
-                                  ? 'border-amber-500 bg-amber-50 text-amber-700'
+                                  ? 'border-amber-500 bg-amber-500/20 text-amber-400'
                                   : opt.value === 'ineffective'
-                                  ? 'border-rose-500 bg-rose-50 text-rose-700'
-                                  : 'border-slate-500 bg-slate-50 text-slate-700';
+                                  ? 'border-rose-500 bg-rose-500/20 text-rose-400'
+                                  : 'border-slate-500 bg-slate-500/20 text-slate-600';
                                 return (
                                   <button
                                     key={opt.value}
@@ -935,7 +1016,7 @@ export default function AssessmentDetailPage() {
                                     className={`px-4 py-2.5 rounded-lg border-2 font-medium transition-all ${
                                       isSelected 
                                         ? colorClass
-                                        : 'border-slate-300 bg-slate-200/50 text-slate-600 hover:border-slate-400 hover:bg-slate-200'
+                                        : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500 hover:bg-slate-100'
                                     } ${!isEditable ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                                   >
                                     <span className="flex items-center gap-2">
@@ -947,7 +1028,7 @@ export default function AssessmentDetailPage() {
                               })}
                             </div>
                             {response.effectiveness && (
-                              <p className="text-sm text-emerald-600 flex items-center gap-1.5">
+                              <p className="text-sm text-emerald-400 flex items-center gap-1.5">
                                 <CheckCircle className="h-4 w-4" />
                                 Selection saved
                               </p>
@@ -966,7 +1047,7 @@ export default function AssessmentDetailPage() {
                                 disabled={!isEditable}
                                 className="w-4 h-4 text-primary-500"
                               />
-                              <span className="text-black">Yes</span>
+                              <span className="text-slate-900">Yes</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input
@@ -977,7 +1058,7 @@ export default function AssessmentDetailPage() {
                                 disabled={!isEditable}
                                 className="w-4 h-4 text-primary-500"
                               />
-                              <span className="text-black">No</span>
+                              <span className="text-slate-900">No</span>
                             </label>
                           </div>
                         )}
@@ -1015,7 +1096,7 @@ export default function AssessmentDetailPage() {
                         </div>
                         
                         {uploadingQuestion === question.id && (
-                          <div className="flex items-center gap-2 text-sm text-primary-600">
+                          <div className="flex items-center gap-2 text-sm text-primary-400">
                             <Loader2 className="h-4 w-4 animate-spin" />
                             Uploading...
                           </div>
@@ -1024,16 +1105,16 @@ export default function AssessmentDetailPage() {
                         {(evidenceFiles[question.id] || []).length > 0 ? (
                           <div className="space-y-2">
                             {evidenceFiles[question.id].map(file => (
-                              <div key={file.id} className="flex items-center justify-between p-2 bg-slate-200/50 rounded-lg">
+                              <div key={file.id} className="flex items-center justify-between p-2 bg-slate-100/50 rounded-lg">
                                 <div className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-primary-600" />
-                                  <span className="text-sm text-black">{file.filename}</span>
+                                  <FileText className="h-4 w-4 text-primary-400" />
+                                  <span className="text-sm text-slate-900">{file.filename}</span>
                                   <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
                                 </div>
                                 {isEditable && (
                                   <button
                                     onClick={() => handleRemoveEvidence(question.id, file.id)}
-                                    className="p-1 text-slate-600 hover:text-rose-600"
+                                    className="p-1 text-slate-600 hover:text-rose-400"
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </button>
@@ -1048,8 +1129,8 @@ export default function AssessmentDetailPage() {
 
                       {/* AI Suggestion Toggle */}
                       {question.ai_suggestion_enabled && isEditable && (
-                        <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded-lg">
-                          <div className="flex items-center gap-2 text-primary-600">
+                        <div className="mt-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                          <div className="flex items-center gap-2 text-purple-400">
                             <Lightbulb className="h-4 w-4" />
                             <span className="text-sm font-medium">AI Assistance Available</span>
                           </div>

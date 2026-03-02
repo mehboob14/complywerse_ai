@@ -1,8 +1,9 @@
 from typing import List, Optional
+import re
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from pydantic import BaseModel
 
 from ....models import (
@@ -41,6 +42,12 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this tenant's data"
         )
+
+
+def _normalize_text(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    return re.sub(r"[^a-z0-9]", "", value.lower())
 
 
 def serialize_control_mapping(mapping: EvidenceControlMapping) -> dict:
@@ -289,62 +296,200 @@ def link_evidence_from_ai_suggestion(
     """
     user_tenants = get_user_tenants(current_user, db)
     
-    # Verify evidence access
-    evidence = db.query(Evidence).filter(
-        Evidence.id == evidence_id,
-        Evidence.tenant_id.in_(user_tenants)
-    ).first()
-    
-    if not evidence:
+    # Verify evidence access and provide precise error semantics
+    evidence_any_tenant = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    if not evidence_any_tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Evidence not found"
         )
+
+    if evidence_any_tenant.tenant_id not in user_tenants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this evidence in the current tenant context"
+        )
+
+    evidence = evidence_any_tenant
     
+    framework_scope_filter = or_(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        UploadedFramework.is_shared == True,
+        UploadedFramework.tenant_id.is_(None)
+    )
+
     # Find the framework by name using multiple matching strategies
     # Strategy 1: Exact match (case-insensitive)
     framework = db.query(UploadedFramework).filter(
-        UploadedFramework.tenant_id.in_(user_tenants),
+        framework_scope_filter,
         func.lower(UploadedFramework.name) == func.lower(link_data.framework_name)
     ).first()
     
     # Strategy 2: Framework name contains search term
     if not framework:
         framework = db.query(UploadedFramework).filter(
-            UploadedFramework.tenant_id.in_(user_tenants),
+            framework_scope_filter,
             UploadedFramework.name.ilike(f"%{link_data.framework_name}%")
         ).first()
     
     # Strategy 3: Search term contains framework name (handles "SBP ETGRMF v2018" matching "SBP ETGRMF")
     if not framework:
         all_frameworks = db.query(UploadedFramework).filter(
-            UploadedFramework.tenant_id.in_(user_tenants)
+            framework_scope_filter
         ).all()
         search_lower = link_data.framework_name.lower()
         for fw in all_frameworks:
             if fw.name.lower() in search_lower:
                 framework = fw
                 break
+
+    # Strategy 4: Normalized match (ignore spaces, punctuation, separators)
+    if not framework:
+        normalized_framework_name = _normalize_text(link_data.framework_name)
+        all_frameworks = db.query(UploadedFramework).filter(
+            framework_scope_filter
+        ).all()
+        for fw in all_frameworks:
+            normalized_fw_name = _normalize_text(fw.name)
+            if not normalized_framework_name or not normalized_fw_name:
+                continue
+            if normalized_fw_name == normalized_framework_name:
+                framework = fw
+                break
+            if normalized_fw_name in normalized_framework_name or normalized_framework_name in normalized_fw_name:
+                framework = fw
+                break
+
+    # Strategy 4b: Token overlap match for long AI display names vs uploaded names
+    if not framework:
+        all_frameworks = db.query(UploadedFramework).filter(framework_scope_filter).all()
+        search_tokens = {
+            token for token in re.findall(r"[a-z0-9]+", (link_data.framework_name or "").lower())
+            if len(token) >= 3
+        }
+        best_match = None
+        best_score = 0
+        for fw in all_frameworks:
+            fw_tokens = {
+                token for token in re.findall(r"[a-z0-9]+", (fw.name or "").lower())
+                if len(token) >= 3
+            }
+            if not fw_tokens or not search_tokens:
+                continue
+            overlap = len(search_tokens.intersection(fw_tokens))
+            if overlap > best_score:
+                best_score = overlap
+                best_match = fw
+        if best_match and best_score >= 2:
+            framework = best_match
     
+    # Strategy 5: If framework name fails, infer framework from matched control identifiers
+    if not framework:
+        identifier_candidates = {
+            link_data.control_id,
+            link_data.clause_reference,
+        }
+        identifier_candidates = {value for value in identifier_candidates if value}
+
+        inferred_controls = []
+        if identifier_candidates:
+            inferred_controls = db.query(ParsedFrameworkControl).join(
+                UploadedFramework,
+                ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
+            ).filter(
+                framework_scope_filter
+            ).filter(
+                (ParsedFrameworkControl.control_id.in_(identifier_candidates)) |
+                (ParsedFrameworkControl.original_reference.in_(identifier_candidates)) |
+                (ParsedFrameworkControl.section_number.in_(identifier_candidates))
+            ).all()
+
+        if len(inferred_controls) == 1:
+            control_candidate = inferred_controls[0]
+            framework = db.query(UploadedFramework).filter(
+                UploadedFramework.id == control_candidate.uploaded_framework_id
+            ).first()
+
     if not framework:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Framework '{link_data.framework_name}' not found"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Framework '{link_data.framework_name}' was not found in your tenant uploaded compliance frameworks"
         )
     
     # Find the control by control_id within this framework
-    # Try matching control_id or original_reference
+    # First pass: strict direct match
     control = db.query(ParsedFrameworkControl).filter(
         ParsedFrameworkControl.uploaded_framework_id == framework.id
     ).filter(
         (ParsedFrameworkControl.control_id == link_data.control_id) |
-        (ParsedFrameworkControl.original_reference == link_data.control_id)
+        (ParsedFrameworkControl.original_reference == link_data.control_id) |
+        (ParsedFrameworkControl.section_number == link_data.control_id)
     ).first()
+
+    # Second pass: use clause reference when provided
+    if not control and link_data.clause_reference:
+        control = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework.id
+        ).filter(
+            (ParsedFrameworkControl.control_id == link_data.clause_reference) |
+            (ParsedFrameworkControl.original_reference == link_data.clause_reference) |
+            (ParsedFrameworkControl.section_number == link_data.clause_reference)
+        ).first()
+
+    # Third pass: normalized/fuzzy match across key identifier fields used in compliance
+    if not control:
+        search_tokens = {
+            _normalize_text(link_data.control_id),
+            _normalize_text(link_data.clause_reference),
+        }
+        search_tokens = {token for token in search_tokens if token}
+
+        controls_in_framework = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework.id
+        ).all()
+
+        for candidate in controls_in_framework:
+            candidate_tokens = {
+                _normalize_text(candidate.control_id),
+                _normalize_text(candidate.original_reference),
+                _normalize_text(candidate.section_number),
+            }
+            candidate_tokens = {token for token in candidate_tokens if token}
+
+            if search_tokens.intersection(candidate_tokens):
+                control = candidate
+                break
+
+            matched = False
+            for s in search_tokens:
+                for c in candidate_tokens:
+                    if len(s) >= 3 and len(c) >= 3 and (s in c or c in s):
+                        matched = True
+                        break
+                if matched:
+                    break
+            if matched:
+                control = candidate
+                break
+
+    # Fourth pass: title contains control token (last resort for exact framework only)
+    if not control and link_data.control_id:
+        normalized_control = _normalize_text(link_data.control_id)
+        controls_in_framework = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework.id
+        ).all()
+        for candidate in controls_in_framework:
+            if normalized_control and normalized_control in _normalize_text(candidate.title):
+                control = candidate
+                break
     
     if not control:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Control '{link_data.control_id}' not found in framework '{framework.name}'"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Could not match AI control '{link_data.control_id}' (clause '{link_data.clause_reference}') "
+                f"in framework '{framework.name}'. Please verify the framework upload and run AI assessment again."
+            )
         )
     
     # Check if mapping already exists

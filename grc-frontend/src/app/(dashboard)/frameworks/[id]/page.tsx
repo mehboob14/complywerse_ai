@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { certificationsApi } from '@/lib/api';
+import { certificationsApi, governanceApi, assetsApi } from '@/lib/api';
 import apiClient from '@/lib/api';
-import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence } from '@/types';
+import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence, ITAsset } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
 import { 
   Loader2, 
@@ -55,22 +55,22 @@ import {
 
 const EVIDENCE_TYPE_MAP: Record<string, { label: string; color: string }> = {
   policy: { label: 'Policy', color: 'bg-blue-50 text-blue-700' },
-  procedure: { label: 'Procedure', color: 'bg-primary-50 text-primary-700' },
+  procedure: { label: 'Procedure', color: 'bg-purple-50 text-purple-700' },
   screenshot: { label: 'Screenshot', color: 'bg-cyan-50 text-cyan-700' },
   audit: { label: 'Audit Log', color: 'bg-orange-50 text-orange-700' },
   log: { label: 'Log', color: 'bg-orange-50 text-orange-700' },
   training: { label: 'Training', color: 'bg-green-50 text-green-700' },
-  risk: { label: 'Risk Assessment', color: 'bg-red-50 text-red-700' },
-  access: { label: 'Access Review', color: 'bg-yellow-50 text-yellow-700' },
-  config: { label: 'Configuration', color: 'bg-indigo-500/20 text-indigo-400' },
-  report: { label: 'Report', color: 'bg-pink-500/20 text-pink-400' },
+  risk: { label: 'Risk Assessment', color: 'bg-rose-50 text-rose-700' },
+  access: { label: 'Access Review', color: 'bg-amber-50 text-amber-700' },
+  config: { label: 'Configuration', color: 'bg-indigo-50 text-indigo-700' },
+  report: { label: 'Report', color: 'bg-pink-50 text-pink-700' },
   certificate: { label: 'Certificate', color: 'bg-emerald-50 text-emerald-700' },
   contract: { label: 'Contract', color: 'bg-amber-50 text-amber-700' },
-  register: { label: 'Register', color: 'bg-teal-500/20 text-teal-400' },
-  inventory: { label: 'Inventory', color: 'bg-lime-500/20 text-lime-400' },
-  plan: { label: 'Plan', color: 'bg-sky-500/20 text-sky-400' },
-  matrix: { label: 'Matrix', color: 'bg-violet-500/20 text-violet-400' },
-  list: { label: 'List', color: 'bg-fuchsia-500/20 text-fuchsia-400' },
+  register: { label: 'Register', color: 'bg-teal-50 text-teal-700' },
+  inventory: { label: 'Inventory', color: 'bg-lime-50 text-lime-700' },
+  plan: { label: 'Plan', color: 'bg-sky-50 text-sky-700' },
+  matrix: { label: 'Matrix', color: 'bg-violet-50 text-violet-700' },
+  list: { label: 'List', color: 'bg-fuchsia-50 text-fuchsia-700' },
 };
 
 const getEvidenceType = (recommendation: string): { label: string; color: string } => {
@@ -78,7 +78,7 @@ const getEvidenceType = (recommendation: string): { label: string; color: string
   for (const [pattern, value] of Object.entries(EVIDENCE_TYPE_MAP)) {
     if (key.includes(pattern)) return value;
   }
-  return { label: 'Document', color: 'bg-slate-50 text-slate-700' };
+  return { label: 'Document', color: 'bg-gray-50 text-gray-700' };
 };
 
 interface EvidenceRequirement {
@@ -262,6 +262,18 @@ export default function CertificationJourneyPage() {
 
   const [enhanceSuccess, setEnhanceSuccess] = useState<string | null>(null);
   const [enhanceError, setEnhanceError] = useState<string | null>(null);
+  const [editingTargetDate, setEditingTargetDate] = useState(false);
+  const [targetDateValue, setTargetDateValue] = useState('');
+  const [generatingPhaseTasks, setGeneratingPhaseTasks] = useState(false);
+
+  const [showApplicabilityModal, setShowApplicabilityModal] = useState(false);
+  const [applicabilityModalControl, setApplicabilityModalControl] = useState<any>(null);
+  const [applicabilityJustification, setApplicabilityJustification] = useState('');
+  const [applicabilityIsApplicable, setApplicabilityIsApplicable] = useState(true);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewingRecord, setReviewingRecord] = useState<any>(null);
+  const [reviewComment, setReviewComment] = useState('');
+  const [applicabilityStatusFilter, setApplicabilityStatusFilter] = useState<string>('all');
 
   const enhanceMutation = useMutation({
     mutationFn: async (frameworkId: number) => {
@@ -274,6 +286,36 @@ export default function CertificationJourneyPage() {
     },
     onError: (error: any) => {
       const message = error?.response?.data?.detail || error?.message || 'Enhancement failed';
+      setEnhanceError(message);
+      setTimeout(() => setEnhanceError(null), 5000);
+    }
+  });
+
+  const updateTargetDateMutation = useMutation({
+    mutationFn: async (targetDate: string) => {
+      return certificationsApi.update(journeyId, { target_date: targetDate });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['certification', journeyId] });
+      setEditingTargetDate(false);
+    }
+  });
+
+  const generatePhasesMutation = useMutation({
+    mutationFn: async () => {
+      setGeneratingPhaseTasks(true);
+      return apiClient.post(`/certifications/${journeyId}/generate-phases`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['journey-phases', journeyId] });
+      queryClient.invalidateQueries({ queryKey: ['certification', journeyId] });
+      setGeneratingPhaseTasks(false);
+      setEnhanceSuccess('AI successfully generated certification journey phases.');
+      setTimeout(() => setEnhanceSuccess(null), 5000);
+    },
+    onError: (error: any) => {
+      setGeneratingPhaseTasks(false);
+      const message = error?.response?.data?.detail || error?.message || 'Failed to generate phases';
       setEnhanceError(message);
       setTimeout(() => setEnhanceError(null), 5000);
     }
@@ -297,22 +339,40 @@ export default function CertificationJourneyPage() {
     enabled: !!journeyId,
   });
 
-  const { data: certificationPhases, isLoading: phasesLoading } = useQuery({
-    queryKey: ['framework-phases', journey?.framework_id],
+  const { data: journeyPhasesData, isLoading: phasesLoading } = useQuery({
+    queryKey: ['journey-phases', journeyId],
     queryFn: async () => {
-      if (!journey?.framework_id) return [];
-      const response = await certificationsApi.getFrameworkPhases(journey.framework_id);
+      const response = await apiClient.get(`/certifications/${journeyId}/journey-phases`);
       return response.data;
     },
-    enabled: !!journey?.framework_id,
+    enabled: !!journeyId,
   });
 
-  const phases = (certificationPhases || []).map((phase: any) => ({
-    id: phase.phase_number,
+  const phasesGenerated = journeyPhasesData?.generated || false;
+  const phaseGenerationTriggered = useRef(false);
+
+  useEffect(() => {
+    if (
+      journeyId &&
+      journeyPhasesData &&
+      !journeyPhasesData.generated &&
+      !generatingPhaseTasks &&
+      !generatePhasesMutation.isPending &&
+      !phaseGenerationTriggered.current
+    ) {
+      phaseGenerationTriggered.current = true;
+      generatePhasesMutation.mutate();
+    }
+  }, [journeyId, journeyPhasesData?.generated]);
+
+  const phases = (journeyPhasesData?.phases || []).map((phase: any) => ({
+    id: phase.phase_number || phase.id,
     name: phase.name,
     description: phase.description,
+    estimated_duration: phase.estimated_duration || '',
     tasks: phase.key_tasks || [],
     deliverables: phase.deliverables || [],
+    status: phase.status || 'not_started',
   }));
 
   useEffect(() => {
@@ -321,20 +381,105 @@ export default function CertificationJourneyPage() {
     }
   }, [progress, selectedDomain]);
 
+  const { data: cdeData, isLoading: cdeLoading } = useQuery({
+    queryKey: ['cde-systems'],
+    queryFn: async () => {
+      const response = await certificationsApi.getCDESystems();
+      return response.data as {
+        systems: Array<{
+          id: number;
+          name: string;
+          asset_type: string;
+          description: string;
+          location: string;
+          owner_name: string | null;
+          owner_id: number | null;
+          vendor: string | null;
+          criticality: string;
+          status: string;
+          cde_environment: boolean;
+          created_at: string;
+        }>;
+        summary: {
+          total: number;
+          type_breakdown: Record<string, number>;
+          criticality_breakdown: Record<string, number>;
+        };
+      };
+    },
+    enabled: activeTab === 'cde-scope',
+  });
+
+  const { data: cdeAssetsFallback, isLoading: cdeAssetsFallbackLoading } = useQuery({
+    queryKey: ['cde-assets-fallback'],
+    queryFn: async () => {
+      const response = await assetsApi.getAll();
+      return response.data as ITAsset[];
+    },
+    enabled: activeTab === 'cde-scope',
+  });
+
+  const { data: applicabilityData, isLoading: applicabilityLoading } = useQuery({
+    queryKey: ['applicability', journey?.framework_id, applicabilityStatusFilter],
+    queryFn: async () => {
+      if (!journey?.framework_id) return null;
+      const params = applicabilityStatusFilter !== 'all' ? `?status_filter=${applicabilityStatusFilter}` : '';
+      const response = await governanceApi.getFrameworkApplicability(journey.framework_id);
+      return response.data;
+    },
+    enabled: !!journey?.framework_id && activeTab === 'applicability',
+  });
+
+  const { data: applicabilityAuditLog } = useQuery({
+    queryKey: ['applicability-audit-log', journey?.framework_id],
+    queryFn: async () => {
+      if (!journey?.framework_id) return [];
+      const response = await governanceApi.getApplicabilityAuditLog(journey.framework_id);
+      return response.data;
+    },
+    enabled: !!journey?.framework_id && activeTab === 'applicability',
+  });
+
+  const setApplicabilityMutation = useMutation({
+    mutationFn: async (data: { control_id: number; uploaded_framework_id: number; is_applicable: boolean; justification: string }) => {
+      return governanceApi.setClauseApplicability(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applicability'] });
+      queryClient.invalidateQueries({ queryKey: ['applicability-audit-log'] });
+      setShowApplicabilityModal(false);
+      setApplicabilityJustification('');
+      setApplicabilityModalControl(null);
+    },
+  });
+
+  const reviewApplicabilityMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: { status: string; review_comment?: string } }) => {
+      return governanceApi.reviewApplicability(id, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applicability'] });
+      queryClient.invalidateQueries({ queryKey: ['applicability-audit-log'] });
+      setShowReviewModal(false);
+      setReviewingRecord(null);
+      setReviewComment('');
+    },
+  });
+
   const isLoading = journeyLoading || controlsLoading;
-  const completionPercentage = progress?.completion_percentage || 67;
+  const completionPercentage = progress?.completion_percentage || 0;
 
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
       </div>
     );
   }
 
   if (journeyError || !journey) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-600">
+      <div className="flex h-64 flex-col items-center justify-center text-red-400">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load certification journey</p>
         <button 
@@ -434,7 +579,6 @@ export default function CertificationJourneyPage() {
     }
     return true;
   }).sort((a: CertificationControl, b: CertificationControl) => {
-    if (sortOrder === 'default') return 0;
     const codeA = a.control_code || '';
     const codeB = b.control_code || '';
     const result = naturalSortCompare(codeA, codeB);
@@ -456,6 +600,8 @@ export default function CertificationJourneyPage() {
     }
   };
 
+  const totalEvidence = controls?.reduce((acc: number, c: CertificationControl) => acc + c.evidence_count, 0) || 0;
+
   const handleControlClick = (control: ControlImplementation) => {
     setSelectedControl(control);
     setShowControlModal(true);
@@ -465,12 +611,19 @@ export default function CertificationJourneyPage() {
     id: `phase-${phase.id}` as TabType,
     label: `${index + 1}. ${phase.name.split(' ')[0]}`
   }));
+
+  const isPciDssFramework = (
+    (journey as any).framework_name ||
+    journey.framework?.name ||
+    ''
+  ).toLowerCase().includes('pci');
   
   const tabs: { id: TabType; label: string; icon?: React.ReactNode }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'phases', label: 'Phases' },
-    ...phaseTabs,
+    ...(isPciDssFramework ? [{ id: 'cde-scope' as TabType, label: 'CDE Scope' }] : []),
     { id: 'controls', label: 'Controls' },
+    { id: 'applicability', label: 'Applicability' },
   ];
 
   const CircularProgress = ({ percentage }: { percentage: number }) => {
@@ -487,7 +640,7 @@ export default function CertificationJourneyPage() {
             stroke="currentColor"
             strokeWidth="8"
             fill="transparent"
-            className="text-slate-700"
+            className="text-gray-200"
           />
           <circle
             cx="64"
@@ -498,13 +651,13 @@ export default function CertificationJourneyPage() {
             fill="transparent"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
-            className="text-primary-500 transition-all duration-500"
+            className="text-blue-600 transition-all duration-500"
             strokeLinecap="round"
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-black">{percentage}%</span>
-          <span className="text-xs text-slate-600">Ready</span>
+          <span className="text-2xl font-bold cw-text">{percentage}%</span>
+          <span className="text-xs text-gray-600">Ready</span>
         </div>
       </div>
     );
@@ -513,15 +666,19 @@ export default function CertificationJourneyPage() {
   const renderOverviewTab = () => (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
-        <div className="card">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-black">
-            <Clock className="h-5 w-5 text-primary-600" />
+        <div className="cw-card p-6">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold cw-text">
+            <Clock className="h-5 w-5 text-blue-600" />
             Certification Timeline
           </h3>
           <div className="space-y-2">
             {phases.length === 0 && phasesLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+              </div>
+            ) : phases.length === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <p className="text-sm text-gray-500">No certification phases defined for this framework</p>
               </div>
             ) : phases.map((phase) => {
               const isExpanded = expandedPhases.includes(phase.id);
@@ -529,44 +686,44 @@ export default function CertificationJourneyPage() {
               const isCompleted = journey.current_phase > phase.id;
               
               return (
-                <div key={phase.id} className="rounded-lg border border-slate-200 bg-white/50">
+                <div key={phase.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
                   <button
                     onClick={() => togglePhase(phase.id)}
                     className="flex w-full items-center justify-between p-4 text-left"
                   >
                     <div className="flex items-center gap-3">
                       <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-                        isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-primary-500 text-white' : 'bg-slate-200 text-slate-500'
+                        isCompleted ? 'bg-emerald-500 text-white' : isCurrent ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
                       }`}>
                         {isCompleted ? <Check className="h-4 w-4" /> : phase.id}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className={`font-medium ${isCompleted ? 'text-green-600' : isCurrent ? 'text-black' : 'text-slate-600'}`}>
+                          <span className={`font-medium ${isCompleted ? 'text-emerald-700' : isCurrent ? 'cw-text' : 'cw-text-muted'}`}>
                             {phase.name}
                           </span>
                           {isCurrent && (
-                            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-600">
+                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
                               In Progress
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-slate-500">{phase.description}</p>
+                        <p className="text-sm text-gray-500">{phase.description}</p>
                       </div>
                     </div>
                     {isExpanded ? (
-                      <ChevronUp className="h-5 w-5 text-slate-600" />
+                      <ChevronUp className="h-5 w-5 cw-text-muted" />
                     ) : (
-                      <ChevronDown className="h-5 w-5 text-slate-600" />
+                      <ChevronDown className="h-5 w-5 cw-text-muted" />
                     )}
                   </button>
                   {isExpanded && (
-                    <div className="border-t border-slate-200 p-4">
+                    <div className="border-t border-[var(--color-border)] p-4">
                       <div className="mb-3">
-                        <h4 className="mb-2 text-sm font-medium text-slate-600">Key Tasks</h4>
+                        <h4 className="mb-2 text-sm font-medium text-gray-700">Key Tasks</h4>
                         <ul className="space-y-1">
                           {phase.tasks.map((task, idx) => (
-                            <li key={idx} className="flex items-center gap-2 text-sm text-slate-600">
+                            <li key={idx} className="flex items-center gap-2 text-sm cw-text-muted">
                               <Circle className="h-2 w-2 fill-current" />
                               {task}
                             </li>
@@ -574,10 +731,10 @@ export default function CertificationJourneyPage() {
                         </ul>
                       </div>
                       <div>
-                        <h4 className="mb-2 text-sm font-medium text-slate-600">Deliverables</h4>
+                        <h4 className="mb-2 text-sm font-medium text-gray-700">Deliverables</h4>
                         <div className="flex flex-wrap gap-2">
                           {phase.deliverables.map((deliverable, idx) => (
-                            <span key={idx} className="rounded-full bg-slate-200 px-3 py-1 text-xs text-slate-600">
+                            <span key={idx} className="rounded-full bg-[var(--color-subtle)] px-3 py-1 text-xs cw-text-muted">
                               {deliverable}
                             </span>
                           ))}
@@ -593,49 +750,62 @@ export default function CertificationJourneyPage() {
       </div>
 
       <div className="space-y-6">
-        <div className="card">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-black">
-            <BarChart3 className="h-5 w-5 text-primary-600" />
+        <div className="cw-card p-6">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold cw-text">
+            <BarChart3 className="h-5 w-5 text-blue-600" />
             Key Metrics
           </h3>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">SoA Controls Applicable</span>
-              <span className="font-semibold text-black">{progress?.implemented || 0}/{progress?.total_controls || 93}</span>
+              <span className="cw-text-muted">Controls Implemented</span>
+              <span className="font-semibold cw-text">{progress?.implemented || 0}/{progress?.total_controls || 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Risks Assessed</span>
-              <span className="font-semibold text-black">24/28</span>
+              <span className="cw-text-muted">Controls In Progress</span>
+              <span className="font-semibold text-blue-600">{progress?.in_progress || 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Evidence Collected</span>
-              <span className="font-semibold text-black">156/189</span>
+              <span className="cw-text-muted">Evidence Collected</span>
+              <span className="font-semibold cw-text">{totalEvidence}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Training Completion</span>
-              <span className="font-semibold text-green-600">87%</span>
+              <span className="cw-text-muted">Not Applicable</span>
+              <span className="font-semibold text-gray-500">{progress?.not_applicable || 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Open Findings</span>
-              <span className="font-semibold text-orange-600">3</span>
+              <span className="cw-text-muted">Open Gaps</span>
+              <span className="font-semibold text-orange-600">{(gaps as any)?.not_implemented?.length || 0}</span>
             </div>
           </div>
         </div>
 
-        <div className="card">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-black">
+        <div className="cw-card p-6">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold cw-text">
             <AlertTriangle className="h-5 w-5 text-orange-600" />
             Attention Required
           </h3>
           <div className="space-y-3">
-            <div className="rounded-lg bg-orange-50 p-3">
-              <p className="text-sm font-medium text-orange-600">3 controls pending implementation</p>
-              <p className="text-xs text-slate-600">Review by Dec 15</p>
-            </div>
-            <div className="rounded-lg bg-yellow-50 p-3">
-              <p className="text-sm font-medium text-yellow-600">Evidence expiring soon</p>
-              <p className="text-xs text-slate-600">5 items need renewal</p>
-            </div>
+            {(gaps as any)?.not_implemented?.length > 0 && (
+              <div className="rounded-lg bg-orange-50 border border-orange-200 p-3">
+                <p className="text-sm font-medium text-orange-700">{(gaps as any).not_implemented.length} controls not implemented</p>
+                <p className="text-xs text-gray-600">Require implementation</p>
+              </div>
+            )}
+            {(gaps as any)?.missing_evidence?.length > 0 && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                <p className="text-sm font-medium text-amber-700">{(gaps as any).missing_evidence.length} controls missing evidence</p>
+                <p className="text-xs text-gray-600">Evidence collection needed</p>
+              </div>
+            )}
+            {(gaps as any)?.pending_verification?.length > 0 && (
+              <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                <p className="text-sm font-medium text-blue-700">{(gaps as any).pending_verification.length} controls pending verification</p>
+                <p className="text-xs text-gray-600">Ready for review</p>
+              </div>
+            )}
+            {!(gaps as any)?.not_implemented?.length && !(gaps as any)?.missing_evidence?.length && !(gaps as any)?.pending_verification?.length && (
+              <p className="text-sm text-gray-500">No attention items at this time</p>
+            )}
           </div>
         </div>
       </div>
@@ -643,17 +813,54 @@ export default function CertificationJourneyPage() {
   );
 
   const renderPhasesTab = () => (
-    <div className="card">
+    <div className="cw-card p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-black">Certification Phases</h3>
-        <span className="text-sm text-slate-600">
-          Phase {journey.current_phase} of {phases.length || '...'}
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold cw-text">Certification Journey Phases</h3>
+          {phasesGenerated && (
+            <span className="flex items-center gap-1 rounded-full bg-purple-50 border border-purple-200 px-2 py-0.5 text-xs text-purple-700">
+              <Sparkles className="h-3 w-3" />
+              AI Generated
+            </span>
+          )}
+          {!phasesGenerated && !generatingPhaseTasks && phases.length > 0 && (
+            <button
+              onClick={() => generatePhasesMutation.mutate()}
+              disabled={generatingPhaseTasks || generatePhasesMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 px-3 py-1.5 text-xs font-medium text-purple-700 hover:from-purple-100 hover:to-blue-100 transition-all disabled:opacity-50"
+            >
+              <Sparkles className="h-3 w-3" />
+              Generate Journey Phases
+            </button>
+          )}
+        </div>
+        <span className="text-sm text-gray-600">
+          {phases.length > 0 ? `${phases.length} Phases` : ''}
         </span>
       </div>
       <div className="space-y-3">
-        {phases.length === 0 && phasesLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
+        {(phasesLoading || generatingPhaseTasks || generatePhasesMutation.isPending) && phases.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="mb-4 relative">
+              <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+              <Sparkles className="h-4 w-4 text-purple-500 absolute -top-1 -right-1 animate-pulse" />
+            </div>
+            <p className="text-sm font-medium text-black mb-1">Generating Certification Journey Phases</p>
+            <p className="text-xs text-gray-600 text-center max-w-md">AI is analyzing the framework controls and domains to create a tailored compliance roadmap with actionable tasks and deliverables...</p>
+          </div>
+        ) : phases.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Sparkles className="mb-3 h-10 w-10 text-gray-400" />
+            <p className="text-sm text-gray-600 mb-1">No certification phases generated yet</p>
+            <p className="text-xs text-gray-500 mb-4">Phases will be automatically generated using AI</p>
+            <button
+              onClick={() => generatePhasesMutation.mutate()}
+              disabled={generatePhasesMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-white hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50"
+            >
+              <Sparkles className="h-4 w-4" />
+              Generate Journey Phases
+            </button>
           </div>
         ) : phases.map((phase) => {
           const isExpanded = expandedPhases.includes(phase.id);
@@ -661,73 +868,91 @@ export default function CertificationJourneyPage() {
           const isCompleted = journey.current_phase > phase.id;
           
           return (
-            <div key={phase.id} className={`rounded-lg border ${isCurrent ? 'border-primary-500' : 'border-slate-200'} bg-white/50`}>
+            <div key={phase.id} className={`rounded-lg border ${isCurrent ? 'border-blue-300' : 'border-gray-200'} bg-white`}>
               <button
                 onClick={() => togglePhase(phase.id)}
                 className="flex w-full items-center justify-between p-4 text-left"
               >
                 <div className="flex items-center gap-4">
                   <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${
-                    isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-primary-500 text-white' : 'bg-slate-200 text-slate-500'
+                    isCompleted ? 'bg-emerald-500 text-white' : isCurrent ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
                   }`}>
                     {isCompleted ? <Check className="h-5 w-5" /> : phase.id}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className={`text-lg font-medium ${isCompleted ? 'text-green-600' : isCurrent ? 'text-black' : 'text-slate-600'}`}>
+                      <span className={`text-lg font-medium ${isCompleted ? 'text-emerald-700' : isCurrent ? 'text-black' : 'text-gray-600'}`}>
                         {phase.name}
                       </span>
                       {isCurrent && (
-                        <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-600">
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
                           Current
                         </span>
                       )}
                       {isCompleted && (
-                        <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600">
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                           Completed
                         </span>
                       )}
+                      {phase.estimated_duration && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                          {phase.estimated_duration}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-sm text-slate-500">{phase.description}</p>
+                    <p className="text-sm text-gray-500 line-clamp-2">{phase.description}</p>
                   </div>
                 </div>
                 {isExpanded ? (
-                  <ChevronUp className="h-5 w-5 text-slate-600" />
+                  <ChevronUp className="h-5 w-5 text-gray-600 flex-shrink-0" />
                 ) : (
-                  <ChevronDown className="h-5 w-5 text-slate-600" />
+                  <ChevronDown className="h-5 w-5 text-gray-600 flex-shrink-0" />
                 )}
               </button>
               {isExpanded && (
-                <div className="border-t border-slate-200 p-4">
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div>
-                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-600">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Key Tasks
-                      </h4>
-                      <ul className="space-y-2">
-                        {phase.tasks.map((task, idx) => (
-                          <li key={idx} className="flex items-center gap-2 text-sm text-slate-600">
-                            <Circle className="h-2 w-2 fill-slate-600 text-slate-600" />
-                            {task}
-                          </li>
-                        ))}
-                      </ul>
+                <div className="border-t border-gray-200 p-4">
+                  {phase.description && (
+                    <p className="text-sm text-gray-600 mb-4">{phase.description}</p>
+                  )}
+                  {phase.tasks.length === 0 && phase.deliverables.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-4 text-center">
+                      <p className="text-sm text-gray-500">No tasks or deliverables defined for this phase</p>
                     </div>
-                    <div>
-                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-600">
-                        <FileText className="h-4 w-4" />
-                        Deliverables
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {phase.deliverables.map((deliverable, idx) => (
-                          <span key={idx} className="rounded-full bg-primary-50 px-3 py-1 text-xs text-primary-600">
-                            {deliverable}
-                          </span>
-                        ))}
-                      </div>
+                  ) : (
+                    <div className="grid gap-6 md:grid-cols-2">
+                      {phase.tasks.length > 0 && (
+                        <div>
+                          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700">
+                            <CheckCircle2 className="h-4 w-4" />
+                            Key Tasks
+                          </h4>
+                          <ul className="space-y-2">
+                            {phase.tasks.map((task: string, idx: number) => (
+                              <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+                                <Circle className="mt-1.5 h-2 w-2 flex-shrink-0 fill-gray-400 text-gray-400" />
+                                {task}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {phase.deliverables.length > 0 && (
+                        <div>
+                          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700">
+                            <FileText className="h-4 w-4" />
+                            Deliverables
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {phase.deliverables.map((deliverable: string, idx: number) => (
+                              <span key={idx} className="rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">
+                                {deliverable}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -741,45 +966,53 @@ export default function CertificationJourneyPage() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div className="card flex items-center gap-3 !p-4">
-                      <MapPin className="h-5 w-5 text-blue-600" />
+          <div className="rounded-lg bg-blue-500/20 p-2">
+            <MapPin className="h-5 w-5 text-blue-400" />
+          </div>
           <div>
-            <p className="text-2xl font-bold text-black">0</p>
-            <p className="text-xs text-slate-600">Locations</p>
+            <p className="text-2xl font-bold text-white">0</p>
+            <p className="text-xs text-slate-400">Locations</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-                      <XCircle className="h-5 w-5 text-orange-600" />
+          <div className="rounded-lg bg-orange-500/20 p-2">
+            <XCircle className="h-5 w-5 text-orange-400" />
+          </div>
           <div>
-            <p className="text-2xl font-bold text-black">0</p>
-            <p className="text-xs text-slate-600">Exclusions</p>
+            <p className="text-2xl font-bold text-white">0</p>
+            <p className="text-xs text-slate-400">Exclusions</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-                      <Building2 className="h-5 w-5 text-primary-600" />
+          <div className="rounded-lg bg-purple-500/20 p-2">
+            <Building2 className="h-5 w-5 text-purple-400" />
+          </div>
           <div>
-            <p className="text-2xl font-bold text-black">0</p>
-            <p className="text-xs text-slate-600">Departments</p>
+            <p className="text-2xl font-bold text-white">0</p>
+            <p className="text-xs text-slate-400">Departments</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-                      <Percent className="h-5 w-5 text-green-600" />
+          <div className="rounded-lg bg-green-500/20 p-2">
+            <Percent className="h-5 w-5 text-green-400" />
+          </div>
           <div>
-            <p className="text-2xl font-bold text-black">0%</p>
-            <p className="text-xs text-slate-600">Complete</p>
+            <p className="text-2xl font-bold text-white">0%</p>
+            <p className="text-xs text-slate-400">Complete</p>
           </div>
         </div>
       </div>
 
       <div className="card">
-        <div className="mb-6 flex gap-4 border-b border-slate-200">
+        <div className="mb-6 flex gap-4 border-b border-slate-700">
           {(['definition', 'locations', 'exclusions', 'departments'] as ScopingSubTab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setScopingSubTab(tab)}
               className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                 scopingSubTab === tab
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-slate-600 hover:text-slate-900'
+                  ? 'border-primary-500 text-primary-400'
+                  : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
               {tab === 'definition' ? 'Scope Definition' : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -827,8 +1060,8 @@ export default function CertificationJourneyPage() {
         {scopingSubTab === 'locations' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <MapPin className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-black">No Locations Defined</h3>
-            <p className="mt-1 text-slate-600">Add locations that are in scope for certification</p>
+            <h3 className="text-lg font-medium text-white">No Locations Defined</h3>
+            <p className="mt-1 text-slate-400">Add locations that are in scope for certification</p>
             <button className="btn-primary mt-4 flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Add Location
@@ -839,8 +1072,8 @@ export default function CertificationJourneyPage() {
         {scopingSubTab === 'exclusions' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <XCircle className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-black">No Exclusions Defined</h3>
-            <p className="mt-1 text-slate-600">Document any scope exclusions with justifications</p>
+            <h3 className="text-lg font-medium text-white">No Exclusions Defined</h3>
+            <p className="mt-1 text-slate-400">Document any scope exclusions with justifications</p>
             <button className="btn-primary mt-4 flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Add Exclusion
@@ -851,8 +1084,8 @@ export default function CertificationJourneyPage() {
         {scopingSubTab === 'departments' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Building2 className="mb-4 h-12 w-12 text-slate-600" />
-            <h3 className="text-lg font-medium text-black">No Departments Defined</h3>
-            <p className="mt-1 text-slate-600">Add departments that are in scope for certification</p>
+            <h3 className="text-lg font-medium text-white">No Departments Defined</h3>
+            <p className="mt-1 text-slate-400">Add departments that are in scope for certification</p>
             <button className="btn-primary mt-4 flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Add Department
@@ -864,43 +1097,43 @@ export default function CertificationJourneyPage() {
   );
 
   const renderSubControlsRecursive = (subControls: SubControlWithEvidence[], depth: number): JSX.Element => {
-    const borderColors = ['border-primary-200', 'border-cyan-500/30', 'border-primary-200'];
-    const bgColors = ['bg-slate-50/50', 'bg-slate-50/40', 'bg-slate-50/30'];
+    const borderColors = ['border-blue-300', 'border-cyan-300', 'border-purple-300'];
+    const bgColors = ['bg-gray-50', 'bg-gray-50', 'bg-white'];
     const borderColor = borderColors[Math.min(depth, borderColors.length - 1)];
     const bgColor = bgColors[Math.min(depth, bgColors.length - 1)];
     
     return (
       <div className={`space-y-2 ${depth > 0 ? `pl-4 border-l-2 ${borderColor}` : `pl-4 border-l-2 ${borderColor}`}`}>
         {subControls.map((sub, idx) => (
-          <div key={sub.id || idx} className={`rounded-lg ${bgColor} p-3`}>
+          <div key={sub.id || idx} className={`rounded-lg ${bgColor} border border-gray-200 p-3`}>
             <div className="flex items-start gap-3">
-              <ChevronRight className={`h-4 w-4 mt-0.5 flex-shrink-0 ${depth === 0 ? 'text-primary-600' : depth === 1 ? 'text-cyan-600' : 'text-primary-600'}`} />
+              <ChevronRight className={`h-4 w-4 mt-0.5 flex-shrink-0 ${depth === 0 ? 'text-blue-600' : depth === 1 ? 'text-cyan-600' : 'text-purple-600'}`} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className={`font-mono text-xs ${depth === 0 ? 'text-primary-600' : depth === 1 ? 'text-cyan-600' : 'text-primary-600'}`}>{sub.code}</span>
+                  <span className={`font-mono text-xs ${depth === 0 ? 'text-blue-600' : depth === 1 ? 'text-cyan-600' : 'text-purple-600'}`}>{sub.code}</span>
                   <span className="text-sm font-medium text-black">{sub.name}</span>
                   {depth > 0 && (
-                    <span className="rounded bg-slate-200/50 px-1.5 py-0.5 text-xs text-slate-500">Level {depth + 1}</span>
+                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">Level {depth + 1}</span>
                   )}
                 </div>
                 {sub.description && (
-                  <p className="text-xs text-slate-600 mt-1 line-clamp-2">{sub.description}</p>
+                  <p className="text-xs text-gray-600 mt-1 line-clamp-2">{sub.description}</p>
                 )}
                 {sub.evidence_requirements && sub.evidence_requirements.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {sub.evidence_requirements.slice(0, 4).map((ev, evIdx) => (
-                      <span key={evIdx} className="rounded bg-slate-200/50 px-1.5 py-0.5 text-xs text-slate-600">
+                      <span key={evIdx} className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">
                         {ev.title}
                       </span>
                     ))}
                     {sub.evidence_requirements.length > 4 && (
-                      <span className="text-xs text-slate-500">+{sub.evidence_requirements.length - 4} more</span>
+                      <span className="text-xs text-gray-600">+{sub.evidence_requirements.length - 4} more</span>
                     )}
                   </div>
                 )}
                 {sub.sub_controls && sub.sub_controls.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-xs text-slate-500 mb-2">Sub-controls ({sub.sub_controls.length})</p>
+                    <p className="text-xs text-gray-600 mb-2">Sub-controls ({sub.sub_controls.length})</p>
                     {renderSubControlsRecursive(sub.sub_controls, depth + 1)}
                   </div>
                 )}
@@ -916,51 +1149,51 @@ export default function CertificationJourneyPage() {
     const isExpanded = expandedControls.includes(control.id);
     const category = getCategoryFromDomain(control.domain_name);
     const statusConfig: Record<string, { label: string; color: string }> = {
-      not_started: { label: 'Not Implemented', color: 'bg-red-50 text-red-700' },
-      in_progress: { label: 'Partial', color: 'bg-yellow-50 text-yellow-700' },
-      implemented: { label: 'Implemented', color: 'bg-green-50 text-green-700' },
+      not_started: { label: 'Not Implemented', color: 'bg-rose-50 text-rose-700' },
+      in_progress: { label: 'Partial', color: 'bg-amber-50 text-amber-700' },
+      implemented: { label: 'Implemented', color: 'bg-emerald-50 text-emerald-700' },
       verified: { label: 'Verified', color: 'bg-blue-50 text-blue-700' },
-      not_applicable: { label: 'N/A', color: 'bg-slate-50 text-slate-700' },
+      not_applicable: { label: 'N/A', color: 'bg-gray-50 text-gray-700' },
     };
     const status = statusConfig[control.status] || statusConfig.not_started;
     
     return (
-      <div key={control.id} className="rounded-lg border border-slate-200 bg-white/50">
+      <div key={control.id} className="rounded-lg border border-gray-200 bg-white">
         <button
           onClick={() => toggleControl(control.id)}
           className="flex w-full items-center justify-between p-4 text-left"
         >
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {isExpanded ? (
-              <ChevronDown className="h-4 w-4 text-slate-600 flex-shrink-0" />
+              <ChevronDown className="h-4 w-4 text-gray-600 flex-shrink-0" />
             ) : (
-              <ChevronRight className="h-4 w-4 text-slate-600 flex-shrink-0" />
+              <ChevronRight className="h-4 w-4 text-gray-600 flex-shrink-0" />
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm text-primary-600">{control.control_code}</span>
+                <span className="font-mono text-sm text-blue-600">{control.control_code}</span>
                 <span className="font-medium text-black truncate">{control.control_name}</span>
               </div>
-              <p className="text-sm text-slate-500 truncate mt-0.5">{control.control_statement}</p>
+              <p className="text-sm text-gray-500 truncate mt-0.5">{control.control_statement}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-            <span className="rounded-full bg-slate-200 px-2 py-1 text-xs text-slate-600">{category}</span>
-            <span className={`rounded-full px-2 py-1 text-xs ${control.is_applicable ? 'bg-green-50 text-green-700' : 'bg-slate-50 text-slate-700'}`}>
+            <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700">{category}</span>
+            <span className={`rounded-full px-2 py-1 text-xs ${control.is_applicable ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-700'}`}>
               {control.is_applicable ? 'Applicable' : 'N/A'}
             </span>
             <span className={`rounded-full px-2 py-1 text-xs ${status.color}`}>{status.label}</span>
-            <span className="text-xs text-slate-500">{control.evidence_count}/{control.required_evidence_count}</span>
-            <Circle className={`h-4 w-4 ${control.evidence_count > 0 ? 'text-green-600 fill-green-400' : 'text-slate-600'}`} />
+            <span className="text-xs text-gray-500">{control.evidence_count}/{control.required_evidence_count}</span>
+            <Circle className={`h-4 w-4 ${control.evidence_count > 0 ? 'text-emerald-600 fill-emerald-600' : 'text-gray-300'}`} />
           </div>
         </button>
         {isExpanded && (
-          <div className="border-t border-slate-200 p-4">
+          <div className="border-t border-gray-200 p-4">
             {/* Sub-controls section - recursive hierarchy */}
             {control.sub_controls && control.sub_controls.length > 0 && (
               <div className="mb-6">
                 <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-black">
-                  <Layers className="h-4 w-4 text-primary-600" />
+                  <Layers className="h-4 w-4 text-blue-600" />
                   Control Hierarchy ({control.sub_controls.length} sub-controls)
                 </h4>
                 {renderSubControlsRecursive(control.sub_controls, 0)}
@@ -972,7 +1205,7 @@ export default function CertificationJourneyPage() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-black">
-                    <Paperclip className="h-4 w-4 text-primary-600" />
+                    <Paperclip className="h-4 w-4 text-blue-600" />
                     Linked Evidence ({control.evidence_count})
                   </h4>
                   {showUpload && (
@@ -983,7 +1216,7 @@ export default function CertificationJourneyPage() {
                         onChange={(e) => handleFileUpload(control.id, e)}
                         disabled={uploadingControlId === control.id}
                       />
-                      <span className="flex items-center gap-1 rounded bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600">
+                      <span className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
                         {uploadingControlId === control.id ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
@@ -1001,15 +1234,15 @@ export default function CertificationJourneyPage() {
                         const status = ev.ai_assessment_status || 'pending';
                         switch (status) {
                           case 'completed':
-                            return { label: 'Assessed', className: 'bg-green-50 text-green-700' };
+                            return { label: 'Assessed', className: 'bg-emerald-50 text-emerald-700' };
                           case 'processing':
-                            return { label: 'Assessing...', className: 'bg-yellow-50 text-yellow-700' };
+                            return { label: 'Assessing...', className: 'bg-amber-50 text-amber-700' };
                           case 'pending_assessment':
                             return { label: 'Ready for Assessment', className: 'bg-blue-50 text-blue-700' };
                           case 'pending_ocr':
-                            return { label: 'Processing...', className: 'bg-slate-50 text-slate-700' };
+                            return { label: 'Processing...', className: 'bg-gray-50 text-gray-700' };
                           default:
-                            return { label: 'Pending', className: 'bg-slate-50 text-slate-700' };
+                            return { label: 'Pending', className: 'bg-gray-50 text-gray-700' };
                         }
                       };
                       const aiBadge = getAIAssessmentBadge();
@@ -1018,29 +1251,29 @@ export default function CertificationJourneyPage() {
                       const isPendingReview = ev.review_status === 'pending';
                       
                       return (
-                        <div key={ev.id} className="rounded-lg bg-slate-50/50 p-3">
+                        <div key={ev.id} className="rounded-lg bg-gray-50 border border-gray-200 p-3">
                           <div className="flex items-center gap-3">
-                            <Paperclip className="h-4 w-4 text-slate-600 flex-shrink-0" />
+                            <Paperclip className="h-4 w-4 text-gray-600 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-black truncate">{ev.file_name || 'Evidence file'}</p>
-                              <p className="text-xs text-slate-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
+                              <p className="text-xs text-gray-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <span className={`rounded px-2 py-0.5 text-xs ${aiBadge.className}`} title={ev.ai_assessment_summary || ''}>
                                 {aiBadge.label}
                               </span>
                               <span className={`rounded px-2 py-0.5 text-xs ${
-                                ev.review_status === 'approved' ? 'bg-green-50 text-green-700' :
-                                ev.review_status === 'rejected' ? 'bg-red-50 text-red-700' :
-                                'bg-yellow-50 text-yellow-700'
+                                ev.review_status === 'approved' ? 'bg-emerald-50 text-emerald-700' :
+                                ev.review_status === 'rejected' ? 'bg-rose-50 text-rose-700' :
+                                'bg-amber-50 text-amber-700'
                               }`}>
                                 {ev.review_status}
                               </span>
                             </div>
                           </div>
                           {ev.ai_assessment_summary && (
-                            <div className="mt-2 ml-7 rounded bg-white/50 p-2">
-                              <p className="text-xs text-slate-600">{ev.ai_assessment_summary}</p>
+                            <div className="mt-2 ml-7 rounded bg-white border border-gray-200 p-2">
+                              <p className="text-xs text-gray-700">{ev.ai_assessment_summary}</p>
                             </div>
                           )}
                           {/* Action buttons row */}
@@ -1052,7 +1285,7 @@ export default function CertificationJourneyPage() {
                                     reviewEvidenceMutation.mutate({ evidenceId: ev.id, action: 'approve' });
                                   }}
                                   disabled={reviewEvidenceMutation.isPending}
-                                  className="flex items-center gap-1 rounded bg-green-50 px-2 py-1 text-xs font-medium text-green-600 hover:bg-green-100 disabled:opacity-50"
+                                  className="flex items-center gap-1 rounded bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                                   title="Approve evidence"
                                 >
                                   <CheckCircle className="h-3 w-3" />
@@ -1063,7 +1296,7 @@ export default function CertificationJourneyPage() {
                                     reviewEvidenceMutation.mutate({ evidenceId: ev.id, action: 'reject' });
                                   }}
                                   disabled={reviewEvidenceMutation.isPending}
-                                  className="flex items-center gap-1 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                                  className="flex items-center gap-1 rounded bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                                   title="Reject evidence"
                                 >
                                   <XCircle className="h-3 w-3" />
@@ -1078,7 +1311,7 @@ export default function CertificationJourneyPage() {
                                   assessEvidenceMutation.mutate(ev.linked_evidence_id);
                                 }}
                                 disabled={isAssessing}
-                                className="flex items-center gap-1 rounded bg-primary-500 px-2 py-1 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+                                className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                                 title="Trigger AI assessment"
                               >
                                 {isAssessing ? (
@@ -1097,7 +1330,7 @@ export default function CertificationJourneyPage() {
                                 }
                               }}
                               disabled={deletingEvidenceId === ev.id}
-                              className="flex items-center gap-1 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                              className="flex items-center gap-1 rounded bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                               title="Delete evidence"
                             >
                               {deletingEvidenceId === ev.id ? (
@@ -1113,17 +1346,17 @@ export default function CertificationJourneyPage() {
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/30 p-6 text-center">
-                    <Paperclip className="mx-auto h-8 w-8 text-slate-600 mb-2" />
-                    <p className="text-sm text-slate-600">No evidence linked yet</p>
-                    <p className="text-xs text-slate-500 mt-1">Upload evidence to comply</p>
+                  <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center">
+                    <Paperclip className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                    <p className="text-sm text-black">No evidence linked yet</p>
+                    <p className="text-xs text-gray-600 mt-1">Upload evidence to comply</p>
                   </div>
                 )}
               </div>
               {/* Required Evidence - Now appears SECOND (right column) */}
               <div>
                 <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-black">
-                  <FileCheck className="h-4 w-4 text-slate-600" />
+                  <FileCheck className="h-4 w-4 text-blue-600" />
                   Required Evidence for {control.control_code}
                 </h4>
                 {control.evidence_requirements?.length > 0 ? (
@@ -1131,29 +1364,29 @@ export default function CertificationJourneyPage() {
                     {control.evidence_requirements.map((ev, idx: number) => {
                       const evType = ev.type || 'document';
                       const typeColors: Record<string, string> = {
-                        'policy': 'bg-blue-50 text-blue-700',
-                        'procedure': 'bg-primary-50 text-primary-700',
-                        'log': 'bg-orange-50 text-orange-700',
-                        'report': 'bg-pink-500/20 text-pink-400',
-                        'screenshot': 'bg-cyan-50 text-cyan-700',
-                        'record': 'bg-green-50 text-green-700',
-                        'configuration': 'bg-indigo-500/20 text-indigo-400',
-                        'certificate': 'bg-emerald-50 text-emerald-700',
-                        'contract': 'bg-amber-50 text-amber-700',
-                        'attestation': 'bg-teal-500/20 text-teal-400',
-                        'test_results': 'bg-lime-500/20 text-lime-400',
-                        'register': 'bg-violet-500/20 text-violet-400',
+                        'policy': 'bg-blue-100 text-blue-700',
+                        'procedure': 'bg-purple-100 text-purple-700',
+                        'log': 'bg-orange-100 text-orange-700',
+                        'report': 'bg-pink-100 text-pink-700',
+                        'screenshot': 'bg-cyan-100 text-cyan-700',
+                        'record': 'bg-green-100 text-green-700',
+                        'configuration': 'bg-indigo-100 text-indigo-700',
+                        'certificate': 'bg-emerald-100 text-emerald-700',
+                        'contract': 'bg-amber-100 text-amber-700',
+                        'attestation': 'bg-teal-100 text-teal-700',
+                        'test_results': 'bg-lime-100 text-lime-700',
+                        'register': 'bg-violet-100 text-violet-700',
                       };
-                      const typeColor = typeColors[evType] || 'bg-slate-50 text-slate-700';
+                      const typeColor = typeColors[evType] || 'bg-gray-100 text-gray-700';
                       const typeLabel = evType.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                       
                       return (
-                        <div key={`${idx}`} className="rounded-lg bg-slate-50/50 p-3">
+                        <div key={`${idx}`} className="rounded-lg bg-gray-50 border border-gray-200 p-3">
                           <div className="flex items-start gap-3">
-                            <Radio className="h-4 w-4 text-primary-600 mt-1 flex-shrink-0" />
+                            <Radio className="h-4 w-4 text-blue-600 mt-1 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-black">{ev.title}</p>
-                              <p className="text-xs text-slate-600 mt-1">{ev.description}</p>
+                              <p className="text-xs text-gray-600 mt-1">{ev.description}</p>
                               <div className="mt-2 flex flex-wrap items-center gap-2">
                                 <span className={`rounded px-1.5 py-0.5 text-xs ${typeColor}`}>
                                   {typeLabel}
@@ -1161,7 +1394,7 @@ export default function CertificationJourneyPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className={`rounded px-2 py-1 text-xs ${ev.is_required !== false ? 'bg-red-50 text-red-700' : 'bg-slate-200 text-slate-500'}`}>
+                              <span className={`rounded px-2 py-1 text-xs ${ev.is_required !== false ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
                                 {ev.is_required !== false ? 'Required' : 'Optional'}
                               </span>
                               {showUpload && (
@@ -1172,7 +1405,7 @@ export default function CertificationJourneyPage() {
                                     onChange={(e) => handleFileUpload(control.id, e)}
                                     disabled={uploadingControlId === control.id}
                                   />
-                                  <span className="flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-200">
+                                  <span className="flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
                                     {uploadingControlId === control.id ? (
                                       <Loader2 className="h-3 w-3 animate-spin" />
                                     ) : (
@@ -1188,8 +1421,8 @@ export default function CertificationJourneyPage() {
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-lg bg-slate-50/50 p-4 text-center">
-                    <p className="text-sm text-slate-600">No evidence requirements defined</p>
+                  <div className="rounded-lg bg-white border border-dashed border-gray-300 p-4 text-center">
+                    <p className="text-sm text-black">No evidence requirements defined</p>
                   </div>
                 )}
               </div>
@@ -1204,55 +1437,63 @@ export default function CertificationJourneyPage() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-slate-200 p-2">
-            <Layers className="h-5 w-5 text-slate-600" />
+          <div className="rounded-lg bg-slate-700 p-2">
+            <Layers className="h-5 w-5 text-slate-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-black">{controlStats.total}</p>
-            <p className="text-xs text-slate-600">Total Controls</p>
+            <p className="text-2xl font-bold text-white">{controlStats.total}</p>
+            <p className="text-xs text-slate-400">Total Controls</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+          <div className="rounded-lg bg-green-500/20 p-2">
+            <CheckCircle2 className="h-5 w-5 text-green-400" />
+          </div>
           <div>
-            <p className="text-2xl font-bold text-green-600">{controlStats.applicable}</p>
-            <p className="text-xs text-slate-600">Applicable</p>
+            <p className="text-2xl font-bold text-green-400">{controlStats.applicable}</p>
+            <p className="text-xs text-slate-400">Applicable</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-slate-200 p-2">
-            <XCircle className="h-5 w-5 text-slate-600" />
+          <div className="rounded-lg bg-slate-700 p-2">
+            <XCircle className="h-5 w-5 text-slate-400" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-600">{controlStats.notApplicable}</p>
-            <p className="text-xs text-slate-600">Not Applicable</p>
-          </div>
-        </div>
-        <div className="card flex items-center gap-3 !p-4">
-                      <Check className="h-5 w-5 text-blue-600" />
-          <div>
-            <p className="text-2xl font-bold text-blue-600">{controlStats.implemented}</p>
-            <p className="text-xs text-slate-600">Implemented</p>
+            <p className="text-2xl font-bold text-slate-400">{controlStats.notApplicable}</p>
+            <p className="text-xs text-slate-400">Not Applicable</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-                      <Clock className="h-5 w-5 text-yellow-600" />
+          <div className="rounded-lg bg-blue-500/20 p-2">
+            <Check className="h-5 w-5 text-blue-400" />
+          </div>
           <div>
-            <p className="text-2xl font-bold text-yellow-600">{controlStats.partial}</p>
-            <p className="text-xs text-slate-600">Partial</p>
+            <p className="text-2xl font-bold text-blue-400">{controlStats.implemented}</p>
+            <p className="text-xs text-slate-400">Implemented</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-                      <AlertCircle className="h-5 w-5 text-red-600" />
+          <div className="rounded-lg bg-yellow-500/20 p-2">
+            <Clock className="h-5 w-5 text-yellow-400" />
+          </div>
           <div>
-            <p className="text-2xl font-bold text-red-600">{controlStats.notImplemented}</p>
-            <p className="text-xs text-slate-600">Not Implemented</p>
+            <p className="text-2xl font-bold text-yellow-400">{controlStats.partial}</p>
+            <p className="text-xs text-slate-400">Partial</p>
+          </div>
+        </div>
+        <div className="card flex items-center gap-3 !p-4">
+          <div className="rounded-lg bg-red-500/20 p-2">
+            <AlertCircle className="h-5 w-5 text-red-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-red-400">{controlStats.notImplemented}</p>
+            <p className="text-xs text-slate-400">Not Implemented</p>
           </div>
         </div>
       </div>
 
       <div className="card">
-        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-700 pb-4">
           {([
             { key: 'all', label: 'All', count: controlStats.total },
             { key: 'organizational', label: 'Organizational', count: controlStats.byCategory.organizational },
@@ -1266,7 +1507,7 @@ export default function CertificationJourneyPage() {
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 categoryFilter === cat.key
                   ? 'bg-primary-500 text-white'
-                  : 'bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
               }`}
             >
               {cat.label} ({cat.count})
@@ -1276,7 +1517,7 @@ export default function CertificationJourneyPage() {
 
         <div className="mb-4 flex gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search controls..."
@@ -1303,7 +1544,7 @@ export default function CertificationJourneyPage() {
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Shield className="mb-4 h-12 w-12 text-slate-600" />
-              <p className="text-slate-600">No controls found</p>
+              <p className="text-slate-400">No controls found</p>
               <p className="text-sm text-slate-500 mt-1">Try adjusting your filters</p>
             </div>
           )}
@@ -1312,58 +1553,62 @@ export default function CertificationJourneyPage() {
     </div>
   );
 
-  const totalEvidence = controls?.reduce((acc: number, c: CertificationControl) => acc + c.evidence_count, 0) || 0;
-
   const renderControlsTab = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-slate-200 p-2">
-            <Layers className="h-5 w-5 text-slate-600" />
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center gap-3 p-4">
+          <div className="rounded-lg bg-gray-100 p-2">
+            <Layers className="h-5 w-5 text-gray-600" />
           </div>
           <div>
             <p className="text-2xl font-bold text-black">{controlStats.total}</p>
-            <p className="text-xs text-slate-600">Total Controls</p>
+            <p className="text-xs text-gray-600">Total Controls</p>
           </div>
         </div>
-        <div className="card flex items-center gap-3 !p-4">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center gap-3 p-4">
+          <div className="rounded-lg bg-emerald-50 p-2">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          </div>
           <div>
-            <p className="text-2xl font-bold text-green-600">{controlStats.implemented}</p>
-            <p className="text-xs text-slate-600">Implemented</p>
+            <p className="text-2xl font-bold text-emerald-600">{controlStats.implemented}</p>
+            <p className="text-xs text-gray-600">Implemented</p>
           </div>
         </div>
-        <div className="card flex items-center gap-3 !p-4">
-                      <FileCheck className="h-5 w-5 text-blue-600" />
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center gap-3 p-4">
+          <div className="rounded-lg bg-blue-50 p-2">
+            <FileCheck className="h-5 w-5 text-blue-600" />
+          </div>
           <div>
             <p className="text-2xl font-bold text-blue-600">{controlStats.partial}</p>
-            <p className="text-xs text-slate-600">In Progress</p>
+            <p className="text-xs text-gray-600">In Progress</p>
           </div>
         </div>
-        <div className="card flex items-center gap-3 !p-4">
-                      <FileText className="h-5 w-5 text-primary-600" />
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center gap-3 p-4">
+          <div className="rounded-lg bg-purple-50 p-2">
+            <FileText className="h-5 w-5 text-purple-600" />
+          </div>
           <div>
-            <p className="text-2xl font-bold text-primary-600">{totalEvidence}</p>
-            <p className="text-xs text-slate-600">Evidence Collected</p>
+            <p className="text-2xl font-bold text-purple-600">{totalEvidence}</p>
+            <p className="text-xs text-gray-600">Evidence Collected</p>
           </div>
         </div>
       </div>
 
-      <div className="card !p-4">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
         <div className="mb-2 flex items-center justify-between text-sm">
-          <span className="text-slate-600">Implementation Progress</span>
+          <span className="text-gray-600">Implementation Progress</span>
           <span className="font-medium text-black">{completionPercentage}%</span>
         </div>
-        <div className="h-3 overflow-hidden rounded-full bg-slate-200">
+        <div className="h-3 overflow-hidden rounded-full bg-gray-100">
           <div
-            className="h-full rounded-full bg-primary-500 transition-all"
+            className="h-full rounded-full bg-blue-600 transition-all"
             style={{ width: `${completionPercentage}%` }}
           />
         </div>
       </div>
 
-      <div className="card">
-        <div className="mb-6 flex items-center justify-between border-b border-slate-200 pb-4">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="mb-6 flex items-center justify-between border-b border-gray-200 pb-4">
           <div className="flex gap-4">
             {(['library', 'policies', 'evidence'] as ControlsSubTab[]).map((tab) => (
               <button
@@ -1371,15 +1616,15 @@ export default function CertificationJourneyPage() {
                 onClick={() => setControlsSubTab(tab)}
                 className={`text-sm font-medium transition-colors ${
                   controlsSubTab === tab
-                    ? 'text-primary-600'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'text-blue-600'
+                    : 'text-gray-600 hover:text-black'
                 }`}
               >
                 {tab === 'library' ? 'Control Library' : tab === 'policies' ? 'Policies & Procedures' : 'Evidence Management'}
               </button>
             ))}
           </div>
-          <button className="btn-secondary flex items-center gap-2">
+          <button className="flex items-center gap-2 rounded-lg bg-white border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
             <Download className="h-4 w-4" />
             Download Implementation Report
           </button>
@@ -1389,7 +1634,7 @@ export default function CertificationJourneyPage() {
           <div>
             <div className="mb-4 flex gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search controls..."
@@ -1435,9 +1680,9 @@ export default function CertificationJourneyPage() {
                 filteredControls.map((control: CertificationControl) => renderControlAccordion(control))
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Shield className="mb-4 h-12 w-12 text-slate-600" />
-                  <p className="text-slate-600">No controls found</p>
-                  <p className="text-sm text-slate-500 mt-1">Try adjusting your filters</p>
+                  <Shield className="mb-4 h-12 w-12 text-gray-400" />
+                  <p className="text-gray-600">No controls found</p>
+                  <p className="text-sm text-gray-500 mt-1">Try adjusting your filters</p>
                 </div>
               )}
             </div>
@@ -1446,10 +1691,10 @@ export default function CertificationJourneyPage() {
 
         {controlsSubTab === 'policies' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <BookOpen className="mb-4 h-12 w-12 text-slate-600" />
+            <BookOpen className="mb-4 h-12 w-12 text-gray-400" />
             <h3 className="text-lg font-medium text-black">Policies & Procedures</h3>
-            <p className="mt-1 text-slate-600">Manage policies and procedures documentation</p>
-            <button className="btn-primary mt-4 flex items-center gap-2">
+            <p className="mt-1 text-gray-600">Manage policies and procedures documentation</p>
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 mt-4">
               <Upload className="h-4 w-4" />
               Upload Policy
             </button>
@@ -1458,10 +1703,10 @@ export default function CertificationJourneyPage() {
 
         {controlsSubTab === 'evidence' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <FileText className="mb-4 h-12 w-12 text-slate-600" />
+            <FileText className="mb-4 h-12 w-12 text-gray-400" />
             <h3 className="text-lg font-medium text-black">Evidence Management</h3>
-            <p className="mt-1 text-slate-600">Collect and manage implementation evidence</p>
-            <button className="btn-primary mt-4 flex items-center gap-2">
+            <p className="mt-1 text-gray-600">Collect and manage implementation evidence</p>
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 mt-4">
               <Upload className="h-4 w-4" />
               Upload Evidence
             </button>
@@ -1472,19 +1717,473 @@ export default function CertificationJourneyPage() {
   );
 
   const renderPlaceholderTab = (title: string, icon: React.ReactNode, description: string) => (
-    <div className="card">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-4 rounded-full bg-white p-4">
+        <div className="mb-4 rounded-full bg-gray-50 p-4">
           {icon}
         </div>
         <h3 className="text-xl font-semibold text-black">{title}</h3>
-        <p className="mt-2 max-w-md text-slate-600">{description}</p>
-        <button className="btn-primary mt-6">
+        <p className="mt-2 max-w-md text-gray-600">{description}</p>
+        <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 mt-6">
           Get Started
         </button>
       </div>
     </div>
   );
+
+  const renderCDEScopeTab = () => {
+    if (cdeLoading || cdeAssetsFallbackLoading) {
+      return (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      );
+    }
+
+    const fallbackSystems = (cdeAssetsFallback || [])
+      .filter((asset) => {
+        const raw = (asset as any).cde_environment;
+        if (typeof raw === 'boolean') return raw;
+        if (typeof raw === 'number') return raw === 1;
+        if (typeof raw === 'string') return ['true', '1', 'yes', 'y', 'on'].includes(raw.toLowerCase().trim());
+        return false;
+      })
+      .map((asset) => ({
+        id: asset.id,
+        name: asset.name,
+        asset_type: asset.asset_type,
+        description: asset.description || '',
+        location: asset.location || '',
+        owner_name: asset.owner_name || null,
+        owner_id: asset.owner_id || null,
+        vendor: asset.vendor || null,
+        criticality: asset.criticality,
+        status: asset.status,
+        cde_environment: true,
+        created_at: asset.created_at,
+      }));
+
+    const systems = (cdeData?.systems && cdeData.systems.length > 0) ? cdeData.systems : fallbackSystems;
+    const summary = systems.reduce(
+      (acc, asset) => {
+        acc.total += 1;
+        const assetType = asset.asset_type || 'other';
+        const criticality = asset.criticality || 'medium';
+        acc.type_breakdown[assetType] = (acc.type_breakdown[assetType] || 0) + 1;
+        acc.criticality_breakdown[criticality] = (acc.criticality_breakdown[criticality] || 0) + 1;
+        return acc;
+      },
+      { total: 0, type_breakdown: {} as Record<string, number>, criticality_breakdown: {} as Record<string, number> }
+    );
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm text-blue-700">
+            CDE assets are sourced from your <a href="/assets" className="font-medium underline">IT Asset Inventory</a>. Mark an IT asset as CDE Environment to include it automatically in PCI-DSS scope.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm text-gray-600">CDE Assets</p>
+            <p className="text-2xl font-bold text-black">{summary.total}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm text-gray-600">Asset Types</p>
+            <p className="text-2xl font-bold text-black">{Object.keys(summary.type_breakdown || {}).length}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm text-gray-600">High/Critical</p>
+            <p className="text-2xl font-bold text-black">{(summary.criticality_breakdown?.critical || 0) + (summary.criticality_breakdown?.high || 0)}</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase text-gray-600">
+                <th className="px-4 py-3">Asset</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Criticality</th>
+                <th className="px-4 py-3">Location</th>
+                <th className="px-4 py-3">Vendor</th>
+                <th className="px-4 py-3">Owner</th>
+                <th className="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {systems.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                    No CDE assets found. Mark assets as CDE in IT Assets.
+                  </td>
+                </tr>
+              ) : (
+                systems.map((asset) => (
+                  <tr key={asset.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-black">{asset.name}</p>
+                      {asset.description && <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{asset.description}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700 capitalize">{asset.asset_type?.replace('_', ' ') || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 capitalize">{asset.criticality || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{asset.location || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{asset.vendor || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{asset.owner_name || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 capitalize">{asset.status || '-'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const openApplicabilityModal = (control: any, isApplicable: boolean) => {
+    setApplicabilityModalControl(control);
+    setApplicabilityIsApplicable(isApplicable);
+    setApplicabilityJustification('');
+    setShowApplicabilityModal(true);
+  };
+
+  const handleSetApplicability = () => {
+    if (!applicabilityModalControl || !journey?.framework_id) return;
+    if (!applicabilityIsApplicable && !applicabilityJustification.trim()) return;
+    setApplicabilityMutation.mutate({
+      control_id: applicabilityModalControl.id,
+      uploaded_framework_id: journey.framework_id,
+      is_applicable: applicabilityIsApplicable,
+      justification: applicabilityJustification,
+    });
+  };
+
+  const handleReviewApplicability = (status: 'approved' | 'rejected') => {
+    if (!reviewingRecord) return;
+    reviewApplicabilityMutation.mutate({
+      id: reviewingRecord.id,
+      data: { status, review_comment: reviewComment },
+    });
+  };
+
+  const renderApplicabilityTab = () => {
+    const applicabilityRecords = (applicabilityData as any)?.records || [];
+    const applicabilityMap = new Map<number, any>();
+    applicabilityRecords.forEach((r: any) => applicabilityMap.set(r.control_id, r));
+
+    const allControls = controls || [];
+    const filteredApplicabilityControls = allControls.filter((c: any) => {
+      if (applicabilityStatusFilter === 'all') return true;
+      const record = applicabilityMap.get(c.id);
+      if (applicabilityStatusFilter === 'pending') return record?.status === 'pending';
+      if (applicabilityStatusFilter === 'approved') return record?.status === 'approved';
+      if (applicabilityStatusFilter === 'rejected') return record?.status === 'rejected';
+      if (applicabilityStatusFilter === 'not_applicable') return record && !record.is_applicable;
+      return true;
+    });
+
+    const totalControls = allControls.length;
+    const naCount = applicabilityRecords.filter((r: any) => !r.is_applicable).length;
+    const pendingCount = applicabilityRecords.filter((r: any) => r.status === 'pending').length;
+    const approvedCount = applicabilityRecords.filter((r: any) => r.status === 'approved').length;
+    const rejectedCount = applicabilityRecords.filter((r: any) => r.status === 'rejected').length;
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm text-gray-600">Total Controls</p>
+            <p className="text-2xl font-bold text-black">{totalControls}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm text-gray-600">Not Applicable</p>
+            <p className="text-2xl font-bold text-orange-600">{naCount}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm text-gray-600">Pending Review</p>
+            <p className="text-2xl font-bold text-amber-600">{pendingCount}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm text-gray-600">Approved</p>
+            <p className="text-2xl font-bold text-emerald-600">{approvedCount}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm text-gray-600">Rejected</p>
+            <p className="text-2xl font-bold text-rose-600">{rejectedCount}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Filter:</span>
+          {['all', 'pending', 'approved', 'rejected', 'not_applicable'].map((f) => (
+            <button
+              key={f}
+              onClick={() => setApplicabilityStatusFilter(f)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                applicabilityStatusFilter === f
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {f === 'not_applicable' ? 'Not Applicable' : f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {applicabilityLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-600">Reference</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-600">Title</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-600">Applicable</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-600">Justification</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-600">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-600">Requested By</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredApplicabilityControls.map((control: any) => {
+                  const record = applicabilityMap.get(control.id);
+                  const isApplicable = record ? record.is_applicable : true;
+                  const status = record?.status || null;
+
+                  return (
+                    <tr key={control.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="text-sm font-mono text-blue-600">
+                          {control.control_code || control.original_reference || control.control_id || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-black line-clamp-2">
+                          {control.control_name || control.title || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {isApplicable ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Yes
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700">
+                            <XCircle className="h-3 w-3" />
+                            N/A
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-gray-700 line-clamp-2">
+                          {record?.justification || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {status === 'pending' && (
+                          <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                            <Clock className="mr-1 h-3 w-3" />
+                            Pending
+                          </span>
+                        )}
+                        {status === 'approved' && (
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                            <CheckCircle2 className="mr-1 h-3 w-3" />
+                            Approved
+                          </span>
+                        )}
+                        {status === 'rejected' && (
+                          <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
+                            <XCircle className="mr-1 h-3 w-3" />
+                            Rejected
+                          </span>
+                        )}
+                        {!status && (
+                          <span className="text-xs text-gray-500">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-gray-700">
+                          {record?.requested_by_name || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          {!record || record.is_applicable ? (
+                            <button
+                              onClick={() => openApplicabilityModal(control, false)}
+                              className="rounded-lg bg-orange-50 border border-orange-200 px-2.5 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100 transition-colors"
+                            >
+                              Mark N/A
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => openApplicabilityModal(control, true)}
+                              className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                            >
+                              Mark Applicable
+                            </button>
+                          )}
+                          {record?.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => { setReviewingRecord(record); setReviewComment(''); setShowReviewModal(true); }}
+                                className="rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+                              >
+                                Review
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredApplicabilityControls.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                      No controls found matching the selected filter.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {(applicabilityAuditLog as any[])?.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <h3 className="mb-3 text-sm font-semibold uppercase text-gray-600">Audit Trail</h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {(applicabilityAuditLog as any[]).slice(0, 20).map((log: any) => (
+                <div key={log.id} className="flex items-start gap-3 rounded-lg bg-gray-50 border border-gray-200 p-3">
+                  <div className={`mt-0.5 h-2 w-2 rounded-full flex-shrink-0 ${
+                    log.action === 'applicability_approved' ? 'bg-emerald-500' :
+                    log.action === 'applicability_rejected' ? 'bg-rose-500' : 'bg-amber-500'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-700">{log.details}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {log.created_at ? new Date(log.created_at).toLocaleString() : ''}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {showApplicabilityModal && applicabilityModalControl && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-black mb-1">
+                {applicabilityIsApplicable ? 'Mark as Applicable' : 'Mark as Not Applicable'}
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Control: <span className="text-blue-600 font-mono">{applicabilityModalControl.control_code || applicabilityModalControl.original_reference || applicabilityModalControl.control_id}</span>
+                {' — '}
+                {applicabilityModalControl.control_name || applicabilityModalControl.title}
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Justification {!applicabilityIsApplicable && <span className="text-rose-600">*</span>}
+                </label>
+                <textarea
+                  value={applicabilityJustification}
+                  onChange={(e) => setApplicabilityJustification(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  rows={4}
+                  placeholder={applicabilityIsApplicable ? 'Provide justification for re-applying this control...' : 'Explain why this clause is not applicable to your organization...'}
+                />
+                {!applicabilityIsApplicable && !applicabilityJustification.trim() && (
+                  <p className="mt-1 text-xs text-rose-600">Justification is required when marking a clause as Not Applicable</p>
+                )}
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => { setShowApplicabilityModal(false); setApplicabilityModalControl(null); }}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSetApplicability}
+                  disabled={setApplicabilityMutation.isPending || (!applicabilityIsApplicable && !applicabilityJustification.trim())}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {setApplicabilityMutation.isPending ? (
+                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Saving...</span>
+                  ) : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showReviewModal && reviewingRecord && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-black mb-1">Review Applicability Decision</h3>
+              <p className="text-sm text-gray-600 mb-2">
+                Control: <span className="text-blue-600 font-mono">{reviewingRecord.control_reference}</span>
+                {' — '}
+                {reviewingRecord.control_title}
+              </p>
+              <div className="mb-3 rounded-lg bg-gray-50 p-3 border border-gray-200">
+                <p className="text-xs text-gray-600 mb-1">Decision</p>
+                <p className="text-sm text-black">{reviewingRecord.is_applicable ? 'Applicable' : 'Not Applicable'}</p>
+                <p className="text-xs text-gray-600 mt-2 mb-1">Justification</p>
+                <p className="text-sm text-gray-700">{reviewingRecord.justification}</p>
+                <p className="text-xs text-gray-600 mt-2 mb-1">Requested By</p>
+                <p className="text-sm text-gray-700">{reviewingRecord.requested_by_name} on {reviewingRecord.requested_at ? new Date(reviewingRecord.requested_at).toLocaleDateString() : ''}</p>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Review Comment</label>
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  rows={3}
+                  placeholder="Add a review comment (optional)..."
+                />
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => { setShowReviewModal(false); setReviewingRecord(null); }}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleReviewApplicability('rejected')}
+                  disabled={reviewApplicabilityMutation.isPending}
+                  className="rounded-lg bg-rose-50 border border-rose-200 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={() => handleReviewApplicability('approved')}
+                  disabled={reviewApplicabilityMutation.isPending}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  {reviewApplicabilityMutation.isPending ? (
+                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Processing...</span>
+                  ) : 'Approve'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderActiveTab = () => {
     switch (activeTab) {
@@ -1510,6 +2209,10 @@ export default function CertificationJourneyPage() {
         return renderSoaTab();
       case 'controls':
         return renderControlsTab();
+      case 'cde-scope':
+        return renderCDEScopeTab();
+      case 'applicability':
+        return renderApplicabilityTab();
       case 'training':
         return renderPlaceholderTab(
           'Training & Awareness',
@@ -1546,39 +2249,62 @@ export default function CertificationJourneyPage() {
           <div className="flex items-center gap-4">
             <button 
               onClick={() => router.push('/frameworks')}
-              className="rounded-lg p-2 text-slate-600 hover:bg-white hover:text-slate-900"
+              className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-black"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
             <div>
               <h1 className="text-2xl font-bold text-black">{journey.name}</h1>
-              <p className="text-slate-600">{journey?.framework?.name || 'Framework'} certification lifecycle</p>
+              <p className="text-gray-600">Framework certification lifecycle</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => journey?.framework_id && enhanceMutation.mutate(journey.framework_id)}
-              disabled={enhanceMutation.isPending || !journey?.framework_id}
-              className="flex items-center gap-2 rounded-lg bg-primary-50 px-4 py-2 text-primary-600 hover:bg-primary-100 transition-colors disabled:opacity-50"
-              title="Generate AI evidence recommendations for all controls"
-            >
-              {enhanceMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Enhancing...
-                </>
+            <div className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2">
+              <Calendar className="h-4 w-4 text-gray-600" />
+              {editingTargetDate ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={targetDateValue}
+                    onChange={(e) => setTargetDateValue(e.target.value)}
+                    className="rounded bg-white px-2 py-1 text-sm text-black border border-gray-300 focus:border-blue-600 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      if (targetDateValue) updateTargetDateMutation.mutate(targetDateValue);
+                    }}
+                    disabled={updateTargetDateMutation.isPending || !targetDateValue}
+                    className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {updateTargetDateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => setEditingTargetDate(false)}
+                    className="rounded px-2 py-1 text-xs text-gray-600 hover:text-black"
+                  >
+                    Cancel
+                  </button>
+                </div>
               ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Generate Evidence Recommendations
-                </>
+                <button
+                  onClick={() => {
+                    setTargetDateValue(journey.target_date ? new Date(journey.target_date).toISOString().split('T')[0] : '');
+                    setEditingTargetDate(true);
+                  }}
+                  className="text-sm text-gray-700 hover:text-black transition-colors"
+                >
+                  {journey.target_date ? `Target: ${new Date(journey.target_date).toLocaleDateString()}` : 'Set Target Date'}
+                </button>
               )}
-            </button>
-            <button className="btn-secondary flex items-center gap-2">
+            </div>
+            <button className="flex items-center gap-2 rounded-lg bg-white border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
               <FileText className="h-4 w-4" />
               Generate Report
             </button>
-            <button className="btn-primary flex items-center gap-2">
+            <button 
+              onClick={() => router.push(`/auditor-portal/${frameworkId}`)}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
               <ExternalLink className="h-4 w-4" />
               Auditor Portal
             </button>
@@ -1586,7 +2312,7 @@ export default function CertificationJourneyPage() {
         </div>
 
         {enhanceSuccess && (
-          <div className="mt-4 rounded-lg bg-green-50 border border-green-200 p-4 text-green-600">
+          <div className="mt-4 rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-emerald-700">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5" />
               {enhanceSuccess}
@@ -1595,7 +2321,7 @@ export default function CertificationJourneyPage() {
         )}
 
         {enhanceError && (
-          <div className="mt-4 rounded-lg bg-red-50 border border-red-200 p-4 text-red-600">
+          <div className="mt-4 rounded-lg bg-rose-50 border border-rose-200 p-4 text-rose-700">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5" />
               {enhanceError}
@@ -1604,47 +2330,53 @@ export default function CertificationJourneyPage() {
         )}
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-          <div className="card flex items-center justify-center !p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center justify-center p-6">
             <CircularProgress percentage={completionPercentage} />
             <div className="ml-4">
               <p className="text-lg font-semibold text-black">Certification Readiness</p>
-              <p className="text-sm text-slate-600">Overall progress</p>
+              <p className="text-sm text-gray-600">Overall progress</p>
             </div>
           </div>
-          <div className="card !p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3">
-                              <Target className="h-5 w-5 text-primary-600" />
+              <div className="rounded-lg bg-blue-50 p-2">
+                <Target className="h-5 w-5 text-blue-600" />
+              </div>
               <div>
-                <p className="text-sm text-slate-600">Current Phase</p>
+                <p className="text-sm text-gray-600">Current Phase</p>
                 <p className="text-lg font-semibold text-black">Phase {journey.current_phase}</p>
-                <p className="text-sm text-primary-600">{phases[journey.current_phase - 1]?.name || 'Loading...'}</p>
+                <p className="text-sm text-blue-600">{phasesLoading ? 'Loading...' : (phases[journey.current_phase - 1]?.name || 'Phase ' + journey.current_phase)}</p>
               </div>
             </div>
           </div>
-          <div className="card !p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3">
-                              <Shield className="h-5 w-5 text-blue-600" />
+              <div className="rounded-lg bg-blue-50 p-2">
+                <Shield className="h-5 w-5 text-blue-600" />
+              </div>
               <div className="flex-1">
-                <p className="text-sm text-slate-600">Control Coverage</p>
+                <p className="text-sm text-gray-600">Control Coverage</p>
                 <p className="text-lg font-semibold text-black">{progress?.implemented || 0}/{progress?.total_controls || 0}</p>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100">
                   <div
-                    className="h-full rounded-full bg-blue-500"
+                    className="h-full rounded-full bg-blue-600"
                     style={{ width: `${progress?.total_controls ? (progress.implemented / progress.total_controls) * 100 : 0}%` }}
                   />
                 </div>
               </div>
             </div>
           </div>
-          <div className="card !p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3">
-                              <Calendar className="h-5 w-5 text-primary-600" />
+              <div className="rounded-lg bg-purple-50 p-2">
+                <Calendar className="h-5 w-5 text-purple-600" />
+              </div>
               <div>
-                <p className="text-sm text-slate-600">Target Date</p>
+                <p className="text-sm text-gray-600">Target Date</p>
                 <p className="text-lg font-semibold text-black">
                   {journey.target_date ? new Date(journey.target_date).toLocaleDateString() : 'Not set'}
                 </p>
-                <p className="text-sm text-slate-500">Stage 2 audit scheduled</p>
+                <p className="text-sm text-gray-500">Stage 2 audit scheduled</p>
               </div>
             </div>
           </div>
@@ -1652,15 +2384,15 @@ export default function CertificationJourneyPage() {
       </div>
 
       <div className="mb-6 overflow-x-auto">
-        <div className="flex min-w-max gap-1 border-b border-slate-200">
+        <div className="flex min-w-max gap-1 border-b border-gray-200">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors ${
                 activeTab === tab.id
-                  ? 'border-b-2 border-primary-500 text-primary-600'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'border-b-2 border-blue-600 text-blue-600'
+                  : 'text-gray-600 hover:text-black'
               }`}
             >
               {tab.label}

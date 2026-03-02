@@ -298,8 +298,7 @@ def get_framework_controls_summary(
         ParsedFrameworkControl,
         UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id
     ).filter(
-        UploadedFramework.tenant_id.in_(user_tenants),
-        UploadedFramework.upload_status.in_(["parsed", "published"])
+        (UploadedFramework.tenant_id.in_(user_tenants)) | (UploadedFramework.tenant_id.is_(None))
     ).group_by(
         UploadedFramework.id,
         UploadedFramework.name,
@@ -307,6 +306,9 @@ def get_framework_controls_summary(
         UploadedFramework.framework_type,
         UploadedFramework.upload_status
     ).all()
+    
+    # Only include frameworks that have at least one control
+    frameworks_with_controls = [f for f in frameworks if f.control_count > 0]
     
     return {
         "frameworks": [
@@ -318,10 +320,10 @@ def get_framework_controls_summary(
                 "status": f.upload_status,
                 "control_count": f.control_count
             }
-            for f in frameworks
+            for f in frameworks_with_controls
         ],
-        "total_frameworks": len(frameworks),
-        "total_controls": sum(f.control_count for f in frameworks)
+        "total_frameworks": len(frameworks_with_controls),
+        "total_controls": sum(f.control_count for f in frameworks_with_controls)
     }
 
 
@@ -342,8 +344,7 @@ def list_framework_controls(
         UploadedFramework,
         ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
     ).filter(
-        UploadedFramework.tenant_id.in_(user_tenants),
-        UploadedFramework.upload_status.in_(["parsed", "published"])
+        (UploadedFramework.tenant_id.in_(user_tenants)) | (UploadedFramework.tenant_id.is_(None))
     )
     
     if framework_id:
@@ -362,11 +363,16 @@ def list_framework_controls(
     
     total = query.count()
     
+    from sqlalchemy import text, func, cast, Integer
+    
+    # Database-agnostic ordering: fallback to control_id string order for SQLite
+    from ..models import DATABASE_URL
+    
     controls = query.options(
         joinedload(ParsedFrameworkControl.uploaded_framework)
     ).order_by(
         UploadedFramework.name,
-        ParsedFrameworkControl.control_id
+        ParsedFrameworkControl.control_id  # Simple string order that works on all databases
     ).offset(skip).limit(limit).all()
     
     control_ids = [c.id for c in controls]

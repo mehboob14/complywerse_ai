@@ -67,11 +67,11 @@ const QUESTION_TYPES = [
 ];
 
 const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
-  risk_rating: { bg: 'bg-rose-50', text: 'text-rose-600' },
-  control_rating: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
-  yes_no: { bg: 'bg-blue-50', text: 'text-blue-600' },
-  text: { bg: 'bg-primary-50', text: 'text-primary-600' },
-  multiple_choice: { bg: 'bg-amber-50', text: 'text-amber-600' },
+  risk_rating: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
+  control_rating: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  yes_no: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  text: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  multiple_choice: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
 };
 
 export default function TemplateDetailPage() {
@@ -233,8 +233,8 @@ export default function TemplateDetailPage() {
   if (error || !template) {
     return (
       <div className="card p-8 text-center">
-        <AlertCircle className="h-12 w-12 text-rose-600 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-black mb-2">Template Not Found</h3>
+        <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-slate-900 mb-2">Template Not Found</h3>
         <p className="text-slate-600 mb-4">The requested template could not be loaded.</p>
         <Link href="/risks/rcsa/templates" className="btn-primary">
           Back to Templates
@@ -252,8 +252,8 @@ export default function TemplateDetailPage() {
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-black">{template.name}</h1>
-              <span className={`text-xs px-2 py-0.5 rounded-full ${template.source === 'system' ? 'bg-blue-50 text-blue-700' : 'bg-primary-50 text-primary-700'}`}>
+              <h1 className="text-2xl font-semibold text-slate-900">{template.name}</h1>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${template.source === 'system' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
                 {template.source}
               </span>
             </div>
@@ -261,13 +261,13 @@ export default function TemplateDetailPage() {
           </div>
           <div className="flex items-center gap-3">
             {hasChanges && (
-              <span className="text-amber-600 text-sm flex items-center gap-1">
+              <span className="text-amber-400 text-sm flex items-center gap-1">
                 <AlertCircle className="h-4 w-4" />
                 Unsaved changes
               </span>
             )}
             {saveStatus === 'saved' && (
-              <span className="text-emerald-600 text-sm flex items-center gap-1">
+              <span className="text-emerald-400 text-sm flex items-center gap-1">
                 <CheckCircle className="h-4 w-4" />
                 Saved
               </span>
@@ -297,27 +297,27 @@ export default function TemplateDetailPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Category</p>
-            <p className="text-black font-medium">{template.category}</p>
+            <p className="text-slate-900 font-medium">{template.category}</p>
           </div>
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Framework Type</p>
-            <p className="text-black font-medium">{template.framework_type}</p>
+            <p className="text-slate-900 font-medium">{template.framework_type}</p>
           </div>
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Questions</p>
-            <p className="text-black font-medium">{questions.length}</p>
+            <p className="text-slate-900 font-medium">{questions.length}</p>
           </div>
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Last Updated</p>
-            <p className="text-black font-medium">{new Date(template.updated_at).toLocaleDateString()}</p>
+            <p className="text-slate-900 font-medium">{new Date(template.updated_at).toLocaleDateString()}</p>
           </div>
         </div>
       </div>
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-black flex items-center gap-2">
-            <HelpCircle className="h-5 w-5 text-primary-600" />
+          <h3 className="text-lg font-medium text-slate-900 flex items-center gap-2">
+            <HelpCircle className="h-5 w-5 text-primary-400" />
             Questions ({questions.length})
           </h3>
           {isEditable && (
@@ -344,7 +344,7 @@ export default function TemplateDetailPage() {
                 onDragStart={() => handleDragStart(index)}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragEnd={handleDragEnd}
-                className={`card p-4 ${isEditable ? 'cursor-move' : 'cursor-pointer'} ${draggedIndex === index ? 'opacity-50' : ''} hover:border-primary-200 transition-all`}
+                className={`card p-4 ${isEditable ? 'cursor-move' : 'cursor-pointer'} ${draggedIndex === index ? 'opacity-50' : ''} hover:border-primary-500/30 transition-all`}
               >
                 <div 
                   className="flex items-start gap-4"
@@ -357,7 +357,7 @@ export default function TemplateDetailPage() {
                   )}
                   <div className="text-slate-600 font-medium w-8">{question.sequence || question.question_order || index + 1}.</div>
                   <div className="flex-1">
-                    <p className="text-black mb-2">{question.question_text}</p>
+                    <p className="text-slate-900 mb-2">{question.question_text}</p>
                     <div className="flex items-center gap-3 flex-wrap">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${TYPE_COLORS[question.question_type]?.bg} ${TYPE_COLORS[question.question_type]?.text}`}>
                         {QUESTION_TYPES.find(t => t.value === question.question_type)?.label || question.question_type}
@@ -366,7 +366,7 @@ export default function TemplateDetailPage() {
                         <span className="text-xs text-slate-500">{question.category || question.section}</span>
                       )}
                       {question.is_required && (
-                        <span className="text-xs text-rose-600">Required</span>
+                        <span className="text-xs text-rose-400">Required</span>
                       )}
                       {question.question_type === 'multiple_choice' && question.options && (
                         <span className="text-xs text-slate-500">
@@ -374,7 +374,7 @@ export default function TemplateDetailPage() {
                         </span>
                       )}
                       {!isEditable && (
-                        <span className="text-xs text-primary-600 ml-auto">
+                        <span className="text-xs text-primary-400 ml-auto">
                           {isExpanded ? <ChevronUp className="h-4 w-4 inline" /> : <ChevronDown className="h-4 w-4 inline" />}
                           {isExpanded ? ' Collapse' : ' Click to expand'}
                         </span>
@@ -389,7 +389,7 @@ export default function TemplateDetailPage() {
                           setEditingQuestion(question);
                           setIsQuestionModalOpen(true);
                         }}
-                        className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded"
+                        className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded"
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
@@ -398,7 +398,7 @@ export default function TemplateDetailPage() {
                           e.stopPropagation();
                           handleDeleteQuestion(question.id);
                         }}
-                        className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded"
+                        className="p-1.5 text-slate-600 hover:text-rose-400 hover:bg-rose-500/20 rounded"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -413,7 +413,7 @@ export default function TemplateDetailPage() {
                     {question.risk_category && (
                       <div>
                         <p className="text-sm text-slate-600 mb-1">Risk Category</p>
-                        <p className="text-black">{question.risk_category}</p>
+                        <p className="text-slate-900">{question.risk_category}</p>
                       </div>
                     )}
                     
@@ -421,7 +421,7 @@ export default function TemplateDetailPage() {
                     {question.control_objective && (
                       <div>
                         <p className="text-sm text-slate-600 mb-1">Control Objective</p>
-                        <p className="text-black">{question.control_objective}</p>
+                        <p className="text-slate-900">{question.control_objective}</p>
                       </div>
                     )}
                     
@@ -429,7 +429,7 @@ export default function TemplateDetailPage() {
                     {(question.guidance || question.guidance_text) && (
                       <div>
                         <p className="text-sm text-slate-600 mb-1">Guidance</p>
-                        <p className="text-black bg-slate-200/50 p-3 rounded-lg text-sm">{question.guidance || question.guidance_text}</p>
+                        <p className="text-slate-900 bg-slate-100/50 p-3 rounded-lg text-sm">{question.guidance || question.guidance_text}</p>
                       </div>
                     )}
                     
@@ -439,7 +439,7 @@ export default function TemplateDetailPage() {
                         <p className="text-sm text-slate-600 mb-2">Available Options</p>
                         <div className="flex flex-wrap gap-2">
                           {question.options.map((opt, i) => (
-                            <span key={i} className="px-3 py-1 bg-slate-200 text-black rounded-lg text-sm">
+                            <span key={i} className="px-3 py-1 bg-slate-100 text-slate-900 rounded-lg text-sm">
                               {opt}
                             </span>
                           ))}
@@ -454,9 +454,9 @@ export default function TemplateDetailPage() {
                         <div className="flex gap-2">
                           {[1, 2, 3, 4, 5].map((rating) => (
                             <div key={rating} className={`px-3 py-2 rounded-lg text-center text-sm ${
-                              rating <= 2 ? 'bg-emerald-50 text-emerald-700' :
-                              rating <= 3 ? 'bg-amber-50 text-amber-700' :
-                              'bg-rose-50 text-rose-700'
+                              rating <= 2 ? 'bg-emerald-500/20 text-emerald-400' :
+                              rating <= 3 ? 'bg-amber-500/20 text-amber-400' :
+                              'bg-rose-500/20 text-rose-400'
                             }`}>
                               {rating}
                             </div>
@@ -473,10 +473,10 @@ export default function TemplateDetailPage() {
                         <div className="flex gap-2">
                           {['Effective', 'Partially Effective', 'Ineffective', 'Not Applicable'].map((rating) => (
                             <span key={rating} className={`px-3 py-1 rounded-lg text-sm ${
-                              rating === 'Effective' ? 'bg-emerald-50 text-emerald-700' :
-                              rating === 'Partially Effective' ? 'bg-amber-50 text-amber-700' :
-                              rating === 'Ineffective' ? 'bg-rose-50 text-rose-700' :
-                              'bg-slate-50 text-slate-700'
+                              rating === 'Effective' ? 'bg-emerald-500/20 text-emerald-400' :
+                              rating === 'Partially Effective' ? 'bg-amber-500/20 text-amber-400' :
+                              rating === 'Ineffective' ? 'bg-rose-500/20 text-rose-400' :
+                              'bg-slate-500/20 text-slate-600'
                             }`}>
                               {rating}
                             </span>
@@ -487,7 +487,7 @@ export default function TemplateDetailPage() {
                     
                     {/* AI Suggestion Badge */}
                     {question.ai_suggestion_enabled && (
-                      <div className="flex items-center gap-2 text-primary-600">
+                      <div className="flex items-center gap-2 text-primary-400">
                         <Star className="h-4 w-4" />
                         <span className="text-sm">AI suggestions enabled for this question</span>
                       </div>
@@ -502,7 +502,7 @@ export default function TemplateDetailPage() {
         {questions.length === 0 && (
           <div className="text-center py-12">
             <HelpCircle className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-black mb-2">No Questions Yet</h3>
+            <h3 className="text-lg font-medium text-slate-900 mb-2">No Questions Yet</h3>
             <p className="text-slate-600 mb-4">Add questions to build your RCSA template</p>
             {isEditable && (
               <button
@@ -549,7 +549,7 @@ function QuestionModal({
   onClose: () => void;
   onSave: (data: Partial<Question>) => void;
 }) {
-  const [questionType, setQuestionType] = useState(question?.question_type || 'text');
+  const [questionType, setQuestionType] = useState<Question['question_type']>(question?.question_type || 'text');
   const [options, setOptions] = useState<string[]>(question?.options || ['']);
 
   const handleAddOption = () => {
@@ -570,7 +570,7 @@ function QuestionModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto py-8">
       <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-slate-200 mx-4">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-black">
+          <h3 className="text-lg font-medium text-slate-900">
             {question ? 'Edit Question' : 'Add Question'}
           </h3>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
@@ -593,7 +593,7 @@ function QuestionModal({
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Question Text</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Question Text</label>
               <textarea
                 name="question_text"
                 defaultValue={question?.question_text}
@@ -605,22 +605,22 @@ function QuestionModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-2">Question Type</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Question Type</label>
               <div className="grid grid-cols-2 gap-2">
                 {QUESTION_TYPES.map((type) => (
                   <button
                     key={type.value}
                     type="button"
-                    onClick={() => setQuestionType(type.value)}
+                    onClick={() => setQuestionType(type.value as Question['question_type'])}
                     className={`p-3 rounded-lg border text-left transition-all ${
                       questionType === type.value
-                        ? 'border-primary-500 bg-primary-50'
+                        ? 'border-primary-500 bg-primary-500/10'
                         : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <type.icon className={`h-4 w-4 ${questionType === type.value ? 'text-primary-600' : 'text-slate-600'}`} />
-                      <span className={`text-sm font-medium ${questionType === type.value ? 'text-black' : 'text-slate-600'}`}>
+                      <type.icon className={`h-4 w-4 ${questionType === type.value ? 'text-primary-400' : 'text-slate-600'}`} />
+                      <span className={`text-sm font-medium ${questionType === type.value ? 'text-slate-900' : 'text-slate-700'}`}>
                         {type.label}
                       </span>
                     </div>
@@ -632,7 +632,7 @@ function QuestionModal({
 
             {questionType === 'multiple_choice' && (
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-2">Options</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Options</label>
                 <div className="space-y-2">
                   {options.map((option, index) => (
                     <div key={index} className="flex items-center gap-2">
@@ -647,7 +647,7 @@ function QuestionModal({
                         <button
                           type="button"
                           onClick={() => handleRemoveOption(index)}
-                          className="p-2 text-slate-600 hover:text-rose-600"
+                          className="p-2 text-slate-600 hover:text-rose-400"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -657,7 +657,7 @@ function QuestionModal({
                   <button
                     type="button"
                     onClick={handleAddOption}
-                    className="text-primary-600 hover:text-primary-300 text-sm flex items-center gap-1"
+                    className="text-primary-400 hover:text-primary-300 text-sm flex items-center gap-1"
                   >
                     <Plus className="h-4 w-4" />
                     Add Option
@@ -667,7 +667,7 @@ function QuestionModal({
             )}
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Category</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
               <input
                 type="text"
                 name="category"
@@ -678,7 +678,7 @@ function QuestionModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Guidance (Optional)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Guidance (Optional)</label>
               <textarea
                 name="guidance"
                 defaultValue={question?.guidance}
@@ -694,9 +694,9 @@ function QuestionModal({
                 name="is_required"
                 id="is_required"
                 defaultChecked={question?.is_required ?? true}
-                className="rounded border-slate-300 bg-slate-200 text-primary-500 focus:ring-primary-500"
+                className="rounded border-slate-300 bg-slate-100 text-primary-500 focus:ring-primary-500"
               />
-              <label htmlFor="is_required" className="text-sm text-slate-600">
+              <label htmlFor="is_required" className="text-sm text-slate-700">
                 Required question
               </label>
             </div>

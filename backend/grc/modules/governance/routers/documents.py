@@ -1,8 +1,9 @@
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import uuid
 import json
+import html
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
@@ -13,12 +14,13 @@ from openai import OpenAI
 from ....models import (
     GovernanceDocument, GovernanceDocumentVersion, DocumentReviewer,
     DocumentApprovalStep, DocumentAuditLog, GRCUser, Tenant, PolicyStatement, 
-    InternalControl, ParsedFrameworkControl, UploadedFramework, get_db
+    InternalControl, ParsedFrameworkControl, UploadedFramework, PolicyReviewHistory, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ..action_logger import log_governance_action
 
-AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
 GOVERNANCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "uploads", "governance")
 os.makedirs(GOVERNANCE_UPLOAD_DIR, exist_ok=True)
@@ -330,6 +332,25 @@ def create_document(
     )
     
     db.commit()
+    
+    # Log the action for review
+    log_governance_action(
+        db=db,
+        tenant_id=tenant_id,
+        action_type="document_draft_created",
+        action_description=f"Governance document draft created: '{document.title}' ({document.doc_type})",
+        entity_type="governance_document",
+        action_user_id=current_user.id,
+        entity_id=db_document.id,
+        action_metadata={
+            "document_code": document.document_code,
+            "doc_type": document.doc_type,
+            "doc_sub_type": document.doc_sub_type,
+            "classification": document.classification
+        }
+    )
+    db.commit()
+    
     db.refresh(db_document)
     
     return serialize_document(db_document, db)
@@ -472,6 +493,57 @@ def get_document_hierarchy(
         return result
     
     return [build_hierarchy(doc) for doc in documents]
+
+
+@router.get("/reviews/upcoming")
+def get_upcoming_reviews(
+    days: int = 90,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    now = datetime.utcnow()
+    cutoff = now + timedelta(days=days)
+    
+    documents = db.query(GovernanceDocument).filter(
+        GovernanceDocument.tenant_id.in_(user_tenants),
+        GovernanceDocument.next_review_date != None,
+        GovernanceDocument.next_review_date <= cutoff,
+        GovernanceDocument.status != "retired"
+    ).order_by(GovernanceDocument.next_review_date.asc()).all()
+    
+    results = []
+    for doc in documents:
+        is_overdue = doc.next_review_date and doc.next_review_date < now
+        days_until = (doc.next_review_date - now).days if doc.next_review_date else None
+        
+        owner_name = None
+        if doc.owner_id:
+            owner = db.query(GRCUser).filter(GRCUser.id == doc.owner_id).first()
+            if owner:
+                owner_name = owner.display_name
+        
+        results.append({
+            "document_id": doc.id,
+            "title": doc.title,
+            "doc_type": doc.doc_type,
+            "status": doc.status,
+            "review_cycle_months": doc.review_cycle_months,
+            "next_review_date": doc.next_review_date.isoformat() if doc.next_review_date else None,
+            "is_overdue": is_overdue,
+            "days_until_review": days_until,
+            "owner_name": owner_name
+        })
+    
+    overdue_count = sum(1 for r in results if r["is_overdue"])
+    upcoming_count = len(results) - overdue_count
+    
+    return {
+        "total": len(results),
+        "overdue_count": overdue_count,
+        "upcoming_count": upcoming_count,
+        "reviews": results
+    }
 
 
 @router.get("/{document_id}")
@@ -666,6 +738,166 @@ def delete_document(
     return None
 
 
+@router.get("/{document_id}/review-history")
+def get_review_history(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    reviews = db.query(PolicyReviewHistory).filter(
+        PolicyReviewHistory.document_id == document_id,
+        PolicyReviewHistory.tenant_id.in_(user_tenants)
+    ).order_by(PolicyReviewHistory.created_at.desc()).all()
+    
+    return [{
+        "id": r.id,
+        "review_type": r.review_type,
+        "review_status": r.review_status,
+        "scheduled_date": r.scheduled_date.isoformat() if r.scheduled_date else None,
+        "started_at": r.started_at.isoformat() if r.started_at else None,
+        "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+        "reviewer_id": r.reviewer_id,
+        "review_notes": r.review_notes,
+        "changes_made": r.changes_made,
+        "outcome": r.outcome,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    } for r in reviews]
+
+
+class StartReviewRequest(BaseModel):
+    review_type: str = "periodic"
+
+
+class CompleteReviewRequest(BaseModel):
+    review_notes: str = ""
+    changes_made: str = ""
+    outcome: str = "no_changes"
+
+
+@router.post("/{document_id}/start-review")
+def start_review(
+    document_id: int,
+    request_body: Optional[StartReviewRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    review_type = request_body.review_type if request_body else "periodic"
+    
+    review = PolicyReviewHistory(
+        tenant_id=document.tenant_id,
+        document_id=document_id,
+        review_type=review_type,
+        review_status="in_progress",
+        scheduled_date=document.next_review_date,
+        started_at=datetime.utcnow(),
+        reviewer_id=current_user.id,
+    )
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+    
+    return {
+        "id": review.id,
+        "review_type": review.review_type,
+        "review_status": review.review_status,
+        "scheduled_date": review.scheduled_date.isoformat() if review.scheduled_date else None,
+        "started_at": review.started_at.isoformat() if review.started_at else None,
+        "reviewer_id": review.reviewer_id,
+        "message": "Review started successfully"
+    }
+
+
+@router.post("/{document_id}/complete-review")
+def complete_review(
+    document_id: int,
+    request_body: CompleteReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    review = db.query(PolicyReviewHistory).filter(
+        PolicyReviewHistory.document_id == document_id,
+        PolicyReviewHistory.review_status == "in_progress",
+        PolicyReviewHistory.tenant_id.in_(user_tenants)
+    ).order_by(PolicyReviewHistory.created_at.desc()).first()
+    
+    if not review:
+        review = PolicyReviewHistory(
+            tenant_id=document.tenant_id,
+            document_id=document_id,
+            review_type="periodic",
+            review_status="in_progress",
+            started_at=datetime.utcnow(),
+            reviewer_id=current_user.id,
+        )
+        db.add(review)
+        db.flush()
+    
+    now = datetime.utcnow()
+    review.review_status = "completed"
+    review.completed_at = now
+    review.review_notes = request_body.review_notes
+    review.changes_made = request_body.changes_made
+    review.outcome = request_body.outcome
+    review.reviewer_id = current_user.id
+    
+    document.last_reviewed_at = now
+    document.last_reviewed_by = current_user.id
+    if document.review_cycle_months:
+        from dateutil.relativedelta import relativedelta
+        document.next_review_date = now + relativedelta(months=document.review_cycle_months)
+    
+    document.updated_at = now
+    
+    create_audit_log(
+        db=db,
+        document_id=document_id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="review_completed",
+        action_details=f"Review completed with outcome: {request_body.outcome}"
+    )
+    
+    db.commit()
+    db.refresh(review)
+    db.refresh(document)
+    
+    return {
+        "id": review.id,
+        "review_status": review.review_status,
+        "completed_at": review.completed_at.isoformat() if review.completed_at else None,
+        "outcome": review.outcome,
+        "next_review_date": document.next_review_date.isoformat() if document.next_review_date else None,
+        "message": "Review completed successfully"
+    }
+
+
 @router.post("/bulk-update-status")
 def bulk_update_status(
     bulk_update: BulkStatusUpdate,
@@ -763,6 +995,59 @@ def bulk_archive(
         "message": f"Successfully archived {archived_count} documents",
         "archived_count": archived_count
     }
+
+
+@router.put("/{document_id}/status")
+def update_document_status(
+    document_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    new_status = body.get("status")
+    valid_statuses = ["draft", "pending_review", "pending_approval", "approved", "published", "expired", "archived"]
+    if new_status not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+        )
+
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    old_status = document.status
+    document.status = new_status
+    document.updated_at = datetime.utcnow()
+
+    if new_status == "published":
+        document.published_by = current_user.id
+        document.published_at = datetime.utcnow()
+
+    create_audit_log(
+        db=db,
+        document_id=document_id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="status_changed",
+        action_details=f"Status changed from '{old_status}' to '{new_status}' by {current_user.display_name}",
+        field_changed="status",
+        old_value=old_status,
+        new_value=new_status
+    )
+
+    db.commit()
+    db.refresh(document)
+
+    return serialize_document(document, db)
 
 
 @router.post("/{document_id}/publish")
@@ -961,6 +1246,24 @@ async def upload_document_file(
         new_value=file.filename
     )
     
+    # Log the action for review
+    log_governance_action(
+        db=db,
+        tenant_id=document.tenant_id,
+        action_type="document_file_uploaded",
+        action_description=f"File uploaded to document: '{document.title}' - {file.filename}",
+        entity_type="governance_document",
+        action_user_id=current_user.id,
+        entity_id=document.id,
+        action_metadata={
+            "document_code": document.document_code,
+            "doc_type": document.doc_type,
+            "file_name": file.filename,
+            "file_size": file_size,
+            "version": document.current_version
+        }
+    )
+    
     db.commit()
     db.refresh(document)
     
@@ -1119,6 +1422,26 @@ async def create_document_with_file(
     )
     
     db.commit()
+    
+    # Log the action for review
+    log_governance_action(
+        db=db,
+        tenant_id=tenant_id,
+        action_type="document_uploaded",
+        action_description=f"Governance document uploaded: '{document.title}' ({document.doc_type}) - File: {file.filename}",
+        entity_type="governance_document",
+        action_user_id=current_user.id,
+        entity_id=document.id,
+        action_metadata={
+            "document_code": document.document_code,
+            "doc_type": document.doc_type,
+            "file_name": file.filename,
+            "file_size": file_size,
+            "classification": document.classification
+        }
+    )
+    db.commit()
+    
     db.refresh(document)
     
     return {
@@ -1134,6 +1457,10 @@ class PolicyAIDraftRequest(BaseModel):
     regulatory_scope: Optional[List[str]] = None
     description: Optional[str] = None
     include_sections: Optional[List[str]] = None
+
+
+class PolicySuggestRequest(BaseModel):
+    framework_ids: List[int]
 
 
 def generate_policy_with_openai(
@@ -1218,7 +1545,7 @@ Return a JSON object with:
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            max_completion_tokens=8192
+            max_completion_tokens=12000
         )
         
         result_text = response.choices[0].message.content or "{}"
@@ -1243,6 +1570,115 @@ Return a JSON object with:
         )
 
 
+@router.post("/ai-suggest-policies")
+def suggest_policies_for_framework(
+    request: PolicySuggestRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Given framework IDs, use AI to suggest what policies, procedures, and standards can be developed"""
+    if not request.framework_ids:
+        raise HTTPException(status_code=400, detail="At least one framework must be selected")
+    
+    frameworks = db.query(UploadedFramework).filter(
+        UploadedFramework.id.in_(request.framework_ids)
+    ).all()
+    
+    if not frameworks:
+        raise HTTPException(status_code=404, detail="No frameworks found")
+    
+    controls_summary = ""
+    for framework in frameworks:
+        controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework.id
+        ).all()
+        
+        controls_summary += f"\nFramework: {framework.name}\n"
+        controls_summary += f"Total Controls: {len(controls)}\n"
+        controls_summary += "Key Control Areas:\n"
+        
+        for control in controls[:50]:
+            ref = control.original_reference or control.control_id
+            controls_summary += f"- {ref}: {control.title}"
+            if control.description:
+                controls_summary += f" - {control.description[:150]}"
+            controls_summary += "\n"
+    
+    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI integration not configured"
+        )
+    
+    client = OpenAI(
+        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
+        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+    )
+    
+    framework_names = ", ".join([f.name for f in frameworks])
+    
+    prompt = f"""You are an expert governance and compliance consultant. Based on the following regulatory framework controls, suggest comprehensive lists of policies, procedures, and standards that an organization should develop to achieve compliance.
+
+{controls_summary}
+
+Analyze ALL the control areas and requirements, then suggest documents organized by type. For each suggestion, provide:
+- A clear, professional title
+- A brief description of what the document should cover
+- The priority level (high, medium, low) based on regulatory importance
+- Which specific control references from the framework it addresses
+
+Return a JSON object with this structure:
+{{
+  "framework_names": "{framework_names}",
+  "suggestions": [
+    {{
+      "doc_type": "policy",
+      "title": "Information Security Policy",
+      "description": "Establishes the organization's approach to information security, defining objectives, principles, and responsibilities for protecting information assets.",
+      "priority": "high",
+      "relevant_controls": ["Control-1.1", "Control-1.2"],
+      "key_sections": ["Purpose", "Scope", "Policy Statements", "Roles and Responsibilities", "Compliance", "Review"]
+    }}
+  ],
+  "total_suggestions": 0
+}}
+
+Provide at least 15-25 suggestions covering policies, procedures, standards, and guidelines. Order by priority (high first).
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an expert governance and compliance consultant. Always respond with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            max_completion_tokens=8192
+        )
+        
+        result_text = response.choices[0].message.content or "{}"
+        result = json.loads(result_text)
+        return result
+    
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to parse AI response: {str(e)}"
+        )
+    except Exception as e:
+        error_msg = str(e)
+        if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Cloud budget exceeded. Please upgrade your plan."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI API error: {error_msg}"
+        )
+
+
 @router.post("/ai-draft")
 def generate_policy_ai_draft(
     request: PolicyAIDraftRequest,
@@ -1264,7 +1700,7 @@ def generate_policy_ai_draft(
             for framework in frameworks:
                 controls = db.query(ParsedFrameworkControl).filter(
                     ParsedFrameworkControl.uploaded_framework_id == framework.id
-                ).limit(20).all()
+                ).limit(50).all()
                 
                 if controls:
                     framework_name = framework.name
@@ -1294,7 +1730,7 @@ def generate_policy_ai_draft(
                 if not any(fc.get("framework") == framework.name for fc in framework_controls):
                     controls = db.query(ParsedFrameworkControl).filter(
                         ParsedFrameworkControl.uploaded_framework_id == framework.id
-                    ).limit(10).all()
+                    ).limit(30).all()
                     
                     if controls:
                         control_ids = [c.original_reference or c.control_id for c in controls]
@@ -1330,3 +1766,149 @@ def generate_policy_ai_draft(
         "word_count": word_count,
         "estimated_review_time": estimated_review_time
     }
+
+
+@router.get("/{document_id}/view-html")
+def get_document_html(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Convert uploaded document to HTML for in-platform viewing"""
+    user_tenants = get_user_tenants(current_user, db)
+    
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+    
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # If document has a file, always prefer file-based conversion (better HTML)
+    if document.file_path and os.path.exists(document.file_path):
+        html_content = ""
+        file_type = document.file_type or ""
+        
+        try:
+            if file_type == "pdf":
+                from PyPDF2 import PdfReader
+                reader = PdfReader(document.file_path)
+                sections = []
+                for i, page in enumerate(reader.pages):
+                    page_text = page.extract_text()
+                    if page_text:
+                        lines = page_text.split('\n')
+                        page_html_parts = []
+                        for line in lines:
+                            stripped = line.strip()
+                            if not stripped:
+                                continue
+                            if stripped.isupper() and len(stripped) < 100:
+                                page_html_parts.append(f'<h3 style="color: #e2e8f0; margin-top: 1.5rem; margin-bottom: 0.5rem; font-weight: 600;">{html.escape(stripped)}</h3>')
+                            elif len(stripped) < 80 and not stripped.endswith('.') and not stripped.endswith(','):
+                                page_html_parts.append(f'<h4 style="color: #cbd5e1; margin-top: 1rem; margin-bottom: 0.25rem; font-weight: 500;">{html.escape(stripped)}</h4>')
+                            else:
+                                page_html_parts.append(f'<p style="color: #94a3b8; margin-bottom: 0.5rem; line-height: 1.6;">{html.escape(stripped)}</p>')
+                        
+                        sections.append(f'<div class="page" style="margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #334155;"><div style="color: #475569; font-size: 0.75rem; margin-bottom: 0.5rem;">Page {i+1}</div>{"".join(page_html_parts)}</div>')
+                html_content = "".join(sections)
+            
+            elif file_type in ("docx", "doc"):
+                from docx import Document as DocxDocument
+                doc = DocxDocument(document.file_path)
+                parts = []
+                for para in doc.paragraphs:
+                    text = para.text.strip()
+                    if not text:
+                        continue
+                    style_name = (para.style.name or "").lower() if para.style else ""
+                    if "heading 1" in style_name:
+                        parts.append(f'<h1 style="color: #f1f5f9; margin-top: 2rem; margin-bottom: 0.75rem; font-size: 1.5rem; font-weight: 700;">{html.escape(text)}</h1>')
+                    elif "heading 2" in style_name:
+                        parts.append(f'<h2 style="color: #e2e8f0; margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.25rem; font-weight: 600;">{html.escape(text)}</h2>')
+                    elif "heading 3" in style_name:
+                        parts.append(f'<h3 style="color: #cbd5e1; margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1.1rem; font-weight: 500;">{html.escape(text)}</h3>')
+                    elif "heading" in style_name:
+                        parts.append(f'<h4 style="color: #cbd5e1; margin-top: 0.75rem; margin-bottom: 0.25rem; font-weight: 500;">{html.escape(text)}</h4>')
+                    elif "title" in style_name:
+                        parts.append(f'<h1 style="color: #f1f5f9; margin-top: 1rem; margin-bottom: 1rem; font-size: 1.75rem; font-weight: 700; text-align: center;">{html.escape(text)}</h1>')
+                    elif "list" in style_name:
+                        parts.append(f'<li style="color: #94a3b8; margin-left: 1.5rem; margin-bottom: 0.25rem; line-height: 1.6;">{html.escape(text)}</li>')
+                    else:
+                        is_bold = all(run.bold for run in para.runs if run.text.strip()) if para.runs else False
+                        if is_bold and len(text) < 100:
+                            parts.append(f'<h4 style="color: #cbd5e1; margin-top: 0.75rem; margin-bottom: 0.25rem; font-weight: 600;">{html.escape(text)}</h4>')
+                        else:
+                            parts.append(f'<p style="color: #94a3b8; margin-bottom: 0.5rem; line-height: 1.6;">{html.escape(text)}</p>')
+                
+                for table in doc.tables:
+                    table_html = '<table style="width: 100%; border-collapse: collapse; margin: 1rem 0; border: 1px solid #334155;">'
+                    for i, row in enumerate(table.rows):
+                        table_html += '<tr>'
+                        for cell in row.cells:
+                            tag = 'th' if i == 0 else 'td'
+                            style = 'padding: 0.5rem; border: 1px solid #334155; color: #94a3b8;'
+                            if i == 0:
+                                style += ' background-color: #1e293b; color: #e2e8f0; font-weight: 600;'
+                            table_html += f'<{tag} style="{style}">{html.escape(cell.text.strip())}</{tag}>'
+                        table_html += '</tr>'
+                    table_html += '</table>'
+                    parts.append(table_html)
+                
+                html_content = "".join(parts)
+            
+            else:
+                raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_type}")
+        
+        except HTTPException:
+            raise
+        except Exception as e:
+            if document.content:
+                lines = document.content.split('\n')
+                html_parts = []
+                for line in lines:
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+                    html_parts.append(f'<p style="color: #94a3b8; margin-bottom: 0.5rem; line-height: 1.6;">{html.escape(stripped)}</p>')
+                return {
+                    "document_id": document.id,
+                    "title": document.title,
+                    "content_type": "html",
+                    "html": "".join(html_parts),
+                    "file_type": document.file_type
+                }
+            raise HTTPException(status_code=500, detail=f"Error converting document: {str(e)}")
+        
+        return {
+            "document_id": document.id,
+            "title": document.title,
+            "content_type": "html",
+            "html": html_content,
+            "file_type": file_type
+        }
+    
+    # Fall back to content field if no file
+    if document.content:
+        lines = document.content.split('\n')
+        html_parts = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.isupper() and len(stripped) < 100:
+                html_parts.append(f'<h3 style="color: #e2e8f0; margin-top: 1.5rem; margin-bottom: 0.5rem; font-weight: 600;">{html.escape(stripped)}</h3>')
+            elif len(stripped) < 80 and not stripped.endswith('.') and not stripped.endswith(','):
+                html_parts.append(f'<h4 style="color: #cbd5e1; margin-top: 1rem; margin-bottom: 0.25rem; font-weight: 500;">{html.escape(stripped)}</h4>')
+            else:
+                html_parts.append(f'<p style="color: #94a3b8; margin-bottom: 0.5rem; line-height: 1.6;">{html.escape(stripped)}</p>')
+        return {
+            "document_id": document.id,
+            "title": document.title,
+            "content_type": "html",
+            "html": "".join(html_parts),
+            "file_type": document.file_type
+        }
+    
+    raise HTTPException(status_code=404, detail="Document file not found")

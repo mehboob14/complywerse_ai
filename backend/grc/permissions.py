@@ -160,6 +160,11 @@ PERMISSION_MATRIX = [
                 "actions": ["view", "create", "edit", "delete", "approve", "publish"]
             },
             {
+                "name": "policy_exceptions",
+                "display_name": "Policy Exceptions",
+                "actions": ["view", "create", "edit", "delete", "approve"]
+            },
+            {
                 "name": "committees",
                 "display_name": "Committees",
                 "actions": ["view", "create", "edit", "delete"]

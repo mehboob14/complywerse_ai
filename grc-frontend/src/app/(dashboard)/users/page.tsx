@@ -84,46 +84,46 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">User Management</h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <h1 className="text-2xl font-bold cw-text-default">User Management</h1>
+          <p className="text-sm cw-text-muted mt-1">
             Manage users, roles, and permissions for your organization
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white/50 rounded-xl border border-slate-200 p-4">
+        <div className="cw-card p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
               <Users className="h-5 w-5 text-primary-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-black">{users.length}</p>
-              <p className="text-xs text-slate-600">Total Users</p>
+              <p className="text-2xl font-bold cw-text-default">{users.length}</p>
+              <p className="text-xs cw-text-muted">Total Users</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white/50 rounded-xl border border-slate-200 p-4">
+        <div className="cw-card p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
               <UserCheck className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-black">{activeCount}</p>
-              <p className="text-xs text-slate-600">Active Users</p>
+              <p className="text-2xl font-bold cw-text-default">{activeCount}</p>
+              <p className="text-xs cw-text-muted">Active Users</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white/50 rounded-xl border border-slate-200 p-4">
+        <div className="cw-card p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-50">
               <UserX className="h-5 w-5 text-slate-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-black">{inactiveCount}</p>
-              <p className="text-xs text-slate-600">Inactive Users</p>
+              <p className="text-2xl font-bold cw-text-default">{inactiveCount}</p>
+              <p className="text-xs cw-text-muted">Inactive Users</p>
             </div>
           </div>
         </div>
@@ -131,19 +131,19 @@ export default function UsersPage() {
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 cw-text-muted" />
           <input
             type="text"
             placeholder="Search users by name, email, or role..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white/50 py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+            className="cw-field w-full py-2.5 pl-10 pr-4 text-sm"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white/50 px-4 py-2.5 text-sm text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+          className="cw-field px-4 py-2.5 text-sm"
         >
           <option value="">All Status</option>
           <option value="active">Active</option>
@@ -151,26 +151,26 @@ export default function UsersPage() {
         </select>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white/30 overflow-hidden">
+      <div className="cw-card overflow-hidden">
         {error ? (
           <div className="p-8 text-center">
             <AlertCircle className="h-12 w-12 text-rose-500 mx-auto mb-3" />
             <p className="text-rose-600">Failed to load users</p>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm cw-text-muted mt-1">
               Please check your connection and try again
             </p>
           </div>
         ) : isLoading ? (
           <div className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary-500 border-t-transparent mx-auto" />
-            <p className="mt-3 text-sm text-slate-600">Loading users...</p>
+            <p className="mt-3 text-sm cw-text-muted">Loading users...</p>
           </div>
         ) : filteredUsers.length === 0 ? (
           <div className="p-8 text-center">
-            <Users className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-600">No users found</p>
+            <Users className="h-12 w-12 cw-text-muted mx-auto mb-3" />
+            <p className="cw-text-muted">No users found</p>
             {searchTerm && (
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="text-sm cw-text-muted mt-1">
                 Try adjusting your search criteria
               </p>
             )}
@@ -178,25 +178,25 @@ export default function UsersPage() {
         ) : (
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-200 bg-white/50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+              <tr className="border-b border-[var(--color-border)] bg-[var(--color-subtle)]">
+                <th className="px-4 py-3 text-left text-xs font-medium cw-text-muted uppercase tracking-wider">
                   User
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium cw-text-muted uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium cw-text-muted uppercase tracking-wider">
                   Department
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium cw-text-muted uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium cw-text-muted uppercase tracking-wider">
                   Joined
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/50">
+            <tbody className="divide-y divide-[var(--color-border)]">
               {filteredUsers.map((user) => {
                 const statusInfo = user.is_active
                   ? STATUS_LABELS.active
@@ -206,7 +206,7 @@ export default function UsersPage() {
                 return (
                   <tr
                     key={user.id}
-                    className="hover:bg-slate-200/30 transition-colors"
+                    className="hover:bg-[var(--color-hover)] transition-colors"
                   >
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
@@ -214,8 +214,8 @@ export default function UsersPage() {
                           {user.name?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
                         <div>
-                          <p className="font-medium text-black">{user.name || 'Unknown User'}</p>
-                          <p className="text-xs text-slate-600 flex items-center gap-1">
+                          <p className="font-medium cw-text-default">{user.name || 'Unknown User'}</p>
+                          <p className="text-xs cw-text-muted flex items-center gap-1">
                             <Mail className="h-3 w-3" />
                             {user.email}
                           </p>
@@ -224,16 +224,16 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-slate-500" />
-                        <span className="text-sm text-slate-600">
+                        <Shield className="h-4 w-4 cw-text-muted" />
+                        <span className="text-sm cw-text-muted">
                           {user.role_name || 'No Role'}
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-slate-500" />
-                        <span className="text-sm text-slate-600">
+                        <Building2 className="h-4 w-4 cw-text-muted" />
+                        <span className="text-sm cw-text-muted">
                           {user.department_name || 'No Department'}
                         </span>
                       </div>
@@ -247,7 +247,7 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                      <div className="flex items-center gap-2 text-sm cw-text-muted">
                         <Clock className="h-4 w-4" />
                         {new Date(user.created_at).toLocaleDateString()}
                       </div>

@@ -122,38 +122,38 @@ const STATUS_OPTIONS = [
 ];
 
 const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string; icon: typeof CheckCircle }> = {
-  complied: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Complied', icon: CheckCircle },
-  partially_complied: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Partial', icon: AlertTriangle },
-  not_complied: { bg: 'bg-rose-50', text: 'text-rose-600', label: 'Not Complied', icon: XCircle },
-  in_progress: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Progress', icon: Clock },
-  na: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'N/A', icon: Minus },
+  complied: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Complied', icon: CheckCircle },
+  partially_complied: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Partial', icon: AlertTriangle },
+  not_complied: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Not Complied', icon: XCircle },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'In Progress', icon: Clock },
+  na: { bg: 'bg-gray-50', text: 'text-gray-600', label: 'N/A', icon: Minus },
 };
 
 const ASSESSMENT_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
-  in_progress: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Progress' },
-  completed: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Completed' },
-  archived: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Archived' },
+  draft: { bg: 'bg-gray-50', text: 'text-gray-600', label: 'Draft' },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'In Progress' },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Completed' },
+  archived: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Archived' },
 };
 
 const EVIDENCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
-  pending_review: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Pending Review' },
-  in_approval: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'In Approval' },
-  approved: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Approved' },
-  rejected: { bg: 'bg-rose-50', text: 'text-rose-600', label: 'Rejected' },
-  returned: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'Returned' },
+  draft: { bg: 'bg-gray-50', text: 'text-gray-600', label: 'Draft' },
+  pending_review: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Review' },
+  in_approval: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'In Approval' },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
+  returned: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Returned' },
 };
 
 function getScoreColor(score: number | null): { bg: string; text: string } {
-  if (score === null) return { bg: 'bg-slate-50', text: 'text-slate-600' };
-  if (score >= 80) return { bg: 'bg-emerald-50', text: 'text-emerald-600' };
-  if (score >= 50) return { bg: 'bg-amber-50', text: 'text-amber-600' };
-  return { bg: 'bg-rose-50', text: 'text-rose-600' };
+  if (score === null) return { bg: 'bg-gray-50', text: 'text-gray-600' };
+  if (score >= 80) return { bg: 'bg-emerald-50', text: 'text-emerald-700' };
+  if (score >= 50) return { bg: 'bg-amber-50', text: 'text-amber-700' };
+  return { bg: 'bg-rose-50', text: 'text-rose-700' };
 }
 
 function getScoreBarColor(score: number | null): string {
-  if (score === null) return 'bg-slate-600';
+  if (score === null) return 'bg-gray-300';
   if (score >= 80) return 'bg-emerald-500';
   if (score >= 50) return 'bg-amber-500';
   return 'bg-rose-500';
@@ -407,17 +407,19 @@ export default function AssessmentDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
   if (error || !assessment) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-600">
-        <AlertCircle className="mb-2 h-8 w-8" />
-        <p>Failed to load assessment details</p>
-        <Link href="/compliance/assessments" className="mt-4 text-primary-600 hover:underline">
+      <div className="bg-white border border-gray-200 rounded-lg p-8 flex flex-col items-center justify-center">
+        <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center mb-4">
+          <AlertCircle className="h-6 w-6 text-rose-600" />
+        </div>
+        <p className="text-black font-medium mb-2">Failed to load assessment details</p>
+        <Link href="/compliance/assessments" className="text-blue-600 hover:text-blue-700 hover:underline font-medium">
           Back to Assessments
         </Link>
       </div>
@@ -431,13 +433,13 @@ export default function AssessmentDetailPage() {
   return (
     <div className="space-y-6">
       {aiError && (
-        <div className="fixed top-4 right-4 z-50 bg-red-900/90 border border-red-700 text-red-200 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-md animate-in slide-in-from-top-2">
-          <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+        <div className="fixed top-4 right-4 z-50 bg-rose-50 border border-rose-200 text-rose-900 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-md animate-in slide-in-from-top-2">
+          <AlertTriangle className="h-5 w-5 text-rose-600 flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-medium">AI Recommendation Error</p>
-            <p className="text-xs text-red-300">{aiError}</p>
+            <p className="text-sm font-medium text-black">AI Recommendation Error</p>
+            <p className="text-xs text-rose-700">{aiError}</p>
           </div>
-          <button onClick={() => setAiError(null)} className="text-red-300 hover:text-slate-900">
+          <button onClick={() => setAiError(null)} className="text-rose-600 hover:text-rose-800">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -445,28 +447,28 @@ export default function AssessmentDetailPage() {
       <div className="flex items-start gap-4">
         <Link
           href="/compliance/assessments"
-          className="mt-1 rounded-lg p-2 text-slate-600 hover:bg-white hover:text-slate-900"
+          className="mt-1 rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-900/50 text-primary-600">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
               <FileText className="h-6 w-6" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-black">{assessment.name}</h1>
-              <p className="text-slate-600">
+              <p className="text-gray-600">
                 {assessment.assessment_type.replace(/_/g, ' ')} • {assessment.file_name}
               </p>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`badge ${statusStyle.bg} ${statusStyle.text}`}>
+          <span className={`px-3 py-1 text-sm font-medium rounded-lg ${statusStyle.bg} ${statusStyle.text}`}>
             {statusStyle.label}
           </span>
-          <button onClick={handleExport} className="btn-secondary flex items-center gap-2">
+          <button onClick={handleExport} className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
             <Download className="h-4 w-4" />
             Export Excel
           </button>
@@ -474,70 +476,70 @@ export default function AssessmentDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <div className="stat-card">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="flex items-start justify-between mb-2">
-            <div className="rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-3">
+            <div className="rounded-xl bg-emerald-50 p-3">
               <CheckCircle className="h-5 w-5 text-emerald-600" />
             </div>
           </div>
-          <p className="stat-value text-emerald-600">{assessment.complied_count || 0}</p>
-          <p className="stat-label">Complied</p>
+          <p className="text-3xl font-bold text-emerald-600">{assessment.complied_count || 0}</p>
+          <p className="text-sm text-gray-600 mt-1">Complied</p>
         </div>
 
-        <div className="stat-card">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="flex items-start justify-between mb-2">
-            <div className="rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 p-3">
+            <div className="rounded-xl bg-amber-50 p-3">
               <AlertTriangle className="h-5 w-5 text-amber-600" />
             </div>
           </div>
-          <p className="stat-value text-amber-600">{assessment.partially_complied_count || 0}</p>
-          <p className="stat-label">Partially Complied</p>
+          <p className="text-3xl font-bold text-amber-600">{assessment.partially_complied_count || 0}</p>
+          <p className="text-sm text-gray-600 mt-1">Partially Complied</p>
         </div>
 
-        <div className="stat-card">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="flex items-start justify-between mb-2">
-            <div className="rounded-xl bg-gradient-to-br from-rose-500/20 to-rose-600/10 p-3">
+            <div className="rounded-xl bg-rose-50 p-3">
               <XCircle className="h-5 w-5 text-rose-600" />
             </div>
           </div>
-          <p className="stat-value text-rose-600">{assessment.not_complied_count || 0}</p>
-          <p className="stat-label">Not Complied</p>
+          <p className="text-3xl font-bold text-rose-600">{assessment.not_complied_count || 0}</p>
+          <p className="text-sm text-gray-600 mt-1">Not Complied</p>
         </div>
 
-        <div className="stat-card">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="flex items-start justify-between mb-2">
-            <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
+            <div className="rounded-xl bg-blue-50 p-3">
               <Clock className="h-5 w-5 text-blue-600" />
             </div>
           </div>
-          <p className="stat-value text-blue-600">{assessment.in_progress_count || 0}</p>
-          <p className="stat-label">In Progress</p>
+          <p className="text-3xl font-bold text-blue-600">{assessment.in_progress_count || 0}</p>
+          <p className="text-sm text-gray-600 mt-1">In Progress</p>
         </div>
 
-        <div className="stat-card">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="flex items-start justify-between mb-2">
-            <div className="rounded-xl bg-gradient-to-br from-slate-500/20 to-slate-600/10 p-3">
-              <Minus className="h-5 w-5 text-slate-600" />
+            <div className="rounded-xl bg-gray-50 p-3">
+              <Minus className="h-5 w-5 text-gray-600" />
             </div>
           </div>
-          <p className="stat-value text-slate-600">{assessment.na_count || 0}</p>
-          <p className="stat-label">N/A</p>
+          <p className="text-3xl font-bold text-gray-600">{assessment.na_count || 0}</p>
+          <p className="text-sm text-gray-600 mt-1">N/A</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="card">
-            <div className="card-header">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <div className="mb-4">
               <div>
-                <h2 className="card-title">Overall Compliance Score</h2>
-                <p className="card-description">Based on {assessment.total_items || 0} items</p>
+                <h2 className="text-lg font-semibold text-black">Overall Compliance Score</h2>
+                <p className="text-sm text-gray-600">Based on {assessment.total_items || 0} items</p>
               </div>
             </div>
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="flex-1">
-                  <div className="h-4 bg-slate-200 rounded-full overflow-hidden">
+                  <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
                     <div
                       className={`h-full ${getScoreBarColor(assessment.overall_score)} transition-all`}
                       style={{ width: `${assessment.overall_score || 0}%` }}
@@ -554,56 +556,56 @@ export default function AssessmentDetailPage() {
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">Assessment Details</h2>
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-black">Assessment Details</h2>
           </div>
           <div className="space-y-3">
             {assessment.source && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-600">Source</span>
+                <span className="text-gray-600">Source</span>
                 <span className="text-black">{assessment.source}</span>
               </div>
             )}
             {assessment.assessor && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-600">Assessor</span>
+                <span className="text-gray-600">Assessor</span>
                 <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-slate-500" />
+                  <User className="h-4 w-4 text-gray-400" />
                   <span className="text-black">{assessment.assessor}</span>
                 </div>
               </div>
             )}
             {assessment.due_date && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-600">Due Date</span>
+                <span className="text-gray-600">Due Date</span>
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-slate-500" />
+                  <Calendar className="h-4 w-4 text-gray-400" />
                   <span className="text-black">{formatDate(assessment.due_date)}</span>
                 </div>
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Created</span>
+              <span className="text-gray-600">Created</span>
               <span className="text-black">{formatDate(assessment.created_at)}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="card-title">Assessment Items</h2>
-            <p className="card-description">
+            <h2 className="text-lg font-semibold text-black">Assessment Items</h2>
+            <p className="text-sm text-gray-600">
               {domains.length} domain{domains.length !== 1 ? 's' : ''} • {assessment.total_items} items
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={expandAll} className="btn-secondary btn-sm">
+            <button onClick={expandAll} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
               Expand All
             </button>
-            <button onClick={collapseAll} className="btn-secondary btn-sm">
+            <button onClick={collapseAll} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
               Collapse All
             </button>
           </div>
@@ -612,8 +614,8 @@ export default function AssessmentDetailPage() {
         <div className="space-y-4">
           {domains.length === 0 ? (
             <div className="text-center py-8">
-              <FileText className="h-12 w-12 text-slate-500 mx-auto mb-3" />
-              <p className="text-slate-600">No assessment items found</p>
+              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600">No assessment items found</p>
             </div>
           ) : (
             domains.map((domain) => {
@@ -625,36 +627,36 @@ export default function AssessmentDetailPage() {
               return (
                 <div
                   key={domain}
-                  className="border border-slate-200 rounded-lg overflow-hidden"
+                  className="border border-gray-200 rounded-lg overflow-hidden"
                 >
                   <button
                     onClick={() => toggleDomain(domain)}
-                    className="w-full flex items-center justify-between p-4 bg-white/50 hover:bg-white transition-colors"
+                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       {isExpanded ? (
-                        <ChevronDown className="h-5 w-5 text-slate-600" />
+                        <ChevronDown className="h-5 w-5 text-gray-600" />
                       ) : (
-                        <ChevronRight className="h-5 w-5 text-slate-600" />
+                        <ChevronRight className="h-5 w-5 text-gray-600" />
                       )}
                       <span className="font-medium text-black">{domain}</span>
-                      <span className="text-sm text-slate-500">({items.length} items)</span>
+                      <span className="text-sm text-gray-500">({items.length} items)</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 min-w-[100px]">
-                        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                           <div
                             className={`h-full ${getScoreBarColor(domainPercentage)} transition-all`}
                             style={{ width: `${domainPercentage}%` }}
                           />
                         </div>
-                        <span className="text-sm text-slate-600">{domainPercentage}%</span>
+                        <span className="text-sm text-gray-600">{domainPercentage}%</span>
                       </div>
                     </div>
                   </button>
 
                   {isExpanded && (
-                    <div className="divide-y divide-slate-700/50">
+                    <div className="divide-y divide-gray-200">
                       {items.map((item) => {
                         const itemStatusStyle =
                           COMPLIANCE_STATUS_STYLES[item.compliance_status] ||
@@ -666,10 +668,10 @@ export default function AssessmentDetailPage() {
                         const aiRecommendation = parseAIRecommendation(item.ai_evidence_recommendation);
 
                         return (
-                          <div key={item.id} className="bg-slate-50/30">
+                          <div key={item.id} className="bg-white">
                             <div className="p-4">
                               <div className="flex items-start gap-4">
-                                <span className="text-sm font-mono text-slate-500 mt-1">
+                                <span className="text-sm font-mono text-gray-500 mt-1">
                                   {item.item_number}
                                 </span>
                                 <div className="flex-1 min-w-0">
@@ -677,39 +679,39 @@ export default function AssessmentDetailPage() {
 
                                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
                                     {item.gaps_identified && (
-                                      <div className="bg-white/50 rounded-lg p-3">
-                                        <p className="text-xs text-slate-500 mb-1">Gaps Identified</p>
-                                        <p className="text-sm text-slate-600">{item.gaps_identified}</p>
+                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                        <p className="text-xs text-gray-600 mb-1">Gaps Identified</p>
+                                        <p className="text-sm text-gray-700">{item.gaps_identified}</p>
                                       </div>
                                     )}
                                     {item.proposed_solution && (
-                                      <div className="bg-white/50 rounded-lg p-3">
-                                        <p className="text-xs text-slate-500 mb-1">Proposed Solution</p>
-                                        <p className="text-sm text-slate-600">{item.proposed_solution}</p>
+                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                        <p className="text-xs text-gray-600 mb-1">Proposed Solution</p>
+                                        <p className="text-sm text-gray-700">{item.proposed_solution}</p>
                                       </div>
                                     )}
                                     {item.responsible_party && (
-                                      <div className="bg-white/50 rounded-lg p-3">
-                                        <p className="text-xs text-slate-500 mb-1">Responsible Party</p>
-                                        <p className="text-sm text-slate-600">{item.responsible_party}</p>
+                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                        <p className="text-xs text-gray-600 mb-1">Responsible Party</p>
+                                        <p className="text-sm text-gray-700">{item.responsible_party}</p>
                                       </div>
                                     )}
                                     {item.timeline && (
-                                      <div className="bg-white/50 rounded-lg p-3">
-                                        <p className="text-xs text-slate-500 mb-1">Timeline</p>
-                                        <p className="text-sm text-slate-600">{item.timeline}</p>
+                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                        <p className="text-xs text-gray-600 mb-1">Timeline</p>
+                                        <p className="text-sm text-gray-700">{item.timeline}</p>
                                       </div>
                                     )}
                                     {item.priority && (
-                                      <div className="bg-white/50 rounded-lg p-3">
-                                        <p className="text-xs text-slate-500 mb-1">Priority</p>
-                                        <p className="text-sm text-slate-600 capitalize">{item.priority}</p>
+                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                        <p className="text-xs text-gray-600 mb-1">Priority</p>
+                                        <p className="text-sm text-gray-700 capitalize">{item.priority}</p>
                                       </div>
                                     )}
                                     {item.remarks && (
-                                      <div className="bg-white/50 rounded-lg p-3">
-                                        <p className="text-xs text-slate-500 mb-1">Remarks</p>
-                                        <p className="text-sm text-slate-600">{item.remarks}</p>
+                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                        <p className="text-xs text-gray-600 mb-1">Remarks</p>
+                                        <p className="text-sm text-gray-700">{item.remarks}</p>
                                       </div>
                                     )}
                                   </div>
@@ -721,7 +723,7 @@ export default function AssessmentDetailPage() {
                                       <select
                                         value={editingStatus}
                                         onChange={(e) => setEditingStatus(e.target.value)}
-                                        className="select text-sm"
+                                        className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                       >
                                         {STATUS_OPTIONS.map((opt) => (
                                           <option key={opt.value} value={opt.value}>
@@ -732,7 +734,7 @@ export default function AssessmentDetailPage() {
                                       <button
                                         onClick={saveEditing}
                                         disabled={updateItemMutation.isPending}
-                                        className="btn-primary btn-sm"
+                                        className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                                       >
                                         {updateItemMutation.isPending ? (
                                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -740,33 +742,33 @@ export default function AssessmentDetailPage() {
                                           <Save className="h-4 w-4" />
                                         )}
                                       </button>
-                                      <button onClick={cancelEditing} className="btn-ghost btn-sm">
+                                      <button onClick={cancelEditing} className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">
                                         <X className="h-4 w-4" />
                                       </button>
                                     </>
                                   ) : (
                                     <>
                                       <span
-                                        className={`badge ${itemStatusStyle.bg} ${itemStatusStyle.text} flex items-center gap-1`}
+                                        className={`px-2 py-1 text-xs font-medium rounded ${itemStatusStyle.bg} ${itemStatusStyle.text} flex items-center gap-1`}
                                       >
                                         <StatusIcon className="h-3 w-3" />
                                         {itemStatusStyle.label}
                                       </span>
                                       <button
                                         onClick={() => startEditing(item)}
-                                        className="btn-ghost btn-sm"
+                                        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                         title="Edit Status"
                                       >
                                         <Edit2 className="h-4 w-4" />
                                       </button>
                                       <button
                                         onClick={() => toggleEvidencePanel(item.id)}
-                                        className={`btn-ghost btn-sm relative ${isEvidenceExpanded ? 'text-primary-600' : ''}`}
+                                        className={`p-2 rounded-lg transition-colors relative ${isEvidenceExpanded ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}
                                         title="Evidence"
                                       >
                                         <Paperclip className="h-4 w-4" />
                                         {currentItemEvidence.length > 0 && (
-                                          <span className="absolute -top-1 -right-1 h-4 w-4 text-xs bg-primary-500 text-white rounded-full flex items-center justify-center">
+                                          <span className="absolute -top-1 -right-1 h-4 w-4 text-xs bg-blue-600 text-white rounded-full flex items-center justify-center">
                                             {currentItemEvidence.length}
                                           </span>
                                         )}
@@ -774,7 +776,7 @@ export default function AssessmentDetailPage() {
                                       <button
                                         onClick={() => handleGenerateAIRecommendation(item.id)}
                                         disabled={generatingAIForItem === item.id}
-                                        className={`btn-ghost btn-sm ${aiRecommendation ? 'text-primary-600' : ''}`}
+                                        className={`p-2 rounded-lg transition-colors ${aiRecommendation ? 'text-purple-600 bg-purple-50' : 'text-gray-600 hover:text-purple-600 hover:bg-purple-50'} disabled:opacity-50`}
                                         title="AI Suggest Evidence"
                                       >
                                         {generatingAIForItem === item.id ? (
@@ -790,35 +792,35 @@ export default function AssessmentDetailPage() {
                             </div>
 
                             {isEvidenceExpanded && (
-                              <div className="mx-4 mb-4 bg-white/50 border border-slate-200 rounded-lg p-4 space-y-4">
+                              <div className="mx-4 mb-4 bg-white border border-gray-200 rounded-lg p-4 space-y-4">
                                 {aiRecommendation && (
                                   <div className="space-y-3">
                                     <div className="flex items-center gap-2">
-                                      <Sparkles className="h-4 w-4 text-primary-600" />
-                                      <h4 className="text-sm font-medium text-primary-600">AI Evidence Recommendations</h4>
+                                      <Sparkles className="h-4 w-4 text-purple-600" />
+                                      <h4 className="text-sm font-medium text-purple-600">AI Evidence Recommendations</h4>
                                       {item.ai_recommendation_generated_at && (
-                                        <span className="text-xs text-slate-500">
+                                        <span className="text-xs text-gray-500">
                                           Generated {formatDateTime(item.ai_recommendation_generated_at)}
                                         </span>
                                       )}
                                     </div>
-                                    <p className="text-sm text-slate-600">{aiRecommendation.summary}</p>
+                                    <p className="text-sm text-gray-700">{aiRecommendation.summary}</p>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                       {aiRecommendation.recommendations.map((rec, idx) => (
-                                        <div key={idx} className="bg-slate-50/50 rounded-lg p-3">
+                                        <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                                           <div className="flex items-center justify-between mb-2">
                                             <span className="text-sm font-medium text-black">{rec.evidence_type}</span>
                                             <span className={`text-xs px-2 py-0.5 rounded ${
                                               rec.priority === 'high' ? 'bg-rose-50 text-rose-700' :
                                               rec.priority === 'medium' ? 'bg-amber-50 text-amber-700' :
-                                              'bg-slate-50 text-slate-700'
+                                              'bg-gray-100 text-gray-700'
                                             }`}>
                                               {rec.priority}
                                             </span>
                                           </div>
-                                          <p className="text-xs text-slate-600 mb-2">{rec.description}</p>
+                                          <p className="text-xs text-gray-600 mb-2">{rec.description}</p>
                                           {rec.example_files.length > 0 && (
-                                            <div className="text-xs text-slate-500">
+                                            <div className="text-xs text-gray-500">
                                               Examples: {rec.example_files.join(', ')}
                                             </div>
                                           )}
@@ -833,8 +835,7 @@ export default function AssessmentDetailPage() {
                                     <button
                                       onClick={() => handleGenerateAIRecommendation(item.id)}
                                       disabled={generatingAIForItem === item.id}
-                                      className="btn-secondary btn-sm flex items-center gap-2"
-                                    >
+                                      className="btn-secondary btn-sm flex items-center gap-2">
                                       {generatingAIForItem === item.id ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                       ) : (
@@ -842,7 +843,7 @@ export default function AssessmentDetailPage() {
                                       )}
                                       Generate AI Suggestions
                                     </button>
-                                    <span className="text-xs text-slate-500">
+                                    <span className="text-xs text-gray-500">
                                       Get AI-powered recommendations for evidence to upload
                                     </span>
                                   </div>
@@ -850,7 +851,7 @@ export default function AssessmentDetailPage() {
 
                                 {currentItemEvidence.length > 0 && (
                                   <div className="space-y-3">
-                                    <h4 className="text-sm font-medium text-slate-600 flex items-center gap-2">
+                                    <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
                                       <Paperclip className="h-4 w-4" />
                                       Uploaded Evidence ({currentItemEvidence.length})
                                     </h4>
@@ -858,11 +859,11 @@ export default function AssessmentDetailPage() {
                                       {currentItemEvidence.map((ev) => {
                                         const evStatusStyle = EVIDENCE_STATUS_STYLES[ev.status] || EVIDENCE_STATUS_STYLES.draft;
                                         return (
-                                          <div key={ev.id} className="bg-slate-50/50 rounded-lg p-3">
+                                          <div key={ev.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                                             <div className="flex items-start justify-between">
                                               <div className="flex-1">
                                                 <div className="flex items-center gap-2">
-                                                  <FileText className="h-4 w-4 text-slate-600" />
+                                                  <FileText className="h-4 w-4 text-gray-600" />
                                                   <span className="text-sm font-medium text-black">
                                                     {ev.evidence?.name || 'Evidence'}
                                                   </span>
@@ -871,11 +872,11 @@ export default function AssessmentDetailPage() {
                                                   </span>
                                                 </div>
                                                 {ev.evidence && (
-                                                  <p className="text-xs text-slate-500 mt-1">
+                                                  <p className="text-xs text-gray-500 mt-1">
                                                     {ev.evidence.file_name} • {ev.evidence.file_type}
                                                   </p>
                                                 )}
-                                                <p className="text-xs text-slate-500">
+                                                <p className="text-xs text-gray-500">
                                                   Uploaded {formatDateTime(ev.created_at)}
                                                 </p>
                                               </div>
@@ -909,7 +910,7 @@ export default function AssessmentDetailPage() {
                                                   <button
                                                     onClick={() => handleApprovalAction(ev.id, 'approve')}
                                                     disabled={approvalActionMutation.isPending}
-                                                    className="btn-ghost btn-sm text-emerald-600 hover:bg-emerald-50"
+                                                    className="btn-ghost btn-sm text-emerald-400 hover:bg-emerald-500/20"
                                                     title="Approve"
                                                   >
                                                     <ThumbsUp className="h-4 w-4" />
@@ -917,7 +918,7 @@ export default function AssessmentDetailPage() {
                                                   <button
                                                     onClick={() => handleApprovalAction(ev.id, 'reject')}
                                                     disabled={approvalActionMutation.isPending}
-                                                    className="btn-ghost btn-sm text-rose-600 hover:bg-rose-50"
+                                                    className="btn-ghost btn-sm text-rose-400 hover:bg-rose-500/20"
                                                     title="Reject"
                                                   >
                                                     <ThumbsDown className="h-4 w-4" />
@@ -925,7 +926,7 @@ export default function AssessmentDetailPage() {
                                                   <button
                                                     onClick={() => handleApprovalAction(ev.id, 'return')}
                                                     disabled={approvalActionMutation.isPending}
-                                                    className="btn-ghost btn-sm text-orange-600 hover:bg-orange-50"
+                                                    className="btn-ghost btn-sm text-orange-400 hover:bg-orange-500/20"
                                                     title="Return for revision"
                                                   >
                                                     <RotateCcw className="h-4 w-4" />
@@ -934,15 +935,15 @@ export default function AssessmentDetailPage() {
                                               )}
                                             </div>
                                             {ev.approval_history && ev.approval_history.length > 0 && (
-                                              <div className="mt-2 pt-2 border-t border-slate-200">
-                                                <p className="text-xs text-slate-500 mb-1">Approval History</p>
+                                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                                <p className="text-xs text-gray-600 mb-1">Approval History</p>
                                                 <div className="space-y-1">
                                                   {ev.approval_history.map((history) => (
-                                                    <div key={history.id} className="text-xs text-slate-600">
+                                                    <div key={history.id} className="text-xs text-gray-600">
                                                       <span className={`font-medium ${
-                                                        history.action === 'approved' ? 'text-emerald-600' :
-                                                        history.action === 'rejected' ? 'text-rose-600' :
-                                                        'text-orange-600'
+                                                        history.action === 'approved' ? 'text-emerald-700' :
+                                                        history.action === 'rejected' ? 'text-rose-700' :
+                                                        'text-orange-700'
                                                       }`}>
                                                         {history.action}
                                                       </span>
@@ -951,7 +952,7 @@ export default function AssessmentDetailPage() {
                                                       {' at Tier '}
                                                       {history.tier_number}
                                                       {history.comments && (
-                                                        <span className="text-slate-500"> - {history.comments}</span>
+                                                        <span className="text-gray-500"> - {history.comments}</span>
                                                       )}
                                                     </div>
                                                   ))}
@@ -965,14 +966,14 @@ export default function AssessmentDetailPage() {
                                   </div>
                                 )}
 
-                                <div className="space-y-3 pt-2 border-t border-slate-200">
-                                  <h4 className="text-sm font-medium text-slate-600 flex items-center gap-2">
+                                <div className="space-y-3 pt-2 border-t border-gray-200">
+                                  <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
                                     <FileUp className="h-4 w-4" />
                                     Upload New Evidence
                                   </h4>
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                     <div>
-                                      <label className="block text-xs text-slate-500 mb-1">File</label>
+                                      <label className="block text-xs text-gray-600 mb-1">File</label>
                                       <input
                                         type="file"
                                         accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
@@ -981,7 +982,7 @@ export default function AssessmentDetailPage() {
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-xs text-slate-500 mb-1">Evidence Name</label>
+                                      <label className="block text-xs text-gray-600 mb-1">Evidence Name</label>
                                       <input
                                         type="text"
                                         value={evidenceName}
@@ -991,7 +992,7 @@ export default function AssessmentDetailPage() {
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-xs text-slate-500 mb-1">Description (optional)</label>
+                                      <label className="block text-xs text-gray-600 mb-1">Description (optional)</label>
                                       <input
                                         type="text"
                                         value={evidenceDescription}

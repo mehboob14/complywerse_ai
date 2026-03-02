@@ -116,16 +116,20 @@ def get_compliance_coverage(
         documents_with_frameworks = documents_with_frameworks.filter(GovernanceDocument.tenant_id == tenant_id)
     
     linked_to_controls = documents_with_controls.scalar() or 0
-    linked_to_frameworks = documents_with_frameworks.scalar() or 0
     
     documents = query.all()
     docs_with_any_link = 0
+    docs_with_framework_link = 0
     for doc in documents:
         has_control = db.query(DocumentControlLink).filter(DocumentControlLink.document_id == doc.id).first() is not None
         has_framework = db.query(DocumentRegulatoryLink).filter(DocumentRegulatoryLink.document_id == doc.id).first() is not None
         has_framework_ids = doc.framework_ids and len(doc.framework_ids) > 0
+        if has_framework or has_framework_ids:
+            docs_with_framework_link += 1
         if has_control or has_framework or has_framework_ids:
             docs_with_any_link += 1
+
+    linked_to_frameworks = docs_with_framework_link
     
     return {
         "total_documents": total_documents,
@@ -486,6 +490,188 @@ def get_document_trends(
             "total_published": sum(published_by_month.values()),
             "period_months": months
         }
+    }
+
+
+@router.get("/compliance-by-framework")
+def get_compliance_by_framework(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    from ....models import PolicyGapAnalysisRun, UploadedFramework
+
+    frameworks = db.query(UploadedFramework).filter(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        UploadedFramework.is_active == True
+    ).all()
+
+    results = []
+    for fw in frameworks:
+        latest_run = db.query(PolicyGapAnalysisRun).filter(
+            PolicyGapAnalysisRun.uploaded_framework_id == fw.id,
+            PolicyGapAnalysisRun.status == "completed"
+        ).order_by(PolicyGapAnalysisRun.completed_at.desc()).first()
+
+        results.append({
+            "framework_id": fw.id,
+            "framework_name": fw.name,
+            "compliance_percentage": latest_run.compliance_percentage if latest_run else None,
+            "total_clauses": latest_run.total_clauses_analyzed if latest_run else 0,
+            "fully_compliant": latest_run.fully_compliant_count if latest_run else 0,
+            "partially_compliant": latest_run.partially_compliant_count if latest_run else 0,
+            "not_addressed": latest_run.not_addressed_count if latest_run else 0,
+            "last_assessed": latest_run.completed_at.isoformat() if latest_run and latest_run.completed_at else None
+        })
+
+    return {"frameworks": results}
+
+
+@router.get("/open-gaps-summary")
+def get_open_gaps_summary(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    from ....models import PolicyGapFinding
+    user_tenants = get_user_tenants(current_user, db)
+
+    gaps = db.query(PolicyGapFinding).filter(
+        PolicyGapFinding.tenant_id.in_(user_tenants),
+        PolicyGapFinding.remediation_status == "open"
+    ).all()
+
+    by_severity = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    by_framework = {}
+    aging = {"0_30_days": 0, "31_60_days": 0, "61_90_days": 0, "over_90_days": 0}
+    now = datetime.utcnow()
+
+    for gap in gaps:
+        severity = gap.risk_severity or "medium"
+        by_severity[severity] = by_severity.get(severity, 0) + 1
+
+        fw_name = gap.framework_name or "Unknown"
+        by_framework[fw_name] = by_framework.get(fw_name, 0) + 1
+
+        if gap.created_at:
+            age_days = (now - gap.created_at).days
+            if age_days <= 30:
+                aging["0_30_days"] += 1
+            elif age_days <= 60:
+                aging["31_60_days"] += 1
+            elif age_days <= 90:
+                aging["61_90_days"] += 1
+            else:
+                aging["over_90_days"] += 1
+
+    return {
+        "total_open_gaps": len(gaps),
+        "by_severity": by_severity,
+        "by_framework": by_framework,
+        "aging_analysis": aging
+    }
+
+
+@router.get("/remediation-progress")
+def get_remediation_progress(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    from ....models import PolicyGapFinding
+    user_tenants = get_user_tenants(current_user, db)
+
+    all_findings = db.query(PolicyGapFinding).filter(
+        PolicyGapFinding.tenant_id.in_(user_tenants),
+        PolicyGapFinding.compliance_status.in_(["partially_compliant", "not_addressed"])
+    ).all()
+
+    total = len(all_findings)
+    open_count = sum(1 for f in all_findings if f.remediation_status == "open")
+    in_progress = sum(1 for f in all_findings if f.remediation_status == "in_progress")
+    closed = sum(1 for f in all_findings if f.remediation_status == "closed")
+
+    return {
+        "total_findings": total,
+        "open": open_count,
+        "in_progress": in_progress,
+        "closed": closed,
+        "progress_percentage": round((closed / total) * 100, 1) if total > 0 else 0
+    }
+
+
+@router.get("/upcoming-reviews")
+def get_upcoming_reviews_dashboard(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    now = datetime.utcnow()
+    cutoff = now + timedelta(days=90)
+
+    documents = db.query(GovernanceDocument).filter(
+        GovernanceDocument.tenant_id.in_(user_tenants),
+        GovernanceDocument.next_review_date != None,
+        GovernanceDocument.next_review_date <= cutoff,
+        GovernanceDocument.status != "retired"
+    ).order_by(GovernanceDocument.next_review_date.asc()).limit(10).all()
+
+    results = []
+    for doc in documents:
+        is_overdue = doc.next_review_date < now if doc.next_review_date else False
+        results.append({
+            "id": doc.id,
+            "title": doc.title,
+            "doc_type": doc.doc_type,
+            "next_review_date": doc.next_review_date.isoformat() if doc.next_review_date else None,
+            "is_overdue": is_overdue,
+            "days_until": (doc.next_review_date - now).days if doc.next_review_date else None,
+            "review_cycle_months": doc.review_cycle_months
+        })
+
+    return {
+        "overdue_count": sum(1 for r in results if r["is_overdue"]),
+        "upcoming": results
+    }
+
+
+@router.get("/accepted-risks")
+def get_accepted_risks(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    from ....models import Risk
+    user_tenants = get_user_tenants(current_user, db)
+
+    accepted_risks = db.query(Risk).filter(
+        Risk.tenant_id.in_(user_tenants),
+        Risk.status == "accepted"
+    ).all()
+
+    def get_risk_level(risk):
+        score = risk.residual_score or risk.inherent_score or 0
+        if score >= 20:
+            return "critical"
+        elif score >= 15:
+            return "high"
+        elif score >= 8:
+            return "medium"
+        else:
+            return "low"
+
+    by_level = {}
+    for risk in accepted_risks:
+        level = get_risk_level(risk)
+        by_level[level] = by_level.get(level, 0) + 1
+
+    return {
+        "total_accepted": len(accepted_risks),
+        "by_risk_level": by_level,
+        "risks": [{
+            "id": r.id,
+            "title": r.title,
+            "risk_level": get_risk_level(r),
+            "residual_score": r.residual_score,
+        } for r in accepted_risks[:10]]
     }
 
 

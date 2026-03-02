@@ -1,18 +1,24 @@
 from typing import List, Optional
 from datetime import datetime
+import json
+import logging
+import io
 
 import os
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, or_
+from openai import OpenAI
+from pydantic import BaseModel
 
 from ....models import (
     GovernanceCommittee, CommitteeMember, CommitteeCharter, CommitteeMeeting,
     MeetingAgendaItem, MeetingMinutes, OversightAction, GovernanceDocument,
-    Risk, RegulatoryChange, GRCUser, Tenant, get_db, Exception
+    Risk, RegulatoryChange, GRCUser, Tenant, get_db, Exception,
+    UploadedFramework, ParsedFrameworkControl
 )
 from ....schemas import (
     GovernanceCommitteeCreate, GovernanceCommitteeUpdate, GovernanceCommitteeResponse,
@@ -25,6 +31,121 @@ from ....schemas import (
     CommitteeDashboardStats, MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+
+logger = logging.getLogger(__name__)
+
+AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+
+
+def get_openai_client() -> OpenAI:
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    is_modelfarm = base_url and "modelfarm" in base_url
+    if is_modelfarm and api_key:
+        return OpenAI(api_key=api_key, base_url=base_url, timeout=120.0)
+    if not api_key or api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI features unavailable. OpenAI API key not configured."
+        )
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=120.0)
+
+
+COMMITTEE_TYPE_KEYWORDS = {
+    "audit_committee": ["audit", "internal audit", "external audit", "financial reporting", "accounting", "assurance", "internal control", "fraud"],
+    "risk_committee": ["risk", "risk management", "risk assessment", "risk appetite", "risk tolerance", "enterprise risk", "risk mitigation"],
+    "compliance_committee": ["compliance", "regulatory", "legal", "regulation", "law", "enforcement", "sanctions", "anti-money laundering", "aml", "kyc"],
+    "board": ["governance", "board", "oversight", "strategic", "fiduciary", "shareholder", "corporate governance", "policy"],
+    "it_steering": ["technology", "information technology", "IT", "cybersecurity", "information security", "data protection", "digital", "cloud", "system", "network", "software"],
+    "custom": [],
+}
+
+
+def gather_framework_context(committee_type: str, user_tenants: list, db: Session, framework_ids: Optional[List[int]] = None) -> dict:
+    # include any frameworks that have been parsed, published, classified, or completed
+    # include frameworks owned by any of the user's tenants, shared ones, or global ones (tenant_id null)
+    query = db.query(UploadedFramework).filter(
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.tenant_id == None,
+            UploadedFramework.is_shared == True,
+        ),
+        UploadedFramework.upload_status.in_( ["published", "parsed", "classified", "completed"] )
+    )
+    
+    # Filter by specific framework IDs if provided
+    if framework_ids and len(framework_ids) > 0:
+        query = query.filter(UploadedFramework.id.in_(framework_ids))
+    
+    frameworks = query.all()
+
+    if not frameworks:
+        return {"frameworks": [], "controls": [], "framework_names": []}
+
+    framework_ids = [f.id for f in frameworks]
+    framework_names = [f.name for f in frameworks]
+
+    controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id.in_(framework_ids)
+    ).all()
+
+    keywords = COMMITTEE_TYPE_KEYWORDS.get(committee_type, [])
+
+    relevant_controls = []
+    for ctrl in controls:
+        text = f"{ctrl.domain or ''} {ctrl.category or ''} {ctrl.full_text or ''}".lower()
+        relevance = sum(1 for kw in keywords if kw.lower() in text)
+        if relevance > 0 or not keywords:
+            fw_name = next((f.name for f in frameworks if f.id == ctrl.uploaded_framework_id), "Unknown")
+            relevant_controls.append({
+                "reference": ctrl.original_reference,
+                "text": (ctrl.full_text or "")[:300],
+                "domain": ctrl.domain,
+                "category": ctrl.category,
+                "framework": fw_name,
+                "relevance": relevance,
+            })
+
+    relevant_controls.sort(key=lambda c: c["relevance"], reverse=True)
+    top_controls = relevant_controls[:60]
+
+    framework_summaries = []
+    for fw in frameworks:
+        framework_summaries.append({
+            "name": fw.name,
+            "purpose": (fw.description or "")[:200],
+            "classification": fw.classification,
+        })
+
+    return {
+        "frameworks": framework_summaries,
+        "controls": top_controls,
+        "framework_names": framework_names,
+    }
+
+
+class AIGenerateCharterRequest(BaseModel):
+    framework_ids: Optional[List[int]] = None
+
+
+class CharterCompareRequest(BaseModel):
+    charter_id: Optional[int] = None
+    charter_text: Optional[str] = None
+
+
+class ManualOversightActionCreate(BaseModel):
+    committee_id: int
+    meeting_id: Optional[int] = None
+    action_number: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    action_type: str = "follow_up"
+    assigned_to: Optional[int] = None
+    due_date: Optional[datetime] = None
+    linked_policy_id: Optional[int] = None
+    linked_risk_id: Optional[int] = None
+    agenda_item_id: Optional[int] = None
 
 router = APIRouter(prefix="/committees", tags=["Governance - Committees"])
 
@@ -221,6 +342,50 @@ def serialize_action(action: OversightAction) -> dict:
         "created_at": action.created_at,
         "is_overdue": is_overdue,
     }
+
+
+def extract_text_from_uploaded_action_file(upload_file: UploadFile, file_bytes: bytes) -> str:
+    filename = (upload_file.filename or "").lower()
+    ext = filename.split(".")[-1] if "." in filename else ""
+
+    if ext in ["txt", "md", "csv", "json", "log"]:
+        return file_bytes.decode("utf-8", errors="ignore")
+
+    if ext == "pdf":
+        try:
+            from PyPDF2 import PdfReader
+            reader = PdfReader(io.BytesIO(file_bytes))
+            extracted = "\n\n".join((page.extract_text() or "") for page in reader.pages)
+            return extracted.strip()
+        except Exception:
+            return ""
+
+    if ext in ["docx", "doc"]:
+        try:
+            from docx import Document as DocxDocument
+            doc = DocxDocument(io.BytesIO(file_bytes))
+            return "\n".join(p.text for p in doc.paragraphs if p.text).strip()
+        except Exception:
+            return ""
+
+    return ""
+
+
+def generate_action_ai_text(prompt: str) -> str:
+    client = get_openai_client()
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a governance risk and compliance writing assistant. Return concise, professional output.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.3,
+        max_tokens=700,
+    )
+    return (response.choices[0].message.content or "").strip()
 
 
 # =============================================================================
@@ -479,6 +644,30 @@ def update_charter(
     db.refresh(charter)
     
     return serialize_charter(charter)
+
+
+@router.delete("/{committee_id}/charters/{charter_id}", status_code=status.HTTP_200_OK)
+def delete_charter(
+    committee_id: int,
+    charter_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    charter = db.query(CommitteeCharter).filter(
+        CommitteeCharter.id == charter_id,
+        CommitteeCharter.committee_id == committee_id,
+        CommitteeCharter.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not charter:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Charter not found")
+
+    db.delete(charter)
+    db.commit()
+    return {"message": "Charter deleted successfully"}
+
 
 @router.get("/charters/{charter_id}/download")
 def download_charter_file(
@@ -1083,6 +1272,144 @@ def update_action_status(
     db.refresh(action)
     
     return serialize_action(action)
+
+
+@router.post("/actions/manual", status_code=status.HTTP_201_CREATED)
+def create_manual_action(
+    action: ManualOversightActionCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    committee = db.query(GovernanceCommittee).filter(
+        GovernanceCommittee.id == action.committee_id,
+        GovernanceCommittee.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not committee:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
+
+    meeting = None
+    if action.meeting_id:
+        meeting = db.query(CommitteeMeeting).filter(
+            CommitteeMeeting.id == action.meeting_id,
+            CommitteeMeeting.committee_id == committee.id,
+            CommitteeMeeting.tenant_id == committee.tenant_id
+        ).first()
+        if not meeting:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found for committee")
+
+    action_count = db.query(OversightAction).filter(
+        OversightAction.committee_id == committee.id
+    ).count()
+    action_number = action.action_number or f"ACT-{committee.id}-{action_count + 1:04d}"
+
+    db_action = OversightAction(
+        tenant_id=committee.tenant_id,
+        committee_id=committee.id,
+        meeting_id=meeting.id if meeting else None,
+        agenda_item_id=action.agenda_item_id,
+        action_number=action_number,
+        title=action.title,
+        description=action.description,
+        action_type=action.action_type,
+        assigned_to=action.assigned_to,
+        due_date=action.due_date,
+        linked_policy_id=action.linked_policy_id,
+        linked_risk_id=action.linked_risk_id,
+        created_by=current_user.id,
+    )
+    db.add(db_action)
+    db.commit()
+    db.refresh(db_action)
+
+    db_action = db.query(OversightAction).options(
+        joinedload(OversightAction.committee),
+        joinedload(OversightAction.meeting),
+        joinedload(OversightAction.assignee),
+        joinedload(OversightAction.creator),
+        joinedload(OversightAction.linked_policy),
+        joinedload(OversightAction.linked_risk),
+    ).filter(OversightAction.id == db_action.id).first()
+
+    return serialize_action(db_action)
+
+
+@router.post("/actions/ai/reword")
+async def ai_reword_action_text(
+    text: Optional[str] = Form(None),
+    tone: str = Form("professional"),
+    file: Optional[UploadFile] = File(None),
+    current_user: GRCUser = Depends(require_auth)
+):
+    _ = current_user
+    source_text = (text or "").strip()
+
+    if file:
+        file_bytes = await file.read()
+        extracted = extract_text_from_uploaded_action_file(file, file_bytes)
+        if extracted:
+            source_text = f"{source_text}\n\n{extracted}".strip()
+
+    if not source_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please provide text or an upload file")
+
+    prompt = f"""Rewrite the following governance oversight action content in a {tone} tone.
+Keep it clear, concise, and actionable.
+Return ONLY the rewritten text, no markdown and no extra commentary.
+
+CONTENT:
+{source_text[:12000]}
+"""
+
+    try:
+        rewritten_text = generate_action_ai_text(prompt)
+        return {"text": rewritten_text}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to reword action text")
+        raise HTTPException(status_code=500, detail=f"AI reword failed: {str(exc)}")
+
+
+@router.post("/actions/ai/summary")
+async def ai_generate_action_summary(
+    text: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    current_user: GRCUser = Depends(require_auth)
+):
+    _ = current_user
+    source_text = (text or "").strip()
+
+    if file:
+        file_bytes = await file.read()
+        extracted = extract_text_from_uploaded_action_file(file, file_bytes)
+        if extracted:
+            source_text = f"{source_text}\n\n{extracted}".strip()
+
+    if not source_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please provide text or an upload file")
+
+    prompt = f"""Summarize the following governance action content into a concise action summary.
+Focus on objective, owner/accountability cues, timeline cues, and expected outcome.
+Keep it to 3-6 sentences.
+Return ONLY the summary text.
+
+CONTENT:
+{source_text[:12000]}
+"""
+
+    try:
+        summary_text = generate_action_ai_text(prompt)
+        return {"text": summary_text}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to summarize action text")
+        raise HTTPException(status_code=500, detail=f"AI summary failed: {str(exc)}")
+
+
 @router.get("/{committee_id}")
 def get_committee(
     committee_id: int,
@@ -1497,12 +1824,350 @@ def schedule_meeting(
 # =============================================================================
 
 
-
-
-
 # =============================================================================
 # Oversight Actions Endpoints
 # =============================================================================
+
+
+# =============================================================================
+# AI Charter Generation & Comparison Endpoints
+# =============================================================================
+
+@router.post("/{committee_id}/ai-generate-charter")
+def ai_generate_charter(
+    committee_id: int,
+    request: AIGenerateCharterRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    committee = db.query(GovernanceCommittee).filter(
+        GovernanceCommittee.id == committee_id,
+        GovernanceCommittee.tenant_id.in_(user_tenants)
+    ).first()
+    if not committee:
+        raise HTTPException(status_code=404, detail="Committee not found")
+
+    context = gather_framework_context(committee.committee_type, user_tenants, db, request.framework_ids)
+
+# log context at INFO so it's visible in standard logs
+    logger.info(f"AI charter request: committee={committee_id}, tenant={committee.tenant_id}, user_tenants={user_tenants}, framework_ids={request.framework_ids}")
+    logger.info(f"framework context: {context}")
+
+    if not context["frameworks"]:
+        # include tenant/committee info in error for easier troubleshooting
+        raise HTTPException(
+            status_code=400,
+            detail=f"No eligible frameworks found for tenant(s) {user_tenants}. Ensure selected frameworks are accessible (tenant-owned/shared/global) and in parsed/published/classified/completed status."
+        )
+
+    client = get_openai_client()
+
+    frameworks_text = ""
+    for fw in context["frameworks"]:
+        frameworks_text += f"\n- {fw['name']} ({fw['classification'] or 'N/A'}): {fw['purpose']}"
+
+    controls_text = ""
+    for ctrl in context["controls"][:40]:
+        controls_text += f"\n- [{ctrl['framework']}] {ctrl['reference']}: {ctrl['text'][:200]}"
+
+    prompt = f"""You are a GRC governance expert. Generate a comprehensive committee charter for the following committee based on ALL the regulatory frameworks and controls provided.
+
+COMMITTEE DETAILS:
+- Name: {committee.name}
+- Type: {committee.committee_type}
+- Description: {committee.description or 'N/A'}
+
+UPLOADED REGULATORY FRAMEWORKS IN THE ORGANIZATION:
+{frameworks_text}
+
+RELEVANT CONTROLS FROM THESE FRAMEWORKS:
+{controls_text}
+
+Generate a detailed charter document with the following sections. For each section, reference which specific frameworks and controls drove that requirement.
+
+Return a JSON object with this exact structure:
+{{
+  "charter_title": "Charter for [Committee Name]",
+  "sections": [
+    {{
+      "title": "Purpose & Mission",
+      "content": "Detailed purpose statement...",
+      "framework_references": ["Framework Name - Control Ref", ...]
+    }},
+    {{
+      "title": "Scope of Authority",
+      "content": "Detailed scope...",
+      "framework_references": [...]
+    }},
+    {{
+      "title": "Composition & Membership",
+      "content": "Required roles, qualifications, minimum members...",
+      "framework_references": [...]
+    }},
+    {{
+      "title": "Roles & Responsibilities",
+      "content": "Chair duties, Secretary duties, Member responsibilities...",
+      "framework_references": [...]
+    }},
+    {{
+      "title": "Meeting Frequency & Quorum",
+      "content": "How often, quorum requirements, special meetings...",
+      "framework_references": [...]
+    }},
+    {{
+      "title": "Key Oversight Responsibilities",
+      "content": "Specific oversight duties mapped to framework requirements...",
+      "framework_references": [...]
+    }},
+    {{
+      "title": "Reporting Requirements",
+      "content": "What reports to produce, to whom, how often...",
+      "framework_references": [...]
+    }},
+    {{
+      "title": "Charter Review & Amendment",
+      "content": "Review cycle, amendment process...",
+      "framework_references": [...]
+    }}
+  ],
+  "summary": "Brief summary of the charter and its framework basis"
+}}
+
+Make the charter comprehensive, professional, and specific to the committee type. Reference specific framework controls where applicable. Return ONLY valid JSON."""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a governance expert. Return only valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=4000
+        )
+
+        response_text = response.choices[0].message.content.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+
+        charter_data = json.loads(response_text.strip())
+
+        return {
+            "committee_id": committee_id,
+            "committee_name": committee.name,
+            "committee_type": committee.committee_type,
+            "frameworks_analyzed": context["framework_names"],
+            "controls_analyzed": len(context["controls"]),
+            "charter": charter_data,
+        }
+
+    except json.JSONDecodeError as e:
+        logger.error(f"AI charter generation JSON parse error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to parse AI response. Please try again.")
+    except Exception as e:
+        logger.error(f"AI charter generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI charter generation failed: {str(e)}")
+
+
+@router.post("/{committee_id}/ai-compare-charter")
+def ai_compare_charter(
+    committee_id: int,
+    request: CharterCompareRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    committee = db.query(GovernanceCommittee).filter(
+        GovernanceCommittee.id == committee_id,
+        GovernanceCommittee.tenant_id.in_(user_tenants)
+    ).first()
+    if not committee:
+        raise HTTPException(status_code=404, detail="Committee not found")
+
+    existing_charter_text = request.charter_text
+    if request.charter_id:
+        charter = db.query(CommitteeCharter).filter(
+            CommitteeCharter.id == request.charter_id,
+            CommitteeCharter.tenant_id.in_(user_tenants)
+        ).first()
+        if not charter:
+            raise HTTPException(status_code=404, detail="Charter not found")
+        existing_charter_text = charter.content
+
+    if not existing_charter_text:
+        raise HTTPException(status_code=400, detail="No charter content provided for comparison.")
+
+    context = gather_framework_context(committee.committee_type, user_tenants, db)
+
+    if not context["frameworks"]:
+        raise HTTPException(
+            status_code=400,
+            detail="No published frameworks found. Upload and publish at least one framework for comparison."
+        )
+
+    client = get_openai_client()
+
+    frameworks_text = ""
+    for fw in context["frameworks"]:
+        frameworks_text += f"\n- {fw['name']} ({fw['classification'] or 'N/A'}): {fw['purpose']}"
+
+    controls_text = ""
+    for ctrl in context["controls"][:40]:
+        controls_text += f"\n- [{ctrl['framework']}] {ctrl['reference']}: {ctrl['text'][:200]}"
+
+    prompt = f"""You are a GRC governance expert. Compare the following EXISTING committee charter against the requirements from the organization's regulatory frameworks.
+
+COMMITTEE DETAILS:
+- Name: {committee.name}
+- Type: {committee.committee_type}
+
+EXISTING CHARTER CONTENT:
+{existing_charter_text[:6000]}
+
+REGULATORY FRAMEWORKS IN THE ORGANIZATION:
+{frameworks_text}
+
+RELEVANT FRAMEWORK CONTROLS:
+{controls_text}
+
+Analyze the existing charter and compare it against what the frameworks require. Return a JSON object with this exact structure:
+{{
+  "overall_score": 75,
+  "overall_assessment": "Brief overall assessment...",
+  "sections": [
+    {{
+      "title": "Purpose & Mission",
+      "status": "covered",
+      "score": 90,
+      "existing_content_summary": "What the charter currently says...",
+      "recommendation": "What should be improved...",
+      "framework_requirements": ["Framework - Control requiring this"]
+    }},
+    {{
+      "title": "Scope of Authority",
+      "status": "partial",
+      "score": 60,
+      "existing_content_summary": "...",
+      "recommendation": "...",
+      "framework_requirements": [...]
+    }},
+    {{
+      "title": "Composition & Membership",
+      "status": "missing",
+      "score": 0,
+      "existing_content_summary": "Not addressed in current charter",
+      "recommendation": "Add section covering...",
+      "framework_requirements": [...]
+    }},
+    {{
+      "title": "Roles & Responsibilities",
+      "status": "covered|partial|missing|exceeds",
+      "score": 0-100,
+      "existing_content_summary": "...",
+      "recommendation": "...",
+      "framework_requirements": [...]
+    }},
+    {{
+      "title": "Meeting Frequency & Quorum",
+      "status": "...",
+      "score": 0-100,
+      "existing_content_summary": "...",
+      "recommendation": "...",
+      "framework_requirements": [...]
+    }},
+    {{
+      "title": "Key Oversight Responsibilities",
+      "status": "...",
+      "score": 0-100,
+      "existing_content_summary": "...",
+      "recommendation": "...",
+      "framework_requirements": [...]
+    }},
+    {{
+      "title": "Reporting Requirements",
+      "status": "...",
+      "score": 0-100,
+      "existing_content_summary": "...",
+      "recommendation": "...",
+      "framework_requirements": [...]
+    }},
+    {{
+      "title": "Charter Review & Amendment",
+      "status": "...",
+      "score": 0-100,
+      "existing_content_summary": "...",
+      "recommendation": "...",
+      "framework_requirements": [...]
+    }}
+  ],
+  "gaps": [
+    {{
+      "description": "Missing requirement...",
+      "severity": "high|medium|low",
+      "frameworks": ["Framework names requiring this"]
+    }}
+  ],
+  "strengths": [
+    "Well-covered area 1",
+    "Well-covered area 2"
+  ],
+  "recommendations": [
+    "Specific improvement 1",
+    "Specific improvement 2"
+  ],
+  "framework_coverage": {{
+    "addressed": ["Framework names well-covered"],
+    "partially_addressed": ["Framework names partially covered"],
+    "not_addressed": ["Framework names missing"]
+  }}
+}}
+
+Status values: "covered" (80-100%), "partial" (40-79%), "missing" (0-39%), "exceeds" (charter goes beyond framework requirements).
+Return ONLY valid JSON."""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a governance compliance expert. Return only valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=4000
+        )
+
+        response_text = response.choices[0].message.content.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+
+        comparison_data = json.loads(response_text.strip())
+
+        return {
+            "committee_id": committee_id,
+            "committee_name": committee.name,
+            "charter_id": request.charter_id,
+            "frameworks_analyzed": context["framework_names"],
+            "controls_analyzed": len(context["controls"]),
+            "comparison": comparison_data,
+        }
+
+    except json.JSONDecodeError as e:
+        logger.error(f"AI charter comparison JSON parse error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to parse AI comparison response. Please try again.")
+    except Exception as e:
+        logger.error(f"AI charter comparison failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI charter comparison failed: {str(e)}")
 
 
 

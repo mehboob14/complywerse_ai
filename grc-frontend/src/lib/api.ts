@@ -47,14 +47,29 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
+const getTenantSlugFromHost = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const host = window.location.hostname.toLowerCase();
+  if (host === 'localhost' || host === '127.0.0.1') return null;
+  if (host.endsWith('.localhost')) {
+    const parts = host.split('.');
+    if (parts.length === 2) return parts[0];
+  }
+  const parts = host.split('.');
+  if (parts.length >= 3) return parts[0];
+  return null;
+};
+
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
-  timeout: 300000,
+  timeout: 900000, // 15 minutes for long-running operations like policy parsing
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+export { apiClient };
 
 apiClient.interceptors.request.use(
   (config) => {
@@ -63,7 +78,11 @@ apiClient.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
-      const tenantSlug = localStorage.getItem('tenant_slug');
+      const hostTenant = getTenantSlugFromHost();
+      const tenantSlug = hostTenant || localStorage.getItem('tenant_slug');
+      if (hostTenant) {
+        localStorage.setItem('tenant_slug', hostTenant);
+      }
       if (tenantSlug) {
         config.headers['X-Tenant-Slug'] = tenantSlug;
       }
@@ -80,7 +99,8 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
+        // CRITICAL: Clear ALL localStorage to prevent cross-tenant data leakage
+        localStorage.clear();
         window.location.href = '/login';
       }
     }
@@ -158,10 +178,11 @@ export const risksApi = {
   unlinkAsset: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/assets/${linkId}`),
   linkEvidence: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/evidence`, data),
   unlinkEvidence: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/evidence/${linkId}`),
-  uploadRiskRegister: (file: File) => {
+  uploadRiskRegister: (file: File, registerType?: string) => {
     const formData = new FormData();
     formData.append('file', file);
-    return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>('/risks/upload', formData, {
+    const params = registerType ? `?register_type=${encodeURIComponent(registerType)}` : '';
+    return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>(`/risks/upload${params}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
@@ -231,11 +252,46 @@ export const governanceApi = {
       responseType: 'blob',
     }),
   parsePolicy: (documentId: number) =>
-    apiClient.post(`/governance/documents/${documentId}/parse-policy`),
+    apiClient.post(`/governance/documents/${documentId}/parse-policy`, {}, {
+      timeout: 900000, // 15 minutes for large document parsing
+    }),
   getDocumentPolicyStatements: (documentId: number) =>
     apiClient.get(`/governance/documents/${documentId}/policy-statements`),
+  addStatement: (documentId: number, data: any) => {
+    console.log('[API] addStatement called with:', { documentId, data });
+    return apiClient.post(`/governance/documents/${documentId}/statements`, data).then(res => {
+      console.log('[API] addStatement response:', res);
+      return res;
+    });
+  },
+  updateStatement: (documentId: number, statementId: number, data: any) =>
+    apiClient.put(`/governance/documents/${documentId}/statements/${statementId}`, data),
+  deleteStatement: (documentId: number, statementId: number) =>
+    apiClient.delete(`/governance/documents/${documentId}/statements/${statementId}`),
+  getDocumentViewHtml: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/view-html`),
+  getStatementVersions: (documentId: number, statementId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/statements/${statementId}/versions`),
+  getStatementDiff: (documentId: number, statementId: number, versionA: number, versionB: number) =>
+    apiClient.get(`/governance/documents/${documentId}/statements/${statementId}/diff`, { params: { version_a: versionA, version_b: versionB } }),
+  rollbackStatement: (documentId: number, statementId: number, versionId: number) =>
+    apiClient.post(`/governance/documents/${documentId}/statements/${statementId}/rollback`, { version_id: versionId }),
+  getReparseProposals: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/reparse-proposals`),
+  applyReparseProposals: (documentId: number, decisions: Array<{index: number, action: string}>) =>
+    apiClient.post(`/governance/documents/${documentId}/reparse-proposals/apply`, { decisions }),
+  exportPolicyStatements: (documentId: number) =>
+    apiClient.get(`/governance/reports/policy-statements/${documentId}/csv`, { responseType: 'blob' }),
+  getGapAnalysisRuns: (documentId: number) =>
+    apiClient.get(`/governance/gap-analysis/runs/${documentId}`),
+  getComplianceSummary: (documentId: number) =>
+    apiClient.get(`/governance/gap-analysis/compliance-summary/${documentId}`),
+  runGapAnalysis: (data: { document_id: number; framework_ids: number[]; run_all?: boolean }) =>
+    apiClient.post('/governance/gap-analysis/run', data, { timeout: 30000 }),
   generatePolicyDraft: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; include_sections?: string[] }) =>
     apiClient.post('/governance/documents/ai-draft', data),
+  suggestPoliciesForFramework: (data: { framework_ids: number[] }) =>
+    apiClient.post('/governance/documents/ai-suggest-policies', data),
   getWorkflowTemplates: (params?: { tenant_id?: number; is_active?: boolean; doc_type?: string; skip?: number; limit?: number }) =>
     apiClient.get('/governance/workflows/templates', { params }),
   getWorkflowTemplate: (id: number) =>
@@ -272,6 +328,8 @@ export const governanceApi = {
     apiClient.get('/governance/dashboard/compliance-coverage'),
   getTrends: (months: number = 12) =>
     apiClient.get(`/governance/dashboard/trends?months=${months}`),
+  updateDocumentStatus: (documentId: number, status: string) =>
+    apiClient.put(`/governance/documents/${documentId}/status`, { status }),
   publishDocument: (documentId: number) =>
     apiClient.post(`/governance/documents/${documentId}/publish`),
   requestAttestation: (documentId: number, data: { user_ids: number[]; attestation_type?: string; due_date?: string }) =>
@@ -281,8 +339,56 @@ export const governanceApi = {
       attestation_type: data.attestation_type || 'acknowledgment',
       due_date: data.due_date,
     }),
+  getParseStatus: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/parse-status`),
+  getDocumentGapFindings: (documentId: number, params?: Record<string, any>) =>
+    apiClient.get(`/governance/gap-analysis/findings/document/${documentId}`, { params }),
+  updateGapFinding: (findingId: number, data: Record<string, any>) =>
+    apiClient.put(`/governance/gap-analysis/findings/${findingId}`, data),
+  overrideGapFinding: (findingId: number, data: { override_status: string; override_justification: string }) =>
+    apiClient.put(`/governance/gap-analysis/findings/${findingId}/override`, data),
+  acceptGapRisk: (findingId: number, data: { justification: string; expiry_date?: string }) =>
+    apiClient.put(`/governance/gap-analysis/findings/${findingId}/accept-risk`, {
+      risk_acceptance_justification: data.justification,
+      risk_acceptance_expiry_date: data.expiry_date || null
+    }),
   getTenantUsers: (tenantId: number) =>
     apiClient.get(`/tenants/${tenantId}/users`),
+  
+  // Governance Action Review endpoints
+  getPendingGovernanceActions: (params?: { action_type?: string; entity_type?: string; skip?: number; limit?: number }) =>
+    apiClient.get('/governance/reviews/governance-actions/pending', { params }),
+  getAllGovernanceActions: (params?: { status_filter?: string; action_type?: string; skip?: number; limit?: number }) =>
+    apiClient.get('/governance/reviews/governance-actions', { params }),
+  updateGovernanceAction: (reviewId: number, data: { review_status: string; review_notes?: string }) =>
+    apiClient.put(`/governance/reviews/governance-actions/${reviewId}`, data),
+  getMyPendingReviews: (params?: { action_type?: string; entity_type?: string; skip?: number; limit?: number }) =>
+    apiClient.get('/governance/reviews/my-pending-reviews', { params }),
+  getMyPendingApprovals: (params?: { action_type?: string; entity_type?: string; skip?: number; limit?: number }) =>
+    apiClient.get('/governance/reviews/my-pending-approvals', { params }),
+};
+
+export const policyExceptionApi = {
+  getSummary: () => apiClient.get('/governance/policy-exceptions/summary'),
+  getExpiringSoon: () => apiClient.get('/governance/policy-exceptions/expiring-soon'),
+  getAll: (params?: Record<string, string | number>) =>
+    apiClient.get('/governance/policy-exceptions', { params }),
+  suggestContent: (data: { title: string; document_id: number }) =>
+    apiClient.post('/governance/policy-exceptions/suggest-content', data),
+  getById: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}`),
+  create: (data: Record<string, unknown>) => apiClient.post('/governance/policy-exceptions', data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/governance/policy-exceptions/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/governance/policy-exceptions/${id}`),
+  submit: (id: number) => apiClient.post(`/governance/policy-exceptions/${id}/submit`),
+  approve: (id: number, data?: { comments?: string }) =>
+    apiClient.post(`/governance/policy-exceptions/${id}/approve`, data || {}),
+  reject: (id: number, data: { rejection_reason: string }) =>
+    apiClient.post(`/governance/policy-exceptions/${id}/reject`, data),
+  revoke: (id: number, data?: { reason?: string }) =>
+    apiClient.post(`/governance/policy-exceptions/${id}/revoke`, data || {}),
+  getComments: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/comments`),
+  addComment: (id: number, data: { comment: string }) =>
+    apiClient.post(`/governance/policy-exceptions/${id}/comments`, data),
 };
 
 export const documentsApi = {
@@ -300,11 +406,29 @@ export const assetsApi = {
   getById: (id: number) => apiClient.get<ITAsset>(`/assets/${id}`),
   getDetail: (id: number) => apiClient.get(`/assets/${id}/detail`),
   getDashboard: () => apiClient.get('/assets/dashboard'),
+  getTenantUsers: () => apiClient.get<Array<{id: number; display_name: string; email: string}>>('/assets/tenant-users'),
+  getCIARecommendation: (data: {
+    name: string;
+    description?: string;
+    asset_type: string;
+    vendor?: string;
+    location?: string;
+    criticality?: string;
+  }) => apiClient.post<{
+    recommendation: string;
+    confidentiality_rating: number;
+    integrity_rating: number;
+    availability_rating: number;
+  }>('/assets/cia-recommendation', data),
   create: (data: {
     name: string;
     description?: string;
     asset_type: string;
     owner_id?: number;
+    owner_name?: string;
+    custodian?: string;
+    host_name?: string;
+    ip_address?: string;
     criticality?: string;
     confidentiality_rating?: number;
     integrity_rating?: number;
@@ -312,6 +436,7 @@ export const assetsApi = {
     valuation?: number;
     vendor?: string;
     location?: string;
+    cde_environment?: boolean;
   }) => apiClient.post<ITAsset>('/assets', data),
   update: (id: number, data: Partial<ITAsset>) => apiClient.put<ITAsset>(`/assets/${id}`, data),
   delete: (id: number) => apiClient.delete(`/assets/${id}`),
@@ -359,7 +484,8 @@ export const certificationsApi = {
   getAll: (params?: { status?: string; framework_id?: number }) => 
     apiClient.get('/certifications', { params }),
   getById: (id: number) => apiClient.get(`/certifications/${id}`),
-  getFrameworkPhases: (frameworkId: number) => apiClient.get(`/certifications/frameworks/${frameworkId}/phases`),
+  getFrameworkPhases: (frameworkId: number) => apiClient.get(`/certifications/uploaded-frameworks/${frameworkId}/phases`),
+  generatePhases: (frameworkId: number) => apiClient.post(`/certifications/frameworks/${frameworkId}/generate-phases`),
   create: (data: { framework_id: number; name: string; target_date?: string }) => 
     apiClient.post('/certifications', data),
   update: (id: number, data: { status?: string; target_date?: string; notes?: string }) => 
@@ -384,11 +510,23 @@ export const certificationsApi = {
   
   getProgress: (id: number) => apiClient.get(`/certifications/${id}/progress`),
   getGaps: (id: number) => apiClient.get(`/certifications/${id}/gaps`),
+  getCDESystems: () => apiClient.get('/certifications/cde-systems'),
+  updateCDESystemScope: (assetId: number, data: { cde_environment: boolean }) =>
+    apiClient.put(`/certifications/cde-systems/${assetId}/scope`, data),
 };
 
 export const ermApi = {
   risks: {
-    getAll: () => apiClient.get<Risk[]>('/erm/risks'),
+    getAll: (filters?: { category?: string; register_type?: string; status?: string; min_score?: number; max_score?: number }) => {
+      const params = new URLSearchParams();
+      if (filters?.category) params.append('category', filters.category);
+      if (filters?.register_type) params.append('register_type', filters.register_type);
+      if (filters?.status) params.append('status_filter', filters.status);
+      if (filters?.min_score !== undefined) params.append('min_score', filters.min_score.toString());
+      if (filters?.max_score !== undefined) params.append('max_score', filters.max_score.toString());
+      const queryString = params.toString();
+      return apiClient.get<Risk[]>(`/erm/risks${queryString ? `?${queryString}` : ''}`);
+    },
     getById: (id: number) => apiClient.get<Risk>(`/erm/risks/${id}`),
     getDetail: (id: number) => apiClient.get<RiskDetail>(`/erm/risks/${id}/detail`),
     getDashboard: () => apiClient.get<RiskDashboard>('/erm/risks/dashboard'),
@@ -396,13 +534,18 @@ export const ermApi = {
     create: (data: Partial<Risk>) => apiClient.post<Risk>('/erm/risks', data),
     update: (id: number, data: Partial<Risk>) => apiClient.put<Risk>(`/erm/risks/${id}`, data),
     delete: (id: number) => apiClient.delete(`/erm/risks/${id}`),
-    uploadRiskRegister: (file: File) => {
+    uploadRiskRegister: (file: File, registerType?: string) => {
       const formData = new FormData();
       formData.append('file', file);
-      return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>('/erm/risks/upload', formData, {
+      const params = registerType ? `?register_type=${encodeURIComponent(registerType)}` : '';
+      return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>(`/erm/risks/upload${params}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },
+    downloadTemplate: () =>
+      apiClient.get('/erm/risks/template/download', {
+        responseType: 'blob',
+      }),
     closeRisk: (riskId: number, notes: string) => 
       apiClient.post<Risk>(`/erm/risks/${riskId}/close`, { notes }),
     reopenRisk: (riskId: number) => 
@@ -425,6 +568,8 @@ export const ermApi = {
         suggested_impact: number;
         risk_treatment_options: string[];
       }>('/erm/risks/ai-suggest', data),
+    generateTreatmentPlan: (riskId: number) =>
+      apiClient.post<{ treatment_plan: string }>(`/erm/risks/${riskId}/ai-treatment-plan`),
   },
   mitigationActions: {
     getAll: (riskId: number) => 
@@ -439,6 +584,16 @@ export const ermApi = {
       apiClient.post<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}/complete`, { actual_residual_reduction: actualReduction }),
     getOverdue: () => 
       apiClient.get<RiskMitigationAction[]>('/erm/mitigation-actions/overdue'),
+    aiSuggest: (riskId: number) =>
+      apiClient.post<{
+        suggestions: Array<{
+          title: string;
+          description: string;
+          action_type: string;
+          priority: string;
+          expected_residual_reduction: number;
+        }>;
+      }>('/erm/mitigation-actions/ai-suggest', { risk_id: riskId }),
   },
   auditFindings: {
     link: (riskId: number, issueId: number, notes?: string) => 
@@ -464,6 +619,39 @@ export const ermApi = {
     getTrend: (id: number, days?: number) => 
       apiClient.get<RiskKRIMeasurement[]>(`/erm/kris/${id}/trend`, { params: { days } }),
     getAlerts: () => apiClient.get<RiskKRI[]>('/erm/kris/alerts'),
+    upload: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>(
+        '/erm/kris/upload',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+    },
+    uploadRegister: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>(
+        '/erm/kris/upload',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+    },
+    aiSuggestManual: (data: { name: string; description?: string; risk_id?: number; metric_hint?: string }) =>
+      apiClient.post<{
+        name: string;
+        suggestion: {
+          description: string;
+          metric_type: string;
+          unit?: string;
+          threshold_direction: string;
+          frequency: string;
+          green_threshold?: number;
+          amber_threshold?: number;
+          data_source?: string;
+          rationale?: string;
+        };
+      }>('/erm/kris/ai-suggest', data),
   },
   incidents: {
     getAll: (params?: { risk_id?: number; severity?: string; status_filter?: string; start_date?: string; end_date?: string }) => 
@@ -507,6 +695,17 @@ export const ermApi = {
           operational_impact: string;
         };
       }>('/erm/incidents/ai-analyze', data),
+    aiSuggestManual: (data: { title: string; description?: string; severity?: string; risk_id?: number }) =>
+      apiClient.post<{
+        title: string;
+        suggestion: {
+          suggested_severity: string;
+          root_cause?: string;
+          corrective_actions?: string;
+          operational_impact?: string;
+          rationale?: string;
+        };
+      }>('/erm/incidents/ai-suggest', data),
   },
   reviews: {
     getAll: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number }) => 
@@ -553,8 +752,18 @@ export const ermApi = {
       apiClient.put(`/erm/appetite/${id}`, data),
     create: (tenantId: number, data: Record<string, unknown>) => 
       apiClient.post(`/erm/appetite?tenant_id=${tenantId}`, data),
-    seedDefaults: (tenantId: number) => 
-      apiClient.post(`/erm/appetite/seed-defaults?tenant_id=${tenantId}`),
+    seedDefaults: (tenantId?: number) => 
+      apiClient.post(`/erm/appetite/seed-defaults${tenantId ? `?tenant_id=${tenantId}` : ''}`),
+    aiSuggest: (data: { category: string; description?: string }) =>
+      apiClient.post<{
+        category: string;
+        appetite_level: string;
+        tolerance_threshold: number;
+        max_acceptable_score: number;
+        description: string;
+        escalation_criteria: string;
+        rationale: string;
+      }>('/erm/appetite/ai-suggest', data),
   },
   internalControls: {
     getAll: (params?: { status_filter?: string; category?: string; department_id?: number; control_type?: string; is_key_control?: boolean }) =>
@@ -580,8 +789,106 @@ export const ermApi = {
     getFrameworkLinks: (id: number) => apiClient.get(`/erm/internal-controls/${id}/framework-links`),
     createFrameworkLink: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/internal-controls/${id}/framework-links`, data),
     deleteFrameworkLink: (id: number, linkId: number) => apiClient.delete(`/erm/internal-controls/${id}/framework-links/${linkId}`),
+    getAISuggestions: (data: { name: string; description?: string }) =>
+      apiClient.post<{ suggested_category: string; suggested_subcategory: string; suggestion_confidence: number }>(
+        '/erm/internal-controls/ai-suggest-category',
+        data
+      ),
+    uploadManualWithAI: (file: File, autoCreate: boolean = false) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('auto_create', String(autoCreate));
+      return apiClient.post<{
+        message: string;
+        file_name: string;
+        auto_create: boolean;
+        extracted_count: number;
+        suggested_count: number;
+        created: number;
+        skipped: number;
+        errors: string[];
+        preview: Array<Record<string, unknown>>;
+      }>('/erm/internal-controls/upload-manual', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+    },
+    getSubcategories: (category: string) =>
+      apiClient.get<{ category: string; subcategories: string[] }>(`/erm/internal-controls/subcategories/${category}`),
+  },
+  analytics: {
+    getInteractiveHeatmap: (params?: { risk_type?: string; category?: string; treatment?: string; business_unit_id?: number; score_type?: string }) =>
+      apiClient.get('/erm/analytics/heatmap', { params }),
+    getBowTie: (riskId: number) =>
+      apiClient.get(`/erm/analytics/bowtie/${riskId}`),
+    runScenarioAnalysis: (data: { scenarios: Array<{ risk_id: number; adjusted_likelihood: number; adjusted_impact: number; scenario_name?: string; notes?: string }> }, scoreType?: string) =>
+      apiClient.post(`/erm/analytics/scenario-analysis${scoreType ? `?score_type=${scoreType}` : ''}`, data),
+    getScenarioPresets: () =>
+      apiClient.get('/erm/analytics/scenario-presets'),
+    getAggregation: () =>
+      apiClient.get('/erm/analytics/aggregation'),
+    getKRITriggers: (params?: { severity?: string; acknowledged?: boolean }) =>
+      apiClient.get('/erm/analytics/kri-triggers', { params }),
+    generateBowTieNarrative: (riskId: number) =>
+      apiClient.post(`/erm/analytics/bowtie/${riskId}/ai-narrative`),
+    aiExplainScenario: (data: { results: any[]; summary: any; scenario_type?: string }) =>
+      apiClient.post<{ explanation: string }>('/erm/analytics/scenario-analysis/ai-explain', data),
+  },
+  riskAssessments: {
+    getAll: (params?: { skip?: number; limit?: number; status?: string; assessment_type?: string }) => 
+      apiClient.get('/erm/risk-assessments', { params }),
+    getById: (id: number) => apiClient.get(`/erm/risk-assessments/${id}`),
+    getDetail: (id: number) => apiClient.get(`/erm/risk-assessments/${id}/detail`),
+    create: (data: Record<string, unknown>) => apiClient.post('/erm/risk-assessments', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/risk-assessments/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/erm/risk-assessments/${id}`),
+    updateStatus: (id: number, data: { status: string; notes?: string }) => 
+      apiClient.post(`/erm/risk-assessments/${id}/status`, data),
+    addRisk: (id: number, data: Record<string, unknown>) => 
+      apiClient.post(`/erm/risk-assessments/${id}/risks`, data),
+    updateRisk: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => 
+      apiClient.put(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}`, data),
+    removeRisk: (assessmentId: number, assessmentRiskId: number) => 
+      apiClient.delete(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}`),
+    bulkAddRisks: (id: number, risk_ids: number[]) => 
+      apiClient.post(`/erm/risk-assessments/${id}/risks/bulk`, { risk_ids }),
+    getAssessedRisks: (id: number, params?: { skip?: number; limit?: number }) => 
+      apiClient.get(`/erm/risk-assessments/${id}/risks`, { params }),
+    getAvailableRisks: (id: number) => 
+      apiClient.get(`/erm/risk-assessments/${id}/available-risks`),
+    linkKRI: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/kris`, data),
+    unlinkKRI: (assessmentId: number, assessmentRiskId: number, linkId: number) => 
+      apiClient.delete(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/kris/${linkId}`),
+    linkIncident: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/incidents`, data),
+    unlinkIncident: (assessmentId: number, assessmentRiskId: number, linkId: number) => 
+      apiClient.delete(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/incidents/${linkId}`),
+    linkRCSAFinding: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => 
+      apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/rcsa-findings`, data),
+    unlinkRCSAFinding: (assessmentId: number, assessmentRiskId: number, linkId: number) => 
+      apiClient.delete(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/rcsa-findings/${linkId}`),
+    aiSuggestRisk: (assessmentId: number, assessmentRiskId: number) =>
+      apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/ai-suggest`),
+    getSummary: (id: number) => apiClient.get(`/erm/risk-assessments/${id}/summary`),
+    getDashboard: () => apiClient.get('/erm/risk-assessments/dashboard'),
+    uploadExcel: (formData: FormData) =>
+      apiClient.post<{
+        assessment_id: number;
+        assessment_name: string;
+        risks_created: number;
+        rows_skipped: number;
+        rows_errored: number;
+        skipped_details: Array<{ row: number; reason: string }>;
+        error_details: Array<{ row: number; error: string }>;
+        mapped_columns: string[];
+      }>('/erm/risk-assessments/upload-excel', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
   },
 };
+
+// Alias for backward compatibility
+export const riskAssessmentApi = ermApi.riskAssessments;
 
 export const frameworkUploadApi = {
   uploadFramework: (formData: FormData) => 
@@ -945,11 +1252,16 @@ export const rcsaApi = {
   updateTemplate: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/rcsa/templates/${id}`, data),
   deleteTemplate: (id: number) => apiClient.delete(`/erm/rcsa/templates/${id}`),
   cloneTemplate: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/templates/${id}/clone`, data),
-  uploadTemplate: (formData: FormData) => apiClient.post('/erm/rcsa/templates/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  uploadTemplate: (formData: FormData, params: { name: string; category: string }) =>
+    apiClient.post('/erm/rcsa/templates/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params,
+    }),
   downloadTemplate: (id: number) => apiClient.get(`/erm/rcsa/templates/download/${id}`, { responseType: 'blob' }),
   
   getCampaigns: (params?: { status?: string; period?: string }) => apiClient.get('/erm/rcsa/campaigns', { params }),
   getCampaign: (id: number) => apiClient.get(`/erm/rcsa/campaigns/${id}`),
+  getCampaignDetail: (id: number) => apiClient.get(`/erm/rcsa/campaigns/${id}/detail`),
   createCampaign: (data: Record<string, unknown>) => apiClient.post('/erm/rcsa/campaigns', data),
   updateCampaign: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/rcsa/campaigns/${id}`, data),
   deleteCampaign: (id: number) => apiClient.delete(`/erm/rcsa/campaigns/${id}`),
@@ -995,6 +1307,40 @@ export const dashboardApi = {
   getFrameworkCompliance: (frameworkId: number) => apiClient.get(`/dashboard/compliance/${frameworkId}`),
   getUnified: (tenantId?: number) => apiClient.get('/dashboard/unified', { params: tenantId ? { tenant_id: tenantId } : {} }),
   getAIInsights: (tenantId?: number) => apiClient.get('/dashboard/ai-insights', { params: tenantId ? { tenant_id: tenantId } : {} }),
+  getEnhancedStats: (tenantId?: number) => apiClient.get('/dashboard/enhanced-stats', { params: tenantId ? { tenant_id: tenantId } : {} }),
+};
+
+export const enrichedDashboardApi = {
+  getExecutiveRiskVelocity: (days?: number) => apiClient.get('/enriched-dashboard/executive/risk-velocity', { params: days ? { days } : {} }),
+  getExecutiveRiskAppetiteGauge: () => apiClient.get('/enriched-dashboard/executive/risk-appetite-gauge'),
+  getExecutiveEmergingRisks: () => apiClient.get('/enriched-dashboard/executive/emerging-risks'),
+  getExecutiveRiskConcentration: () => apiClient.get('/enriched-dashboard/executive/risk-concentration'),
+  getExecutiveBoardReadiness: () => apiClient.get('/enriched-dashboard/executive/board-readiness'),
+  getExecutiveSummary: () => apiClient.get('/enriched-dashboard/executive/summary'),
+  getCompliancePosture: () => apiClient.get('/enriched-dashboard/compliance-health/posture'),
+  getControlEffectiveness: () => apiClient.get('/enriched-dashboard/compliance-health/control-effectiveness'),
+  getAuditReadiness: () => apiClient.get('/enriched-dashboard/compliance-health/audit-readiness'),
+  getAttestationStatus: () => apiClient.get('/enriched-dashboard/compliance-health/attestation-status'),
+  getExceptionAging: () => apiClient.get('/enriched-dashboard/compliance-health/exception-aging'),
+  getEvidenceStatus: () => apiClient.get('/enriched-dashboard/compliance-health/evidence-status'),
+  getTreatmentPortfolio: () => apiClient.get('/enriched-dashboard/treatment/portfolio'),
+  getTreatmentEffectiveness: () => apiClient.get('/enriched-dashboard/treatment/effectiveness'),
+  getTreatmentStrategyMix: () => apiClient.get('/enriched-dashboard/treatment/strategy-mix'),
+  getTreatmentActionVelocity: () => apiClient.get('/enriched-dashboard/treatment/action-velocity'),
+  getTreatmentBurndown: (months?: number) => apiClient.get('/enriched-dashboard/treatment/burndown', { params: months ? { months } : {} }),
+  getIncidentSummary: () => apiClient.get('/enriched-dashboard/incidents/summary'),
+  getIncidentResponseTimes: () => apiClient.get('/enriched-dashboard/incidents/response-times'),
+  getIncidentRootCauses: () => apiClient.get('/enriched-dashboard/incidents/root-causes'),
+  getIncidentTrends: (months?: number) => apiClient.get('/enriched-dashboard/incidents/trends', { params: months ? { months } : {} }),
+  getIncidentLessonsLearned: () => apiClient.get('/enriched-dashboard/incidents/lessons-learned'),
+  getControlTestingSummary: () => apiClient.get('/enriched-dashboard/controls/testing-summary'),
+  getControlDeficiencyTracker: () => apiClient.get('/enriched-dashboard/controls/deficiency-tracker'),
+  getControlEffectivenessByType: () => apiClient.get('/enriched-dashboard/controls/effectiveness-by-type'),
+  getControlUpcomingTests: () => apiClient.get('/enriched-dashboard/controls/upcoming-tests'),
+  getRegulatoryChangeTracker: () => apiClient.get('/enriched-dashboard/regulatory/change-tracker'),
+  getRegulatoryImpactSummary: () => apiClient.get('/enriched-dashboard/regulatory/impact-summary'),
+  getRegulatoryImplementationProgress: () => apiClient.get('/enriched-dashboard/regulatory/implementation-progress'),
+  getRegulatoryFeedAnalysis: () => apiClient.get('/enriched-dashboard/regulatory/feed-analysis'),
 };
 
 export const attestationApi = {
@@ -1028,12 +1374,16 @@ export const committeeApi = {
   getCharters: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/charters`),
   createCharter: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/charters`, data),
   updateCharter: (charterId: number, data: any) => apiClient.put(`/governance/committees/charters/${charterId}`, data),
+  deleteCharter: (committeeId: number, charterId: number) => apiClient.delete(`/governance/committees/${committeeId}/charters/${charterId}`),
   uploadCharterFile: (committeeId: number, charterId: number, formData: FormData) => 
     apiClient.post(`/governance/committees/${committeeId}/charters/${charterId}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
   downloadCharterFile: (charterId: number) => 
     apiClient.get(`/governance/committees/charters/${charterId}/download`, { responseType: 'blob' }),
+  aiGenerateCharter: (committeeId: number, frameworkIds?: number[]) => apiClient.post(`/governance/committees/${committeeId}/ai-generate-charter`, { framework_ids: frameworkIds || [] }),
+  aiCompareCharter: (committeeId: number, data: { charter_id?: number; charter_text?: string }) =>
+    apiClient.post(`/governance/committees/${committeeId}/ai-compare-charter`, data),
   getMeetings: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/meetings`),
   createMeeting: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/meetings`, data),
   getMeeting: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}`),
@@ -1044,13 +1394,22 @@ export const committeeApi = {
   createMinutes: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/minutes`, data),
   updateMinutes: (minutesId: number, data: any) => apiClient.put(`/governance/committees/minutes/${minutesId}`, data),
   createAction: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/actions`, data),
+  createManualAction: (data: any) => apiClient.post('/governance/committees/actions/manual', data),
   getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean }) => apiClient.get('/governance/committees/actions', { params }),
   updateAction: (actionId: number, data: any) => apiClient.patch(`/governance/committees/actions/${actionId}`, data),
+  aiRewordActionText: (formData: FormData) =>
+    apiClient.post('/governance/committees/actions/ai/reword', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  aiSummarizeActionText: (formData: FormData) =>
+    apiClient.post('/governance/committees/actions/ai/summary', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   getDashboard: () => apiClient.get('/governance/committees/dashboard'),
   getSuggestedAgendaItems: (meetingId: number) => 
-    apiClient.get(`/grc/committees/meetings/${meetingId}/suggested-agenda-items`),
+    apiClient.get(`/governance/committees/meetings/${meetingId}/suggested-agenda-items`),
   autoPopulateAgenda: (meetingId: number, data: { include_documents?: boolean; include_exceptions?: boolean; include_regulatory_changes?: boolean }) => 
-    apiClient.post(`/grc/committees/meetings/${meetingId}/auto-populate-agenda`, data),
+    apiClient.post(`/governance/committees/meetings/${meetingId}/auto-populate-agenda`, data),
 };
 
 export interface QuickAssessRequest {
@@ -1084,16 +1443,166 @@ export const evidenceAIApi = {
 };
 
 export const controlLibraryApi = {
+  // Groups Module
+  groups: {
+    getCategories: () => apiClient.get('/control-library/groups/categories'),
+    getDomains: () => apiClient.get('/control-library/groups/domains'),
+    getAll: (params?: { category?: string; domain?: string; search?: string; skip?: number; limit?: number }) =>
+      apiClient.get('/control-library/groups', { params }),
+    getById: (groupId: number) => apiClient.get(`/control-library/groups/${groupId}`),
+    create: (data: { code: string; name: string; description?: string; category?: string; domain?: string; keywords?: string[]; evidence_types?: string[] }) =>
+      apiClient.post('/control-library/groups', data),
+    update: (groupId: number, data: { code?: string; name?: string; description?: string; category?: string; domain?: string; keywords?: string[]; evidence_types?: string[]; ai_summary?: string }) =>
+      apiClient.put(`/control-library/groups/${groupId}`, data),
+    delete: (groupId: number) => apiClient.delete(`/control-library/groups/${groupId}`),
+    addControls: (groupId: number, data: { normalized_control_ids?: number[]; framework_control_ids?: number[]; parsed_control_ids?: number[] }) =>
+      apiClient.post(`/control-library/groups/${groupId}/controls`, data),
+    removeControl: (groupId: number, mappingId: number) =>
+      apiClient.delete(`/control-library/groups/${groupId}/controls/${mappingId}`),
+    autoGroup: (data?: { framework_ids?: number[] }) =>
+      apiClient.post('/control-library/groups/auto-group', data || {}),
+    getFrameworks: (groupId: number) => apiClient.get(`/control-library/groups/${groupId}/frameworks`),
+    generateSummary: (groupId: number, data?: { regenerate_keywords?: boolean }) =>
+      apiClient.post(`/control-library/groups/${groupId}/generate-summary`, data || { regenerate_keywords: true }),
+    populateFromFrameworks: (groupId: number) =>
+      apiClient.post(`/control-library/groups/${groupId}/populate-from-frameworks`),
+    populateAllGroups: () => apiClient.post('/control-library/groups/populate-all-groups'),
+    getSimilarities: (groupId: number) => apiClient.get(`/control-library/groups/${groupId}/similarities`),
+  },
+
+  // AI Mapping Module
+  aiMapping: {
+    getSimilarities: (params?: { source_type?: string; source_id?: number; min_score?: number; framework_id?: number; skip?: number; limit?: number }) =>
+      apiClient.get('/control-library/ai-mapping/similarities', { params }),
+    getAnalysis: (analysisId: number) => apiClient.get(`/control-library/ai-mapping/analysis/${analysisId}`),
+    getSuggestions: (controlType: 'normalized' | 'framework', controlId: number) =>
+      apiClient.get(`/control-library/ai-mapping/suggestions/${controlType}/${controlId}`),
+    analyze: (data?: { framework_ids?: number[] }) =>
+      apiClient.post('/control-library/ai-mapping/analyze', data || {}),
+    analyzePair: (data: { source_type: string; source_control_id: number; target_type: string; target_control_id: number }) =>
+      apiClient.post('/control-library/ai-mapping/analyze-pair', data),
+    verifySimilarity: (similarityId: number, data: { verified: boolean; adjusted_score?: number }) =>
+      apiClient.put(`/control-library/ai-mapping/similarities/${similarityId}/verify`, data),
+  },
+
+  // Inheritance Module
+  inheritance: {
+    getAll: (params?: { parent_type?: 'normalized' | 'framework'; parent_id?: number; child_type?: 'normalized' | 'framework'; inheritance_type?: 'full' | 'partial' | 'conditional'; skip?: number; limit?: number }) =>
+      apiClient.get('/control-library/inheritance', { params }),
+    getById: (inheritanceId: number) => apiClient.get(`/control-library/inheritance/${inheritanceId}`),
+    getAsParent: (controlType: 'normalized' | 'framework', controlId: number) =>
+      apiClient.get(`/control-library/inheritance/parent/${controlType}/${controlId}`),
+    getAsChild: (controlType: 'normalized' | 'framework', controlId: number) =>
+      apiClient.get(`/control-library/inheritance/child/${controlType}/${controlId}`),
+    getTree: (controlType: 'normalized' | 'framework', controlId: number) =>
+      apiClient.get(`/control-library/inheritance/tree/${controlType}/${controlId}`),
+    create: (data: { parent_type: 'normalized' | 'framework'; parent_control_id: number; child_type: 'normalized' | 'framework'; child_control_id: number; inheritance_type: 'full' | 'partial' | 'conditional'; condition_description?: string; coverage_percentage?: number }) =>
+      apiClient.post('/control-library/inheritance', data),
+    analyzeInheritance: (data: { control_type: 'normalized' | 'framework'; control_id: number }) =>
+      apiClient.post('/control-library/inheritance/analyze-inheritance', data),
+    update: (inheritanceId: number, data: { inheritance_type?: 'full' | 'partial' | 'conditional'; condition_description?: string; coverage_percentage?: number }) =>
+      apiClient.put(`/control-library/inheritance/${inheritanceId}`, data),
+    delete: (inheritanceId: number) => apiClient.delete(`/control-library/inheritance/${inheritanceId}`),
+  },
+
+  // Evidence Recommendations Module
+  evidenceRecs: {
+    getAll: (params?: { group_id?: number; control_type?: string; control_id?: number; priority?: string; skip?: number; limit?: number }) =>
+      apiClient.get('/control-library/evidence-recs', { params }),
+    getEvidenceTypes: () => apiClient.get('/control-library/evidence-recs/evidence-types'),
+    getPrioritySummary: () => apiClient.get('/control-library/evidence-recs/priority-summary'),
+    getForControl: (controlType: 'normalized' | 'framework', controlId: number) =>
+      apiClient.get(`/control-library/evidence-recs/for-control/${controlType}/${controlId}`),
+    getForGroup: (groupId: number) => apiClient.get(`/control-library/evidence-recs/for-group/${groupId}`),
+    generateForControl: (controlType: 'normalized' | 'framework', controlId: number) =>
+      apiClient.post(`/control-library/evidence-recs/generate/${controlType}/${controlId}`),
+    generateForGroup: (groupId: number) =>
+      apiClient.post(`/control-library/evidence-recs/generate-for-group/${groupId}`),
+    bulkGenerate: (data: { control_ids: Array<{ type: string; id: number }> }) =>
+      apiClient.post('/control-library/evidence-recs/bulk-generate', data),
+    update: (recommendationId: number, data: { evidence_type?: string; evidence_description?: string; priority?: string; sample_evidence_names?: string[] }) =>
+      apiClient.put(`/control-library/evidence-recs/${recommendationId}`, data),
+    delete: (recommendationId: number) => apiClient.delete(`/control-library/evidence-recs/${recommendationId}`),
+  },
+
+  // Gap Analysis Module
   gapAnalysis: {
-    prioritizeWithAI: async (data?: { framework_id?: number; max_gaps?: number }) => {
-      const response = await apiClient.post('/control-library/gap-analysis/ai-prioritize', data || {});
-      return response.data;
-    },
-    getDashboard: () => apiClient.get('/control-library/gap-analysis/dashboard'),
-    getUnmappedControls: (params?: { framework_id?: number; skip?: number; limit?: number }) => 
+    getUnmappedControls: (params?: { framework_id?: number; control_type?: 'normalized' | 'framework' | 'parsed'; skip?: number; limit?: number }) =>
       apiClient.get('/control-library/gap-analysis/unmapped-controls', { params }),
-    getControlsWithoutEvidence: (params?: { framework_id?: number; skip?: number; limit?: number }) => 
+    getControlsWithoutEvidence: (params?: { framework_id?: number; control_type?: string; skip?: number; limit?: number }) =>
       apiClient.get('/control-library/gap-analysis/controls-without-evidence', { params }),
+    getControlsWithLowCoverage: (params?: { threshold?: number; framework_id?: number; skip?: number; limit?: number }) =>
+      apiClient.get('/control-library/gap-analysis/controls-with-low-coverage', { params }),
+    getUnmappedSummary: () => apiClient.get('/control-library/gap-analysis/unmapped-summary'),
+    getEvidenceGaps: (params?: { framework_id?: number; skip?: number; limit?: number }) =>
+      apiClient.get('/control-library/gap-analysis/evidence-gaps', { params }),
+    getFrameworkGaps: (frameworkId: number, params?: { framework_type?: 'legacy' | 'uploaded' }) =>
+      apiClient.get(`/control-library/gap-analysis/framework-gaps/${frameworkId}`, { params }),
+    getGroupGaps: (groupId: number) => apiClient.get(`/control-library/gap-analysis/group-gaps/${groupId}`),
+    getDashboard: () => apiClient.get('/control-library/gap-analysis/dashboard'),
+    export: (data?: { format?: 'json' | 'csv'; include_details?: boolean }) =>
+      apiClient.post('/control-library/gap-analysis/export', data || {}),
+    prioritizeWithAI: (data?: { framework_id?: number; max_gaps?: number }) =>
+      apiClient.post('/control-library/gap-analysis/ai-prioritize', data || {}),
+  },
+
+  // Comparison Module
+  comparison: {
+    getFrameworks: () => apiClient.get('/control-library/comparison/frameworks'),
+    getControls: (params: { framework_ids: number[]; category?: string; domain?: string; skip?: number; limit?: number }) =>
+      apiClient.get('/control-library/comparison/controls', { params }),
+    getGroup: (groupId: number) => apiClient.get(`/control-library/comparison/group/${groupId}`),
+    getControl: (controlType: 'normalized' | 'framework', controlId: number) =>
+      apiClient.get(`/control-library/comparison/control/${controlType}/${controlId}`),
+    getDifferences: (controlType: 'normalized' | 'framework', controlId: number) =>
+      apiClient.get(`/control-library/comparison/differences/${controlType}/${controlId}`),
+    getMatrix: (params?: { framework_ids?: number[] }) =>
+      apiClient.get('/control-library/comparison/matrix', { params }),
+    // Positional parameter version for frontend compatibility
+    getCrosswalk: (sourceFrameworkId: number, destFrameworkId: number, skip?: number, limit?: number) =>
+      apiClient.get('/control-library/comparison/crosswalk', { 
+        params: { source_framework_id: sourceFrameworkId, destination_framework_id: destFrameworkId, skip, limit } 
+      }),
+    sideBySide: (data: { control_pairs: Array<{ control1_type: string; control1_id: number; control2_type: string; control2_id: number }> }) =>
+      apiClient.post('/control-library/comparison/side-by-side', data),
+    exportComparison: (data: { framework_ids: number[]; format?: 'csv' | 'xlsx' }) =>
+      apiClient.post('/control-library/comparison/export-comparison', data, { responseType: 'blob' }),
+    // Positional parameter version for frontend compatibility
+    aiMapControl: (sourceFrameworkId: number, destFrameworkId: number, sourceControlId: number) =>
+      apiClient.post('/control-library/comparison/crosswalk/ai-map', null, { 
+        params: { source_framework_id: sourceFrameworkId, destination_framework_id: destFrameworkId, source_control_id: sourceControlId } 
+      }),
+  },
+
+  // Coverage Module
+  coverage: {
+    getMatrix: () => apiClient.get('/control-library/coverage/matrix'),
+    getByFramework: () => apiClient.get('/control-library/coverage/by-framework'),
+    getByCategory: () => apiClient.get('/control-library/coverage/by-category'),
+    getByDomain: () => apiClient.get('/control-library/coverage/by-domain'),
+    getHeatmapData: () => apiClient.get('/control-library/coverage/heatmap-data'),
+    getFrameworkCoverage: (frameworkId: number) => apiClient.get(`/control-library/coverage/framework/${frameworkId}`),
+    getGroupCoverage: (groupId: number) => apiClient.get(`/control-library/coverage/group/${groupId}`),
+    getEvidenceReuse: () => apiClient.get('/control-library/coverage/evidence-reuse'),
+    getAuditSavings: () => apiClient.get('/control-library/coverage/audit-savings'),
+    getTrends: (params?: { period?: 'weekly' | 'monthly' }) =>
+      apiClient.get('/control-library/coverage/trends', { params }),
+  },
+
+  // Reports Module
+  reports: {
+    getHarmonization: () => apiClient.get('/control-library/reports/harmonization'),
+    getFramework: (frameworkId: number) => apiClient.get(`/control-library/reports/framework/${frameworkId}`),
+    getAuditReady: () => apiClient.get('/control-library/reports/audit-ready'),
+    getCrossFrameworkMapping: () => apiClient.get('/control-library/reports/cross-framework-mapping'),
+    getEvidenceRequirements: () => apiClient.get('/control-library/reports/evidence-requirements'),
+    download: (reportId: string) => apiClient.get(`/control-library/reports/download/${reportId}`, { responseType: 'blob' }),
+    getHistory: (params?: { skip?: number; limit?: number }) =>
+      apiClient.get('/control-library/reports/history', { params }),
+    export: (data?: { format?: 'xlsx' | 'csv'; framework_ids?: number[]; include_sections?: string[] }) =>
+      apiClient.post('/control-library/reports/export', data || {}, { responseType: 'blob' }),
+    generateExecutiveSummary: (data?: { include_recommendations?: boolean; focus_areas?: string[] }) =>
+      apiClient.post('/control-library/reports/generate-executive-summary', data || {}),
   },
 };
 
@@ -1102,6 +1611,10 @@ export interface AdminUser {
   username: string;
   email: string;
   display_name: string;
+  department?: string;
+  group?: string;
+  division?: string;
+  designation?: string;
   is_active: boolean;
   created_at: string;
   last_login: string | null;
@@ -1206,6 +1719,165 @@ export const tenantAuthApi = {
     geography?: string;
     primary_contact_phone?: string;
   }) => apiClient.post('/auth/register-organization', data),
+};
+
+export const auditApi = {
+  universe: {
+    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/universe', { params }),
+    getById: (id: number) => apiClient.get(`/audit/universe/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/audit/universe', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/universe/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/audit/universe/${id}`),
+    getCoverageGaps: () => apiClient.get('/audit/universe/coverage-gaps'),
+    getRiskEnrichment: () => apiClient.get('/audit/universe/risk-enrichment'),
+    syncFromRisks: () => apiClient.post('/audit/universe/sync-from-risks'),
+    refreshRiskScores: () => apiClient.post('/audit/universe/refresh-risk-scores'),
+  },
+  plans: {
+    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/plans', { params }),
+    getById: (id: number) => apiClient.get(`/audit/plans/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/audit/plans', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/plans/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/audit/plans/${id}`),
+    approve: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/plans/${id}/approve`, data),
+    generateFromUniverse: (data: Record<string, unknown>) => apiClient.post('/audit/plans/generate-from-universe', data),
+    addItem: (planId: number, data: Record<string, unknown>) => apiClient.post(`/audit/plans/${planId}/items`, data),
+    updateItem: (planId: number, itemId: number, data: Record<string, unknown>) => apiClient.put(`/audit/plans/${planId}/items/${itemId}`, data),
+    deleteItem: (planId: number, itemId: number) => apiClient.delete(`/audit/plans/${planId}/items/${itemId}`),
+    getCalendar: (planId: number) => apiClient.get(`/audit/plans/${planId}/calendar`),
+    getRegulatoryImpact: (params?: Record<string, unknown>) => apiClient.get('/audit/plans/regulatory-impact', { params }),
+  },
+  engagements: {
+    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/engagements', { params }),
+    getById: (id: number) => apiClient.get(`/audit/engagements/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/audit/engagements', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/engagements/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/audit/engagements/${id}`),
+    transition: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/engagements/${id}/transition`, data),
+    createFromPlanItem: (data: Record<string, unknown>) => apiClient.post('/audit/engagements/from-plan-item', data),
+    createFromPlan: (planId: number) => apiClient.post('/audit/engagements/from-plan', undefined, { params: { plan_id: planId } }),
+    getResourceCalendar: (params?: Record<string, unknown>) => apiClient.get('/audit/engagements/resource-calendar', { params }),
+  },
+  workpapers: {
+    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/workpapers', { params }),
+    getById: (id: number) => apiClient.get(`/audit/workpapers/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/audit/workpapers', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/workpapers/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/audit/workpapers/${id}`),
+    signoff: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/workpapers/${id}/signoff`, data),
+    addProcedure: (workpaperId: number, data: Record<string, unknown>) => apiClient.post(`/audit/workpapers/${workpaperId}/procedures`, data),
+    updateProcedure: (workpaperId: number, procedureId: number, data: Record<string, unknown>) => apiClient.put(`/audit/workpapers/${workpaperId}/procedures/${procedureId}`, data),
+  },
+  findings: {
+    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/findings', { params }),
+    getById: (id: number) => apiClient.get(`/audit/findings/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/audit/findings', data),
+    downloadTemplate: () => apiClient.get('/audit/findings/template/download', { responseType: 'blob' }),
+    importFile: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiClient.post('/audit/findings/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    createWithAttachment: (data: FormData) => apiClient.post('/audit/findings/with-attachment', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+    suggestDetails: (data: Record<string, unknown>) => apiClient.post('/audit/findings/ai-suggest', data),
+    getGroupedByEngagement: (params?: Record<string, unknown>) => apiClient.get('/audit/findings/grouped-by-engagement', { params }),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/findings/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/audit/findings/${id}`),
+    getOverdue: () => apiClient.get('/audit/findings/overdue'),
+    getThemes: () => apiClient.get('/audit/findings/themes'),
+    addManagementResponse: (findingId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/management-response`, data),
+    addRecommendation: (findingId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/recommendations`, data),
+    addActionPlan: (findingId: number, recId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/recommendations/${recId}/action-plans`, data),
+    updateActionPlan: (findingId: number, recId: number, apId: number, data: Record<string, unknown>) => apiClient.put(`/audit/findings/${findingId}/recommendations/${recId}/action-plans/${apId}`, data),
+    addFollowUp: (findingId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/follow-ups`, data),
+    closeFollowUp: (findingId: number, fuId: number, data?: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/follow-ups/${fuId}/close`, data || {}),
+  },
+  ccm: {
+    getRules: (params?: Record<string, unknown>) => apiClient.get('/audit/ccm/rules', { params }),
+    createRule: (data: Record<string, unknown>) => apiClient.post('/audit/ccm/rules', data),
+    updateRule: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/ccm/rules/${id}`, data),
+    deleteRule: (id: number) => apiClient.delete(`/audit/ccm/rules/${id}`),
+    getAnomalies: (params?: Record<string, unknown>) => apiClient.get('/audit/ccm/anomalies', { params }),
+    createAnomaly: (data: Record<string, unknown>) => apiClient.post('/audit/ccm/anomalies', data),
+    reviewAnomaly: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/ccm/anomalies/${id}/review`, data),
+    getStats: () => apiClient.get('/audit/ccm/stats'),
+  },
+  reporting: {
+    getReports: (params?: Record<string, unknown>) => apiClient.get('/audit/reporting/reports', { params }),
+    createReport: (data: Record<string, unknown>) => apiClient.post('/audit/reporting/reports', data),
+    updateReport: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/reporting/reports/${id}`, data),
+    getFullReport: (id: number) => apiClient.get(`/audit/reporting/reports/${id}/full`),
+    exportPDF: (id: number) => apiClient.get(`/audit/reporting/reports/${id}/export/pdf`, { responseType: 'blob' }),
+    exportDOCX: (id: number) => apiClient.get(`/audit/reporting/reports/${id}/export/docx`, { responseType: 'blob' }),
+    getBoardPacks: () => apiClient.get('/audit/reporting/board-packs'),
+    createBoardPack: (data: Record<string, unknown>) => apiClient.post('/audit/reporting/board-packs', data),
+    getKPIs: () => apiClient.get('/audit/reporting/kpis'),
+    getTrendAnalysis: (params?: Record<string, unknown>) => apiClient.get('/audit/reporting/trend-analysis', { params }),
+    getRiskPrioritization: () => apiClient.get('/audit/reporting/risk-prioritization'),
+    getAccountability: () => apiClient.get('/audit/reporting/accountability'),
+    getROIMetrics: (hourlyRate?: number) => apiClient.get('/audit/reporting/roi-metrics', { params: hourlyRate ? { hourly_rate: hourlyRate } : {} }),
+    getRegulatoryImpactTracker: () => apiClient.get('/audit/reporting/regulatory-impact-tracker'),
+    downloadStoryboardPDF: () => apiClient.get('/audit/reporting/storyboard-pdf', { responseType: 'blob' }),
+    getPBC: (params?: Record<string, unknown>) => apiClient.get('/audit/reporting/pbc', { params }),
+    createPBCItem: (data: Record<string, unknown>) => apiClient.post('/audit/reporting/pbc', data),
+    updatePBCItem: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/reporting/pbc/${id}`, data),
+  },
+  qaip: {
+    getReviews: (params?: Record<string, unknown>) => apiClient.get('/audit/qaip/reviews', { params }),
+    createReview: (data: Record<string, unknown>) => apiClient.post('/audit/qaip/reviews', data),
+    updateReview: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/qaip/reviews/${id}`, data),
+    getIIAStandards: () => apiClient.get('/audit/qaip/iia-standards'),
+    getConformance: () => apiClient.get('/audit/qaip/conformance'),
+    getMaturity: () => apiClient.get('/audit/qaip/maturity'),
+    getTemplates: () => apiClient.get('/audit/qaip/templates'),
+    createTemplate: (data: Record<string, unknown>) => apiClient.post('/audit/qaip/templates', data),
+    updateTemplate: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/qaip/templates/${id}`, data),
+    deleteTemplate: (id: number) => apiClient.delete(`/audit/qaip/templates/${id}`),
+    applyTemplate: (templateId: number, engagementId: number) => apiClient.post(`/audit/qaip/templates/${templateId}/apply/${engagementId}`),
+  },
+  testScripts: {
+    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/test-scripts', { params }),
+    getById: (id: number) => apiClient.get(`/audit/test-scripts/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/audit/test-scripts', data),
+    generateFromEngagement: (data: Record<string, unknown>) => apiClient.post('/audit/test-scripts/generate-from-engagement', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/test-scripts/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/audit/test-scripts/${id}`),
+    cloneToEngagement: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/test-scripts/${id}/clone-to-engagement`, data),
+  },
+  skillMatrix: {
+    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/skill-matrix', { params }),
+    getByUser: (userId: number) => apiClient.get(`/audit/skill-matrix/user/${userId}`),
+    createSkill: (data: Record<string, unknown>) => apiClient.post('/audit/skill-matrix', data),
+    updateSkill: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/skill-matrix/${id}`, data),
+    deleteSkill: (id: number) => apiClient.delete(`/audit/skill-matrix/${id}`),
+    upsertProfile: (data: Record<string, unknown>) => apiClient.put('/audit/skill-matrix/profile/upsert', data),
+    match: (params?: Record<string, unknown>) => apiClient.get('/audit/skill-matrix/match', { params }),
+    getStats: () => apiClient.get('/audit/skill-matrix/stats'),
+  },
+  capacity: {
+    getCalendar: (params?: Record<string, unknown>) => apiClient.get('/audit/capacity/calendar', { params }),
+    getUtilization: (params?: Record<string, unknown>) => apiClient.get('/audit/capacity/utilization', { params }),
+    getConflicts: (params?: Record<string, unknown>) => apiClient.get('/audit/capacity/conflicts', { params }),
+  },
+  ai: {
+    generateAuditPlan: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-audit-plan', data),
+    generateProcedures: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-procedures', data),
+    draftFinding: (data: Record<string, unknown>) => apiClient.post('/audit/ai/draft-finding', data),
+    getCCMInsights: (data: Record<string, unknown>) => apiClient.post('/audit/ai/ccm-insights', data),
+    generateBoardPackNarrative: (data: Record<string, unknown>) => apiClient.post('/audit/ai/board-pack-narrative', data),
+    getBoardPackNarrative: (data: Record<string, unknown>) => apiClient.post('/audit/ai/board-pack-narrative', data),
+    generateEngagementDetails: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-engagement-details', data),
+    getRiskSuggestions: (data: Record<string, unknown>) => apiClient.post('/audit/ai/risk-assessment-suggestions', data),
+    findingSimilarity: (data: Record<string, unknown>) => apiClient.post('/audit/ai/finding-similarity', data),
+    getFieldworkGuidance: (data: Record<string, unknown>) => apiClient.post('/audit/ai/fieldwork-guidance', data),
+    regulatoryImpact: (data: Record<string, unknown>) => apiClient.post('/audit/ai/regulatory-impact-assessment', data),
+    generateTestScript: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-test-script', data),
+    suggestEngagementSkills: (data: Record<string, unknown>) => apiClient.post('/audit/ai/suggest-engagement-skills', data),
+  },
 };
 
 export default apiClient;

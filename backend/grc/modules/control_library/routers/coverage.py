@@ -2,35 +2,66 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, distinct
+from sqlalchemy import func, distinct, or_
 from pydantic import BaseModel
 
 from ....models import (
     Framework, FrameworkDomain, ControlObjective, FrameworkControl,
     CommonControlGroup, CommonControlGroupMapping, NormalizedControl,
-    Evidence, EvidenceControlMapping, GRCUser, get_db
+    Evidence, EvidenceControlMapping, UploadedFramework, ParsedFrameworkControl,
+    ControlImplementation, ImplementationEvidence, GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/coverage", tags=["Control Library - Coverage Matrix"])
 
 
-def calculate_coverage_matrix(db: Session, tenant_id: int) -> dict:
+def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: Optional[List[int]] = None) -> dict:
     tenant_evidence_ids = db.query(Evidence.id).filter(
         Evidence.tenant_id == tenant_id
     ).subquery()
-    
-    covered_fc_ids = db.query(EvidenceControlMapping.framework_control_id).filter(
-        EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
-        EvidenceControlMapping.framework_control_id.isnot(None)
-    ).distinct().subquery()
-    
-    frameworks = db.query(Framework).filter(Framework.is_active == True).all()
-    
+
+    covered_fc_set = set(
+        row[0]
+        for row in db.query(EvidenceControlMapping.framework_control_id).filter(
+            EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
+            EvidenceControlMapping.framework_control_id.isnot(None)
+        ).distinct().all()
+        if row[0] is not None
+    )
+
+    covered_pc_set = set(
+        row[0]
+        for row in db.query(EvidenceControlMapping.parsed_control_id).filter(
+            EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
+            EvidenceControlMapping.parsed_control_id.isnot(None)
+        ).distinct().all()
+        if row[0] is not None
+    )
+
+    implementation_covered_pc_set = set(
+        row[0]
+        for row in db.query(ControlImplementation.parsed_control_id)
+        .join(ImplementationEvidence, ImplementationEvidence.implementation_id == ControlImplementation.id)
+        .join(Evidence, Evidence.id == ImplementationEvidence.evidence_id)
+        .filter(
+            Evidence.tenant_id == tenant_id,
+            ControlImplementation.parsed_control_id.isnot(None)
+        )
+        .distinct()
+        .all()
+        if row[0] is not None
+    )
+
+    covered_pc_set.update(implementation_covered_pc_set)
+
     matrix = {}
     categories = set()
-    
-    for fw in frameworks:
+
+    legacy_frameworks = db.query(Framework).filter(
+        or_(Framework.is_active == True, Framework.is_active.is_(None))
+    ).all()
+    for fw in legacy_frameworks:
         fw_key = str(fw.id)
         matrix[fw_key] = {
             "framework_id": fw.id,
@@ -38,38 +69,86 @@ def calculate_coverage_matrix(db: Session, tenant_id: int) -> dict:
             "framework_code": fw.short_code,
             "categories": {}
         }
-        
+
         for domain in fw.domains:
-            if domain.name:
-                categories.add(domain.name)
+            cat_key = domain.name or "Uncategorized"
+            categories.add(cat_key)
+
+            if cat_key not in matrix[fw_key]["categories"]:
+                matrix[fw_key]["categories"][cat_key] = {
+                    "controls_total": 0,
+                    "controls_with_evidence": 0,
+                    "coverage_percent": 0
+                }
+
             for objective in domain.objectives:
                 controls = db.query(FrameworkControl).filter(
                     FrameworkControl.objective_id == objective.id
                 ).all()
-                
-                cat_key = domain.name or "Uncategorized"
-                if cat_key not in matrix[fw_key]["categories"]:
-                    matrix[fw_key]["categories"][cat_key] = {
-                        "controls_total": 0,
-                        "controls_with_evidence": 0,
-                        "coverage_percent": 0
-                    }
-                
                 for ctrl in controls:
                     matrix[fw_key]["categories"][cat_key]["controls_total"] += 1
-                    covered_check = db.query(func.count()).filter(
-                        covered_fc_ids.c.framework_control_id == ctrl.id
-                    ).scalar()
-                    if covered_check and covered_check > 0:
+                    if ctrl.id in covered_fc_set:
                         matrix[fw_key]["categories"][cat_key]["controls_with_evidence"] += 1
-        
+
         for cat_key in matrix[fw_key]["categories"]:
             cat_data = matrix[fw_key]["categories"][cat_key]
             if cat_data["controls_total"] > 0:
                 cat_data["coverage_percent"] = round(
                     (cat_data["controls_with_evidence"] / cat_data["controls_total"]) * 100, 2
                 )
-    
+
+    tenant_filter = [tenant_id]
+    if visible_tenant_ids:
+        tenant_filter = visible_tenant_ids
+
+    uploaded_frameworks = db.query(UploadedFramework).filter(
+        or_(UploadedFramework.is_active == True, UploadedFramework.is_active.is_(None)),
+        or_(
+            UploadedFramework.tenant_id.in_(tenant_filter),
+            UploadedFramework.tenant_id.is_(None),
+            UploadedFramework.is_shared == True
+        )
+    ).all()
+
+    for uploaded_framework in uploaded_frameworks:
+        parsed_controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == uploaded_framework.id
+        ).all()
+
+        if not parsed_controls:
+            continue
+
+        synthetic_framework_id = -uploaded_framework.id
+        fw_key = str(synthetic_framework_id)
+        matrix[fw_key] = {
+            "framework_id": synthetic_framework_id,
+            "framework_name": uploaded_framework.name,
+            "framework_code": uploaded_framework.framework_type.upper() if uploaded_framework.framework_type else f"UP-{uploaded_framework.id}",
+            "categories": {}
+        }
+
+        for parsed_control in parsed_controls:
+            cat_key = parsed_control.category or parsed_control.domain or "Uncategorized"
+            categories.add(cat_key)
+
+            if cat_key not in matrix[fw_key]["categories"]:
+                matrix[fw_key]["categories"][cat_key] = {
+                    "controls_total": 0,
+                    "controls_with_evidence": 0,
+                    "coverage_percent": 0
+                }
+
+            matrix[fw_key]["categories"][cat_key]["controls_total"] += 1
+            if parsed_control.id in covered_pc_set:
+                matrix[fw_key]["categories"][cat_key]["controls_with_evidence"] += 1
+
+        for cat_key in matrix[fw_key]["categories"]:
+            cat_data = matrix[fw_key]["categories"][cat_key]
+            if cat_data["controls_total"] > 0:
+                cat_data["coverage_percent"] = round(
+                    (cat_data["controls_with_evidence"] / cat_data["controls_total"]) * 100, 2
+                )
+
     return {
         "matrix": matrix,
         "categories": sorted(list(categories))
@@ -88,7 +167,10 @@ def get_framework_coverage(db: Session, tenant_id: int, framework_id: int) -> di
     
     covered_ids_set = set(row[0] for row in covered_fc_ids.all())
     
-    framework = db.query(Framework).filter(Framework.id == framework_id).first()
+    framework = db.query(Framework).filter(
+        Framework.id == framework_id,
+        or_(Framework.is_active == True, Framework.is_active.is_(None))
+    ).first()
     if not framework:
         return None
     
@@ -168,6 +250,124 @@ def get_framework_coverage(db: Session, tenant_id: int, framework_id: int) -> di
     }
 
 
+def get_uploaded_framework_coverage(
+    db: Session,
+    tenant_id: int,
+    uploaded_framework_id: int,
+    visible_tenant_ids: Optional[List[int]] = None
+) -> dict:
+    tenant_evidence_ids = db.query(Evidence.id).filter(
+        Evidence.tenant_id == tenant_id
+    ).subquery()
+
+    covered_pc_ids = db.query(EvidenceControlMapping.parsed_control_id).filter(
+        EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
+        EvidenceControlMapping.parsed_control_id.isnot(None)
+    ).distinct()
+
+    implementation_covered_pc_ids = db.query(ControlImplementation.parsed_control_id).join(
+        ImplementationEvidence,
+        ImplementationEvidence.implementation_id == ControlImplementation.id
+    ).join(
+        Evidence,
+        Evidence.id == ImplementationEvidence.evidence_id
+    ).filter(
+        Evidence.tenant_id == tenant_id,
+        ControlImplementation.parsed_control_id.isnot(None)
+    ).distinct()
+
+    covered_ids_set = set(row[0] for row in covered_pc_ids.all())
+
+    tenant_filter = [tenant_id]
+    if visible_tenant_ids:
+        tenant_filter = visible_tenant_ids
+
+    uploaded_framework = db.query(UploadedFramework).filter(
+        UploadedFramework.id == uploaded_framework_id,
+        or_(UploadedFramework.is_active == True, UploadedFramework.is_active.is_(None)),
+        or_(
+            UploadedFramework.tenant_id.in_(tenant_filter),
+            UploadedFramework.tenant_id.is_(None),
+            UploadedFramework.is_shared == True
+        )
+    ).first()
+    if not uploaded_framework:
+        return None
+
+    parsed_controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == uploaded_framework_id
+    ).all()
+
+    uncovered_controls = []
+    domain_coverage = {}
+    category_coverage = {}
+
+    for parsed_control in parsed_controls:
+        domain_key = parsed_control.domain or "General"
+        if domain_key not in domain_coverage:
+            domain_coverage[domain_key] = {
+                "domain_id": None,
+                "domain_code": domain_key,
+                "domain_name": domain_key,
+                "total_controls": 0,
+                "covered_controls": 0,
+                "coverage_percent": 0
+            }
+
+        category_key = parsed_control.category or parsed_control.domain or "Uncategorized"
+        if category_key not in category_coverage:
+            category_coverage[category_key] = {
+                "category_name": category_key,
+                "total_controls": 0,
+                "covered_controls": 0,
+                "coverage_percent": 0
+            }
+
+        is_covered = parsed_control.id in covered_ids_set
+        domain_coverage[domain_key]["total_controls"] += 1
+        category_coverage[category_key]["total_controls"] += 1
+
+        if is_covered:
+            domain_coverage[domain_key]["covered_controls"] += 1
+            category_coverage[category_key]["covered_controls"] += 1
+        else:
+            uncovered_controls.append({
+                "id": parsed_control.id,
+                "code": parsed_control.control_id or parsed_control.original_reference or f"PC-{parsed_control.id}",
+                "name": parsed_control.title,
+                "domain": parsed_control.domain,
+                "objective": parsed_control.requirement
+            })
+
+    for domain_data in domain_coverage.values():
+        if domain_data["total_controls"] > 0:
+            domain_data["coverage_percent"] = round(
+                (domain_data["covered_controls"] / domain_data["total_controls"]) * 100, 2
+            )
+
+    for category_data in category_coverage.values():
+        if category_data["total_controls"] > 0:
+            category_data["coverage_percent"] = round(
+                (category_data["covered_controls"] / category_data["total_controls"]) * 100, 2
+            )
+
+    total_controls = len(parsed_controls)
+    covered_controls = total_controls - len(uncovered_controls)
+
+    return {
+        "framework_id": -uploaded_framework.id,
+        "framework_name": uploaded_framework.name,
+        "framework_code": uploaded_framework.framework_type.upper() if uploaded_framework.framework_type else f"UP-{uploaded_framework.id}",
+        "total_controls": total_controls,
+        "covered_controls": covered_controls,
+        "uncovered_controls": len(uncovered_controls),
+        "coverage_percent": round((covered_controls / total_controls * 100) if total_controls > 0 else 0, 2),
+        "uncovered_control_list": uncovered_controls[:50],
+        "by_domain": list(domain_coverage.values()),
+        "by_category": list(category_coverage.values())
+    }
+
+
 def calculate_audit_savings(db: Session, tenant_id: int) -> dict:
     tenant_evidence = db.query(Evidence).filter(
         Evidence.tenant_id == tenant_id
@@ -187,7 +387,10 @@ def calculate_audit_savings(db: Session, tenant_id: int) -> dict:
     
     mappings = db.query(EvidenceControlMapping).filter(
         EvidenceControlMapping.evidence_id.in_(evidence_ids),
-        EvidenceControlMapping.framework_control_id.isnot(None)
+        or_(
+            EvidenceControlMapping.framework_control_id.isnot(None),
+            EvidenceControlMapping.parsed_control_id.isnot(None)
+        )
     ).all()
     
     evidence_to_frameworks = {}
@@ -195,14 +398,30 @@ def calculate_audit_savings(db: Session, tenant_id: int) -> dict:
         if m.evidence_id not in evidence_to_frameworks:
             evidence_to_frameworks[m.evidence_id] = set()
         
-        fc = db.query(FrameworkControl).options(
-            joinedload(FrameworkControl.objective)
-            .joinedload(ControlObjective.domain)
-            .joinedload(FrameworkDomain.framework)
-        ).filter(FrameworkControl.id == m.framework_control_id).first()
-        
-        if fc and fc.objective and fc.objective.domain and fc.objective.domain.framework:
-            evidence_to_frameworks[m.evidence_id].add(fc.objective.domain.framework.id)
+        if m.framework_control_id:
+            fc = db.query(FrameworkControl).options(
+                joinedload(FrameworkControl.objective)
+                .joinedload(ControlObjective.domain)
+                .joinedload(FrameworkDomain.framework)
+            ).filter(FrameworkControl.id == m.framework_control_id).first()
+
+            if fc and fc.objective and fc.objective.domain and fc.objective.domain.framework:
+                evidence_to_frameworks[m.evidence_id].add(fc.objective.domain.framework.id)
+
+        if m.parsed_control_id:
+            parsed_control = db.query(ParsedFrameworkControl).options(
+                joinedload(ParsedFrameworkControl.uploaded_framework)
+            ).filter(ParsedFrameworkControl.id == m.parsed_control_id).first()
+
+            if (
+                parsed_control
+                and parsed_control.uploaded_framework
+                and (
+                    parsed_control.uploaded_framework.tenant_id == tenant_id
+                    or parsed_control.uploaded_framework.is_shared
+                )
+            ):
+                evidence_to_frameworks[m.evidence_id].add(-parsed_control.uploaded_framework.id)
     
     multi_framework_evidence = sum(1 for fws in evidence_to_frameworks.values() if len(fws) > 1)
     
@@ -211,7 +430,12 @@ def calculate_audit_savings(db: Session, tenant_id: int) -> dict:
     savings = single_framework_effort - actual_effort if single_framework_effort > actual_effort else 0
     savings_percent = round((savings / single_framework_effort * 100) if single_framework_effort > 0 else 0, 2)
     
-    unique_controls = set(m.framework_control_id for m in mappings if m.framework_control_id)
+    unique_controls = set()
+    for mapping in mappings:
+        if mapping.framework_control_id:
+            unique_controls.add(f"legacy:{mapping.framework_control_id}")
+        if mapping.parsed_control_id:
+            unique_controls.add(f"parsed:{mapping.parsed_control_id}")
     
     return {
         "total_evidence": len(tenant_evidence),
@@ -229,6 +453,7 @@ def get_coverage_matrix(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(
@@ -236,7 +461,7 @@ def get_coverage_matrix(
             detail="User has no tenant assigned"
         )
     
-    result = calculate_coverage_matrix(db, tenant_id)
+    result = calculate_coverage_matrix(db, tenant_id, user_tenants)
     
     frameworks = []
     for fw_key, fw_data in result["matrix"].items():
@@ -263,6 +488,7 @@ def get_coverage_by_framework(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(
@@ -278,10 +504,34 @@ def get_coverage_by_framework(
         EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
         EvidenceControlMapping.framework_control_id.isnot(None)
     ).distinct()
-    
+
+    covered_pc_ids = db.query(EvidenceControlMapping.parsed_control_id).filter(
+        EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
+        EvidenceControlMapping.parsed_control_id.isnot(None)
+    ).distinct()
+
     covered_ids_set = set(row[0] for row in covered_fc_ids.all())
-    
-    frameworks = db.query(Framework).filter(Framework.is_active == True).all()
+
+    implementation_covered_ids = set(
+        row[0]
+        for row in db.query(ControlImplementation.parsed_control_id)
+        .join(ImplementationEvidence, ImplementationEvidence.implementation_id == ControlImplementation.id)
+        .join(Evidence, Evidence.id == ImplementationEvidence.evidence_id)
+        .filter(
+            Evidence.tenant_id == tenant_id,
+            ControlImplementation.parsed_control_id.isnot(None)
+        )
+        .distinct()
+        .all()
+        if row[0] is not None
+    )
+
+    covered_parsed_ids_set = set(row[0] for row in covered_pc_ids.all())
+    covered_parsed_ids_set.update(implementation_covered_ids)
+
+    frameworks = db.query(Framework).filter(
+        or_(Framework.is_active == True, Framework.is_active.is_(None))
+    ).all()
     results = []
     
     for fw in frameworks:
@@ -326,6 +576,59 @@ def get_coverage_by_framework(
             "coverage_percent": round((covered / total * 100) if total > 0 else 0, 2),
             "by_category": list(by_category.values())
         })
+
+    uploaded_frameworks = db.query(UploadedFramework).filter(
+        or_(UploadedFramework.is_active == True, UploadedFramework.is_active.is_(None)),
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.tenant_id.is_(None),
+            UploadedFramework.is_shared == True
+        )
+    ).all()
+
+    for uploaded_framework in uploaded_frameworks:
+        parsed_controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == uploaded_framework.id
+        ).all()
+
+        if not parsed_controls:
+            continue
+
+        total = 0
+        covered = 0
+        by_category = {}
+
+        for parsed_control in parsed_controls:
+            category_key = parsed_control.category or parsed_control.domain or "Uncategorized"
+            if category_key not in by_category:
+                by_category[category_key] = {
+                    "category_name": category_key,
+                    "total_controls": 0,
+                    "covered_controls": 0,
+                    "coverage_percent": 0
+                }
+
+            total += 1
+            by_category[category_key]["total_controls"] += 1
+            if parsed_control.id in covered_parsed_ids_set:
+                covered += 1
+                by_category[category_key]["covered_controls"] += 1
+
+        for category_data in by_category.values():
+            if category_data["total_controls"] > 0:
+                category_data["coverage_percent"] = round(
+                    (category_data["covered_controls"] / category_data["total_controls"]) * 100, 2
+                )
+
+        results.append({
+            "framework_id": -uploaded_framework.id,
+            "framework_name": uploaded_framework.name,
+            "framework_code": uploaded_framework.framework_type.upper() if uploaded_framework.framework_type else f"UP-{uploaded_framework.id}",
+            "total_controls": total,
+            "covered_controls": covered,
+            "coverage_percent": round((covered / total * 100) if total > 0 else 0, 2),
+            "by_category": list(by_category.values())
+        })
     
     return {"frameworks": results}
 
@@ -335,6 +638,7 @@ def get_coverage_by_category(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(
@@ -350,8 +654,26 @@ def get_coverage_by_category(
         EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
         EvidenceControlMapping.framework_control_id.isnot(None)
     ).distinct()
-    
+
+    covered_pc_ids = db.query(EvidenceControlMapping.parsed_control_id).filter(
+        EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
+        EvidenceControlMapping.parsed_control_id.isnot(None)
+    ).distinct()
+
+    implementation_covered_pc_ids = db.query(ControlImplementation.parsed_control_id).join(
+        ImplementationEvidence,
+        ImplementationEvidence.implementation_id == ControlImplementation.id
+    ).join(
+        Evidence,
+        Evidence.id == ImplementationEvidence.evidence_id
+    ).filter(
+        Evidence.tenant_id == tenant_id,
+        ControlImplementation.parsed_control_id.isnot(None)
+    ).distinct()
+
     covered_ids_set = set(row[0] for row in covered_fc_ids.all())
+    covered_parsed_ids_set = set(row[0] for row in covered_pc_ids.all())
+    covered_parsed_ids_set.update(row[0] for row in implementation_covered_pc_ids.all())
     
     domains = db.query(FrameworkDomain).all()
     categories = {}
@@ -390,6 +712,53 @@ def get_coverage_by_category(
                 if ctrl.id in covered_ids_set:
                     categories[cat_key]["covered_controls"] += 1
                     categories[cat_key]["frameworks"][fw_key]["covered_controls"] += 1
+
+    uploaded_frameworks = db.query(UploadedFramework).filter(
+        or_(UploadedFramework.is_active == True, UploadedFramework.is_active.is_(None)),
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.tenant_id.is_(None),
+            UploadedFramework.is_shared == True
+        )
+    ).all()
+
+    for uploaded_framework in uploaded_frameworks:
+        parsed_controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == uploaded_framework.id
+        ).all()
+
+        if not parsed_controls:
+            continue
+
+        synthetic_framework_id = -uploaded_framework.id
+        framework_key = str(synthetic_framework_id)
+
+        for parsed_control in parsed_controls:
+            category_key = parsed_control.category or parsed_control.domain or "Uncategorized"
+            if category_key not in categories:
+                categories[category_key] = {
+                    "category_name": category_key,
+                    "total_controls": 0,
+                    "covered_controls": 0,
+                    "coverage_percent": 0,
+                    "frameworks": {}
+                }
+
+            if framework_key not in categories[category_key]["frameworks"]:
+                categories[category_key]["frameworks"][framework_key] = {
+                    "framework_id": synthetic_framework_id,
+                    "framework_name": uploaded_framework.name,
+                    "total_controls": 0,
+                    "covered_controls": 0,
+                    "coverage_percent": 0
+                }
+
+            categories[category_key]["total_controls"] += 1
+            categories[category_key]["frameworks"][framework_key]["total_controls"] += 1
+
+            if parsed_control.id in covered_parsed_ids_set:
+                categories[category_key]["covered_controls"] += 1
+                categories[category_key]["frameworks"][framework_key]["covered_controls"] += 1
     
     for cat_data in categories.values():
         if cat_data["total_controls"] > 0:
@@ -468,6 +837,7 @@ def get_heatmap_data(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(
@@ -475,7 +845,7 @@ def get_heatmap_data(
             detail="User has no tenant assigned"
         )
     
-    result = calculate_coverage_matrix(db, tenant_id)
+    result = calculate_coverage_matrix(db, tenant_id, user_tenants)
     
     rows = []
     columns = result["categories"]
@@ -527,6 +897,7 @@ def get_framework_coverage_detail(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    user_tenants = get_user_tenants(current_user, db)
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(
@@ -534,14 +905,20 @@ def get_framework_coverage_detail(
             detail="User has no tenant assigned"
         )
     
-    framework = db.query(Framework).filter(Framework.id == framework_id).first()
-    if not framework:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Framework not found"
-        )
-    
-    result = get_framework_coverage(db, tenant_id, framework_id)
+    if framework_id < 0:
+        result = get_uploaded_framework_coverage(db, tenant_id, abs(framework_id), user_tenants)
+    else:
+        framework = db.query(Framework).filter(
+            Framework.id == framework_id,
+            or_(Framework.is_active == True, Framework.is_active.is_(None))
+        ).first()
+        if not framework:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Framework not found"
+            )
+        result = get_framework_coverage(db, tenant_id, framework_id)
+
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

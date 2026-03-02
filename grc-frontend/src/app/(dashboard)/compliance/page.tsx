@@ -22,25 +22,25 @@ import {
 import Link from 'next/link';
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  compliant: { bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Compliant' },
-  partially_compliant: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Partially Compliant' },
-  non_compliant: { bg: 'bg-rose-50', text: 'text-rose-600', label: 'Non-Compliant' },
-  not_assessed: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Not Assessed' },
-  not_applicable: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Not Applicable' },
+  compliant: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Compliant' },
+  partially_compliant: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Partially Compliant' },
+  non_compliant: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Non-Compliant' },
+  not_assessed: { bg: 'bg-gray-50', text: 'text-gray-700', label: 'Not Assessed' },
+  not_applicable: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Not Applicable' },
 };
 
 const PRIORITY_COLORS: Record<string, { bg: string; text: string }> = {
-  critical: { bg: 'bg-rose-50', text: 'text-rose-600' },
-  high: { bg: 'bg-orange-50', text: 'text-orange-600' },
-  medium: { bg: 'bg-amber-50', text: 'text-amber-600' },
-  low: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
+  critical: { bg: 'bg-rose-50', text: 'text-rose-700' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-700' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-700' },
+  low: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
 };
 
 const IMPACT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  critical: { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-500/30' },
-  high: { bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-500/30' },
-  medium: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-500/30' },
-  low: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200' },
+  critical: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+  low: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
 };
 
 interface PrioritizedGap {
@@ -134,27 +134,27 @@ export default function ComplianceOverviewPage() {
       <div className="space-y-8">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="stat-card">
-              <div className="skeleton h-12 w-12 rounded-xl mb-4" />
-              <div className="skeleton h-8 w-20 mb-2" />
-              <div className="skeleton h-4 w-32" />
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+              <div className="bg-gray-200 h-12 w-12 rounded-xl mb-4 animate-pulse" />
+              <div className="bg-gray-200 h-8 w-20 mb-2 rounded animate-pulse" />
+              <div className="bg-gray-200 h-4 w-32 rounded animate-pulse" />
             </div>
           ))}
         </div>
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="card">
-            <div className="skeleton h-6 w-32 mb-4" />
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <div className="bg-gray-200 h-6 w-32 mb-4 rounded animate-pulse" />
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="skeleton h-16 w-full rounded-lg" />
+                <div key={i} className="bg-gray-200 h-16 w-full rounded-lg animate-pulse" />
               ))}
             </div>
           </div>
-          <div className="card">
-            <div className="skeleton h-6 w-32 mb-4" />
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <div className="bg-gray-200 h-6 w-32 mb-4 rounded animate-pulse" />
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="skeleton h-16 w-full rounded-lg" />
+                <div key={i} className="bg-gray-200 h-16 w-full rounded-lg animate-pulse" />
               ))}
             </div>
           </div>
@@ -181,29 +181,29 @@ export default function ComplianceOverviewPage() {
       name: 'Total Statements',
       value: totalStatements,
       icon: FileText,
-      iconColor: 'text-primary-600',
-      bgColor: 'from-primary-500/20 to-primary-600/10',
+      iconColor: 'text-blue-600',
+      bgColor: 'bg-blue-50',
     },
     {
       name: 'Compliant Rate',
       value: `${compliantPercent}%`,
       icon: CheckCircle,
       iconColor: 'text-emerald-600',
-      bgColor: 'from-emerald-500/20 to-emerald-600/10',
+      bgColor: 'bg-emerald-50',
     },
     {
       name: 'Non-Compliant',
       value: nonCompliantCount,
       icon: XCircle,
       iconColor: 'text-rose-600',
-      bgColor: 'from-rose-500/20 to-rose-600/10',
+      bgColor: 'bg-rose-50',
     },
     {
       name: 'Not Assessed',
       value: notAssessedCount,
       icon: HelpCircle,
-      iconColor: 'text-slate-600',
-      bgColor: 'from-slate-500/20 to-slate-600/10',
+      iconColor: 'text-gray-600',
+      bgColor: 'bg-gray-50',
     },
   ];
 
@@ -216,25 +216,25 @@ export default function ComplianceOverviewPage() {
         {statCards.map((stat) => (
           <div
             key={stat.name}
-            className="stat-card group hover:border-slate-300 transition-all duration-200 hover:shadow-xl"
+            className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200"
           >
             <div className="flex items-start justify-between mb-4">
-              <div className={`rounded-xl bg-gradient-to-br ${stat.bgColor} p-3`}>
+              <div className={`rounded-xl ${stat.bgColor} p-3`}>
                 <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
               </div>
             </div>
-            <p className="stat-value">{stat.value}</p>
-            <p className="stat-label">{stat.name}</p>
+            <p className="text-3xl font-bold text-black">{stat.value}</p>
+            <p className="text-sm text-gray-600 mt-1">{stat.name}</p>
           </div>
         ))}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card">
-          <div className="card-header">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="mb-6">
             <div>
-              <h2 className="card-title">Compliance Status Breakdown</h2>
-              <p className="card-description">Distribution by status</p>
+              <h2 className="text-lg font-semibold text-black">Compliance Status Breakdown</h2>
+              <p className="text-sm text-gray-600 mt-1">Distribution by status</p>
             </div>
           </div>
           <div className="space-y-4">
@@ -251,11 +251,11 @@ export default function ComplianceOverviewPage() {
                 <div key={key} className="group">
                   <div className="flex items-center justify-between mb-2">
                     <span className={`text-sm font-medium ${style.text}`}>{label}</span>
-                    <span className="text-sm text-slate-600">{count} ({percentage}%)</span>
+                    <span className="text-sm text-gray-600">{count} ({percentage}%)</span>
                   </div>
-                  <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div
-                      className={`h-full ${style.bg.replace('/20', '')} transition-all duration-500`}
+                      className={`h-full ${style.bg.replace('bg-', 'bg-').replace('-50', '-400')} transition-all duration-500`}
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
@@ -265,40 +265,40 @@ export default function ComplianceOverviewPage() {
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-header">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="mb-6">
             <div>
-              <h2 className="card-title">By Category</h2>
-              <p className="card-description">Statement distribution</p>
+              <h2 className="text-lg font-semibold text-black">By Category</h2>
+              <p className="text-sm text-gray-600 mt-1">Statement distribution</p>
             </div>
           </div>
           <div className="space-y-3">
             {Object.entries(summary?.by_category || {}).slice(0, 6).map(([category, count]) => (
-              <div key={category} className="flex items-center justify-between group">
-                <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors capitalize">
+              <div key={category} className="flex items-center justify-between group hover:bg-gray-50 p-2 rounded-lg transition-colors">
+                <span className="text-sm text-gray-700 capitalize">
                   {category.replace(/_/g, ' ')}
                 </span>
                 <span className="text-base font-semibold text-black">{count as number}</span>
               </div>
             ))}
             {Object.keys(summary?.by_category || {}).length === 0 && (
-              <p className="text-sm text-slate-500 text-center py-4">No categories found</p>
+              <p className="text-sm text-gray-500 text-center py-4">No categories found</p>
             )}
           </div>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card">
-          <div className="card-header">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="card-title flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-black flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
                 Overdue Assessments
               </h2>
-              <p className="card-description">{overdue?.total || 0} overdue</p>
+              <p className="text-sm text-gray-600 mt-1">{overdue?.total || 0} overdue</p>
             </div>
-            <Link href="/compliance/statements" className="btn-secondary btn-sm">
+            <Link href="/compliance/statements" className="px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
               View All
             </Link>
           </div>
@@ -307,22 +307,22 @@ export default function ComplianceOverviewPage() {
               overdueItems.map((item: any) => (
                 <div
                   key={item.compliance_id}
-                  className="flex items-center justify-between p-3 bg-white/50 rounded-lg hover:bg-slate-50 transition-colors"
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-black truncate">
                       {item.statement_code || 'No Code'}
                     </p>
-                    <p className="text-xs text-slate-600 truncate">
+                    <p className="text-xs text-gray-600 truncate">
                       {item.document_title || 'No Document'}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-rose-600 flex items-center gap-1">
+                    <span className="text-xs text-rose-600 flex items-center gap-1 font-medium">
                       <Clock className="h-3 w-3" />
                       {item.days_overdue}d overdue
                     </span>
-                    <span className={`badge ${PRIORITY_COLORS[item.priority]?.bg || 'bg-slate-50'} ${PRIORITY_COLORS[item.priority]?.text || 'text-slate-600'}`}>
+                    <span className={`px-2 py-1 text-xs font-medium rounded ${PRIORITY_COLORS[item.priority]?.bg || 'bg-gray-50'} ${PRIORITY_COLORS[item.priority]?.text || 'text-gray-700'}`}>
                       {item.priority || 'medium'}
                     </span>
                   </div>
@@ -331,19 +331,19 @@ export default function ComplianceOverviewPage() {
             ) : (
               <div className="text-center py-8">
                 <CheckCircle className="h-12 w-12 text-emerald-600 mx-auto mb-3" />
-                <p className="text-slate-600">No overdue assessments</p>
+                <p className="text-gray-600">No overdue assessments</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-header">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="card-title">Recent Statements</h2>
-              <p className="card-description">Latest policy statements</p>
+              <h2 className="text-lg font-semibold text-black">Recent Statements</h2>
+              <p className="text-sm text-gray-600 mt-1">Latest policy statements</p>
             </div>
-            <Link href="/compliance/statements" className="btn-secondary btn-sm">
+            <Link href="/compliance/statements" className="px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1">
               View All
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -355,17 +355,17 @@ export default function ComplianceOverviewPage() {
                 return (
                   <div
                     key={stmt.id}
-                    className="flex items-center justify-between p-3 bg-white/50 rounded-lg hover:bg-slate-50 transition-colors"
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-black truncate">
                         {stmt.statement_code || 'No Code'}
                       </p>
-                      <p className="text-xs text-slate-600 truncate">
+                      <p className="text-xs text-gray-600 truncate">
                         {stmt.statement_summary || stmt.statement_text?.slice(0, 60) + '...' || 'No text'}
                       </p>
                     </div>
-                    <span className={`badge ${statusStyle.bg} ${statusStyle.text}`}>
+                    <span className={`px-2 py-1 text-xs font-medium rounded ${statusStyle.bg} ${statusStyle.text} whitespace-nowrap ml-3`}>
                       {statusStyle.label}
                     </span>
                   </div>
@@ -373,22 +373,22 @@ export default function ComplianceOverviewPage() {
               })
             ) : (
               <div className="text-center py-8">
-                <FileText className="h-12 w-12 text-slate-500 mx-auto mb-3" />
-                <p className="text-slate-600">No statements found</p>
+                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600">No statements found</p>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <div className="mb-6">
           <div>
-            <h2 className="card-title flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary-600" />
+            <h2 className="text-lg font-semibold text-black flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-blue-600" />
               Compliance Score
             </h2>
-            <p className="card-description">Overall compliance health</p>
+            <p className="text-sm text-gray-600 mt-1">Overall compliance health</p>
           </div>
         </div>
         <div className="flex items-center gap-8">
@@ -399,7 +399,7 @@ export default function ComplianceOverviewPage() {
                   a 15.9155 15.9155 0 0 1 0 31.831
                   a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
-                stroke="rgb(51, 65, 85)"
+                stroke="rgb(229, 231, 235)"
                 strokeWidth="3"
               />
               <path
@@ -418,20 +418,20 @@ export default function ComplianceOverviewPage() {
           </div>
           <div className="flex-1">
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-slate-600">Assessed</p>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Assessed</p>
                 <p className="text-xl font-semibold text-black">{summary?.statistics?.assessed_count || 0}</p>
               </div>
-              <div>
-                <p className="text-sm text-slate-600">Mandatory</p>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Mandatory</p>
                 <p className="text-xl font-semibold text-black">{summary?.statistics?.mandatory_count || 0}</p>
               </div>
-              <div>
-                <p className="text-sm text-slate-600">Active</p>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Active</p>
                 <p className="text-xl font-semibold text-black">{summary?.statistics?.active_count || 0}</p>
               </div>
-              <div>
-                <p className="text-sm text-slate-600">Compliance Rate</p>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Compliance Rate</p>
                 <p className="text-xl font-semibold text-emerald-600">{summary?.compliance_rate?.toFixed(1) || 0}%</p>
               </div>
             </div>
@@ -440,21 +440,21 @@ export default function ComplianceOverviewPage() {
       </div>
 
       {/* AI Gap Prioritization Section */}
-      <div className="card border border-primary-200">
-        <div className="card-header">
+      <div className="bg-white rounded-xl border border-blue-200 p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="card-title flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary-600" />
+            <h2 className="text-lg font-semibold text-black flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-blue-600" />
               AI Gap Prioritization
             </h2>
-            <p className="card-description">
+            <p className="text-sm text-gray-600 mt-1">
               Analyze compliance gaps and prioritize by business impact
             </p>
           </div>
           <button
             onClick={() => aiPrioritizeMutation.mutate()}
             disabled={aiPrioritizeMutation.isPending}
-            className="btn-primary flex items-center gap-2"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
           >
             {aiPrioritizeMutation.isPending ? (
               <>
@@ -472,7 +472,7 @@ export default function ComplianceOverviewPage() {
 
         {aiPrioritizeMutation.isError && (
           <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg mb-4">
-            <p className="text-sm text-rose-600">
+            <p className="text-sm text-rose-700">
               Failed to analyze gaps. Please try again.
             </p>
           </div>
@@ -483,15 +483,15 @@ export default function ComplianceOverviewPage() {
             {aiResult.message && aiResult.total_gaps_analyzed === 0 && (
               <div className="text-center py-8">
                 <CheckCircle className="h-12 w-12 text-emerald-600 mx-auto mb-3" />
-                <p className="text-slate-600">{aiResult.message}</p>
+                <p className="text-gray-700">{aiResult.message}</p>
               </div>
             )}
 
             {aiResult.total_gaps_analyzed > 0 && (
               <>
                 {aiResult.fallback && (
-                  <div className="p-3 bg-amber-50 border border-amber-500/20 rounded-lg">
-                    <p className="text-sm text-amber-600">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-700">
                       {aiResult.error || 'AI analysis unavailable. Showing basic prioritization.'}
                     </p>
                   </div>
@@ -500,20 +500,20 @@ export default function ComplianceOverviewPage() {
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg">
-                    <p className="text-2xl font-bold text-rose-600">{aiResult.summary.critical_gaps}</p>
-                    <p className="text-sm text-slate-600">Critical</p>
+                    <p className="text-2xl font-bold text-rose-700">{aiResult.summary.critical_gaps}</p>
+                    <p className="text-sm text-gray-600">Critical</p>
                   </div>
-                  <div className="p-4 bg-orange-50 border border-orange-500/20 rounded-lg">
-                    <p className="text-2xl font-bold text-orange-600">{aiResult.summary.high_gaps}</p>
-                    <p className="text-sm text-slate-600">High</p>
+                  <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-2xl font-bold text-orange-700">{aiResult.summary.high_gaps}</p>
+                    <p className="text-sm text-gray-600">High</p>
                   </div>
-                  <div className="p-4 bg-amber-50 border border-amber-500/20 rounded-lg">
-                    <p className="text-2xl font-bold text-amber-600">{aiResult.summary.medium_gaps}</p>
-                    <p className="text-sm text-slate-600">Medium</p>
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-2xl font-bold text-amber-700">{aiResult.summary.medium_gaps}</p>
+                    <p className="text-sm text-gray-600">Medium</p>
                   </div>
-                  <div className="p-4 bg-blue-50 border border-blue-500/20 rounded-lg">
-                    <p className="text-2xl font-bold text-blue-600">{aiResult.summary.low_gaps}</p>
-                    <p className="text-sm text-slate-600">Low</p>
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-2xl font-bold text-blue-700">{aiResult.summary.low_gaps}</p>
+                    <p className="text-sm text-gray-600">Low</p>
                   </div>
                 </div>
 
@@ -521,7 +521,7 @@ export default function ComplianceOverviewPage() {
                 {aiResult.summary.key_themes && aiResult.summary.key_themes.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {aiResult.summary.key_themes.map((theme, idx) => (
-                      <span key={idx} className="px-3 py-1 bg-slate-200 text-slate-600 text-sm rounded-full">
+                      <span key={idx} className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full border border-gray-200">
                         {theme}
                       </span>
                     ))}
@@ -530,8 +530,8 @@ export default function ComplianceOverviewPage() {
 
                 {/* Quick Wins */}
                 {aiResult.quick_wins && aiResult.quick_wins.length > 0 && (
-                  <div className="p-4 bg-emerald-500/5 border border-emerald-200 rounded-lg">
-                    <h3 className="text-sm font-semibold text-emerald-600 flex items-center gap-2 mb-3">
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <h3 className="text-sm font-semibold text-emerald-700 flex items-center gap-2 mb-3">
                       <Zap className="h-4 w-4" />
                       Quick Wins
                     </h3>
@@ -541,7 +541,7 @@ export default function ComplianceOverviewPage() {
                           <Lightbulb className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
                           <div>
                             <p className="text-sm text-black">{win.gap_description}</p>
-                            <p className="text-xs text-slate-600 mt-1">{win.recommendation}</p>
+                            <p className="text-xs text-gray-600 mt-1">{win.recommendation}</p>
                           </div>
                         </div>
                       ))}
@@ -551,8 +551,8 @@ export default function ComplianceOverviewPage() {
 
                 {/* Prioritized Gaps List */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-600 flex items-center gap-2">
-                    <Target className="h-4 w-4 text-primary-600" />
+                  <h3 className="text-sm font-semibold text-black flex items-center gap-2">
+                    <Target className="h-4 w-4 text-blue-600" />
                     Prioritized Gaps ({aiResult.prioritized_gaps.length})
                   </h3>
                   {aiResult.prioritized_gaps.map((gap) => {
@@ -561,48 +561,48 @@ export default function ComplianceOverviewPage() {
                     return (
                       <div
                         key={gap.rank}
-                        className={`p-4 bg-white/50 border ${impactStyle.border} rounded-lg`}
+                        className={`p-4 bg-gray-50 border ${impactStyle.border} rounded-lg hover:shadow-sm transition-all`}
                       >
                         <div
                           className="flex items-start justify-between cursor-pointer"
                           onClick={() => toggleGapExpand(gap.rank)}
                         >
                           <div className="flex items-start gap-3 flex-1">
-                            <div className="flex-shrink-0 w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
-                              <span className="text-sm font-bold text-black">#{gap.rank}</span>
+                            <div className="flex-shrink-0 w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                              <span className="text-sm font-bold text-gray-700">#{gap.rank}</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <h4 className="font-medium text-black">{gap.control_title}</h4>
-                                <span className={`badge ${impactStyle.bg} ${impactStyle.text}`}>
+                                <span className={`px-2 py-1 text-xs font-medium rounded ${impactStyle.bg} ${impactStyle.text}`}>
                                   {gap.business_impact}
                                 </span>
-                                <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-200 rounded">
+                                <span className="text-xs text-gray-600 px-2 py-0.5 bg-gray-100 rounded border border-gray-200">
                                   {gap.gap_type.replace('_', ' ')}
                                 </span>
                               </div>
-                              <p className="text-sm text-slate-600 mt-1">{gap.framework_name}</p>
+                              <p className="text-sm text-gray-600 mt-1">{gap.framework_name}</p>
                             </div>
                           </div>
-                          <button className="text-slate-600 hover:text-slate-900 p-1">
+                          <button className="text-gray-500 hover:text-black p-1 transition-colors">
                             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </button>
                         </div>
 
                         {isExpanded && (
-                          <div className="mt-4 pt-4 border-t border-slate-200 space-y-4">
+                          <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
                             <div>
-                              <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Impact Reasoning</p>
-                              <p className="text-sm text-slate-600">{gap.impact_reasoning}</p>
+                              <p className="text-xs font-semibold text-gray-600 uppercase mb-1">Impact Reasoning</p>
+                              <p className="text-sm text-gray-700">{gap.impact_reasoning}</p>
                             </div>
                             <div>
-                              <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Regulatory Risk</p>
-                              <p className="text-sm text-slate-600">{gap.regulatory_risk}</p>
+                              <p className="text-xs font-semibold text-gray-600 uppercase mb-1">Regulatory Risk</p>
+                              <p className="text-sm text-gray-700">{gap.regulatory_risk}</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                               <div>
-                                <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Remediation Effort</p>
-                                <span className={`badge ${
+                                <p className="text-xs font-semibold text-gray-600 uppercase mb-1">Remediation Effort</p>
+                                <span className={`px-2 py-1 text-xs font-medium rounded ${
                                   gap.remediation_effort === 'low' ? 'bg-emerald-50 text-emerald-700' :
                                   gap.remediation_effort === 'high' ? 'bg-rose-50 text-rose-700' :
                                   'bg-amber-50 text-amber-700'
@@ -611,17 +611,17 @@ export default function ComplianceOverviewPage() {
                                 </span>
                               </div>
                               <div>
-                                <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Deadline</p>
+                                <p className="text-xs font-semibold text-gray-600 uppercase mb-1">Deadline</p>
                                 <span className="text-sm text-black">{gap.deadline_recommendation}</span>
                               </div>
                             </div>
                             {gap.suggested_actions && gap.suggested_actions.length > 0 && (
                               <div>
-                                <p className="text-xs font-semibold text-slate-600 uppercase mb-2">Suggested Actions</p>
+                                <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Suggested Actions</p>
                                 <ul className="space-y-1">
                                   {gap.suggested_actions.map((action, idx) => (
-                                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                                      <span className="text-primary-600">•</span>
+                                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+                                      <span className="text-blue-600">•</span>
                                       {action}
                                     </li>
                                   ))}
@@ -635,7 +635,7 @@ export default function ComplianceOverviewPage() {
                   })}
                 </div>
 
-                <p className="text-xs text-slate-500 text-center">
+                <p className="text-xs text-gray-500 text-center">
                   Analysis performed at {new Date(aiResult.analysis_date).toLocaleString()} • {aiResult.total_gaps_analyzed} gaps analyzed
                 </p>
               </>
