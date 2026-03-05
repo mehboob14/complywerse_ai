@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Cookie
 from fastapi.responses import JSONResponse
@@ -8,13 +8,13 @@ from sqlalchemy import text, or_
 from pydantic import BaseModel, EmailStr
 import bcrypt
 
-from ..models import Tenant, get_db
+from ..models import Tenant, GRCUser, AuditLog as GlobalAuditLog, get_db
 from ..tenant_manager import (
     get_tenant_session, tenant_session, sanitize_schema_name, IS_SQLITE
 )
 from ..tenant_models import (
-    TenantUser, Role, Permission, RolePermission, UserRole, 
-    OrganizationProfile, AuditLog
+    TenantUser, Role, Permission, RolePermission, UserRole,
+    OrganizationProfile
 )
 from ..permissions import get_permission_matrix_for_ui, get_all_permissions
 from .auth_router import decode_token, require_auth, get_current_user
@@ -37,8 +37,8 @@ def get_tenant_email_domain(tenant: Tenant) -> Optional[str]:
 
 
 def get_tenant_from_request(
-    request: Request, 
-    token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+    request: Request,
+    token: Optional[str] = None,
     db: Session = Depends(get_db)
 ) -> Tenant:
     tenant = getattr(request.state, 'tenant', None)
@@ -54,8 +54,12 @@ def get_tenant_from_request(
         if tenant:
             return tenant
     
-    if token:
-        payload = decode_token(token)
+    resolved_token = token if isinstance(token, str) else None
+    if not resolved_token:
+        resolved_token = request.cookies.get("grc_auth_token")
+
+    if resolved_token:
+        payload = decode_token(resolved_token)
         if payload:
             tenant_id = payload.get("tenant_id")
             subdomain = payload.get("subdomain")
@@ -850,30 +854,53 @@ def get_permissions_matrix(
 
 @router.get("/audit-logs")
 def list_audit_logs(
+    request: Request,
     limit: int = 100,
     offset: int = 0,
+    action: Optional[str] = None,
+    module: Optional[str] = None,
+    user_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     user: TenantUser = Depends(require_permission("admin:audit_logs:view")),
-    tenant_db: Session = Depends(get_tenant_db)
+    tenant_db: Session = Depends(get_tenant_db),
+    db: Session = Depends(get_db)
 ):
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    if IS_SQLITE:
-        logs = tenant_db.query(AuditLog).filter(
-            AuditLog.tenant_id == tenant_schema
-        ).order_by(AuditLog.timestamp.desc()).offset(offset).limit(limit).all()
-        total = tenant_db.query(AuditLog).filter(AuditLog.tenant_id == tenant_schema).count()
-    else:
-        logs = tenant_db.query(AuditLog).order_by(AuditLog.timestamp.desc()).offset(offset).limit(limit).all()
-        total = tenant_db.query(AuditLog).count()
-    
+    tenant = get_tenant_from_request(request, db=db)
+
+    query = db.query(GlobalAuditLog).filter(GlobalAuditLog.tenant_id == tenant.id)
+
+    if action:
+        query = query.filter(GlobalAuditLog.action.ilike(f"%{action}%"))
+    if module:
+        query = query.filter(GlobalAuditLog.resource_type.ilike(f"%{module}%"))
+    if user_id:
+        query = query.filter(GlobalAuditLog.user_id == user_id)
+
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            query = query.filter(GlobalAuditLog.timestamp >= start_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start_date format. Use YYYY-MM-DD")
+
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(GlobalAuditLog.timestamp < end_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_date format. Use YYYY-MM-DD")
+
+    total = query.count()
+    logs = query.order_by(GlobalAuditLog.timestamp.desc()).offset(offset).limit(limit).all()
+
     result = []
     for log in logs:
-        if IS_SQLITE:
-            log_user = tenant_db.query(TenantUser).filter(
-                TenantUser.id == log.user_id,
-                TenantUser.tenant_id == tenant_schema
-            ).first()
-        else:
-            log_user = tenant_db.query(TenantUser).filter(TenantUser.id == log.user_id).first()
+        log_user = None
+        if log.user_id:
+            log_user = db.query(GRCUser).filter(GRCUser.id == log.user_id).first()
+
+        changes = log.changes if isinstance(log.changes, dict) else {}
         result.append({
             "id": log.id,
             "user_id": log.user_id,
@@ -881,9 +908,40 @@ def list_audit_logs(
             "action": log.action,
             "resource_type": log.resource_type,
             "resource_id": log.resource_id,
-            "details": log.details,
+            "details": changes,
+            "method": changes.get("method"),
+            "path": changes.get("path"),
+            "status_code": changes.get("status_code"),
+            "duration_ms": changes.get("duration_ms"),
             "ip_address": log.ip_address,
             "timestamp": log.timestamp.isoformat() if log.timestamp else None
         })
-    
+
     return {"logs": result, "total": total}
+
+
+@router.get("/audit-logs/filters")
+def get_audit_log_filters(
+    request: Request,
+    user: TenantUser = Depends(require_permission("admin:audit_logs:view")),
+    tenant_db: Session = Depends(get_tenant_db),
+    db: Session = Depends(get_db)
+):
+    tenant = get_tenant_from_request(request, db=db)
+
+    base_query = db.query(GlobalAuditLog).filter(GlobalAuditLog.tenant_id == tenant.id)
+
+    actions = [
+        row[0] for row in base_query.with_entities(GlobalAuditLog.action).distinct().order_by(GlobalAuditLog.action).all()
+        if row[0]
+    ]
+    modules = [
+        row[0] for row in base_query.with_entities(GlobalAuditLog.resource_type).distinct().order_by(GlobalAuditLog.resource_type).all()
+        if row[0]
+    ]
+
+    return {
+        "actions": actions,
+        "modules": modules,
+        "date_presets": ["all", "today", "last_7_days", "last_30_days"],
+    }

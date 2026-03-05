@@ -527,6 +527,55 @@
     font-family: 'Poppins';
   }
 
+  .governance-light .cw-btn-primary,
+  .governance-light .cw-btn-secondary,
+  .governance-light .cw-btn-success,
+  .governance-light .cw-btn-danger,
+  .governance-light .cw-btn-neutral {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.5rem;
+    padding: 0.5rem 0.875rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, opacity 150ms ease;
+  }
+
+  .governance-light .cw-btn-primary:disabled,
+  .governance-light .cw-btn-secondary:disabled,
+  .governance-light .cw-btn-success:disabled,
+  .governance-light .cw-btn-danger:disabled,
+  .governance-light .cw-btn-neutral:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .governance-light .cw-field {
+    min-height: 2.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .governance-light select.cw-field {
+    min-width: 9.5rem;
+  }
+
+  .governance-light textarea.cw-field {
+    min-height: 6rem;
+    line-height: 1.4;
+  }
+
+  .governance-light .fixed.inset-0 .cw-card {
+    box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-lg);
+  }
+
   .governance-light input:focus,
   .governance-light select:focus,
   .governance-light textarea:focus {

@@ -521,7 +521,7 @@ export default function ERMOverviewPage() {
                           onMouseEnter={() => setHoveredCell({ likelihood, impact })}
                           onMouseLeave={() => setHoveredCell(null)}
                         >
-                          <span className={`font-bold ${cellData.count > 0 ? 'text-slate-900 text-lg' : 'text-slate-900/50 text-sm'}`}>
+                          <span className={`font-bold ${cellData.count > 0 ? 'text-white text-lg' : 'text-white/60 text-sm'}`}>
                             {cellData.count || '-'}
                           </span>
                           

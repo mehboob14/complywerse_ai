@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from ..models import (
     ITAsset, AssetControlLink, AssetRiskAssessment, AssetFrameworkControlLink,
-    AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, GRCUser, Tenant, TenantUser, get_db
+    AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, Risk, GRCUser, Tenant, TenantUser, get_db
 )
 from ..schemas import (
     ITAssetCreate, ITAssetUpdate, ITAssetResponse,
@@ -988,7 +988,20 @@ def get_asset_detail(
                 "notes": link.notes
             })
     
-    linked_risks = [{"risk_id": link.risk_id} for link in asset.risk_links]
+    linked_risks = []
+    for link in asset.risk_links:
+        risk = db.query(Risk).filter(
+            Risk.id == link.risk_id,
+            Risk.tenant_id.in_(user_tenants)
+        ).first()
+        if risk:
+            linked_risks.append({
+                "risk_id": risk.id,
+                "title": risk.title,
+                "status": risk.status,
+                "inherent_score": risk.inherent_score,
+                "residual_score": risk.residual_score,
+            })
     
     linked_evidence = []
     for link in asset.evidence_links:

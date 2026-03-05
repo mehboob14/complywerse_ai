@@ -35,6 +35,12 @@ from ....routers.auth_router import require_auth, get_user_tenants, get_user_pri
 router = APIRouter(prefix="/risks", tags=["ERM - Risk Register"])
 
 
+def resolve_risk_category(category: Optional[str], risk_category: Optional[str]) -> str:
+    primary = (category or "").strip().lower()
+    secondary = (risk_category or "").strip().lower()
+    return primary or secondary or "operational"
+
+
 def calculate_risk_score(likelihood: int, impact: int) -> float:
     return likelihood * impact
 
@@ -147,12 +153,14 @@ def create_risk(
             detail="Tenant not found"
         )
     
+    resolved_category = resolve_risk_category(risk.category, getattr(risk, 'risk_category', None))
+
     db_risk = Risk(
         tenant_id=tenant_id,
         title=risk.title,
         description=risk.description,
-        category=risk.category,
-        risk_category=getattr(risk, 'risk_category', risk.category),
+        category=resolved_category,
+        risk_category=resolved_category,
         owner_id=risk.owner_id
     )
     db.add(db_risk)
@@ -446,6 +454,13 @@ def update_risk(
         )
     
     update_data = risk_update.model_dump(exclude_unset=True)
+    if "category" in update_data or "risk_category" in update_data:
+        update_data["category"] = resolve_risk_category(
+            update_data.get("category", risk.category),
+            update_data.get("risk_category", risk.risk_category)
+        )
+        update_data["risk_category"] = update_data["category"]
+
     for field, value in update_data.items():
         setattr(risk, field, value)
     

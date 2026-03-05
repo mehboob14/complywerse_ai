@@ -570,6 +570,10 @@ export const ermApi = {
       }>('/erm/risks/ai-suggest', data),
     generateTreatmentPlan: (riskId: number) =>
       apiClient.post<{ treatment_plan: string }>(`/erm/risks/${riskId}/ai-treatment-plan`),
+    linkAsset: (id: number, data: { asset_id: number }) =>
+      apiClient.post(`/erm/risks/${id}/assets`, data),
+    unlinkAsset: (id: number, linkId: number) =>
+      apiClient.delete(`/erm/risks/${id}/assets/${linkId}`),
   },
   mitigationActions: {
     getAll: (riskId: number) => 
@@ -1281,7 +1285,10 @@ export const rcsaApi = {
   startAssessment: (id: number) => apiClient.post(`/erm/rcsa/assessments/${id}/start`),
   saveResponses: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/save`, data),
   submitAssessment: (id: number) => apiClient.post(`/erm/rcsa/assessments/${id}/submit`),
-  getAISuggestions: (id: number) => apiClient.get(`/erm/rcsa/assessments/${id}/ai-suggestions`),
+  getAISuggestions: (id: number, questionId?: number) =>
+    apiClient.get(`/erm/rcsa/assessments/${id}/ai-suggestions`, {
+      params: questionId ? { question_id: questionId } : undefined,
+    }),
 
   approveAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/approve`, data),
   rejectAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/reject`, data),
@@ -1699,8 +1706,9 @@ export const adminApi = {
   getPermissions: () => apiClient.get<{ name: string; module: string; submodule: string; action: string; description: string }[]>('/admin/permissions'),
   getPermissionMatrix: () => apiClient.get<PermissionModule[]>('/admin/permissions/matrix'),
 
-  getAuditLogs: (params?: { limit?: number; offset?: number }) => 
+  getAuditLogs: (params?: { limit?: number; offset?: number; action?: string; module?: string; user_id?: number; start_date?: string; end_date?: string }) => 
     apiClient.get('/admin/audit-logs', { params }),
+  getAuditLogFilters: () => apiClient.get<{ actions: string[]; modules: string[]; date_presets: string[] }>('/admin/audit-logs/filters'),
 };
 
 export const tenantAuthApi = {

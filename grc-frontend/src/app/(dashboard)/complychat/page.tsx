@@ -612,12 +612,22 @@ export default function ComplyChatPage() {
                           )}
                         </div>
                       ) : (
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                        <p
+                          className={clsx(
+                            'text-sm leading-relaxed whitespace-pre-wrap',
+                            message.role === 'user' ? 'text-white' : 'text-black'
+                          )}
+                        >
                           {message.content}
                         </p>
                       )}
                     </div>
-                    <span className="text-xs text-slate-800 mt-1 px-1">
+                    <span
+                      className={clsx(
+                        'text-xs mt-1 px-1',
+                        message.role === 'user' ? 'text-white/80' : 'text-slate-800'
+                      )}
+                    >
                       {message.timestamp.toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',

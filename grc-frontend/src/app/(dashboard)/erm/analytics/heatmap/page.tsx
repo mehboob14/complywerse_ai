@@ -314,10 +314,10 @@ export default function InteractiveHeatMapPage() {
                           count > 0 ? `ring-1 ${getCellBorderColor(score)}` : ''
                         }`}
                       >
-                        <span className={`font-bold ${count > 0 ? 'text-slate-900 text-lg' : 'text-slate-900/40 text-sm'}`}>
+                        <span className={`font-bold ${count > 0 ? 'text-white text-lg' : 'text-white/60 text-sm'}`}>
                           {count > 0 ? count : '·'}
                         </span>
-                        <span className="text-[10px] text-slate-900/60">{score}</span>
+                        <span className="text-[10px] text-white/80">{score}</span>
                       </button>
                     );
                   })
@@ -374,25 +374,25 @@ export default function InteractiveHeatMapPage() {
                       {risk.category && (
                         <div>
                           <span className="text-slate-600">Category: </span>
-                          <span className="text-slate-200 capitalize">{risk.category.replace('_', ' ')}</span>
+                          <span className="text-slate-900 capitalize">{risk.category.replace('_', ' ')}</span>
                         </div>
                       )}
                       {risk.owner && (
                         <div>
                           <span className="text-slate-600">Owner: </span>
-                          <span className="text-slate-200">{risk.owner}</span>
+                          <span className="text-slate-900">{risk.owner}</span>
                         </div>
                       )}
                       {risk.inherent_score !== undefined && (
                         <div>
                           <span className="text-slate-600">Inherent: </span>
-                          <span className="text-slate-200">{risk.inherent_score}</span>
+                          <span className="text-slate-900">{risk.inherent_score}</span>
                         </div>
                       )}
                       {risk.residual_score !== undefined && (
                         <div>
                           <span className="text-slate-600">Residual: </span>
-                          <span className="text-slate-200">{risk.residual_score}</span>
+                          <span className="text-slate-900">{risk.residual_score}</span>
                         </div>
                       )}
                     </div>

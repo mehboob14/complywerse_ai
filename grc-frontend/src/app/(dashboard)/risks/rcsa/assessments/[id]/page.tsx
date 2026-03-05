@@ -123,11 +123,16 @@ export default function AssessmentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const assessmentId = Number(params.id);
+  const rawAssessmentId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const assessmentId = Number(rawAssessmentId);
+  const isValidAssessmentId = Number.isFinite(assessmentId) && assessmentId > 0;
 
   const [responses, setResponses] = useState<Record<number, Response>>({});
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [showAISuggestions, setShowAISuggestions] = useState<Record<number, boolean>>({});
+  const [aiSuggestionsByQuestion, setAiSuggestionsByQuestion] = useState<Record<number, AISuggestion | null>>({});
+  const [loadingAIByQuestion, setLoadingAIByQuestion] = useState<Record<number, boolean>>({});
+  const [fetchedAIByQuestion, setFetchedAIByQuestion] = useState<Record<number, boolean>>({});
   const [validationErrors, setValidationErrors] = useState<Set<number>>(new Set());
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'list' | 'step'>('list');
@@ -146,20 +151,35 @@ export default function AssessmentDetailPage() {
         throw new Error('Failed to load assessment');
       }
     },
+    enabled: isValidAssessmentId,
+    retry: 1,
   });
 
-  const { data: aiSuggestions } = useQuery({
-    queryKey: ['rcsa-ai-suggestions', assessmentId],
-    queryFn: async () => {
-      try {
-        const response = await rcsaApi.getAISuggestions(assessmentId);
-        return response.data as AISuggestion[];
-      } catch {
-        return [] as AISuggestion[];
-      }
-    },
-    enabled: !!assessment,
-  });
+  const handleAIToggle = async (questionId: number) => {
+    const currentlyOpen = !!showAISuggestions[questionId];
+
+    if (currentlyOpen) {
+      setShowAISuggestions((prev) => ({ ...prev, [questionId]: false }));
+      return;
+    }
+
+    setShowAISuggestions((prev) => ({ ...prev, [questionId]: true }));
+
+    if (fetchedAIByQuestion[questionId] || loadingAIByQuestion[questionId]) {
+      return;
+    }
+
+    setLoadingAIByQuestion((prev) => ({ ...prev, [questionId]: true }));
+    try {
+      const response = await rcsaApi.getAISuggestions(assessmentId, questionId);
+      const suggestions = (response.data || []) as AISuggestion[];
+      const matched = suggestions.find((s) => Number(s.question_id) === Number(questionId)) || null;
+      setAiSuggestionsByQuestion((prev) => ({ ...prev, [questionId]: matched }));
+    } finally {
+      setFetchedAIByQuestion((prev) => ({ ...prev, [questionId]: true }));
+      setLoadingAIByQuestion((prev) => ({ ...prev, [questionId]: false }));
+    }
+  };
 
   useEffect(() => {
     if (assessment?.responses) {
@@ -267,7 +287,7 @@ export default function AssessmentDetailPage() {
   };
 
   const acceptAISuggestion = (questionId: number) => {
-    const suggestion = aiSuggestions?.find(s => s.question_id === questionId);
+    const suggestion = aiSuggestionsByQuestion[questionId];
     if (suggestion && typeof suggestion.suggested_value === 'object') {
       const value = suggestion.suggested_value as Record<string, unknown>;
       setResponses(prev => ({
@@ -306,7 +326,7 @@ export default function AssessmentDetailPage() {
 
   const currentQuestion = sortedQuestions[currentQuestionIndex];
   const currentAISuggestion = currentQuestion
-    ? aiSuggestions?.find((s) => s.question_id === currentQuestion.id)
+    ? (aiSuggestionsByQuestion[currentQuestion.id] || null)
     : null;
   const totalQuestions = sortedQuestions.length;
   const answeredCount = Object.keys(responses).filter(qId => {
@@ -590,12 +610,7 @@ export default function AssessmentDetailPage() {
             {currentQuestion.ai_suggestion_enabled && (
               <div className="relative">
                 <button
-                  onClick={() =>
-                    setShowAISuggestions((prev) => ({
-                      ...prev,
-                      [currentQuestion.id]: !prev[currentQuestion.id],
-                    }))
-                  }
+                  onClick={() => void handleAIToggle(currentQuestion.id)}
                   className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
                   title="AI Assistant"
                 >
@@ -611,7 +626,9 @@ export default function AssessmentDetailPage() {
                       )}
                     </div>
 
-                    {currentAISuggestion ? (
+                    {currentQuestion && loadingAIByQuestion[currentQuestion.id] ? (
+                      <p className="text-sm text-slate-700">Loading AI suggestion...</p>
+                    ) : currentAISuggestion ? (
                       <>
                         {currentAISuggestion.suggestion && (
                           <p className="text-sm text-slate-700 mb-2">{currentAISuggestion.suggestion}</p>
@@ -620,7 +637,7 @@ export default function AssessmentDetailPage() {
                           <div className="mb-3">
                             <p className="text-xs font-medium text-purple-300 mb-2">Recommended Evidence to Upload:</p>
                             <div className="space-y-2">
-                              {currentAISuggestion.evidence_recommendations.map((rec, idx) => (
+                              {currentAISuggestion.evidence_recommendations.map((rec: EvidenceRecommendation, idx: number) => (
                                 <div key={idx} className="bg-white rounded p-2">
                                   <p className="text-sm font-medium text-slate-900">{rec.evidence_type}</p>
                                   <p className="text-xs text-slate-600">{rec.description}</p>
@@ -641,8 +658,10 @@ export default function AssessmentDetailPage() {
                           </button>
                         )}
                       </>
-                    ) : (
+                    ) : currentQuestion && fetchedAIByQuestion[currentQuestion.id] ? (
                       <p className="text-sm text-slate-700">No AI suggestion available yet for this question.</p>
+                    ) : (
+                      <p className="text-sm text-slate-700">Click AI Assistant to load suggestions for this assessment.</p>
                     )}
                   </div>
                 )}
@@ -878,7 +897,7 @@ export default function AssessmentDetailPage() {
               <div className="divide-y divide-slate-700">
                 {questions.sort((a, b) => (a.question_order || a.sequence) - (b.question_order || b.sequence)).map((question) => {
                   const response = responses[question.id] || {};
-                  const aiSuggestion = aiSuggestions?.find(s => s.question_id === question.id);
+                  const aiSuggestion = aiSuggestionsByQuestion[question.id] || null;
                   const hasError = validationErrors.has(question.id);
 
                   return (
@@ -899,7 +918,7 @@ export default function AssessmentDetailPage() {
                         {question.ai_suggestion_enabled && (
                           <div className="relative">
                             <button
-                              onClick={() => setShowAISuggestions(prev => ({ ...prev, [question.id]: !prev[question.id] }))}
+                              onClick={() => void handleAIToggle(question.id)}
                               className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
                               title="AI Assistant"
                             >
@@ -914,7 +933,9 @@ export default function AssessmentDetailPage() {
                                     <span className="text-xs text-slate-600">({Math.round(aiSuggestion.confidence * 100)}% confidence)</span>
                                   )}
                                 </div>
-                                {aiSuggestion ? (
+                                {loadingAIByQuestion[question.id] ? (
+                                  <p className="text-sm text-slate-700">Loading AI suggestion...</p>
+                                ) : aiSuggestion ? (
                                   <>
                                     {aiSuggestion.suggestion && (
                                       <p className="text-sm text-slate-700 mb-2">{aiSuggestion.suggestion}</p>
@@ -923,13 +944,13 @@ export default function AssessmentDetailPage() {
                                       <div className="mb-3">
                                         <p className="text-xs font-medium text-purple-300 mb-2">Recommended Evidence to Upload:</p>
                                         <div className="space-y-2">
-                                          {aiSuggestion.evidence_recommendations.map((rec, idx) => (
+                                          {aiSuggestion.evidence_recommendations.map((rec: EvidenceRecommendation, idx: number) => (
                                             <div key={idx} className="bg-white rounded p-2">
                                               <p className="text-sm font-medium text-slate-900">{rec.evidence_type}</p>
                                               <p className="text-xs text-slate-600">{rec.description}</p>
                                               {rec.example_files.length > 0 && (
                                                 <div className="flex flex-wrap gap-1 mt-1">
-                                                  {rec.example_files.map((f, i) => (
+                                                  {rec.example_files.map((f: string, i: number) => (
                                                     <span key={i} className="text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">{f}</span>
                                                   ))}
                                                 </div>
@@ -951,8 +972,10 @@ export default function AssessmentDetailPage() {
                                       </button>
                                     )}
                                   </>
-                                ) : (
+                                ) : fetchedAIByQuestion[question.id] ? (
                                   <p className="text-sm text-slate-700">No AI suggestion available yet for this question.</p>
+                                ) : (
+                                  <p className="text-sm text-slate-700">Click AI Assistant to load suggestions for this assessment.</p>
                                 )}
                               </div>
                             )}

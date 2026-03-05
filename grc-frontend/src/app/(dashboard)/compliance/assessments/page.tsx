@@ -22,6 +22,18 @@ import {
   Trash2,
   Sparkles,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from 'recharts';
 
 interface Assessment {
   id: number;
@@ -78,6 +90,13 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   in_progress: { bg: 'bg-[var(--color-base-soft)]', text: 'text-[var(--color-status-review)]', label: 'In Progress' },
   completed: { bg: 'bg-[var(--color-success-soft)]', text: 'text-[var(--color-status-published)]', label: 'Completed' },
   archived: { bg: 'bg-[var(--color-subtle)]', text: 'text-[var(--color-status-archived)]', label: 'Archived' },
+};
+
+const STATUS_CHART_COLORS: Record<string, string> = {
+  draft: '#94A3B8',
+  in_progress: '#3B82F6',
+  completed: '#10B981',
+  archived: '#6B7280',
 };
 
 function getScoreColor(score: number | null): { bg: string; text: string } {
@@ -258,6 +277,40 @@ export default function AssessmentsPage() {
       )
     : assessments;
 
+  const statusChartData = Object.entries(
+    filteredAssessments.reduce<Record<string, number>>((acc, assessment) => {
+      acc[assessment.status] = (acc[assessment.status] || 0) + 1;
+      return acc;
+    }, {})
+  )
+    .map(([status, value]) => ({
+      name: STATUS_STYLES[status]?.label || status.replace(/_/g, ' '),
+      status,
+      value,
+      color: STATUS_CHART_COLORS[status] || '#64748B',
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const progressByStatusData = Object.entries(
+    filteredAssessments.reduce<Record<string, { totalScore: number; count: number }>>((acc, assessment) => {
+      if (assessment.overall_score === null) {
+        return acc;
+      }
+      const existing = acc[assessment.status] || { totalScore: 0, count: 0 };
+      acc[assessment.status] = {
+        totalScore: existing.totalScore + assessment.overall_score,
+        count: existing.count + 1,
+      };
+      return acc;
+    }, {})
+  )
+    .map(([status, metric]) => ({
+      name: STATUS_STYLES[status]?.label || status.replace(/_/g, ' '),
+      status,
+      averageScore: Math.round(metric.totalScore / metric.count),
+    }))
+    .sort((a, b) => b.averageScore - a.averageScore);
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -386,6 +439,66 @@ export default function AssessmentsPage() {
           </div>
           <p className="text-3xl font-bold text-black mt-4">{data?.summary?.total_not_complied || 0}</p>
           <p className="text-sm text-gray-600 mt-1">Non-Complied Items</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold text-black">Assessment Status Distribution</h3>
+            <p className="text-xs text-gray-600">Based on currently loaded assessments</p>
+          </div>
+          <div className="h-64">
+            {statusChartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                No status data available
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusChartData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={82}
+                    innerRadius={48}
+                    label
+                  >
+                    {statusChartData.map((entry) => (
+                      <Cell key={entry.status} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold text-black">Average Progress by Status</h3>
+            <p className="text-xs text-gray-600">Average assessment completion score (%)</p>
+          </div>
+          <div className="h-64">
+            {progressByStatusData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                No progress data available
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={progressByStatusData} margin={{ top: 8, right: 8, left: 0, bottom: 6 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#4B5563' }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#4B5563' }} />
+                  <Tooltip formatter={(value) => [`${value}%`, 'Average Progress']} />
+                  <Bar dataKey="averageScore" fill="#2563EB" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </div>
       </div>
 

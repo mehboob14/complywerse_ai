@@ -81,7 +81,7 @@ interface AssetDetailData {
   created_at: string;
   linked_controls: LinkedControl[];
   linked_framework_controls: LinkedFrameworkControl[];
-  linked_risks: Array<{ risk_id: number }>;
+  linked_risks: Array<{ risk_id: number; title?: string; status?: string }>;
   linked_evidence: LinkedEvidence[];
   risk_assessments: RiskAssessment[];
   coverage_percentage: number;
@@ -764,11 +764,14 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
 
       {asset.linked_risks && asset.linked_risks.length > 0 ? (
         <div className="space-y-2">
-          {asset.linked_risks.map((risk, idx) => (
-            <div key={idx} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
+          {asset.linked_risks.map((risk) => (
+            <div key={risk.risk_id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
               <div className="flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 text-orange-400" />
-                <p className="text-white">Risk ID: {risk.risk_id}</p>
+                <div>
+                  <p className="text-white">{risk.title || `Risk #${risk.risk_id}`}</p>
+                  <p className="text-xs text-slate-400">Risk ID: {risk.risk_id}{risk.status ? ` • ${risk.status}` : ''}</p>
+                </div>
               </div>
               <Link 
                 href={`/risks/${risk.risk_id}`}

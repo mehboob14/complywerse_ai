@@ -1840,6 +1840,7 @@ def submit_assessment(
 @router.get("/assessments/{assessment_id}/ai-suggestions", response_model=List[RCSAAISuggestionResponse])
 def get_ai_suggestions(
     assessment_id: int,
+    question_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1865,8 +1866,17 @@ def get_ai_suggestions(
     bu_name = bu.name if bu else "Unknown Business Unit"
     
     suggestions = []
-    
-    for question in template.questions:
+
+    if question_id is not None:
+        target_questions = [q for q in template.questions if q.id == question_id]
+        if not target_questions:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found in template")
+    else:
+        target_questions = list(template.questions)
+
+    for question in target_questions:
+        if not question.ai_suggestion_enabled:
+            continue
         
         existing_response = db.query(RCSAResponse).filter(
             RCSAResponse.assessment_id == assessment_id,

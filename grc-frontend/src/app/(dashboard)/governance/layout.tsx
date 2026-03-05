@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   FileText,
-  GitPullRequest,
   Calendar,
   CheckSquare,
   Link2,
@@ -19,7 +18,6 @@ const governanceNavigation = [
   { name: 'Documents', href: '/governance/documents', icon: FileText },
   { name: 'Committees', href: '/governance/committees', icon: Users },
   { name: 'Mappings', href: '/governance/mappings', icon: Link2 },
-  { name: 'Workflows', href: '/governance/workflows', icon: GitPullRequest },
   { name: 'Approvals', href: '/governance/approvals', icon: CheckSquare },
   { name: 'Exceptions', href: '/governance/exceptions', icon: AlertTriangle },
   { name: 'Reviews', href: '/governance/reviews', icon: Calendar },
@@ -39,9 +37,6 @@ export default function GovernanceLayout({
           <h1 className="text-[18px] font-semibold text-[var(--color-text)]">Governance</h1>
           <p className="helper-text">Policy and document lifecycle management</p>
         </div>
-        <button className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-[13px] font-medium text-[var(--color-text)]">
-          More Filters
-        </button>
       </div>
 
       <div className="filters-row rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">

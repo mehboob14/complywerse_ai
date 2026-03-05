@@ -723,19 +723,6 @@ export default function RegulatoryFeedsPage() {
                                       </div>
                                     )}
 
-                                    {item.ai_analysis.impacted_policies && item.ai_analysis.impacted_policies.length > 0 && (
-                                      <div>
-                                        <h5 className="text-xs font-medium text-gray-700 uppercase mb-2">Impacted Policies</h5>
-                                        <div className="space-y-2">
-                                          {item.ai_analysis.impacted_policies.map((policy, idx) => (
-                                            <div key={idx} className="text-sm">
-                                              <div className="text-gray-800 font-medium">{policy.title}</div>
-                                              <div className="text-gray-700 text-xs capitalize">{policy.action_needed}</div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
                                   </div>
 
                                   {item.ai_analysis.implementation_tasks && item.ai_analysis.implementation_tasks.length > 0 && (

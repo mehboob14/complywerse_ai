@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ermApi } from '@/lib/api';
-import { Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
+import { adminApi, assetsApi, ermApi } from '@/lib/api';
+import { ITAsset, Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
 import { 
   AlertTriangle, 
   Loader2, 
@@ -79,9 +79,10 @@ const filterValuesMatch = (left: string | null | undefined, right: string | null
 };
 
 const inferEffectiveRiskCategory = (risk: Risk): RiskCategory => {
+  const legacyCategory = (risk as Risk & { category?: string }).category;
   const categoryText = [
     risk.risk_category,
-    risk.category,
+    legacyCategory,
     risk.register_type,
     risk.title,
     risk.description,
@@ -418,7 +419,8 @@ export default function ERMRisksPage() {
     });
 
     (risks || []).forEach((risk) => {
-      const value = (risk.risk_category || risk.category || '').trim();
+      const legacyCategory = (risk as Risk & { category?: string }).category;
+      const value = (risk.risk_category || legacyCategory || '').trim();
       const canonical = canonicalFilterValue(value);
       if (canonical && !valuesByCanonical.has(canonical)) {
         valuesByCanonical.set(canonical, value);
@@ -658,11 +660,11 @@ export default function ERMRisksPage() {
                         }}
                         className={`flex items-center justify-center rounded text-xs font-medium transition-all ${
                           getHeatmapCellColor(likelihood, impact)
-                        } ${isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-slate-900' : ''}`}
+                        } ${isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-white' : ''}`}
                         title={`L${likelihood} x I${impact} = ${likelihood * impact}`}
                       >
                         {cell?.count > 0 && (
-                          <span className="text-slate-900">{cell.count}</span>
+                          <span className="text-white">{cell.count}</span>
                         )}
                       </button>
                     );
@@ -856,11 +858,27 @@ export default function ERMRisksPage() {
             setIsModalOpen(false);
             setEditingRisk(null);
           }}
-          onSubmit={(data) => {
+          onSubmit={async ({ riskData, linkedAssetId }) => {
             if (editingRisk) {
-              updateMutation.mutate({ id: editingRisk.id, data });
-            } else {
-              createMutation.mutate(data);
+              const updated = await updateMutation.mutateAsync({ id: editingRisk.id, data: riskData });
+              const updatedRiskId = updated?.data?.id || editingRisk.id;
+              if (linkedAssetId && updatedRiskId) {
+                try {
+                  await ermApi.risks.linkAsset(updatedRiskId, { asset_id: linkedAssetId });
+                } catch {
+                }
+              }
+              return;
+            }
+
+            const created = await createMutation.mutateAsync(riskData);
+            const createdRiskId = created?.data?.id;
+            if (linkedAssetId && createdRiskId) {
+              try {
+                await ermApi.risks.linkAsset(createdRiskId, { asset_id: linkedAssetId });
+                queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+              } catch {
+              }
             }
           }}
           isLoading={createMutation.isPending || updateMutation.isPending}
@@ -950,6 +968,11 @@ interface AISuggestion {
   risk_treatment_options: string[];
 }
 
+interface RiskModalSubmitPayload {
+  riskData: Partial<Risk>;
+  linkedAssetId?: number;
+}
+
 function RiskModal({
   risk,
   onClose,
@@ -958,7 +981,7 @@ function RiskModal({
 }: {
   risk: Risk | null;
   onClose: () => void;
-  onSubmit: (data: Partial<Risk>) => void;
+  onSubmit: (payload: RiskModalSubmitPayload) => Promise<void> | void;
   isLoading: boolean;
 }) {
   const [formData, setFormData] = useState({
@@ -974,6 +997,7 @@ function RiskModal({
     residual_likelihood: risk?.residual_likelihood || 2,
     residual_impact: risk?.residual_impact || 2,
     treatment_plan: risk?.treatment_plan || '',
+    linked_asset_id: '',
   });
 
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion | null>(null);
@@ -986,12 +1010,27 @@ function RiskModal({
     queryKey: ['users'],
     queryFn: async () => {
       try {
-        const response = await fetch('/api/users');
-        if (!response.ok) return [];
-        return response.json() as Promise<User[]>;
+        const response = await adminApi.getUsers();
+        return (response.data || []).map((user: any) => ({
+          id: user.id,
+          email: user.email,
+          full_name:
+            user.full_name ||
+            user.name ||
+            [user.first_name, user.last_name].filter(Boolean).join(' ').trim() ||
+            user.email,
+        })) as User[];
       } catch {
         return [];
       }
+    },
+  });
+
+  const { data: assets } = useQuery({
+    queryKey: ['erm-assets-select-options'],
+    queryFn: async () => {
+      const response = await assetsApi.getAll();
+      return (response.data || []) as ITAsset[];
     },
   });
 
@@ -1070,12 +1109,16 @@ function RiskModal({
     setFormData({ ...formData, description: consequenceSection + `• ${consequence}\n` });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      ...formData,
-      inherent_score: formData.inherent_likelihood * formData.inherent_impact,
-      residual_score: formData.residual_likelihood * formData.residual_impact,
+    const { linked_asset_id, ...riskData } = formData;
+    await onSubmit({
+      riskData: {
+        ...riskData,
+        inherent_score: formData.inherent_likelihood * formData.inherent_impact,
+        residual_score: formData.residual_likelihood * formData.residual_impact,
+      },
+      linkedAssetId: linked_asset_id ? Number(linked_asset_id) : undefined,
     });
   };
 
@@ -1347,6 +1390,20 @@ function RiskModal({
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-600">Linked Asset (Optional)</label>
+            <select
+              value={formData.linked_asset_id}
+              onChange={(e) => setFormData({ ...formData, linked_asset_id: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+            >
+              <option value="">Select asset...</option>
+              {(assets || []).map((asset) => (
+                <option key={asset.id} value={asset.id}>{asset.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>

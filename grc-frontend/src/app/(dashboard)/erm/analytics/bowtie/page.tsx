@@ -323,7 +323,7 @@ export default function BowTieAnalysisPage() {
               <div className="space-y-3">
                 <div>
                   <p className="text-sm text-slate-600">Description</p>
-                  <p className="text-sm text-slate-200 mt-1">
+                  <p className="text-sm text-slate-900 mt-1">
                     {bowTieData.risk_description || 'No description provided'}
                   </p>
                 </div>

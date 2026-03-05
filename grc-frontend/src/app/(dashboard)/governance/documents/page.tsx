@@ -199,6 +199,7 @@ export default function GovernanceDocumentsPage() {
     word_count: number;
     estimated_review_time: string;
   } | null>(null);
+  const [autoParseAfterCreate, setAutoParseAfterCreate] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -235,8 +236,15 @@ export default function GovernanceDocumentsPage() {
       };
       return governanceApi.createDocument(payload as any);
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      if (autoParseAfterCreate) {
+        const createdDocumentId = (response.data as { id?: number } | undefined)?.id;
+        if (createdDocumentId) {
+          parsePolicyMutation.mutate(createdDocumentId);
+        }
+        setAutoParseAfterCreate(false);
+      }
       setIsModalOpen(false);
       setEditingDocument(null);
     },
@@ -780,7 +788,11 @@ export default function GovernanceDocumentsPage() {
       {isModalOpen && (
         <DocumentModal
           document={editingDocument}
-          onClose={() => { setIsModalOpen(false); setEditingDocument(null); }}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingDocument(null);
+            setAutoParseAfterCreate(false);
+          }}
           onSubmit={(data) => {
             if (editingDocument?.id) {
               updateMutation.mutate({ id: editingDocument.id, data });
@@ -846,6 +858,7 @@ export default function GovernanceDocumentsPage() {
           onUseContent={(content: string, title: string, docType?: string, description?: string) => {
             setIsAIDraftModalOpen(false);
             setAIDraftResult(null);
+            setAutoParseAfterCreate(true);
             setEditingDocument({
               title,
               content,

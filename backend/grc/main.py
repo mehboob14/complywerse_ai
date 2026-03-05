@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 from .models import init_grc_db
+from .audit_logger import should_audit_request, parse_request_payload, write_audit_log
 from .routers import (
     auth_router,
     tenants_router,
@@ -46,6 +49,38 @@ app.add_middleware(
 )
 
 app.add_middleware(TenantMiddleware)
+
+
+@app.middleware("http")
+async def audit_log_middleware(request: Request, call_next):
+    if not should_audit_request(request):
+        return await call_next(request)
+
+    import time
+    started_at = time.time()
+
+    request_payload = None
+    if request.method.upper() not in {"GET", "DELETE", "HEAD", "OPTIONS"}:
+        body = await request.body()
+        received = False
+
+        async def receive():
+            nonlocal received
+            if received:
+                return {"type": "http.request", "body": b"", "more_body": False}
+            received = True
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        request._receive = receive
+        request_payload = await parse_request_payload(request, body)
+
+    try:
+        response = await call_next(request)
+        write_audit_log(request, response, started_at, request_payload)
+        return response
+    except Exception:
+        write_audit_log(request, Response(status_code=500), started_at, request_payload)
+        raise
 
 app.include_router(auth_router)
 app.include_router(admin_router)
