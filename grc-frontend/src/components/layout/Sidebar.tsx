@@ -149,6 +149,12 @@ const navigation: NavEntry[] = [
       { name: 'IT Assets', href: '/assets', icon: Server, requiredPermissions: ['assets:asset_inventory:*'] },
     ],
   },
+  {
+    name: 'Workflow Engine',
+    href: '/workflow-engine',
+    icon: GitPullRequest,
+    requiredPermissions: ['workflow_engine:definitions:*', 'workflow_engine:executions:*']
+  },
   { name: 'ComplyChat', href: '/complychat', icon: Bot, requiredPermissions: ['dashboard:ai_insights:*'] },
   {
     name: 'Administration',

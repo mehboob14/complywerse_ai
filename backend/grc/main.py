@@ -30,6 +30,11 @@ from .modules.control_library import control_library_router
 from .modules.vuln_management import vuln_management_router
 from .modules.chatbot import chatbot_router
 from .modules.audit_management import audit_management_router
+from .modules.workflow_engine import (
+    workflow_engine_router,
+    start_workflow_engine_runtime,
+    stop_workflow_engine_runtime,
+)
 from .middleware.subdomain import TenantMiddleware
 
 app = FastAPI(
@@ -106,11 +111,18 @@ app.include_router(control_library_router)
 app.include_router(vuln_management_router)
 app.include_router(chatbot_router)
 app.include_router(audit_management_router)
+app.include_router(workflow_engine_router)
 
 
 @app.on_event("startup")
 def on_startup():
     init_grc_db()
+    start_workflow_engine_runtime()
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    stop_workflow_engine_runtime()
 
 
 @app.get("/")
@@ -132,7 +144,8 @@ def root():
             "compliance",
             "compliance-assessments",
             "control-library",
-            "vuln-management"
+            "vuln-management",
+            "workflow-engine"
         ]
     }
 

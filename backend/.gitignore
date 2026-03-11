@@ -2,7 +2,12 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+uploads/
+*.xlsx
+*.csv
+.env
+__pycache__/
+venv/
 # Virtual environments
 .venv/
 venv/

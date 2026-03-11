@@ -255,6 +255,42 @@ PERMISSION_MATRIX = [
         ]
     },
     {
+        "module": "workflow_engine",
+        "display_name": "Workflow Automation Engine",
+        "submodules": [
+            {
+                "name": "definitions",
+                "display_name": "Workflow Definitions",
+                "actions": ["view", "create", "edit", "delete", "publish"]
+            },
+            {
+                "name": "templates",
+                "display_name": "Workflow Templates",
+                "actions": ["view", "create", "edit", "delete", "publish"]
+            },
+            {
+                "name": "executions",
+                "display_name": "Workflow Executions",
+                "actions": ["view", "create", "edit", "approve", "cancel"]
+            },
+            {
+                "name": "integrations",
+                "display_name": "Workflow Integrations",
+                "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "analytics",
+                "display_name": "Workflow Analytics",
+                "actions": ["view", "export"]
+            },
+            {
+                "name": "ai",
+                "display_name": "Workflow AI",
+                "actions": ["view", "create", "edit"]
+            }
+        ]
+    },
+    {
         "module": "reports",
         "display_name": "Reports & Analytics",
         "submodules": [

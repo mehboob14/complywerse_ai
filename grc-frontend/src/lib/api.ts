@@ -43,6 +43,7 @@ import {
   GovernanceDocumentVersion,
   DocumentApprovalStep,
   GovernanceDashboard,
+  AssetType,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
@@ -282,6 +283,10 @@ export const governanceApi = {
     apiClient.post(`/governance/documents/${documentId}/reparse-proposals/apply`, { decisions }),
   exportPolicyStatements: (documentId: number) =>
     apiClient.get(`/governance/reports/policy-statements/${documentId}/csv`, { responseType: 'blob' }),
+  exportComplianceSummary: () =>
+    apiClient.get('/governance/reports/compliance-summary/csv', { responseType: 'blob' }),
+  exportAuditLog: (days: number = 90) =>
+    apiClient.get('/governance/reports/audit-log/csv', { params: { days }, responseType: 'blob' }),
   getGapAnalysisRuns: (documentId: number) =>
     apiClient.get(`/governance/gap-analysis/runs/${documentId}`),
   getComplianceSummary: (documentId: number) =>
@@ -318,6 +323,14 @@ export const governanceApi = {
     apiClient.post('/governance/workflows/templates/seed-defaults', null, { params: { tenant_id: tenantId } }),
   getDocumentMappings: (documentId: number) =>
     apiClient.get(`/governance/mappings/document/${documentId}`),
+  getFrameworkApplicability: (frameworkId: number) =>
+    apiClient.get(`/governance/applicability/framework/${frameworkId}`),
+  getApplicabilityAuditLog: (frameworkId: number) =>
+    apiClient.get(`/governance/applicability/audit-log/${frameworkId}`),
+  setClauseApplicability: (data: { control_id: number; uploaded_framework_id: number; is_applicable: boolean; justification: string }) =>
+    apiClient.post('/governance/applicability', data),
+  reviewApplicability: (applicabilityId: number, data: { status: string; review_comment?: string }) =>
+    apiClient.put(`/governance/applicability/${applicabilityId}/review`, data),
   linkControl: (data: { document_id: number; normalized_control_id: number; link_type?: string; notes?: string }) =>
     apiClient.post('/governance/mappings/control', data),
   unlinkControl: (linkId: number) =>
@@ -326,6 +339,16 @@ export const governanceApi = {
     apiClient.get('/governance/mappings/coverage'),
   getComplianceCoverage: () =>
     apiClient.get('/governance/dashboard/compliance-coverage'),
+  getComplianceByFramework: () =>
+    apiClient.get('/governance/dashboard/compliance-by-framework'),
+  getOpenGapsSummary: () =>
+    apiClient.get('/governance/dashboard/open-gaps-summary'),
+  getRemediationProgress: () =>
+    apiClient.get('/governance/dashboard/remediation-progress'),
+  getUpcomingReviewsDashboard: () =>
+    apiClient.get('/governance/dashboard/upcoming-reviews'),
+  getAcceptedRisks: () =>
+    apiClient.get('/governance/dashboard/accepted-risks'),
   getTrends: (months: number = 12) =>
     apiClient.get(`/governance/dashboard/trends?months=${months}`),
   updateDocumentStatus: (documentId: number, status: string) =>
@@ -413,7 +436,7 @@ export const assetsApi = {
     asset_type: string;
     vendor?: string;
     location?: string;
-    criticality?: string;
+    criticality?: 'low' | 'medium' | 'high' | 'critical';
   }) => apiClient.post<{
     recommendation: string;
     confidentiality_rating: number;
@@ -423,13 +446,13 @@ export const assetsApi = {
   create: (data: {
     name: string;
     description?: string;
-    asset_type: string;
+    asset_type: AssetType;
     owner_id?: number;
     owner_name?: string;
     custodian?: string;
     host_name?: string;
     ip_address?: string;
-    criticality?: string;
+    criticality?: 'low' | 'medium' | 'high' | 'critical';
     confidentiality_rating?: number;
     integrity_rating?: number;
     availability_rating?: number;
@@ -1871,6 +1894,10 @@ export const auditApi = {
     getUtilization: (params?: Record<string, unknown>) => apiClient.get('/audit/capacity/utilization', { params }),
     getConflicts: (params?: Record<string, unknown>) => apiClient.get('/audit/capacity/conflicts', { params }),
   },
+  tools: {
+    samplingCalculator: (data: Record<string, unknown>) => apiClient.post('/audit/tools/sampling-calculator', data),
+    getRegulatoryChanges: () => apiClient.get('/audit/tools/regulatory-changes'),
+  },
   ai: {
     generateAuditPlan: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-audit-plan', data),
     generateProcedures: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-procedures', data),
@@ -1885,6 +1912,73 @@ export const auditApi = {
     regulatoryImpact: (data: Record<string, unknown>) => apiClient.post('/audit/ai/regulatory-impact-assessment', data),
     generateTestScript: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-test-script', data),
     suggestEngagementSkills: (data: Record<string, unknown>) => apiClient.post('/audit/ai/suggest-engagement-skills', data),
+  },
+};
+
+export const workflowEngineApi = {
+  definitions: {
+    list: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/definitions', { params }),
+    getById: (id: number) => apiClient.get(`/workflow-engine/definitions/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/definitions', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/workflow-engine/definitions/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/workflow-engine/definitions/${id}`),
+    listVersions: (id: number) => apiClient.get(`/workflow-engine/definitions/${id}/versions`),
+    rollback: (id: number, versionId: number) => apiClient.post(`/workflow-engine/definitions/${id}/rollback/${versionId}`),
+  },
+  executions: {
+    trigger: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/executions/trigger', data),
+    listInstances: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/executions/instances', { params }),
+    getInstance: (id: number) => apiClient.get(`/workflow-engine/executions/instances/${id}`),
+    resumeInstance: (id: number) => apiClient.post(`/workflow-engine/executions/instances/${id}/resume`),
+    decideApproval: (approvalRequestId: number, data: Record<string, unknown>) => apiClient.post(`/workflow-engine/executions/approvals/${approvalRequestId}/decision`, data),
+    inbox: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/executions/approvals/inbox', { params }),
+  },
+  catalog: {
+    nodeTypes: () => apiClient.get('/workflow-engine/catalog/node-types'),
+    templatesLibrary: () => apiClient.get('/workflow-engine/catalog/templates/library'),
+    integrationPoints: () => apiClient.get('/workflow-engine/catalog/integrations'),
+    users: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/catalog/actors/users', { params }),
+    roles: () => apiClient.get('/workflow-engine/catalog/actors/roles'),
+  },
+  templates: {
+    list: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/templates', { params }),
+    create: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/templates', data),
+    instantiate: (templateId: number, name?: string) => apiClient.post(`/workflow-engine/templates/${templateId}/instantiate`, undefined, {
+      params: name ? { name } : {},
+    }),
+  },
+  links: {
+    list: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/links', { params }),
+    create: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/links', data),
+    delete: (id: number) => apiClient.delete(`/workflow-engine/links/${id}`),
+  },
+  escalationConfigs: {
+    list: () => apiClient.get('/workflow-engine/escalation-configs'),
+    create: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/escalation-configs', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.patch(`/workflow-engine/escalation-configs/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/workflow-engine/escalation-configs/${id}`),
+  },
+  integrations: {
+    listSchedules: () => apiClient.get('/workflow-engine/integrations/schedules'),
+    createSchedule: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/integrations/schedules', data),
+    listWebhooks: () => apiClient.get('/workflow-engine/integrations/webhooks'),
+    createWebhook: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/integrations/webhooks', data),
+    publishExternal: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/integrations/events/publish-external', data),
+  },
+  analytics: {
+    overview: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/analytics/overview', { params }),
+    bottlenecks: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/analytics/bottlenecks', { params }),
+    liveStatus: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/analytics/live-status', { params }),
+  },
+  ai: {
+    suggestions: () => apiClient.get('/workflow-engine/ai/suggestions'),
+    naturalLanguage: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/ai/natural-language', data),
+    optimize: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/ai/optimize', data),
+    intelligentRouting: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/ai/intelligent-routing', data),
+    anomalies: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/ai/anomalies', data),
+  },
+  events: {
+    publish: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/events/publish', data),
   },
 };
 
