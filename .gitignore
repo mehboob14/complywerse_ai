@@ -64,6 +64,8 @@ backend/venv_version_11/
 backend/__pycache__/
 backend/grc/__pycache__/
 backend/static/
+backend/venv
+backend/__pycache__/
 
 grc-frontend/node_modules/
 grc-frontend/.next/

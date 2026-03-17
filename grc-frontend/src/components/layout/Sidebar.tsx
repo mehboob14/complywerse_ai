@@ -427,7 +427,7 @@ export default function Sidebar() {
         <div className="flex items-center gap-2.5">
           <Shield {...navIconProps} className="text-[var(--color-text-inverse)] flex-shrink-0" />
           {!collapsed && (
-            <span className="whitespace-nowrap text-lg font-semibold text-[var(--color-text-inverse)]">CompliWerse AI</span>
+            <span className="whitespace-nowrap text-lg font-semibold text-[var(--color-text-inverse)]">Compliverse AI</span>
           )}
         </div>
       </div>
