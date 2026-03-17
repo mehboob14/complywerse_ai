@@ -77,3 +77,6 @@ backend/*.zip
 # Generic nested dependency/cache folders
 **/node_modules/
 **/__pycache__/
+
+# Local tool/session state
+.local/

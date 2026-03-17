@@ -161,6 +161,15 @@ const SEVERITY_BG: Record<string, string> = {
   info: 'bg-[var(--color-subtle)]',
 };
 
+function seededNumber(seed: string, min: number, max: number): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 33 + seed.charCodeAt(i)) >>> 0;
+  }
+  const span = max - min + 1;
+  return min + (hash % span);
+}
+
 const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { percentage: number } }> }) => {
   if (active && payload && payload.length) {
     return (
@@ -300,21 +309,46 @@ export default function VulnerabilityDashboardPage() {
     );
   }
 
-  const totalVulns = dashboard?.total_vulnerabilities || 0;
-  const byStatus = dashboard?.by_status || {};
-  const openCount = (byStatus['open'] || 0) + (byStatus['in_progress'] || 0);
-  const criticalHighCount = (dashboard?.by_severity?.['critical'] || 0) + (dashboard?.by_severity?.['high'] || 0);
-  const resolvedCount = byStatus['resolved'] || 0;
-  const inProgressCount = byStatus['in_progress'] || 0;
+  // Demo metrics for dashboard presentation: total < 150 and open 70+.
+  const totalVulns = seededNumber('vuln-total', 121, 149);
+  const openCount = seededNumber('vuln-open', 72, 99);
+  const inProgressCount = seededNumber('vuln-in-progress', 18, 36);
+  const openOnlyCount = Math.max(10, openCount - inProgressCount);
+  const resolvedCount = Math.max(0, totalVulns - openCount);
+
+  const criticalCount = seededNumber('vuln-critical', 16, 28);
+  const highCount = seededNumber('vuln-high', 22, 38);
+  const mediumCount = seededNumber('vuln-medium', 18, 34);
+  const lowCount = Math.max(0, totalVulns - (criticalCount + highCount + mediumCount));
+  const criticalHighCount = criticalCount + highCount;
+
+  const byStatus: Record<string, number> = {
+    open: openOnlyCount,
+    in_progress: inProgressCount,
+    resolved: resolvedCount,
+  };
+
+  const bySeverity: Record<string, number> = {
+    critical: criticalCount,
+    high: highCount,
+    medium: mediumCount,
+    low: lowCount,
+  };
+
+  const agingBuckets: Record<string, number> = {
+    '0-7 days': seededNumber('vuln-aging-0-7', 16, 30),
+    '8-30 days': seededNumber('vuln-aging-8-30', 24, 38),
+    '31-90 days': seededNumber('vuln-aging-31-90', 18, 32),
+    '90+ days': seededNumber('vuln-aging-90+', 10, 22),
+  };
+
+  const overdueCount = seededNumber('vuln-overdue', 9, 24);
 
   const overallSLACompliance = (() => {
-    const compliance = dashboard?.sla_compliance || {};
-    const totalResolved = Object.values(compliance).reduce((sum, c) => sum + c.resolved, 0);
-    const totalOnTime = Object.values(compliance).reduce((sum, c) => sum + c.on_time, 0);
-    return totalResolved > 0 ? Math.round((totalOnTime / totalResolved) * 100) : 0;
+    return seededNumber('vuln-sla', 73, 92);
   })();
 
-  const severityData = Object.entries(dashboard?.by_severity || {})
+  const severityData = Object.entries(bySeverity)
     .filter(([, count]) => count > 0)
     .map(([severity, count]) => ({
       name: severity,
@@ -327,7 +361,7 @@ export default function VulnerabilityDashboardPage() {
       return order.indexOf(a.name) - order.indexOf(b.name);
     });
 
-  const agingData = Object.entries(dashboard?.aging_buckets || {}).map(([bucket, count]) => ({
+  const agingData = Object.entries(agingBuckets).map(([bucket, count]) => ({
     name: bucket,
     value: count,
     fill: bucket === '90+ days' ? 'var(--color-danger)' : bucket === '31-90 days' ? 'var(--color-warning)' : bucket === '8-30 days' ? 'var(--color-warning)' : 'var(--color-success)',
@@ -411,7 +445,7 @@ export default function VulnerabilityDashboardPage() {
                 <p className={`text-3xl font-bold mt-2 ${overallSLACompliance >= 80 ? 'text-green-600' : overallSLACompliance >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
                   {overallSLACompliance}%
                 </p>
-                <p className="text-xs cw-text-muted mt-2">{dashboard?.overdue_count || 0} overdue</p>
+                <p className="text-xs cw-text-muted mt-2">{overdueCount} overdue</p>
               </div>
               <div className={`p-2.5 rounded-lg ${overallSLACompliance >= 80 ? 'bg-green-50' : overallSLACompliance >= 60 ? 'bg-yellow-50' : 'bg-red-50'}`}>
                 <Shield className={`h-5 w-5 ${overallSLACompliance >= 80 ? 'text-green-600' : overallSLACompliance >= 60 ? 'text-yellow-600' : 'text-red-600'}`} />
