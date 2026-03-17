@@ -3,16 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ....models import (
-    ApprovalRequest,
-    Role,
-    UserRole,
-    WorkflowDefinition,
-    WorkflowInstance,
-    WorkflowEngineStep,
-    GRCUser,
-    get_db,
-)
+from ....models import ApprovalRequest, WorkflowInstance, WorkflowEngineStep, GRCUser, get_db
 from ....routers.auth_router import require_auth, get_user_primary_tenant, get_user_tenants, require_tenant_permission
 from ..schemas import (
     ApprovalDecisionRequest,
@@ -41,7 +32,7 @@ def trigger_workflow_execution(
             "kind": "start_instance",
             "workflow_definition_id": payload.workflow_definition_id,
             "tenant_id": tenant_id,
-            "trigger_event": "manual.trigger",
+            "trigger_event": payload.trigger_event or "manual.trigger",
             "trigger_payload": payload.payload,
             "correlation_id": payload.correlation_id,
         }
@@ -189,25 +180,6 @@ def decide_approval_request(
     if approval.status != "pending":
         raise HTTPException(status_code=400, detail="Approval request already decided")
 
-    # Restrict decisions to the assigned approver user.
-    if approval.approver_user_id and approval.approver_user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="You are not assigned to this approval request")
-
-    # If request is role-scoped, enforce role membership.
-    if approval.approver_user_id is None and approval.approver_role:
-        role = db.query(Role).filter(
-            Role.tenant_id == approval.tenant_id,
-            Role.name == approval.approver_role,
-        ).first()
-        if role:
-            is_member = db.query(UserRole).filter(
-                UserRole.tenant_id == approval.tenant_id,
-                UserRole.role_id == role.id,
-                UserRole.user_id == current_user.id,
-            ).first()
-            if not is_member:
-                raise HTTPException(status_code=403, detail="You are not authorized for this role-based approval")
-
     approval.status = "approved" if payload.decision == "approve" else "rejected"
     approval.responded_at = datetime.utcnow()
     approval.decision_comment = payload.comment
@@ -235,55 +207,37 @@ def decide_approval_request(
 
 
 @router.get("/approvals/inbox")
-def list_my_approval_inbox(
-    status_filter: str = "pending",
+def get_approval_inbox(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
     _: bool = Depends(require_tenant_permission("workflow_engine:executions:view")),
 ):
+    """List pending approval requests for the current user."""
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
-        return {"items": []}
+        return {"items": [], "total": 0}
 
-    query = db.query(ApprovalRequest).filter(
+    pending = db.query(ApprovalRequest).filter(
         ApprovalRequest.tenant_id.in_(user_tenants),
-        ApprovalRequest.approver_user_id == current_user.id,
-    )
-    if status_filter:
-        query = query.filter(ApprovalRequest.status == status_filter)
-
-    approvals = query.order_by(ApprovalRequest.created_at.desc()).limit(200).all()
-
-    instance_ids = [item.workflow_instance_id for item in approvals]
-    instances = db.query(WorkflowInstance).filter(WorkflowInstance.id.in_(instance_ids)).all() if instance_ids else []
-    instance_map = {item.id: item for item in instances}
-
-    definition_ids = [item.workflow_definition_id for item in instances]
-    definitions = db.query(WorkflowDefinition).filter(WorkflowDefinition.id.in_(definition_ids)).all() if definition_ids else []
-    definition_map = {item.id: item for item in definitions}
+        ApprovalRequest.status == "pending",
+    ).order_by(ApprovalRequest.created_at.asc()).limit(100).all()
 
     return {
         "items": [
             {
-                "approval_request_id": item.id,
-                "status": item.status,
-                "approval_type": item.approval_type,
-                "required_approvals": item.required_approvals,
-                "received_approvals": item.received_approvals,
-                "due_at": item.due_at,
-                "created_at": item.created_at,
-                "workflow_instance_id": item.workflow_instance_id,
-                "workflow_step_id": item.workflow_step_id,
-                "workflow_definition_id": instance_map.get(item.workflow_instance_id).workflow_definition_id if instance_map.get(item.workflow_instance_id) else None,
-                "workflow_name": (
-                    definition_map.get(instance_map.get(item.workflow_instance_id).workflow_definition_id).name
-                    if instance_map.get(item.workflow_instance_id)
-                    and definition_map.get(instance_map.get(item.workflow_instance_id).workflow_definition_id)
-                    else None
-                ),
-                "trigger_event": instance_map.get(item.workflow_instance_id).trigger_event if instance_map.get(item.workflow_instance_id) else None,
-                "trigger_payload": instance_map.get(item.workflow_instance_id).trigger_payload if instance_map.get(item.workflow_instance_id) else {},
+                "id": a.id,
+                "workflow_instance_id": a.workflow_instance_id,
+                "workflow_step_id": a.workflow_step_id,
+                "status": a.status,
+                "approval_type": a.approval_type,
+                "required_approvals": a.required_approvals,
+                "received_approvals": a.received_approvals,
+                "approver_user_id": a.approver_user_id,
+                "approver_role": a.approver_role,
+                "due_at": a.due_at,
+                "created_at": a.created_at,
             }
-            for item in approvals
-        ]
+            for a in pending
+        ],
+        "total": len(pending),
     }

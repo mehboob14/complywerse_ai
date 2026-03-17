@@ -9,8 +9,8 @@ class WorkflowNodeIn(BaseModel):
     node_type: str
     name: str
     config: Dict[str, Any] = Field(default_factory=dict)
-    position_x: int = 0
-    position_y: int = 0
+    position_x: float = 0
+    position_y: float = 0
     is_start: bool = False
     is_terminal: bool = False
 
@@ -20,6 +20,9 @@ class WorkflowEdgeIn(BaseModel):
     target_node_key: str
     condition: Dict[str, Any] = Field(default_factory=dict)
     priority: int = 100
+    source_handle: Optional[str] = None
+    target_handle: Optional[str] = None
+    label: Optional[str] = None
 
 
 class WorkflowDefinitionCreate(BaseModel):
@@ -69,6 +72,7 @@ class TriggerEventRequest(BaseModel):
 
 class TriggerExecutionRequest(BaseModel):
     workflow_definition_id: int
+    trigger_event: Optional[str] = None
     payload: Dict[str, Any] = Field(default_factory=dict)
     correlation_id: Optional[str] = None
 
@@ -143,8 +147,9 @@ class WorkflowVersionResponse(BaseModel):
 class WorkflowScheduleCreate(BaseModel):
     workflow_definition_id: int
     name: str
-    schedule_type: str = Field(default="interval", pattern="^(interval|once)$")
+    schedule_type: str = Field(default="interval", pattern="^(interval|once|cron)$")
     interval_minutes: Optional[int] = None
+    cron_expression: Optional[str] = None
     run_at: Optional[datetime] = None
     payload: Dict[str, Any] = Field(default_factory=dict)
     is_active: bool = True
@@ -157,6 +162,7 @@ class WorkflowScheduleResponse(BaseModel):
     name: str
     schedule_type: str
     interval_minutes: Optional[int]
+    cron_expression: Optional[str] = None
     run_at: Optional[datetime]
     next_run_at: Optional[datetime]
     payload: Dict[str, Any]
@@ -206,3 +212,46 @@ class IntelligentRoutingRequest(BaseModel):
 class WorkflowAnomalyRequest(BaseModel):
     lookback_hours: int = 72
     runtime_threshold_minutes: int = 60
+
+
+# ─── Email Notification Schemas ────────────────────────────────────────────────
+
+class EmailConfigCreate(BaseModel):
+    config_name: str
+    smtp_host: str
+    smtp_port: int = 587
+    smtp_username: str
+    smtp_password: str
+    from_email: str
+    from_name: Optional[str] = None
+    use_tls: bool = True
+
+
+class EmailConfigUpdate(BaseModel):
+    config_name: Optional[str] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+    from_email: Optional[str] = None
+    from_name: Optional[str] = None
+    use_tls: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class EmailConfigResponse(BaseModel):
+    id: int
+    tenant_id: int
+    config_name: str
+    smtp_host: str
+    smtp_port: int
+    smtp_username: str
+    from_email: str
+    from_name: Optional[str]
+    use_tls: bool
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

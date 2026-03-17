@@ -1,14 +1,17 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from typing import Optional
 
-from ....models import GRCUser, Role, TenantUser, UserRole, get_db
-from ....routers.auth_router import get_user_tenants, require_auth
+from ....models import get_db
 from ....routers.auth_router import require_tenant_permission
+from ....routers.admin_router import get_tenant_db
+from ....tenant_models import TenantUser, Role
 
 from ..services.catalog import (
     ACTION_NODE_TYPES,
     APPROVAL_NODE_TYPES,
     CONDITION_NODE_TYPES,
+    get_platform_functions_grouped_by_module,
     INTEGRATION_POINTS,
     PREBUILT_TEMPLATES,
     TIMER_NODE_TYPES,
@@ -22,9 +25,11 @@ router = APIRouter(prefix="/catalog", tags=["Workflow Engine Catalog"])
 def list_node_types(
     _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
 ):
+    platform_functions = get_platform_functions_grouped_by_module()
     return {
         "triggers": TRIGGER_NODE_TYPES,
         "actions": ACTION_NODE_TYPES,
+        "platform_functions": platform_functions,
         "conditions": CONDITION_NODE_TYPES,
         "approvals": APPROVAL_NODE_TYPES,
         "timers": TIMER_NODE_TYPES,
@@ -46,75 +51,60 @@ def list_cross_module_integration_points(
 
 
 @router.get("/actors/users")
-def list_workflow_actor_users(
-    search: str | None = Query(None, description="Search by name/email"),
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
+def list_actor_users(
+    search: Optional[str] = None,
+    tenant_db: Session = Depends(get_tenant_db),
     _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
 ):
-    user_tenants = get_user_tenants(current_user, db)
-    if not user_tenants:
-        return {"users": []}
+    """List tenant users available as workflow actors (approvers, assignees, recipients)."""
+    from ....tenant_manager import IS_SQLITE
+    tenant_schema = tenant_db.info.get('tenant_schema')
 
-    query = db.query(GRCUser, TenantUser.tenant_id).join(
-        TenantUser,
-        TenantUser.user_id == GRCUser.id,
-    ).filter(
-        TenantUser.tenant_id.in_(user_tenants),
-        GRCUser.is_active == True,
-    )
+    if IS_SQLITE:
+        query = tenant_db.query(TenantUser).filter(
+            TenantUser.tenant_id == tenant_schema,
+            TenantUser.is_active == True,
+        )
+    else:
+        query = tenant_db.query(TenantUser).filter(TenantUser.is_active == True)
 
     if search:
-        like = f"%{search}%"
         query = query.filter(
-            (GRCUser.display_name.ilike(like)) |
-            (GRCUser.username.ilike(like)) |
-            (GRCUser.email.ilike(like))
+            TenantUser.username.ilike(f"%{search}%") | TenantUser.email.ilike(f"%{search}%")
         )
-
-    rows = query.order_by(GRCUser.display_name.asc()).limit(300).all()
+    users = query.order_by(TenantUser.username).limit(200).all()
     return {
         "users": [
             {
-                "id": user.id,
-                "tenant_id": tenant_id,
-                "display_name": user.display_name,
-                "username": user.username,
-                "email": user.email,
+                "id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "display_name": u.display_name or u.username,
             }
-            for user, tenant_id in rows
+            for u in users
         ]
     }
 
 
 @router.get("/actors/roles")
-def list_workflow_actor_roles(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
+def list_actor_roles(
+    tenant_db: Session = Depends(get_tenant_db),
     _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
 ):
-    user_tenants = get_user_tenants(current_user, db)
-    if not user_tenants:
-        return {"roles": []}
+    """List tenant roles available as workflow actors."""
+    from ....tenant_manager import IS_SQLITE
+    tenant_schema = tenant_db.info.get('tenant_schema')
 
-    rows = db.query(Role).filter(
-        Role.tenant_id.in_(user_tenants),
-    ).order_by(Role.name.asc()).all()
+    if IS_SQLITE:
+        roles = tenant_db.query(Role).filter(
+            Role.tenant_id == tenant_schema
+        ).order_by(Role.name).all()
+    else:
+        roles = tenant_db.query(Role).order_by(Role.name).all()
 
-    results = []
-    for role in rows:
-        member_count = db.query(UserRole.id).filter(
-            UserRole.tenant_id == role.tenant_id,
-            UserRole.role_id == role.id,
-        ).count()
-        results.append(
-            {
-                "id": role.id,
-                "tenant_id": role.tenant_id,
-                "name": role.name,
-                "description": role.description,
-                "member_count": member_count,
-            }
-        )
-
-    return {"roles": results}
+    return {
+        "roles": [
+            {"id": r.id, "name": r.name, "description": getattr(r, "description", None)}
+            for r in roles
+        ]
+    }

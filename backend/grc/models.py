@@ -5935,7 +5935,7 @@ class WorkflowDefinition(Base):
     is_active = Column(Boolean, default=True, index=True)
     trigger_event = Column(String(255), nullable=False, index=True)
     trigger_conditions = Column(JSON, default={})
-    definition_json = Column(JSON, default={})
+    definition_json = Column(JSON, default={})  # Canvas viewport/layout state (zoom, pan, positions)
     created_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     updated_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -5958,12 +5958,12 @@ class WorkflowNode(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     workflow_definition_id = Column(Integer, ForeignKey("grc_workflow_definitions.id"), nullable=False, index=True)
-    node_key = Column(String(100), nullable=False)
-    node_type = Column(String(50), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    config = Column(JSON, default={})
-    position_x = Column(Integer, default=0)
-    position_y = Column(Integer, default=0)
+    node_key = Column(String(100), nullable=False)  # Unique key within the workflow
+    node_type = Column(String(255), nullable=False, index=True)  # Node type ID from catalog
+    name = Column(String(255), nullable=False)  # Display name for this node instance
+    config = Column(JSON, default={})  # Node-specific configuration
+    position_x = Column(Float, default=0)  # Canvas X position
+    position_y = Column(Float, default=0)  # Canvas Y position
     is_start = Column(Boolean, default=False)
     is_terminal = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -5973,7 +5973,6 @@ class WorkflowNode(Base):
 
     __table_args__ = (
         Index("ix_workflow_node_definition_key", "workflow_definition_id", "node_key"),
-        UniqueConstraint("workflow_definition_id", "node_key", name="uq_workflow_node_definition_key"),
     )
 
 
@@ -5984,7 +5983,7 @@ class WorkflowEdge(Base):
     workflow_definition_id = Column(Integer, ForeignKey("grc_workflow_definitions.id"), nullable=False, index=True)
     source_node_key = Column(String(100), nullable=False, index=True)
     target_node_key = Column(String(100), nullable=False, index=True)
-    condition = Column(JSON, default={})
+    condition = Column(JSON, default={})  # Conditional logic, label, handles stored here
     priority = Column(Integer, default=100)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -6208,6 +6207,55 @@ class WorkflowEngineWebhookEndpoint(Base):
 
     __table_args__ = (
         Index("ix_workflow_webhook_tenant_event", "tenant_id", "event_name"),
+    )
+
+
+class WorkflowEmailConfiguration(Base):
+    """Email configuration for workflow notifications"""
+    __tablename__ = "grc_workflow_email_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    config_name = Column(String(255), nullable=False)
+    smtp_host = Column(String(255), nullable=False)
+    smtp_port = Column(Integer, default=587)
+    smtp_username = Column(String(255), nullable=False)
+    smtp_password = Column(String(500), nullable=False)  # Should be encrypted in production
+    from_email = Column(String(255), nullable=False)
+    from_name = Column(String(255), nullable=True)
+    use_tls = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "config_name", name="uq_workflow_email_config_tenant_name"),
+    )
+
+
+class WorkflowNotification(Base):
+    """In-app notifications for workflow events"""
+    __tablename__ = "grc_workflow_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    workflow_instance_id = Column(Integer, ForeignKey("grc_workflow_instances.id"), nullable=True, index=True)
+    notification_type = Column(String(50), default="info")  # info, success, warning, error
+    subject = Column(String(500), nullable=False)
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False, index=True)
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    user = relationship("GRCUser")
+    workflow_instance = relationship("WorkflowInstance")
+
+    __table_args__ = (
+        Index("ix_workflow_notification_user_read", "user_id", "is_read"),
     )
 
 

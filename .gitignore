@@ -44,6 +44,7 @@ yarn-error.log*
 Thumbs.db
 
 # Build
+.claude/
 dist/
 build/
 .next/
@@ -57,3 +58,22 @@ attached_assets/
 # Temporary files
 cookies.txt
 *.sql
+
+# Project-specific generated directories
+backend/venv_version_11/
+backend/__pycache__/
+backend/grc/__pycache__/
+backend/static/
+
+grc-frontend/node_modules/
+grc-frontend/.next/
+grc-frontend/out/
+grc-frontend/dist/
+grc-frontend/build/
+grc-frontend/uploads/
+grc-frontend/*.zip
+backend/*.zip
+
+# Generic nested dependency/cache folders
+**/node_modules/
+**/__pycache__/

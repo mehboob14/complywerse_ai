@@ -14,6 +14,14 @@ from ..services.definition_versions import snapshot_definition
 router = APIRouter(prefix="/definitions", tags=["Workflow Engine Definitions"])
 
 
+def _is_start_node(node: WorkflowNode) -> bool:
+    return bool(node.is_start) or (node.node_key or "").lower() == "start"
+
+
+def _is_terminal_node(node: WorkflowNode) -> bool:
+    return bool(node.is_terminal) or (node.node_key or "").lower() == "end"
+
+
 def _to_definition_response(definition: WorkflowDefinition) -> WorkflowDefinitionResponse:
     return WorkflowDefinitionResponse(
         id=definition.id,
@@ -32,10 +40,10 @@ def _to_definition_response(definition: WorkflowDefinition) -> WorkflowDefinitio
                 "node_type": node.node_type,
                 "name": node.name,
                 "config": node.config or {},
-                "position_x": node.position_x,
-                "position_y": node.position_y,
-                "is_start": node.is_start,
-                "is_terminal": node.is_terminal,
+                "position_x": float(node.position_x or 0),
+                "position_y": float(node.position_y or 0),
+                "is_start": _is_start_node(node),
+                "is_terminal": _is_terminal_node(node),
             }
             for node in definition.nodes
         ],
@@ -44,8 +52,11 @@ def _to_definition_response(definition: WorkflowDefinition) -> WorkflowDefinitio
                 "id": edge.id,
                 "source_node_key": edge.source_node_key,
                 "target_node_key": edge.target_node_key,
+                "source_handle": (edge.condition or {}).get("_handle"),
+                "target_handle": None,
+                "label": (edge.condition or {}).get("_label", ""),
                 "condition": edge.condition or {},
-                "priority": edge.priority,
+                "priority": int(edge.priority or 100),
             }
             for edge in definition.edges
         ],
@@ -59,6 +70,45 @@ def _resolve_tenant_id(current_user: GRCUser, db: Session) -> int:
     if not tenant_id:
         raise HTTPException(status_code=400, detail="User is not assigned to any tenant")
     return tenant_id
+
+
+def _apply_nodes(db: Session, definition_id: int, nodes: list[dict]) -> None:
+    db.query(WorkflowNode).filter(WorkflowNode.workflow_definition_id == definition_id).delete()
+    for node in nodes:
+        db.add(
+            WorkflowNode(
+                workflow_definition_id=definition_id,
+                node_key=node.get("node_key"),
+                node_type=node.get("node_type") or "action",
+                name=node.get("name") or node.get("node_key") or "Node",
+                config=node.get("config") or {},
+                position_x=float(node.get("position_x", 0) or 0),
+                position_y=float(node.get("position_y", 0) or 0),
+                is_start=bool(node.get("is_start", False)),
+                is_terminal=bool(node.get("is_terminal", False)),
+            )
+        )
+
+
+def _apply_edges(db: Session, definition_id: int, edges: list[dict]) -> None:
+    db.query(WorkflowEdge).filter(WorkflowEdge.workflow_definition_id == definition_id).delete()
+    for idx, edge in enumerate(edges):
+        condition = dict(edge.get("condition") or {})
+        priority = int(edge.get("priority") or condition.get("priority") or 100)
+        if edge.get("label") and "_label" not in condition:
+            condition["_label"] = edge.get("label")
+        if edge.get("source_handle") and "_handle" not in condition:
+            condition["_handle"] = edge.get("source_handle")
+
+        db.add(
+            WorkflowEdge(
+                workflow_definition_id=definition_id,
+                source_node_key=edge.get("source_node_key"),
+                target_node_key=edge.get("target_node_key"),
+                condition=condition,
+                priority=priority,
+            )
+        )
 
 
 @router.post("", response_model=WorkflowDefinitionResponse, status_code=status.HTTP_201_CREATED)
@@ -84,31 +134,8 @@ def create_workflow_definition(
     db.add(definition)
     db.flush()
 
-    for node in payload.nodes:
-        db.add(
-            WorkflowNode(
-                workflow_definition_id=definition.id,
-                node_key=node.node_key,
-                node_type=node.node_type,
-                name=node.name,
-                config=node.config,
-                position_x=node.position_x,
-                position_y=node.position_y,
-                is_start=node.is_start,
-                is_terminal=node.is_terminal,
-            )
-        )
-
-    for edge in payload.edges:
-        db.add(
-            WorkflowEdge(
-                workflow_definition_id=definition.id,
-                source_node_key=edge.source_node_key,
-                target_node_key=edge.target_node_key,
-                condition=edge.condition,
-                priority=edge.priority,
-            )
-        )
+    _apply_nodes(db, definition.id, [n.model_dump() for n in payload.nodes])
+    _apply_edges(db, definition.id, [e.model_dump() for e in payload.edges])
 
     db.flush()
     db.refresh(definition)
@@ -176,41 +203,20 @@ def update_workflow_definition(
     node_data = update_data.pop("nodes", None)
     edge_data = update_data.pop("edges", None)
 
+    if "definition_json" in update_data:
+        definition.definition_json = update_data.pop("definition_json")
+
     for field, value in update_data.items():
         setattr(definition, field, value)
 
-    if update_data:
+    if update_data or node_data is not None or edge_data is not None:
         definition.version = (definition.version or 1) + 1
 
     if node_data is not None:
-        db.query(WorkflowNode).filter(WorkflowNode.workflow_definition_id == definition.id).delete()
-        for node in node_data:
-            db.add(
-                WorkflowNode(
-                    workflow_definition_id=definition.id,
-                    node_key=node.node_key,
-                    node_type=node.node_type,
-                    name=node.name,
-                    config=node.config,
-                    position_x=node.position_x,
-                    position_y=node.position_y,
-                    is_start=node.is_start,
-                    is_terminal=node.is_terminal,
-                )
-            )
+        _apply_nodes(db, definition.id, node_data)
 
     if edge_data is not None:
-        db.query(WorkflowEdge).filter(WorkflowEdge.workflow_definition_id == definition.id).delete()
-        for edge in edge_data:
-            db.add(
-                WorkflowEdge(
-                    workflow_definition_id=definition.id,
-                    source_node_key=edge.source_node_key,
-                    target_node_key=edge.target_node_key,
-                    condition=edge.condition,
-                    priority=edge.priority,
-                )
-            )
+        _apply_edges(db, definition.id, edge_data)
 
     definition.updated_by_id = current_user.id
     db.flush()
@@ -296,33 +302,8 @@ def rollback_workflow_definition_version(
     definition.version = (definition.version or 1) + 1
     definition.updated_by_id = current_user.id
 
-    db.query(WorkflowNode).filter(WorkflowNode.workflow_definition_id == definition.id).delete()
-    for node in version.nodes_json or []:
-        db.add(
-            WorkflowNode(
-                workflow_definition_id=definition.id,
-                node_key=node.get("node_key"),
-                node_type=node.get("node_type") or "action",
-                name=node.get("name") or node.get("node_key") or "Node",
-                config=node.get("config") or {},
-                position_x=int(node.get("position_x", 0)),
-                position_y=int(node.get("position_y", 0)),
-                is_start=bool(node.get("is_start", False)),
-                is_terminal=bool(node.get("is_terminal", False)),
-            )
-        )
-
-    db.query(WorkflowEdge).filter(WorkflowEdge.workflow_definition_id == definition.id).delete()
-    for edge in version.edges_json or []:
-        db.add(
-            WorkflowEdge(
-                workflow_definition_id=definition.id,
-                source_node_key=edge.get("source_node_key"),
-                target_node_key=edge.get("target_node_key"),
-                condition=edge.get("condition") or {},
-                priority=int(edge.get("priority", 100)),
-            )
-        )
+    _apply_nodes(db, definition.id, version.nodes_json or [])
+    _apply_edges(db, definition.id, version.edges_json or [])
 
     db.flush()
     db.refresh(definition)

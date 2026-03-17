@@ -1,41 +1,78 @@
-import os
+"""SMTP email helper for workflow engine notifications."""
 import smtplib
+import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Iterable
+from typing import Optional
+
+from ....models import WorkflowEmailConfiguration
 
 
-class WorkflowEmailService:
-    SMTP_HOST = os.environ.get("SMTP_HOST")
-    SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-    SMTP_USER = os.environ.get("SMTP_USER")
-    SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
-    SMTP_FROM_EMAIL = os.environ.get("SMTP_FROM_EMAIL", "noreply@grc-platform.com")
+def send_email(
+    db,
+    tenant_id: int,
+    to: str,
+    subject: str,
+    body_html: str,
+    body_text: Optional[str] = None,
+) -> dict:
+    """
+    Send an email using the tenant's configured SMTP settings.
+    Returns {"success": True/False, "message": "..."}.
+    """
+    settings: Optional[WorkflowEmailConfiguration] = (
+        db.query(WorkflowEmailConfiguration)
+        .filter(
+            WorkflowEmailConfiguration.tenant_id == tenant_id,
+            WorkflowEmailConfiguration.is_active == True,
+        )
+        .first()
+    )
 
-    @classmethod
-    def is_configured(cls) -> bool:
-        return bool(cls.SMTP_HOST and cls.SMTP_USER and cls.SMTP_PASSWORD)
+    if not settings:
+        return {"success": False, "message": "Email settings not configured for this tenant"}
 
-    @classmethod
-    def send_email(cls, recipients: Iterable[str], subject: str, body: str) -> dict:
-        recipient_list = sorted({str(r).strip() for r in (recipients or []) if r})
-        if not recipient_list:
-            return {"sent": False, "reason": "no_recipients", "recipient_count": 0}
+    from_addr = settings.from_email or "noreply@complyverse.app"
+    from_name = settings.from_name or "ComplyVerse"
 
-        if not cls.is_configured():
-            return {"sent": False, "reason": "smtp_not_configured", "recipient_count": len(recipient_list)}
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"{from_name} <{from_addr}>"
+    msg["To"] = to
 
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = cls.SMTP_FROM_EMAIL
-        msg["To"] = ", ".join(recipient_list)
-        msg.attach(MIMEText(body or "", "html"))
+    if body_text:
+        msg.attach(MIMEText(body_text, "plain"))
+    msg.attach(MIMEText(body_html, "html"))
 
-        try:
-            with smtplib.SMTP(cls.SMTP_HOST, cls.SMTP_PORT) as server:
-                server.starttls()
-                server.login(cls.SMTP_USER, cls.SMTP_PASSWORD)
-                server.sendmail(cls.SMTP_FROM_EMAIL, recipient_list, msg.as_string())
-            return {"sent": True, "reason": None, "recipient_count": len(recipient_list)}
-        except Exception as exc:
-            return {"sent": False, "reason": str(exc), "recipient_count": len(recipient_list)}
+    try:
+        if settings.use_tls:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+                server.ehlo()
+                server.starttls(context=ssl.create_default_context())
+                server.ehlo()
+                if settings.smtp_username and settings.smtp_password:
+                    server.login(settings.smtp_username, settings.smtp_password)
+                server.sendmail(from_addr, [to], msg.as_string())
+        else:
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, context=context, timeout=15) as server:
+                if settings.smtp_username and settings.smtp_password:
+                    server.login(settings.smtp_username, settings.smtp_password)
+                server.sendmail(from_addr, [to], msg.as_string())
+
+        return {"success": True, "message": f"Email sent to {to}"}
+
+    except smtplib.SMTPAuthenticationError:
+        return {"success": False, "message": "SMTP authentication failed — check username/password"}
+    except smtplib.SMTPConnectError as e:
+        return {"success": False, "message": f"Could not connect to SMTP server: {e}"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+def send_bulk_email(db, tenant_id: int, recipients: list, subject: str, body_html: str) -> list:
+    """Send to multiple recipients, return per-recipient results."""
+    return [
+        send_email(db, tenant_id, r, subject, body_html)
+        for r in recipients
+    ]

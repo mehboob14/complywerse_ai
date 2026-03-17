@@ -48,6 +48,16 @@ def create_schedule(
         if not payload.interval_minutes:
             raise HTTPException(status_code=400, detail="interval_minutes required for interval schedule")
         next_run_at = datetime.utcnow() + timedelta(minutes=int(payload.interval_minutes))
+    elif payload.schedule_type == "cron":
+        if not payload.cron_expression:
+            raise HTTPException(status_code=400, detail="cron_expression required for cron schedule")
+        try:
+            from croniter import croniter as _ci
+            next_run_at = _ci(payload.cron_expression, datetime.utcnow()).get_next(datetime)
+        except ImportError:
+            next_run_at = datetime.utcnow() + timedelta(hours=1)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid cron expression: {e}")
     else:
         if not payload.run_at:
             raise HTTPException(status_code=400, detail="run_at required for once schedule")
@@ -59,6 +69,7 @@ def create_schedule(
         name=payload.name,
         schedule_type=payload.schedule_type,
         interval_minutes=payload.interval_minutes,
+        cron_expression=getattr(payload, "cron_expression", None),
         run_at=payload.run_at,
         next_run_at=next_run_at,
         payload=payload.payload,
@@ -76,6 +87,7 @@ def create_schedule(
         name=schedule.name,
         schedule_type=schedule.schedule_type,
         interval_minutes=schedule.interval_minutes,
+        cron_expression=schedule.cron_expression,
         run_at=schedule.run_at,
         next_run_at=schedule.next_run_at,
         payload=schedule.payload or {},
@@ -105,6 +117,7 @@ def list_schedules(
             name=item.name,
             schedule_type=item.schedule_type,
             interval_minutes=item.interval_minutes,
+            cron_expression=item.cron_expression,
             run_at=item.run_at,
             next_run_at=item.next_run_at,
             payload=item.payload or {},

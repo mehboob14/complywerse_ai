@@ -1,14 +1,30 @@
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
-from ....models import ApprovalRequest, WorkflowAuditLog, WorkflowEngineStep, WorkflowInstance
+from ....models import ApprovalRequest, Role, UserRole, WorkflowAuditLog, WorkflowEngineStep, WorkflowInstance
 from .action_handlers import WorkflowActionHandlers
 from .condition_evaluator import ConditionEvaluator
-from .email_service import WorkflowEmailService
-from .recipient_resolver import WorkflowRecipientResolver
 
 
 class StepExecutor:
+    @staticmethod
+    def _resolve_node_type(node) -> str:
+        node_type = (getattr(node, "node_type", None) or "").lower()
+        if node_type in {"start", "action", "condition", "approval", "timer", "subworkflow", "end"}:
+            return node_type
+        cfg = getattr(node, "config", {}) or {}
+        if cfg.get("trigger_type"):
+            return "start"
+        if cfg.get("approval_type"):
+            return "approval"
+        if cfg.get("timer_kind") or cfg.get("wait_seconds") or cfg.get("wait_until"):
+            return "timer"
+        if cfg.get("condition_kind") or cfg.get("condition"):
+            return "condition"
+        if cfg.get("action_name"):
+            return "action"
+        return "action"
+
     @staticmethod
     def _normalize_user_ids(values) -> list[int]:
         normalized: list[int] = []
@@ -21,8 +37,36 @@ class StepExecutor:
                 continue
         return normalized
 
+    @staticmethod
+    def _normalize_role_ids(values) -> list[int]:
+        normalized: list[int] = []
+        for value in values or []:
+            try:
+                parsed = int(value)
+                if parsed > 0:
+                    normalized.append(parsed)
+            except Exception:
+                continue
+        return normalized
+
+    @staticmethod
+    def _resolve_role_user_ids(db, tenant_id: int, role_ids: list[int]) -> list[int]:
+        if not role_ids:
+            return []
+        users = (
+            db.query(UserRole.user_id)
+            .join(Role, Role.id == UserRole.role_id)
+            .filter(
+                UserRole.tenant_id == tenant_id,
+                Role.id.in_(role_ids),
+            )
+            .distinct()
+            .all()
+        )
+        return [u[0] for u in users]
+
     def execute(self, db, instance, definition, node, step: WorkflowEngineStep) -> Dict[str, Any]:
-        node_type = (node.node_type or "action").lower()
+        node_type = self._resolve_node_type(node)
         config = node.config or {}
 
         if node_type in {"start", "noop"}:
@@ -92,63 +136,38 @@ class StepExecutor:
         except Exception:
             return None
 
-    @staticmethod
-    def _resolve_due_at_with_days(timeout_seconds: Optional[int], timeout_days: Optional[int]) -> Optional[datetime]:
-        if timeout_seconds is not None:
-            return StepExecutor._resolve_due_at(timeout_seconds)
-        if timeout_days is None:
-            return None
-        try:
-            days = int(timeout_days)
-            return datetime.utcnow() + timedelta(days=max(days, 0))
-        except Exception:
-            return None
-
     def _execute_approval_node(self, db, instance, definition, step: WorkflowEngineStep, config: Dict[str, Any]) -> Dict[str, Any]:
         approval_type = (config.get("approval_type") or "single").lower()
         approver_user_ids = self._normalize_user_ids(config.get("approver_user_ids") or [])
-        approver_user_ids.extend(self._normalize_user_ids(config.get("reviewer_user_ids") or []))
-        approver_user_ids.extend(self._normalize_user_ids(config.get("target_user_ids") or []))
+        approver_role_ids = self._normalize_role_ids(config.get("approver_role_ids") or [])
         required = int(config.get("required_approvals", 1))
         on_timeout = (config.get("on_timeout") or "auto_reject").lower()
         reminder_interval_seconds = int(config.get("reminder_interval_seconds") or 0)
         levels = config.get("levels") or []
-        role_ids = self._normalize_user_ids(config.get("approver_role_ids") or [])
-        role_ids.extend(self._normalize_user_ids(config.get("reviewer_role_ids") or []))
-        role_ids.extend(self._normalize_user_ids(config.get("role_ids") or []))
 
-        approver_role_name = config.get("approver_role")
-        timeout_seconds = config.get("timeout_seconds")
-        timeout_days = config.get("timeout_days")
-        escalate_role_ids = self._normalize_user_ids(config.get("escalation_role_ids") or [])
-        escalate_user_ids = self._normalize_user_ids(config.get("escalation_user_ids") or [])
+        role_users = self._resolve_role_user_ids(db, instance.tenant_id, approver_role_ids)
+        if role_users:
+            approver_user_ids = list(dict.fromkeys([*approver_user_ids, *role_users]))
 
         if approval_type == "single" and not approver_user_ids and config.get("approver_user_id"):
             approver_user_ids = self._normalize_user_ids([config.get("approver_user_id")])
 
-        resolved_users = WorkflowRecipientResolver.resolve_user_ids(
-            db=db,
-            tenant_id=instance.tenant_id,
-            user_ids=approver_user_ids,
-            role_ids=role_ids,
-            role_names=[approver_role_name] if approver_role_name else [],
-        )
-
         if not db.query(ApprovalRequest).filter(ApprovalRequest.workflow_step_id == step.id).first():
             if approval_type == "multi_level":
                 first_level = levels[0] if levels else {}
-                level_role_ids = self._normalize_user_ids(first_level.get("approver_role_ids") or [])
-                level_role_name = first_level.get("approver_role")
-                raw_level_users = self._normalize_user_ids(
-                    first_level.get("approver_user_ids") or resolved_users or [config.get("approver_user_id")]
+                first_level_role_ids = self._normalize_role_ids(first_level.get("approver_role_ids") or [])
+                level_user_ids = self._normalize_user_ids(
+                    first_level.get("approver_user_ids") or approver_user_ids or [config.get("approver_user_id")]
                 )
-                level_user_ids = WorkflowRecipientResolver.resolve_user_ids(
-                    db=db,
-                    tenant_id=instance.tenant_id,
-                    user_ids=raw_level_users,
-                    role_ids=level_role_ids,
-                    role_names=[level_role_name] if level_role_name else [],
-                )
+                if first_level_role_ids:
+                    level_user_ids = list(
+                        dict.fromkeys(
+                            [
+                                *level_user_ids,
+                                *self._resolve_role_user_ids(db, instance.tenant_id, first_level_role_ids),
+                            ]
+                        )
+                    )
                 for user_id in level_user_ids:
                     if user_id is None:
                         continue
@@ -159,8 +178,12 @@ class StepExecutor:
                         approval_type="multi_level",
                         required_approvals=int(first_level.get("required_approvals", 1)),
                         approver_user_id=user_id,
-                        approver_role=first_level.get("approver_role") or approver_role_name,
-                        due_at=self._resolve_due_at_with_days(timeout_seconds, timeout_days),
+                            approver_role=(
+                                first_level.get("approver_role")
+                                or ",".join(str(rid) for rid in first_level_role_ids)
+                                or config.get("approver_role")
+                            ),
+                        due_at=self._resolve_due_at(config.get("timeout_seconds")),
                         request_metadata={
                             "node_key": step.node_key,
                             "level_index": 0,
@@ -168,15 +191,13 @@ class StepExecutor:
                             "on_timeout": on_timeout,
                             "reminder_interval_seconds": reminder_interval_seconds,
                             "delegate_to_user_id": config.get("delegate_to_user_id"),
-                            "escalation_role_ids": escalate_role_ids,
-                            "escalation_user_ids": escalate_user_ids,
                         },
                     )
                     db.add(request)
                     db.flush()
             else:
-                targets = resolved_users or self._normalize_user_ids([config.get("approver_user_id")])
-                for user_id in targets:
+                targets = approver_user_ids or [config.get("approver_user_id")]
+                for user_id in self._normalize_user_ids(targets):
                     if user_id is None:
                         continue
                     request = ApprovalRequest(
@@ -186,16 +207,14 @@ class StepExecutor:
                         approval_type=approval_type,
                         required_approvals=required,
                         approver_user_id=user_id,
-                        approver_role=approver_role_name,
-                        due_at=self._resolve_due_at_with_days(timeout_seconds, timeout_days),
+                        approver_role=(config.get("approver_role") or ",".join(str(rid) for rid in approver_role_ids)),
+                        due_at=self._resolve_due_at(config.get("timeout_seconds")),
                         request_metadata={
                             "node_key": step.node_key,
                             "levels": levels,
                             "on_timeout": on_timeout,
                             "reminder_interval_seconds": reminder_interval_seconds,
                             "delegate_to_user_id": config.get("delegate_to_user_id"),
-                            "escalation_role_ids": escalate_role_ids,
-                            "escalation_user_ids": escalate_user_ids,
                         },
                     )
                     db.add(request)
@@ -213,31 +232,9 @@ class StepExecutor:
                         "approval_type": approval_type,
                         "on_timeout": on_timeout,
                         "reminder_interval_seconds": reminder_interval_seconds,
-                        "resolved_approver_user_ids": resolved_users,
                     },
                 )
             )
-
-            pending_requests = db.query(ApprovalRequest).filter(
-                ApprovalRequest.workflow_step_id == step.id,
-                ApprovalRequest.status == "pending",
-            ).all()
-            request_user_ids = [item.approver_user_id for item in pending_requests if item.approver_user_id]
-            recipients = WorkflowRecipientResolver.resolve_emails_for_users(
-                db=db,
-                tenant_id=instance.tenant_id,
-                user_ids=request_user_ids,
-            )
-            if recipients:
-                WorkflowEmailService.send_email(
-                    recipients=recipients,
-                    subject="GRC workflow approval requested",
-                    body=(
-                        f"<p>You have a pending workflow approval task.</p>"
-                        f"<p>Workflow instance: <strong>{instance.id}</strong></p>"
-                        f"<p>Node: <strong>{step.node_key}</strong></p>"
-                    ),
-                )
 
         all_requests = db.query(ApprovalRequest).filter(ApprovalRequest.workflow_step_id == step.id).all()
         rejected = [r for r in all_requests if r.status == "rejected"]
@@ -291,13 +288,17 @@ class StepExecutor:
                 }
 
             next_cfg = levels[next_level]
-            next_users = WorkflowRecipientResolver.resolve_user_ids(
-                db=db,
-                tenant_id=instance.tenant_id,
-                user_ids=self._normalize_user_ids(next_cfg.get("approver_user_ids") or []),
-                role_ids=self._normalize_user_ids(next_cfg.get("approver_role_ids") or []),
-                role_names=[next_cfg.get("approver_role")] if next_cfg.get("approver_role") else [],
-            )
+            next_users = self._normalize_user_ids(next_cfg.get("approver_user_ids") or [])
+            next_role_ids = self._normalize_role_ids(next_cfg.get("approver_role_ids") or [])
+            if next_role_ids:
+                next_users = list(
+                    dict.fromkeys(
+                        [
+                            *next_users,
+                            *self._resolve_role_user_ids(db, instance.tenant_id, next_role_ids),
+                        ]
+                    )
+                )
             if next_users and not db.query(ApprovalRequest).filter(
                 ApprovalRequest.workflow_step_id == step.id,
                 ApprovalRequest.status == "pending",
@@ -311,8 +312,8 @@ class StepExecutor:
                             approval_type="multi_level",
                             required_approvals=int(next_cfg.get("required_approvals", 1)),
                             approver_user_id=user_id,
-                            approver_role=next_cfg.get("approver_role"),
-                            due_at=self._resolve_due_at_with_days(next_cfg.get("timeout_seconds"), next_cfg.get("timeout_days")),
+                            approver_role=next_cfg.get("approver_role") or ",".join(str(rid) for rid in next_role_ids),
+                            due_at=self._resolve_due_at(next_cfg.get("timeout_seconds")),
                             request_metadata={
                                 "node_key": step.node_key,
                                 "level_index": next_level,
@@ -320,8 +321,6 @@ class StepExecutor:
                                 "on_timeout": (meta or {}).get("on_timeout", "auto_reject"),
                                 "reminder_interval_seconds": (meta or {}).get("reminder_interval_seconds", 0),
                                 "delegate_to_user_id": (meta or {}).get("delegate_to_user_id"),
-                                "escalation_role_ids": (meta or {}).get("escalation_role_ids", []),
-                                "escalation_user_ids": (meta or {}).get("escalation_user_ids", []),
                             },
                         )
                     )

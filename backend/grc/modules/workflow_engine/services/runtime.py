@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 
 from ....models import (
     ApprovalRequest,
+    Role,
     SessionLocal,
+    UserRole,
     WorkflowAuditLog,
     WorkflowDefinition,
     WorkflowEdge,
@@ -20,15 +22,39 @@ from ....models import (
     WorkflowNode,
 )
 from .condition_evaluator import ConditionEvaluator
-from .email_service import WorkflowEmailService
 from .event_queue import WorkflowEventQueue
-from .recipient_resolver import WorkflowRecipientResolver
 from .state_machine import WorkflowStateMachine
 from .step_executor import StepExecutor
 from .timer_service import TimerService
 from .trigger_dispatcher import TriggerDispatcher
 
 logger = logging.getLogger(__name__)
+
+
+def _node_runtime_type(node: WorkflowNode) -> str:
+    if node.is_start:
+        return "start"
+    if node.is_terminal:
+        return "end"
+    node_type = (node.node_type or "").lower()
+    if node_type in {"start", "end", "action", "condition", "approval", "timer", "subworkflow"}:
+        return node_type
+    cfg = node.config or {}
+    if cfg.get("trigger_type"):
+        return "start"
+    if cfg.get("approval_type"):
+        return "approval"
+    if cfg.get("timer_kind") or cfg.get("wait_seconds") or cfg.get("wait_until"):
+        return "timer"
+    if cfg.get("condition_kind") or cfg.get("condition"):
+        return "condition"
+    if cfg.get("action_name"):
+        return "action"
+    return "action"
+
+
+def _is_terminal(node: WorkflowNode) -> bool:
+    return bool(node.is_terminal) or _node_runtime_type(node) == "end"
 
 
 class WorkflowRuntime:
@@ -222,7 +248,7 @@ class WorkflowRuntime:
                 step = WorkflowEngineStep(
                     workflow_instance_id=instance.id,
                     node_key=node.node_key,
-                    node_type=node.node_type,
+                    node_type=_node_runtime_type(node),
                     status="running",
                     input_payload={
                         "trigger": instance.trigger_payload or {},
@@ -315,7 +341,7 @@ class WorkflowRuntime:
                 )
             )
 
-            if not next_node_key or node.is_terminal or node.node_type.lower() == "end":
+            if not next_node_key or _is_terminal(node):
                 self._mark_instance_completed(db, instance)
                 self._notify_webhooks(instance, "workflow.instance.completed")
                 break
@@ -333,8 +359,13 @@ class WorkflowRuntime:
                 WorkflowEdge.workflow_definition_id == definition_id,
                 WorkflowEdge.source_node_key == source_node_key,
             )
-            .order_by(WorkflowEdge.priority.asc(), WorkflowEdge.id.asc())
+            .order_by(WorkflowEdge.id.asc())
             .all()
+        )
+
+        edges = sorted(
+            edges,
+            key=lambda e: int((e.condition or {}).get("priority", 100)),
         )
 
         for edge in edges:
@@ -353,6 +384,18 @@ class WorkflowRuntime:
         )
         if start:
             return start
+
+        start = (
+            db.query(WorkflowNode)
+            .filter(
+                WorkflowNode.workflow_definition_id == definition_id,
+            )
+            .all()
+        )
+        for node in start:
+            if (node.node_type or "").lower() == "start" or (node.node_key or "").lower() == "start":
+                return node
+
         return (
             db.query(WorkflowNode)
             .filter(WorkflowNode.workflow_definition_id == definition_id)
@@ -423,8 +466,6 @@ class WorkflowRuntime:
             if timeout_strategy == "escalate":
                 next_users = []
                 levels = metadata.get("levels") or []
-                escalation_role_ids = metadata.get("escalation_role_ids") or []
-                escalation_user_ids = metadata.get("escalation_user_ids") or []
                 try:
                     current_level = int(metadata.get("level_index", 0))
                 except Exception:
@@ -441,6 +482,33 @@ class WorkflowRuntime:
                         except Exception:
                             continue
 
+                    role_ids = []
+                    for raw_role in (next_cfg.get("approver_role_ids") or []):
+                        try:
+                            parsed_role = int(raw_role)
+                            if parsed_role > 0:
+                                role_ids.append(parsed_role)
+                        except Exception:
+                            continue
+                    if role_ids:
+                        role_users = (
+                            db.query(UserRole.user_id)
+                            .join(Role, Role.id == UserRole.role_id)
+                            .filter(
+                                UserRole.tenant_id == instance.tenant_id,
+                                Role.id.in_(role_ids),
+                            )
+                            .distinct()
+                            .all()
+                        )
+                        for row in role_users:
+                            try:
+                                parsed_user = int(row[0])
+                                if parsed_user > 0:
+                                    next_users.append(parsed_user)
+                            except Exception:
+                                continue
+
                 if not next_users and delegate_to_user_id:
                     try:
                         parsed_delegate = int(delegate_to_user_id)
@@ -449,19 +517,8 @@ class WorkflowRuntime:
                     except Exception:
                         pass
 
-                if escalation_role_ids or escalation_user_ids:
-                    next_users.extend(
-                        WorkflowRecipientResolver.resolve_user_ids(
-                            db=db,
-                            tenant_id=instance.tenant_id,
-                            user_ids=escalation_user_ids,
-                            role_ids=escalation_role_ids,
-                        )
-                    )
-
-                next_users = sorted({int(uid) for uid in next_users if uid})
-
                 created_escalation = 0
+                next_users = list(dict.fromkeys(next_users))
                 for user_id in next_users:
                     already_pending = db.query(ApprovalRequest).filter(
                         ApprovalRequest.workflow_step_id == step.id,
@@ -517,22 +574,6 @@ class WorkflowRuntime:
                             payload={"approval_request_id": request.id, "escalated_to_count": created_escalation},
                         )
                     )
-
-                    escalation_recipients = WorkflowRecipientResolver.resolve_emails_for_users(
-                        db=db,
-                        tenant_id=instance.tenant_id,
-                        user_ids=next_users,
-                    )
-                    if escalation_recipients:
-                        WorkflowEmailService.send_email(
-                            recipients=escalation_recipients,
-                            subject="Workflow approval escalated",
-                            body=(
-                                f"<p>An approval request has been escalated to you.</p>"
-                                f"<p>Workflow instance: <strong>{instance.id}</strong></p>"
-                                f"<p>Please review it as soon as possible.</p>"
-                            ),
-                        )
                     state_changed = True
                     continue
 

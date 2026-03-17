@@ -2,619 +2,1320 @@
 
 import {
   Background,
+  BackgroundVariant,
   Connection,
   Controls,
   Edge,
-  Handle,
-  MarkerType,
   MiniMap,
+  MarkerType,
   Node,
-  NodeTypes,
-  Position,
   ReactFlow,
   ReactFlowInstance,
   ReactFlowProvider,
   addEdge,
   useEdgesState,
   useNodesState,
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { workflowEngineApi } from '@/lib/api';
 
-type FlowNodeData = {
-  nodeKey: string;
-  nodeType: 'start' | 'action' | 'condition' | 'approval' | 'timer' | 'end' | 'subworkflow';
-  label: string;
-  config: Record<string, unknown>;
-  isStart?: boolean;
-  isTerminal?: boolean;
+import { AIPanel } from './components/AIPanel';
+import { AnalyticsTab } from './components/AnalyticsTab';
+import { ApprovalsTab } from './components/ApprovalsTab';
+import { ConfigPanel } from './components/ConfigPanel';
+import { nodeTypes } from './components/CustomNodes';
+import { NodePalette } from './components/NodePalette';
+import { SchedulesTab } from './components/SchedulesTab';
+import { SYSTEM_TEMPLATES, TemplatesModal } from './components/TemplatesModal';
+import { TopToolbar } from './components/TopToolbar';
+import { VersionDrawer } from './components/VersionDrawer';
+import {
+  ACTION_KEYS,
+  APPROVAL_KEYS,
+  AISuggestion,
+  AnalyticsOverview,
+  BackendEdge,
+  BackendNode,
+  CONDITION_KEYS,
+  FlowNodeData,
+  PaletteItem,
+  TIMER_KEYS,
+  TRIGGER_EVENT_MAP,
+  TRIGGER_KEYS,
+  WorkflowDefinition,
+  WorkflowTemplate,
+  WorkflowVersion,
+} from './components/types';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function normalizeBackendNode(node: BackendNode): FlowNodeData {
+  let nodeType = node.node_type || 'action';
+  if (node.is_start || TRIGGER_KEYS.has(node.node_key)) nodeType = 'start';
+  if (node.is_terminal || node.node_key === 'end') nodeType = 'end';
+  return {
+    nodeKey: node.node_key,
+    nodeType,
+    label:
+      node.name ||
+      (node.config?.action_name as string) ||
+      (node.config?.trigger_type as string) ||
+      node.node_key,
+    config: (node.config as Record<string, unknown>) || {},
+    isStart: node.is_start,
+    isTerminal: node.is_terminal,
+  };
+}
+
+function defaultConfigForGroup(group: string): Record<string, unknown> {
+  if (group === 'triggers') return { trigger_type: '' };
+  if (group === 'actions' || group === 'platform_functions') return { action_name: '', payload: {} };
+  if (group === 'conditions') return { condition_kind: '', condition: { path: 'trigger.severity', operator: 'eq', value: 'high' } };
+  if (group === 'approvals') return { approval_type: 'single', approver_user_ids: [], required_approvals: 1, timeout_seconds: 86400, on_timeout: 'escalate' };
+  if (group === 'timers') return { timer_kind: 'wait_duration', wait_seconds: 3600 };
+  return {};
+}
+
+function triggerEventForNodeConfig(config: Record<string, unknown>): string {
+  const t = config?.trigger_type as string;
+  return TRIGGER_EVENT_MAP[t] || 'manual.trigger';
+}
+
+function getEdgeLabel(edge: Edge): string {
+  if (typeof edge.label === 'string') return edge.label;
+  const cond = (edge.data as Record<string, unknown>)?.condition as Record<string, unknown>;
+  return (cond?._label as string) || '';
+}
+
+function extractApiErrorMessage(error: unknown): string {
+  if (!error) return 'Unknown error';
+  if (typeof error === 'object' && error !== null) {
+    const e = error as Record<string, unknown>;
+    if (e.response && typeof e.response === 'object') {
+      const resp = e.response as Record<string, unknown>;
+      if (resp.data && typeof resp.data === 'object') {
+        const data = resp.data as Record<string, unknown>;
+        if (typeof data.detail === 'string') return data.detail;
+        if (Array.isArray(data.detail)) return data.detail.map((d: Record<string, unknown>) => d.msg).join(', ');
+      }
+    }
+    if (typeof e.message === 'string') return e.message;
+  }
+  return String(error);
+}
+
+
+type CatalogItem = { key: string; label: string; module?: string; submodule?: string; functionality_name?: string };
+type CatalogResponse = {
+  triggers?: CatalogItem[];
+  actions?: CatalogItem[];
+  conditions?: CatalogItem[];
+  approvals?: CatalogItem[];
+  timers?: CatalogItem[];
+  platform_functions?: Record<string, CatalogItem[]>;
 };
 
-type WorkflowDefinition = {
-  id: number;
-  name: string;
-  description?: string;
-  trigger_event: string;
-  trigger_conditions: Record<string, unknown>;
-  definition_json: Record<string, unknown>;
-  nodes: Array<Record<string, unknown>>;
-  edges: Array<Record<string, unknown>>;
-  is_active: boolean;
-  version: number;
-};
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-type ActorUser = { id: number; display_name?: string; username?: string; email?: string };
-type ActorRole = { id: number; name: string; member_count?: number };
-type SenderProfile = { id: string; name: string; fromEmail: string; smtpHost: string; smtpPort: number; smtpUser: string; smtpPassword: string };
-type MessageTemplate = { id: string; name: string; subject: string; body: string };
+function toTitleCase(input: string): string {
+  return input
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join(' ');
+}
 
-type PaletteItem = { key: string; label: string; group: 'trigger' | 'action' | 'condition' | 'approval' | 'timer' | 'control'; module?: string };
+function normalizePlatformFunctionLabel(item: CatalogItem, moduleNameFallback?: string): string {
+  const rawBase = (item.functionality_name || item.label || '').trim();
+  const moduleName = (item.module || moduleNameFallback || '').trim();
+  const submoduleName = (item.submodule || '').trim();
 
-const TRIGGERS: PaletteItem[] = [
-  { key: 'governance.policy_draft.created', label: 'Policy Draft Created', group: 'trigger', module: 'governance' },
-  { key: 'governance.documents.file_uploaded', label: 'Governance Doc Uploaded', group: 'trigger', module: 'governance' },
-  { key: 'evidence.items.uploaded', label: 'Evidence Uploaded', group: 'trigger', module: 'evidence' },
-  { key: 'manual.trigger', label: 'Manual Trigger', group: 'trigger', module: 'general' },
-];
+  let label = rawBase;
 
-const ACTIONS: PaletteItem[] = [
-  { key: 'send_notification_email', label: 'Send Email', group: 'action' },
-  { key: 'create_risk_entry', label: 'Create Risk Entry', group: 'action' },
-  { key: 'update_compliance_status', label: 'Update Compliance Status', group: 'action' },
-  { key: 'call_webhook_api', label: 'Call Webhook', group: 'action' },
-];
+  // Remove common prefixed forms: "Module / Submodule: Name", "Module - Name", "Submodule: Name"
+  const modulePrefix = moduleName ? `${escapeRegExp(moduleName)}\s*[/|:>\-]+\s*` : '';
+  const submodulePrefix = submoduleName ? `${escapeRegExp(submoduleName)}\s*[/|:>\-]+\s*` : '';
 
-const APPROVALS: PaletteItem[] = [
-  { key: 'single', label: 'Single Approver', group: 'approval' },
-  { key: 'quorum', label: 'Quorum Approval', group: 'approval' },
-  { key: 'multi_level', label: 'Multi-Level Approval', group: 'approval' },
-];
+  if (modulePrefix) {
+    label = label.replace(new RegExp(`^${modulePrefix}`, 'i'), '');
+  }
+  if (submodulePrefix) {
+    label = label.replace(new RegExp(`^${submodulePrefix}`, 'i'), '');
+  }
+  if (modulePrefix && submodulePrefix) {
+    label = label.replace(new RegExp(`^${modulePrefix}${submodulePrefix}`, 'i'), '');
+  }
 
-const TIMERS: PaletteItem[] = [
-  { key: 'wait_duration', label: 'Wait Duration', group: 'timer' },
-  { key: 'sla_countdown', label: 'SLA / Escalation Timer', group: 'timer' },
-];
+  // If still in "X / Y / Z" form, use only the most specific tail segment.
+  if (label.includes('/')) {
+    const parts = label
+      .split('/')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length > 1) {
+      label = parts[parts.length - 1];
+    }
+  }
 
-const CONDITION_GROUPS: Record<string, Array<{ key: string; label: string }>> = {
-  governance: [
-    { key: 'doc_type_is', label: 'Document Type Is' },
-    { key: 'policy_classification_is', label: 'Policy Classification Is' },
-    { key: 'policy_status_is', label: 'Policy Status Is' },
-  ],
-  compliance: [
-    { key: 'assessment_status_is', label: 'Assessment Status Is' },
-    { key: 'control_gap_exists', label: 'Control Gap Exists' },
-  ],
-  risk: [
-    { key: 'risk_score_gt', label: 'Risk Score Greater Than' },
-    { key: 'risk_category_is', label: 'Risk Category Is' },
-    { key: 'severity_is', label: 'Severity Is' },
-  ],
-  evidence: [
-    { key: 'evidence_type_is', label: 'Evidence Type Is' },
-    { key: 'evidence_age_gt_days', label: 'Evidence Age > Days' },
-  ],
-};
+  if (label.includes(':')) {
+    const parts = label
+      .split(':')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length > 1) {
+      label = parts[parts.length - 1];
+    }
+  }
 
-const DEFAULT_TEMPLATES: MessageTemplate[] = [
-  { id: 'approval-request', name: 'Approval Request', subject: 'Action Required: Approval Needed', body: '<p>You have a pending approval request.</p>' },
-  { id: 'approved-submitter', name: 'Approved Notification', subject: 'Your document has been approved', body: '<p>Your document was approved.</p>' },
-  { id: 'escalation', name: 'Escalation Alert', subject: 'Escalation: Approval overdue', body: '<p>This request has been escalated due to timeout.</p>' },
-];
+  label = label.replace(/\s+/g, ' ').trim();
+  if (!label) {
+    const keyTail = item.key.split('.').pop() || item.key;
+    return toTitleCase(keyTail.replace(/[^a-zA-Z0-9_\s-]/g, ' '));
+  }
 
-const nodeTypes: NodeTypes = {
-  workflowNode: ({ data }: { data: FlowNodeData }) => {
-    const color = data.nodeType === 'start' ? 'border-blue-600' : data.nodeType === 'approval' ? 'border-violet-600' : data.nodeType === 'condition' ? 'border-amber-500' : data.nodeType === 'timer' ? 'border-cyan-600' : data.nodeType === 'end' ? 'border-gray-500' : 'border-emerald-600';
-    return (
-      <div className={`relative min-w-[260px] rounded-xl border-2 ${color} bg-white px-4 py-3 shadow-md`}>
-        <Handle type="target" position={Position.Top} id="in" className="h-2.5 w-2.5 !bg-gray-600" />
-        {data.nodeType === 'condition' ? (
-          <>
-            <Handle type="source" position={Position.Right} id="out_true" className="h-2.5 w-2.5 !bg-emerald-600" />
-            <Handle type="source" position={Position.Bottom} id="out_false" className="h-2.5 w-2.5 !bg-rose-600" />
-          </>
-        ) : (
-          <Handle type="source" position={Position.Bottom} id="out" className="h-2.5 w-2.5 !bg-blue-600" />
-        )}
-        <div className="text-[11px] uppercase tracking-wider text-gray-500">{data.nodeType}</div>
-        <div className="text-base font-semibold text-black">{data.label}</div>
-        <div className="text-[11px] text-gray-600">{data.nodeKey}</div>
-      </div>
-    );
-  },
-};
+  return label;
+}
 
-function WorkflowEngineAdminContent() {
+function buildPalette(catalog: CatalogResponse): PaletteItem[] {
+  const defaults: PaletteItem[] = [
+    ...Array.from(TRIGGER_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'triggers' as const })),
+    ...Array.from(ACTION_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'actions' as const })),
+    ...Array.from(CONDITION_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'conditions' as const })),
+    ...Array.from(APPROVAL_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'approvals' as const })),
+    ...Array.from(TIMER_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'timers' as const })),
+    { key: 'subworkflow', label: 'Sub-Workflow', description: '', group: 'control' },
+    { key: 'end', label: 'End', description: '', group: 'control' },
+  ];
+
+  const seen = new Set(defaults.map((d) => d.key));
+  const extras: PaletteItem[] = [];
+
+  const flatGroups: Array<{ group: PaletteItem['group']; items: CatalogItem[] }> = [
+    { group: 'triggers', items: catalog.triggers || [] },
+    { group: 'actions', items: catalog.actions || [] },
+    { group: 'conditions', items: catalog.conditions || [] },
+    { group: 'approvals', items: catalog.approvals || [] },
+    { group: 'timers', items: catalog.timers || [] },
+  ];
+
+  for (const grp of flatGroups) {
+    for (const item of grp.items) {
+      if (grp.group === 'actions' && item.key.startsWith('platform_action.')) {
+        continue;
+      }
+      if (!seen.has(item.key)) {
+        extras.push({ key: item.key, label: item.label, description: '', group: grp.group, module: item.module, submodule: item.submodule });
+        seen.add(item.key);
+      }
+    }
+  }
+
+  for (const [moduleName, items] of Object.entries(catalog.platform_functions || {})) {
+    for (const item of items) {
+      if (!seen.has(item.key)) {
+        extras.push({
+          key: item.key,
+          label: normalizePlatformFunctionLabel(item, moduleName),
+          description: '',
+          group: 'platform_functions',
+          module: item.module || moduleName,
+          submodule: item.submodule,
+        });
+        seen.add(item.key);
+      }
+    }
+  }
+
+  return [...defaults, ...extras];
+}
+
+function normalizeActorUsers(payload: unknown): Array<{ id: number; username?: string; email: string; display_name: string }> {
+  const list = Array.isArray(payload)
+    ? payload
+    : Array.isArray((payload as { users?: unknown[] })?.users)
+      ? (payload as { users: unknown[] }).users
+      : [];
+
+  const users: Array<{ id: number; username?: string; email: string; display_name: string }> = [];
+  for (const raw of list) {
+    const u = raw as Record<string, unknown>;
+    const id = Number(u.id);
+    const email = String(u.email || '');
+    if (!id || !email) continue;
+    const displayName = String(u.display_name || u.full_name || u.username || email || 'User');
+    const username = u.username ? String(u.username) : undefined;
+    users.push({ id, email, display_name: displayName, username });
+  }
+  return users;
+}
+
+function normalizeActorRoles(payload: unknown): Array<{ id: number; name: string; description?: string }> {
+  const list = Array.isArray(payload)
+    ? payload
+    : Array.isArray((payload as { roles?: unknown[] })?.roles)
+      ? (payload as { roles: unknown[] }).roles
+      : [];
+
+  const roles: Array<{ id: number; name: string; description?: string }> = [];
+  for (const raw of list) {
+    const r = raw as Record<string, unknown>;
+    const id = Number(r.id);
+    const name = String(r.name || '');
+    if (!id || !name) continue;
+    const description = r.description ? String(r.description) : undefined;
+    roles.push({ id, name, description });
+  }
+  return roles;
+}
+
+function toFlowNodes(rawNodes: BackendNode[], definitionJson: Record<string, unknown>): Node<FlowNodeData>[] {
+  const positions = (definitionJson?.canvas as Record<string, unknown>)?.positions as Record<string, { x: number; y: number }> || {};
+  const COLS = 3;
+  const GAP_X = 220;
+  const GAP_Y = 130;
+  return rawNodes.map((n, idx) => {
+    const data = normalizeBackendNode(n);
+    const pos = positions[n.node_key] || (n.position_x != null && n.position_y != null
+      ? { x: n.position_x, y: n.position_y }
+      : n.x != null && n.y != null
+        ? { x: n.x, y: n.y }
+        : { x: (idx % COLS) * GAP_X + 40, y: Math.floor(idx / COLS) * GAP_Y + 40 });
+    return {
+      id: n.node_key,
+      type: 'workflowNode',
+      position: pos,
+      data,
+    };
+  });
+}
+
+function toFlowEdges(rawEdges: BackendEdge[]): Edge[] {
+  return rawEdges.map((e, idx) => ({
+    id: `${e.source_node_key}-${e.target_node_key}-${idx}`,
+    source: e.source_node_key,
+    target: e.target_node_key,
+    sourceHandle: e.condition?._handle as string || 'out',
+    label: (e.condition?._label as string) || '',
+    animated: true,
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' },
+    style: { stroke: '#64748b', strokeWidth: 1.5 },
+    data: { condition: e.condition, priority: e.priority },
+  }));
+}
+
+// ─── Inner Component (needs ReactFlow context) ──────────────────────────────
+
+function WorkflowEngineContent() {
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  // ─── State ─────────────────────────────────────────────────────────────────
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [definitions, setDefinitions] = useState<WorkflowDefinition[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node<FlowNodeData>>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance<Node<FlowNodeData>, Edge> | null>(null);
+  const [catalog, setCatalog] = useState<CatalogResponse>({});
+  const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
+  const [overview, setOverview] = useState<AnalyticsOverview>({});
+  const [actorUsers, setActorUsers] = useState<Array<{ id: number; username?: string; email: string; display_name: string }>>([]);
+  const [actorRoles, setActorRoles] = useState<Array<{ id: number; name: string; description?: string }>>([]);
+  const [emailConfigCount, setEmailConfigCount] = useState(0);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([]);
+  const [optimizationTips, setOptimizationTips] = useState<string[]>([]);
+  const [versions, setVersions] = useState<WorkflowVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
 
-  const [users, setUsers] = useState<ActorUser[]>([]);
-  const [roles, setRoles] = useState<ActorRole[]>([]);
-  const [senderProfiles, setSenderProfiles] = useState<SenderProfile[]>([]);
-  const [templates, setTemplates] = useState<MessageTemplate[]>(DEFAULT_TEMPLATES);
-
+  // Workflow fields
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [triggerEvent, setTriggerEvent] = useState('manual.trigger');
   const [isActive, setIsActive] = useState(true);
+  const [triggerConditionsText, setTriggerConditionsText] = useState('{}');
+  const [definitionJsonText, setDefinitionJsonText] = useState('{}');
 
+  // ReactFlow state
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<FlowNodeData>>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance<Node<FlowNodeData>, Edge> | null>(null);
+
+  // Inspector state
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [nodeConfigText, setNodeConfigText] = useState('{}');
+  const [edgeConditionText, setEdgeConditionText] = useState('{}');
+  const [edgeLabel, setEdgeLabel] = useState('');
+  const [edgePriority, setEdgePriority] = useState(1);
 
-  const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
-  const selectedEdge = useMemo(() => edges.find((e) => e.id === selectedEdgeId) || null, [edges, selectedEdgeId]);
+  // UI state
+  const [activeTab, setActiveTab] = useState<'builder' | 'workflows' | 'analytics' | 'approvals' | 'schedules'>('builder');
+  const [showVersions, setShowVersions] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showAI, setShowAI] = useState(false);
 
-  const [newSender, setNewSender] = useState<SenderProfile>({ id: '', name: '', fromEmail: '', smtpHost: '', smtpPort: 587, smtpUser: '', smtpPassword: '' });
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  // ─── Derived values ─────────────────────────────────────────────────────────
+  const palette = useMemo(() => buildPalette(catalog), [catalog]);
+  const actionOptions = useMemo(
+    () => palette.filter((p) => p.group === 'actions' || p.group === 'platform_functions'),
+    [palette]
+  );
+  const conditionPathOptions = useMemo(
+    () => {
+      const base = [
+        { value: 'trigger.severity', label: 'trigger.severity' },
+        { value: 'trigger.event_name', label: 'trigger.event_name' },
+        { value: 'context.resolved', label: 'context.resolved' },
+        { value: 'instance.status', label: 'instance.status' },
+      ];
+      const nodeDerived = nodes.map((n) => ({
+        value: `context.node.${n.id}.status`,
+        label: `${n.data.label} (${n.id})`,
+      }));
+      return [...base, ...nodeDerived];
+    },
+    [nodes]
+  );
+  const selectedDefinition = useMemo(() => definitions.find((d) => d.id === selectedId), [definitions, selectedId]);
+  const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId), [nodes, selectedNodeId]);
+  const selectedEdge = useMemo(() => edges.find((e) => e.id === selectedEdgeId), [edges, selectedEdgeId]);
 
-  const loadAll = async () => {
-    const [defs, actorUsers, actorRoles] = await Promise.all([
-      workflowEngineApi.definitions.list(),
-      workflowEngineApi.catalog.users(),
-      workflowEngineApi.catalog.roles(),
-    ]);
-    setDefinitions((defs.data || []) as WorkflowDefinition[]);
-    setUsers(((actorUsers.data || {}).users || []) as ActorUser[]);
-    setRoles(((actorRoles.data || {}).roles || []) as ActorRole[]);
-  };
+  // ─── Data loading ────────────────────────────────────────────────────────────
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [defsRes, catalogRes, templatesRes, overviewRes] = await Promise.all([
+        workflowEngineApi.definitions.list(),
+        workflowEngineApi.catalog.nodeTypes(),
+        workflowEngineApi.templates.list(),
+        workflowEngineApi.analytics.overview(),
+      ]);
+      setDefinitions(defsRes.data || []);
+      setCatalog(catalogRes.data || {});
+      setTemplates(templatesRes.data || []);
+      setOverview(overviewRes.data || {});
 
-  useEffect(() => { loadAll(); }, []);
-
-  const setNodeConfig = (nodeId: string, patch: Record<string, unknown>) => {
-    setNodes((prev) => prev.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, config: { ...(n.data.config || {}), ...patch } } } : n));
-  };
-
-  const setNodeLabel = (nodeId: string, label: string) => {
-    setNodes((prev) => prev.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, label } } : n));
-  };
-
-  const addNode = (item: PaletteItem) => {
-    const point = reactFlowInstance ? reactFlowInstance.screenToFlowPosition({ x: 400, y: 260 }) : { x: 260, y: 200 };
-    if (item.group === 'trigger') {
-      const existing = nodes.find((n) => n.data.nodeType === 'start');
-      if (existing) {
-        setNodeLabel(existing.id, item.label);
-        setNodeConfig(existing.id, { trigger_event: item.key });
-        setTriggerEvent(item.key);
-        setSelectedNodeId(existing.id);
-        return;
+      // Fetch actor users/roles from the workflow-engine catalog (tenant-scoped).
+      try {
+        const [catalogUsersRes, catalogRolesRes] = await Promise.all([
+          workflowEngineApi.catalog.users(),
+          workflowEngineApi.catalog.roles(),
+        ]);
+        setActorUsers(normalizeActorUsers(catalogUsersRes.data));
+        setActorRoles(normalizeActorRoles(catalogRolesRes.data));
+      } catch {
+        // silently ignore; dropdowns will show empty state
       }
+
+      try {
+        const setupRes = await workflowEngineApi.notifications.checkSetup();
+        setEmailConfigCount(Number(setupRes.data?.email_config_count || 0));
+      } catch {
+        setEmailConfigCount(0);
+      }
+    } catch (e) {
+      console.error('Failed to load workflow data:', e);
+    } finally {
+      setLoading(false);
     }
+    // Fire-and-forget AI suggestions
+    workflowEngineApi.ai.suggestions().then((r) => {
+      const d = r.data;
+      setAiSuggestions(Array.isArray(d) ? d : (d?.suggestions || []));
+    }).catch(() => {});
+  }, []);
 
-    const id = `${item.key.replace(/\./g, '_')}_${Date.now()}`;
-    const nodeType: FlowNodeData['nodeType'] = item.group === 'trigger' ? 'start' : item.group === 'action' ? 'action' : item.group === 'condition' ? 'condition' : item.group === 'approval' ? 'approval' : item.group === 'timer' ? 'timer' : item.key === 'end' ? 'end' : 'subworkflow';
-    const config: Record<string, unknown> =
-      nodeType === 'start' ? { trigger_event: item.key } :
-      nodeType === 'approval' ? { approval_type: item.key, required_approvals: 1, timeout_days: 14, on_timeout: 'escalate', approver_user_ids: [], approver_role_ids: [], escalation_user_ids: [], escalation_role_ids: [] } :
-      nodeType === 'action' ? { action_name: item.key, user_ids: [], role_ids: [] } :
-      nodeType === 'timer' ? { timer_kind: item.key, wait_seconds: 3600 } :
-      nodeType === 'condition' ? { condition_key: item.key, expected_value: '' } : {};
+  useEffect(() => { loadAll(); }, [loadAll]);
 
-    setNodes((prev) => [...prev, { id, type: 'workflowNode', position: point, data: { nodeKey: id, nodeType, label: item.label, config, isStart: nodeType === 'start', isTerminal: nodeType === 'end' } }]);
-    if (nodeType === 'start') setTriggerEvent(item.key);
-  };
+  // Populate form when selection changes
+  useEffect(() => {
+    if (!selectedDefinition) return;
+    setName(selectedDefinition.name || '');
+    setDescription(selectedDefinition.description || '');
+    setTriggerEvent(selectedDefinition.trigger_event || 'manual.trigger');
+    setIsActive(selectedDefinition.is_active ?? true);
+    setTriggerConditionsText(JSON.stringify(selectedDefinition.trigger_conditions || {}, null, 2));
+    setDefinitionJsonText(JSON.stringify(selectedDefinition.definition_json || {}, null, 2));
+    const rawNodes = (selectedDefinition.nodes || []) as BackendNode[];
+    const rawEdges = (selectedDefinition.edges || []) as BackendEdge[];
+    setNodes(toFlowNodes(rawNodes, selectedDefinition.definition_json as Record<string, unknown>));
+    setEdges(toFlowEdges(rawEdges));
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  }, [selectedDefinition, setNodes, setEdges]);
 
-  const onConnect = useCallback((connection: Connection) => {
-    const condition = connection.sourceHandle === 'out_true' ? { path: 'step.condition_result', operator: 'eq', value: true, _label: 'true' } : connection.sourceHandle === 'out_false' ? { path: 'step.condition_result', operator: 'eq', value: false, _label: 'false' } : {};
-    setEdges((prev) => addEdge({ ...connection, id: `${connection.source}-${connection.target}-${Date.now()}`, markerEnd: { type: MarkerType.ArrowClosed }, data: { condition, priority: 1 } }, prev));
-  }, [setEdges]);
-
-  const onDropCanvas = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const raw = event.dataTransfer.getData('application/workflow-item');
-    if (!raw) return;
-    addNode(JSON.parse(raw) as PaletteItem);
-  };
-
-  const onDragOverCanvas = (event: React.DragEvent<HTMLDivElement>) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; };
-
-  const nodeIncomingOutgoing = () => {
-    const incoming: Record<string, number> = {};
-    const outgoing: Record<string, number> = {};
-    nodes.forEach((n) => { incoming[n.id] = 0; outgoing[n.id] = 0; });
-    edges.forEach((e) => {
-      if (e.target in incoming) incoming[e.target] += 1;
-      if (e.source in outgoing) outgoing[e.source] += 1;
-    });
-    return { incoming, outgoing };
-  };
-
-  const validateWorkflow = (): string[] => {
-    const errors: string[] = [];
-    if (!name.trim()) errors.push('Workflow name is required.');
-    const starts = nodes.filter((n) => n.data.nodeType === 'start');
-    const ends = nodes.filter((n) => n.data.nodeType === 'end');
-    if (starts.length !== 1) errors.push('Exactly one trigger node is required.');
-    if (ends.length < 1) errors.push('At least one end node is required.');
-
-    const { incoming, outgoing } = nodeIncomingOutgoing();
-    nodes.forEach((n) => {
-      if (n.data.nodeType !== 'start' && (incoming[n.id] || 0) === 0) errors.push(`Node "${n.data.label}" has no incoming connection.`);
-      if (n.data.nodeType !== 'end' && (outgoing[n.id] || 0) === 0) errors.push(`Node "${n.data.label}" has no outgoing connection.`);
-
-      const cfg = n.data.config || {};
-      if (n.data.nodeType === 'approval') {
-        const approverUsers = (cfg.approver_user_ids as number[] | undefined) || [];
-        const approverRoles = (cfg.approver_role_ids as number[] | undefined) || [];
-        if (!approverUsers.length && !approverRoles.length) errors.push(`Approval node "${n.data.label}" must have approver users or roles.`);
-      }
-      if (n.data.nodeType === 'action' && String(cfg.action_name || '') === 'send_notification_email') {
-        const usersCfg = (cfg.user_ids as number[] | undefined) || [];
-        const rolesCfg = (cfg.role_ids as number[] | undefined) || [];
-        const includeTrigger = Boolean(cfg.include_trigger_user);
-        if (!usersCfg.length && !rolesCfg.length && !includeTrigger) errors.push(`Email node "${n.data.label}" must target at least one user/role.`);
-        if (!String(cfg.sender_profile_id || '')) errors.push(`Email node "${n.data.label}" must have sender profile.`);
-      }
-      if (n.data.nodeType === 'condition') {
-        const outCount = edges.filter((e) => e.source === n.id).length;
-        if (outCount < 2) errors.push(`Condition node "${n.data.label}" must have two branches (true/false).`);
-      }
-    });
-    return Array.from(new Set(errors));
-  };
-
-  const serializePayload = () => {
-    const positions: Record<string, { x: number; y: number }> = {};
-    return {
-      name,
-      description,
-      trigger_event: triggerEvent,
-      is_active: isActive,
-      trigger_conditions: {},
-      definition_json: {
-        sender_profiles: senderProfiles,
-        message_templates: templates,
-        canvas: { positions: nodes.reduce((acc, n) => { positions[n.id] = { x: n.position.x, y: n.position.y }; acc[n.id] = positions[n.id]; return acc; }, {} as Record<string, { x: number; y: number }>) },
-      },
-      nodes: nodes.map((n) => ({ node_key: n.id, node_type: n.data.nodeType, name: n.data.label, config: n.data.config || {}, is_start: n.data.nodeType === 'start', is_terminal: n.data.nodeType === 'end' })),
-      edges: edges.map((e) => ({ source_node_key: e.source, target_node_key: e.target, condition: ((e.data as Record<string, unknown>)?.condition || {}) as Record<string, unknown>, priority: Number((e.data as Record<string, unknown>)?.priority || 1) })),
-    };
-  };
-
-  const saveWorkflow = async () => {
-    const errors = validateWorkflow();
-    setValidationErrors(errors);
-    if (errors.length) return;
-
-    const payload = serializePayload();
-    if (selectedId) {
-      await workflowEngineApi.definitions.update(selectedId, payload);
-    } else {
-      await workflowEngineApi.definitions.create(payload);
+  // Sync inspector when selectedNode changes
+  useEffect(() => {
+    if (selectedNode) {
+      setNodeConfigText(JSON.stringify(selectedNode.data.config || {}, null, 2));
     }
-    await loadAll();
-  };
+  }, [selectedNode]);
 
-  const loadDefinition = (definition: WorkflowDefinition) => {
-    setSelectedId(definition.id);
-    setName(definition.name);
-    setDescription(definition.description || '');
-    setTriggerEvent(definition.trigger_event || 'manual.trigger');
-    setIsActive(Boolean(definition.is_active));
+  // Sync inspector when selectedEdge changes
+  useEffect(() => {
+    if (selectedEdge) {
+      const cond = (selectedEdge.data as Record<string, unknown>)?.condition as Record<string, unknown> || {};
+      const { _label, ...rest } = cond;
+      setEdgeConditionText(JSON.stringify(rest, null, 2));
+      setEdgeLabel((_label as string) || getEdgeLabel(selectedEdge));
+      setEdgePriority(((selectedEdge.data as Record<string, unknown>)?.priority as number) || 1);
+    }
+  }, [selectedEdge]);
 
-    const defJson = (definition.definition_json || {}) as Record<string, unknown>;
-    setSenderProfiles(((defJson.sender_profiles as SenderProfile[] | undefined) || []));
-    setTemplates(((defJson.message_templates as MessageTemplate[] | undefined) || DEFAULT_TEMPLATES));
-
-    const positions = (((defJson.canvas as Record<string, unknown>)?.positions || {}) as Record<string, { x?: number; y?: number }>);
-    const flowNodes: Node<FlowNodeData>[] = (definition.nodes || []).map((raw, i) => {
-      const nodeKey = String(raw.node_key || `node_${i}`);
-      const nodeType = String(raw.node_type || 'action') as FlowNodeData['nodeType'];
-      return {
-        id: nodeKey,
-        type: 'workflowNode',
-        position: { x: Number(positions[nodeKey]?.x ?? (180 + (i % 4) * 270)), y: Number(positions[nodeKey]?.y ?? (120 + Math.floor(i / 4) * 170)) },
-        data: { nodeKey, nodeType, label: String(raw.name || nodeKey), config: (raw.config || {}) as Record<string, unknown>, isStart: Boolean(raw.is_start), isTerminal: Boolean(raw.is_terminal) },
-      };
-    });
-
-    const flowEdges: Edge[] = (definition.edges || []).map((raw, i) => ({
-      id: `${raw.source_node_key}-${raw.target_node_key}-${i}`,
-      source: String(raw.source_node_key || ''),
-      target: String(raw.target_node_key || ''),
-      markerEnd: { type: MarkerType.ArrowClosed },
-      data: { condition: (raw.condition || {}) as Record<string, unknown>, priority: Number(raw.priority || 1) },
-    }));
-
-    setNodes(flowNodes);
-    setEdges(flowEdges);
-    setValidationErrors([]);
-  };
-
-  const resetDraft = () => {
+  // ─── Reset draft ─────────────────────────────────────────────────────────────
+  const resetDraft = useCallback(() => {
     setSelectedId(null);
     setName('');
     setDescription('');
     setTriggerEvent('manual.trigger');
     setIsActive(true);
-    setNodes([]);
-    setEdges([]);
-    setValidationErrors([]);
-  };
+    setTriggerConditionsText('{}');
+    setDefinitionJsonText('{}');
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    const startNode: Node<FlowNodeData> = { id: 'start', type: 'workflowNode', position: { x: 200, y: 60 }, data: { nodeKey: 'start', nodeType: 'start', label: 'Start', config: { trigger_type: 'manual_trigger' }, isStart: true } };
+    const endNode: Node<FlowNodeData> = { id: 'end', type: 'workflowNode', position: { x: 200, y: 240 }, data: { nodeKey: 'end', nodeType: 'end', label: 'End', config: {}, isTerminal: true } };
+    setNodes([startNode, endNode]);
+    setEdges([{ id: 'start-end', source: 'start', target: 'end', sourceHandle: 'out', animated: true, markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }, style: { stroke: '#64748b', strokeWidth: 1.5 }, data: {} }]);
+  }, [setNodes, setEdges]);
 
-  const updateActivation = async (item: WorkflowDefinition, nextActive: boolean) => {
-    await workflowEngineApi.definitions.update(item.id, {
-      name: item.name,
-      description: item.description,
-      trigger_event: item.trigger_event,
-      trigger_conditions: item.trigger_conditions || {},
-      definition_json: item.definition_json || {},
-      is_active: nextActive,
-    });
+  useEffect(() => { if (nodes.length === 0 && edges.length === 0) resetDraft(); }, []); // eslint-disable-line
+
+  // ─── Canvas serialization ─────────────────────────────────────────────────
+  const serializeCanvas = useCallback(() => {
+    const positions: Record<string, { x: number; y: number }> = {};
+    nodes.forEach((n) => { positions[n.id] = n.position; });
+    const serializedNodes: BackendNode[] = nodes.map((n) => ({
+      node_key: n.id,
+      node_type: n.data.nodeType,
+      name: n.data.label,
+      config: n.data.config,
+      is_start: n.data.isStart || n.data.nodeType === 'start',
+      is_terminal: n.data.isTerminal || n.data.nodeType === 'end',
+    }));
+    const serializedEdges: BackendEdge[] = edges.map((e) => ({
+      source_node_key: e.source,
+      target_node_key: e.target,
+      condition: { ...((e.data as Record<string, unknown>)?.condition as Record<string, unknown> || {}), _label: getEdgeLabel(e), _handle: e.sourceHandle || undefined },
+      priority: ((e.data as Record<string, unknown>)?.priority as number) || 1,
+      source_handle: e.sourceHandle || undefined,
+      target_handle: e.targetHandle || undefined,
+      label: getEdgeLabel(e),
+    }));
+    return { nodes: serializedNodes, edges: serializedEdges, positions };
+  }, [nodes, edges]);
+
+  const buildPayload = useCallback(() => {
+    const { nodes: serializedNodes, edges: serializedEdges, positions } = serializeCanvas();
+    let teConds: Record<string, unknown> = {};
+    try { teConds = JSON.parse(triggerConditionsText); } catch { /* ignore */ }
+    let defJson: Record<string, unknown> = {};
+    try { defJson = JSON.parse(definitionJsonText); } catch { /* ignore */ }
+    const startNode = nodes.find((n) => n.data.isStart || n.data.nodeType === 'start');
+    const computedTriggerEvent = startNode ? triggerEventForNodeConfig(startNode.data.config) : triggerEvent;
+    return {
+      name: name || 'Untitled Workflow',
+      description,
+      trigger_event: computedTriggerEvent,
+      is_active: isActive,
+      trigger_conditions: teConds,
+      definition_json: { ...defJson, canvas: { positions } },
+      nodes: serializedNodes,
+      edges: serializedEdges,
+    };
+  }, [serializeCanvas, triggerConditionsText, definitionJsonText, nodes, triggerEvent, name, description, isActive]);
+
+  // ─── CRUD operations ─────────────────────────────────────────────────────────
+  const saveDefinition = useCallback(async () => {
+    setSaving(true);
+    try {
+      const payload = buildPayload();
+      if (selectedId) {
+        await workflowEngineApi.definitions.update(selectedId, payload);
+      } else {
+        const res = await workflowEngineApi.definitions.create(payload);
+        const newId = res.data?.id as number | undefined;
+        if (newId) setSelectedId(newId);
+      }
+      await loadAll();
+    } catch (e) {
+      alert('Save failed: ' + extractApiErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [buildPayload, selectedId, loadAll]);
+
+  const deleteDefinition = useCallback(async () => {
+    if (!selectedId) return;
+    if (!confirm('Delete this workflow? This cannot be undone.')) return;
+    await workflowEngineApi.definitions.delete(selectedId);
     await loadAll();
-  };
+    resetDraft();
+  }, [selectedId, loadAll, resetDraft]);
 
-  const parseMultiSelectIds = (e: React.ChangeEvent<HTMLSelectElement>) => Array.from(e.target.selectedOptions).map((o) => Number(o.value));
+  const configureEmailSettings = useCallback(async () => {
+    const configName = window.prompt('Email config name', 'default');
+    if (!configName) return;
+    const smtpHost = window.prompt('SMTP host', 'smtp.gmail.com');
+    if (!smtpHost) return;
+    const smtpPortRaw = window.prompt('SMTP port', '587');
+    const smtpUsername = window.prompt('SMTP username', '');
+    if (!smtpUsername) return;
+    const smtpPassword = window.prompt('SMTP password', '');
+    if (!smtpPassword) return;
+    const fromEmail = window.prompt('From email', smtpUsername);
+    if (!fromEmail) return;
+    const fromName = window.prompt('From name', 'ComplyVerse') || 'ComplyVerse';
 
-  const selectedNodeConfig = (selectedNode?.data.config || {}) as Record<string, unknown>;
+    try {
+      await workflowEngineApi.notifications.createEmailConfig({
+        config_name: configName,
+        smtp_host: smtpHost,
+        smtp_port: Number(smtpPortRaw || '587') || 587,
+        smtp_username: smtpUsername,
+        smtp_password: smtpPassword,
+        from_email: fromEmail,
+        from_name: fromName,
+        use_tls: true,
+      });
+      await loadAll();
+      alert('Email configuration saved');
+    } catch (e) {
+      alert('Email setup failed: ' + extractApiErrorMessage(e));
+    }
+  }, [loadAll]);
+
+  const testEmailSettings = useCallback(async () => {
+    try {
+      const listRes = await workflowEngineApi.notifications.listEmailConfigs();
+      const configs = listRes.data || [];
+      if (!configs.length) {
+        alert('No email config found. Please configure SMTP first.');
+        return;
+      }
+      const targetEmail = window.prompt('Send test email to', actorUsers[0]?.email || '');
+      if (!targetEmail) return;
+      const configId = Number(configs[0].id);
+      await workflowEngineApi.notifications.testEmailConfig(configId, targetEmail);
+      alert('Test email sent');
+    } catch (e) {
+      alert('Email test failed: ' + extractApiErrorMessage(e));
+    }
+  }, [actorUsers]);
+
+  const triggerSelected = useCallback(async (workflowDefinitionId?: number) => {
+    const targetId = workflowDefinitionId || selectedId;
+    if (!targetId) return;
+    const triggerEvent = window.prompt('Trigger event for simulation', 'manual.trigger') ?? 'manual.trigger';
+    const payloadInput = window.prompt('Simulation payload JSON', '{}');
+    if (payloadInput === null) return;
+    let payloadJson: Record<string, unknown> = {};
+    try {
+      payloadJson = JSON.parse(payloadInput || '{}');
+    } catch {
+      alert('Invalid simulation payload JSON');
+      return;
+    }
+    try {
+      await workflowEngineApi.executions.trigger({ workflow_definition_id: targetId, trigger_event: triggerEvent || 'manual.trigger', payload: payloadJson });
+      alert('Workflow triggered successfully');
+    } catch (e) {
+      alert('Trigger failed: ' + extractApiErrorMessage(e));
+    }
+  }, [selectedId]);
+
+  // ─── Version history ─────────────────────────────────────────────────────────
+  const loadVersions = useCallback(async () => {
+    if (!selectedId) return;
+    setVersionsLoading(true);
+    try {
+      const res = await workflowEngineApi.definitions.listVersions(selectedId);
+      setVersions(res.data || []);
+    } catch { /* ignore */ }
+    finally { setVersionsLoading(false); }
+  }, [selectedId]);
+
+  const handleShowVersions = useCallback(() => {
+    setShowVersions(true);
+    loadVersions();
+  }, [loadVersions]);
+
+  const handleRollback = useCallback(async (versionId: number) => {
+    if (!selectedId) return;
+    if (!confirm('Restore this version? The current version will be overwritten.')) return;
+    try {
+      await workflowEngineApi.definitions.rollback(selectedId, versionId);
+      await loadAll();
+      setShowVersions(false);
+    } catch (e) {
+      alert('Rollback failed: ' + extractApiErrorMessage(e));
+    }
+  }, [selectedId, loadAll]);
+
+  // ─── Template actions ─────────────────────────────────────────────────────────
+  const handleUseTemplate = useCallback(async (templateId: number) => {
+    if (templateId < 0) {
+      // System template — load full workflow graph into canvas
+      const tpl = SYSTEM_TEMPLATES.find((t) => t.id === templateId);
+      if (tpl && tpl.nodes_json && tpl.edges_json) {
+        setSelectedId(null);
+        setName(tpl.name);
+        setDescription(tpl.description || '');
+        setTriggerEvent(tpl.trigger_event || 'manual.trigger');
+        setIsActive(true);
+        setSelectedNodeId(null);
+        setSelectedEdgeId(null);
+        setNodes(toFlowNodes(tpl.nodes_json, {}));
+        setEdges(toFlowEdges(tpl.edges_json));
+        setTimeout(() => fitView({ padding: 0.15 }), 120);
+      } else {
+        resetDraft();
+      }
+      setShowTemplates(false);
+      return;
+    }
+    try {
+      const res = await workflowEngineApi.templates.instantiate(templateId, 'New from Template');
+      await loadAll();
+      const newId = res.data?.id;
+      if (newId) setSelectedId(newId);
+    } catch (e) {
+      alert('Failed to use template: ' + extractApiErrorMessage(e));
+    }
+    setShowTemplates(false);
+  }, [loadAll, resetDraft]);
+
+  // ─── AI operations ────────────────────────────────────────────────────────────
+  const generateFromNaturalLanguage = useCallback(async () => {
+    if (!aiPrompt.trim()) return;
+    setAiGenerating(true);
+    try {
+      const res = await workflowEngineApi.ai.naturalLanguage({ prompt: aiPrompt });
+      const data = res.data;
+      if (data?.nodes && data?.edges) {
+        const rawNodes = data.nodes as BackendNode[];
+        const rawEdges = data.edges as BackendEdge[];
+        // Clear existing selection and load AI-generated graph
+        setSelectedId(null);
+        setSelectedNodeId(null);
+        setSelectedEdgeId(null);
+        setName(data.name || `AI: ${aiPrompt.slice(0, 60)}`);
+        setDescription(data.description || '');
+        setTriggerEvent(data.trigger_event || 'manual.trigger');
+        setIsActive(true);
+        setNodes(toFlowNodes(rawNodes, {}));
+        setEdges(toFlowEdges(rawEdges));
+        setShowAI(false);
+        setTimeout(() => fitView({ padding: 0.15 }), 120);
+      } else {
+        alert('AI returned an incomplete response. Please try again.');
+      }
+    } catch (e) {
+      console.error('AI generation error:', e);
+      alert('AI generation failed: ' + extractApiErrorMessage(e));
+    } finally {
+      setAiGenerating(false);
+    }
+  }, [aiPrompt, setNodes, setEdges, fitView]);
+
+  const runOptimization = useCallback(async () => {
+    if (!selectedId) return;
+    setAiGenerating(true);
+    try {
+      const res = await workflowEngineApi.ai.optimize({ workflow_definition_id: selectedId });
+      const raw = res.data?.suggestions || [];
+      // Backend returns [{type, title, description, priority}] or legacy string[]
+      const tips: string[] = raw.map((s: unknown) =>
+        typeof s === 'string' ? s : `[${(s as Record<string, string>).priority?.toUpperCase() || 'INFO'}] ${(s as Record<string, string>).title}: ${(s as Record<string, string>).description}`
+      );
+      setOptimizationTips(tips);
+    } catch { /* ignore */ }
+    finally { setAiGenerating(false); }
+  }, [selectedId]);
+
+  const handleUseSuggestion = useCallback((suggestion: AISuggestion) => {
+    // Build nodes & edges — use provided ones or generate from category/trigger
+    let rawNodes: BackendNode[] = suggestion.suggested_nodes || [];
+    let rawEdges: BackendEdge[] = suggestion.suggested_edges || [];
+
+    if (rawNodes.length === 0) {
+      // Generate a sensible default workflow based on category
+      const trigger = suggestion.trigger_event || 'manual_trigger';
+      const cat = (suggestion.category || '').toLowerCase();
+
+      const startNode: BackendNode = { node_key: 'start', node_type: 'start', name: suggestion.title, is_start: true, config: { trigger_type: trigger }, x: 350, y: 30 };
+      const endNode: BackendNode = { node_key: 'end', node_type: 'end', name: 'End', is_terminal: true, config: {}, x: 350, y: 0 };
+
+      if (cat.includes('risk')) {
+        rawNodes = [
+          startNode,
+          { node_key: 'check_risk', node_type: 'condition', name: 'Evaluate Risk Level', config: { condition_type: 'check_risk_level' }, x: 350, y: 160 },
+          { node_key: 'escalate', node_type: 'action', name: 'Escalate to Management', config: { action_name: 'escalate_to_management' }, x: 100, y: 300 },
+          { node_key: 'notify', node_type: 'action', name: 'Send Notification', config: { action_name: 'send_notification_email', subject: suggestion.title }, x: 600, y: 300 },
+          { node_key: 'approval', node_type: 'approval', name: 'Manager Approval', config: { approval_type: 'single', timeout_hours: 24 }, x: 350, y: 440 },
+          { node_key: 'evidence', node_type: 'action', name: 'Request Evidence', config: { action_name: 'request_evidence_upload' }, x: 350, y: 570 },
+          { node_key: 'report', node_type: 'action', name: 'Generate Report', config: { action_name: 'generate_report' }, x: 350, y: 700 },
+          { ...endNode, y: 830 },
+        ];
+        rawEdges = [
+          { source_node_key: 'start', target_node_key: 'check_risk' },
+          { source_node_key: 'check_risk', target_node_key: 'escalate', condition: { _label: 'Critical / High', _handle: 'condition-true' } },
+          { source_node_key: 'check_risk', target_node_key: 'notify', condition: { _label: 'Medium / Low', _handle: 'condition-false' } },
+          { source_node_key: 'escalate', target_node_key: 'approval' },
+          { source_node_key: 'notify', target_node_key: 'approval' },
+          { source_node_key: 'approval', target_node_key: 'evidence', condition: { _label: 'Approved' } },
+          { source_node_key: 'evidence', target_node_key: 'report' },
+          { source_node_key: 'report', target_node_key: 'end' },
+        ];
+      } else if (cat.includes('incident')) {
+        rawNodes = [
+          startNode,
+          { node_key: 'check_severity', node_type: 'condition', name: 'Check Severity', config: { condition_type: 'check_risk_level' }, x: 350, y: 160 },
+          { node_key: 'escalate', node_type: 'action', name: 'Escalate to Management', config: { action_name: 'escalate_to_management' }, x: 100, y: 300 },
+          { node_key: 'assign_owner', node_type: 'action', name: 'Assign Incident Owner', config: { action_name: 'assign_control_owner' }, x: 600, y: 300 },
+          { node_key: 'collect_evidence', node_type: 'action', name: 'Collect Evidence', config: { action_name: 'request_evidence_upload' }, x: 350, y: 440 },
+          { node_key: 'notify', node_type: 'action', name: 'Send Resolution Notice', config: { action_name: 'send_notification_email', subject: 'Incident Resolved' }, x: 350, y: 570 },
+          { ...endNode, y: 700 },
+        ];
+        rawEdges = [
+          { source_node_key: 'start', target_node_key: 'check_severity' },
+          { source_node_key: 'check_severity', target_node_key: 'escalate', condition: { _label: 'Critical', _handle: 'condition-true' } },
+          { source_node_key: 'check_severity', target_node_key: 'assign_owner', condition: { _label: 'Normal', _handle: 'condition-false' } },
+          { source_node_key: 'escalate', target_node_key: 'collect_evidence' },
+          { source_node_key: 'assign_owner', target_node_key: 'collect_evidence' },
+          { source_node_key: 'collect_evidence', target_node_key: 'notify' },
+          { source_node_key: 'notify', target_node_key: 'end' },
+        ];
+      } else if (cat.includes('evidence')) {
+        rawNodes = [
+          startNode,
+          { node_key: 'check_age', node_type: 'condition', name: 'Check Evidence Age', config: { condition_type: 'check_evidence_age', max_days: 90 }, x: 350, y: 160 },
+          { node_key: 'request_upload', node_type: 'action', name: 'Request New Evidence', config: { action_name: 'request_evidence_upload' }, x: 350, y: 300 },
+          { node_key: 'sla', node_type: 'timer', name: 'SLA Countdown (48h)', config: { timer_type: 'sla_countdown', duration_hours: 48 }, x: 350, y: 440 },
+          { node_key: 'escalate', node_type: 'action', name: 'Escalate Overdue', config: { action_name: 'escalate_to_management' }, x: 350, y: 570 },
+          { ...endNode, y: 700 },
+        ];
+        rawEdges = [
+          { source_node_key: 'start', target_node_key: 'check_age' },
+          { source_node_key: 'check_age', target_node_key: 'request_upload', condition: { _label: 'Expired / Expiring', _handle: 'condition-true' } },
+          { source_node_key: 'check_age', target_node_key: 'end', condition: { _label: 'Valid', _handle: 'condition-false' } },
+          { source_node_key: 'request_upload', target_node_key: 'sla' },
+          { source_node_key: 'sla', target_node_key: 'escalate' },
+          { source_node_key: 'escalate', target_node_key: 'end' },
+        ];
+      } else if (cat.includes('audit')) {
+        rawNodes = [
+          startNode,
+          { node_key: 'create_finding', node_type: 'action', name: 'Create Audit Scope', config: { action_name: 'create_audit_finding' }, x: 350, y: 160 },
+          { node_key: 'approval', node_type: 'approval', name: 'Audit Plan Approval', config: { approval_type: 'multi_level', levels: ['Audit Manager', 'CAE'] }, x: 350, y: 300 },
+          { node_key: 'assign', node_type: 'action', name: 'Assign Auditors', config: { action_name: 'assign_control_owner' }, x: 350, y: 440 },
+          { node_key: 'evidence', node_type: 'action', name: 'Request Workpapers', config: { action_name: 'request_evidence_upload' }, x: 350, y: 570 },
+          { node_key: 'report', node_type: 'action', name: 'Generate Audit Report', config: { action_name: 'generate_report' }, x: 350, y: 700 },
+          { ...endNode, y: 830 },
+        ];
+        rawEdges = [
+          { source_node_key: 'start', target_node_key: 'create_finding' },
+          { source_node_key: 'create_finding', target_node_key: 'approval' },
+          { source_node_key: 'approval', target_node_key: 'assign', condition: { _label: 'Approved' } },
+          { source_node_key: 'assign', target_node_key: 'evidence' },
+          { source_node_key: 'evidence', target_node_key: 'report' },
+          { source_node_key: 'report', target_node_key: 'end' },
+        ];
+      } else if (cat.includes('policy') || cat.includes('access')) {
+        rawNodes = [
+          startNode,
+          { node_key: 'notify', node_type: 'action', name: 'Notify Stakeholders', config: { action_name: 'send_notification_email', subject: suggestion.title }, x: 350, y: 160 },
+          { node_key: 'approval', node_type: 'approval', name: 'Review & Approve', config: { approval_type: 'multi_level', levels: ['Dept Head', 'CISO'] }, x: 350, y: 300 },
+          { node_key: 'check_approval', node_type: 'condition', name: 'Check Outcome', config: { condition_type: 'check_approval_status' }, x: 350, y: 440 },
+          { node_key: 'publish', node_type: 'action', name: 'Publish & Distribute', config: { action_name: 'send_notification_email', subject: `${suggestion.title} — Approved` }, x: 100, y: 570 },
+          { node_key: 'reject', node_type: 'action', name: 'Rejection Notice', config: { action_name: 'send_notification_email', subject: `${suggestion.title} — Rejected` }, x: 600, y: 570 },
+          { node_key: 'report', node_type: 'action', name: 'Generate Report', config: { action_name: 'generate_report' }, x: 350, y: 700 },
+          { ...endNode, y: 830 },
+        ];
+        rawEdges = [
+          { source_node_key: 'start', target_node_key: 'notify' },
+          { source_node_key: 'notify', target_node_key: 'approval' },
+          { source_node_key: 'approval', target_node_key: 'check_approval' },
+          { source_node_key: 'check_approval', target_node_key: 'publish', condition: { _label: 'Approved', _handle: 'condition-true' } },
+          { source_node_key: 'check_approval', target_node_key: 'reject', condition: { _label: 'Rejected', _handle: 'condition-false' } },
+          { source_node_key: 'publish', target_node_key: 'report' },
+          { source_node_key: 'reject', target_node_key: 'report' },
+          { source_node_key: 'report', target_node_key: 'end' },
+        ];
+      } else {
+        // Generic fallback workflow
+        rawNodes = [
+          startNode,
+          { node_key: 'notify', node_type: 'action', name: 'Send Notification', config: { action_name: 'send_notification_email', subject: suggestion.title }, x: 350, y: 160 },
+          { node_key: 'approval', node_type: 'approval', name: 'Manager Approval', config: { approval_type: 'single', timeout_hours: 24 }, x: 350, y: 300 },
+          { node_key: 'action', node_type: 'action', name: 'Execute Action', config: { action_name: 'assign_control_owner' }, x: 350, y: 440 },
+          { node_key: 'report', node_type: 'action', name: 'Generate Report', config: { action_name: 'generate_report' }, x: 350, y: 570 },
+          { ...endNode, y: 700 },
+        ];
+        rawEdges = [
+          { source_node_key: 'start', target_node_key: 'notify' },
+          { source_node_key: 'notify', target_node_key: 'approval' },
+          { source_node_key: 'approval', target_node_key: 'action', condition: { _label: 'Approved' } },
+          { source_node_key: 'action', target_node_key: 'report' },
+          { source_node_key: 'report', target_node_key: 'end' },
+        ];
+      }
+    }
+
+    setSelectedId(null);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setNodes(toFlowNodes(rawNodes, {}));
+    setEdges(toFlowEdges(rawEdges));
+    setName(suggestion.title);
+    setDescription(suggestion.description || '');
+    setTriggerEvent(suggestion.trigger_event || 'manual.trigger');
+    setIsActive(true);
+    setShowAI(false);
+    setTimeout(() => fitView({ padding: 0.15 }), 120);
+  }, [setNodes, setEdges, fitView]);
+
+  // ─── Canvas event handlers ────────────────────────────────────────────────────
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const isTrueHandle = connection.sourceHandle === 'out_true';
+      const isFalseHandle = connection.sourceHandle === 'out_false';
+      const label = isTrueHandle ? 'true' : isFalseHandle ? 'false' : '';
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...connection,
+            animated: true,
+            label,
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' },
+            style: { stroke: isTrueHandle ? '#22c55e' : isFalseHandle ? '#ef4444' : '#64748b', strokeWidth: 1.5 },
+            data: { condition: { _label: label, _handle: connection.sourceHandle }, priority: 1 },
+          },
+          eds
+        )
+      );
+    },
+    [setEdges]
+  );
+
+  const onDragStart = useCallback((event: React.DragEvent, item: PaletteItem) => {
+    event.dataTransfer.setData('application/workflow-node', JSON.stringify(item));
+    event.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const onDropCanvas = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      if (!reactFlowInstance || !reactFlowWrapper.current) return;
+      const raw = event.dataTransfer.getData('application/workflow-node');
+      if (!raw) return;
+      const item: PaletteItem = JSON.parse(raw);
+      const bounds = reactFlowWrapper.current.getBoundingClientRect();
+      const position = reactFlowInstance.screenToFlowPosition({ x: event.clientX - bounds.left, y: event.clientY - bounds.top });
+      const nodeKey = `${item.key}_${Date.now()}`;
+      const isStart = item.group === 'triggers';
+      const isEnd = item.key === 'end';
+      const nodeType = isStart ? 'start' : isEnd ? 'end' : item.group === 'conditions' ? 'condition' : item.group === 'approvals' ? 'approval' : item.group === 'timers' ? 'timer' : item.key === 'subworkflow' ? 'subworkflow' : 'action';
+      const config = { ...defaultConfigForGroup(item.group) };
+      if (isStart) config.trigger_type = item.key;
+      if (nodeType === 'action') config.action_name = item.key;
+      if (nodeType === 'condition') config.condition_kind = item.key;
+      if (nodeType === 'approval') config.approval_type = item.key;
+      if (nodeType === 'timer') config.timer_kind = item.key;
+      const newNode: Node<FlowNodeData> = {
+        id: nodeKey,
+        type: 'workflowNode',
+        position,
+        data: { nodeKey, nodeType, label: item.label, config, isStart, isTerminal: isEnd },
+      };
+      setNodes((nds) => [...nds, newNode]);
+    },
+    [reactFlowInstance, setNodes]
+  );
+
+  const onDragOverCanvas = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const updateSelectedNode = useCallback(
+    (field: string, value: unknown) => {
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id !== selectedNodeId) return n;
+          if (field === 'label') return { ...n, data: { ...n.data, label: value as string } };
+          return { ...n, data: { ...n.data, config: { ...n.data.config, [field]: value } } };
+        })
+      );
+    },
+    [selectedNodeId, setNodes]
+  );
+
+  const applyNodeConfig = useCallback(() => {
+    try {
+      const parsed = JSON.parse(nodeConfigText);
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id !== selectedNodeId) return n;
+          return { ...n, data: { ...n.data, config: parsed } };
+        })
+      );
+    } catch {
+      alert('Invalid JSON in config');
+    }
+  }, [nodeConfigText, selectedNodeId, setNodes]);
+
+  const applyEdgeConfig = useCallback(() => {
+    try {
+      const parsed = JSON.parse(edgeConditionText);
+      setEdges((eds) =>
+        eds.map((e) => {
+          if (e.id !== selectedEdgeId) return e;
+          return { ...e, label: edgeLabel, data: { condition: { ...parsed, _label: edgeLabel }, priority: edgePriority } };
+        })
+      );
+    } catch {
+      alert('Invalid JSON in edge condition');
+    }
+  }, [edgeConditionText, edgeLabel, edgePriority, selectedEdgeId, setEdges]);
+
+  const deleteSelected = useCallback(() => {
+    if (selectedNodeId) {
+      setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
+      setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId));
+      setSelectedNodeId(null);
+    } else if (selectedEdgeId) {
+      setEdges((eds) => eds.filter((e) => e.id !== selectedEdgeId));
+      setSelectedEdgeId(null);
+    }
+  }, [selectedNodeId, selectedEdgeId, setNodes, setEdges]);
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-50">
+        <div className="text-sm text-gray-400">Loading Workflow Engine...</div>
+      </div>
+    );
+  }
+
+  const TABS = [
+    { key: 'builder' as const, label: 'Builder' },
+    { key: 'workflows' as const, label: 'Workflows' },
+    { key: 'analytics' as const, label: 'Analytics' },
+    { key: 'approvals' as const, label: 'Approvals' },
+    { key: 'schedules' as const, label: 'Schedules & Webhooks' },
+  ];
+
+  const sortedDefinitions = [...definitions].sort((a, b) =>
+    (new Date(b.updated_at || '').getTime() || 0) - (new Date(a.updated_at || '').getTime() || 0)
+  );
 
   return (
-    <div className="space-y-5 p-6 bg-slate-50 min-h-screen">
-      <div className="bg-white border border-gray-300 rounded-xl p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-black">Workflow Builder</h1>
-            <p className="text-gray-700 text-sm">n8n-style guided builder with dropdowns and validation for non-technical users.</p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={resetDraft} className="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50">New</button>
-            <button onClick={saveWorkflow} className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">{selectedId ? 'Update Workflow' : 'Create Workflow'}</button>
-          </div>
+    <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
+      {/* Page header */}
+      <div className="flex items-center gap-3 px-5 py-3 bg-white border-b border-gray-200 shrink-0">
+        <div>
+          <h1 className="text-base font-bold text-gray-900">Workflow Engine</h1>
+          <p className="text-[11px] text-gray-500">Build, automate, and monitor GRC workflows</p>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-        <div className="xl:col-span-1 space-y-4">
-          <div className="bg-white border border-gray-300 rounded-xl p-3">
-            <h3 className="font-semibold text-black mb-2">Workflow List</h3>
-            <div className="space-y-2 max-h-[280px] overflow-auto">
-              {definitions.map((d) => (
-                <div key={d.id} className={`border rounded p-2 ${selectedId === d.id ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-white'}`}>
-                  <button onClick={() => loadDefinition(d)} className="w-full text-left">
-                    <div className="text-sm font-medium text-black">{d.name}</div>
-                    <div className="text-xs text-gray-600">{d.trigger_event}</div>
-                  </button>
-                  <button onClick={() => updateActivation(d, !d.is_active)} className={`mt-2 w-full text-xs rounded px-2 py-1 ${d.is_active ? 'border border-amber-500 text-amber-700' : 'border border-emerald-600 text-emerald-700'}`}>
-                    {d.is_active ? 'Deactivate' : 'Activate'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-300 rounded-xl p-3">
-            <h3 className="font-semibold text-black mb-2">Basic Info</h3>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workflow Name" className="w-full border border-gray-300 rounded px-2 py-1 text-sm mb-2" />
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full border border-gray-300 rounded px-2 py-1 text-sm min-h-[80px] mb-2" />
-            <input value={triggerEvent} onChange={(e) => setTriggerEvent(e.target.value)} placeholder="Trigger Event" className="w-full border border-gray-300 rounded px-2 py-1 text-sm mb-2" />
-            <label className="text-sm text-gray-700 flex items-center gap-2"><input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> Active</label>
-          </div>
-
-          <div className="bg-white border border-gray-300 rounded-xl p-3">
-            <h3 className="font-semibold text-black mb-2">Email Sender Profiles</h3>
-            <input value={newSender.name} onChange={(e) => setNewSender((s) => ({ ...s, name: e.target.value }))} placeholder="Profile Name" className="w-full border border-gray-300 rounded px-2 py-1 text-xs mb-1" />
-            <input value={newSender.fromEmail} onChange={(e) => setNewSender((s) => ({ ...s, fromEmail: e.target.value }))} placeholder="From Email" className="w-full border border-gray-300 rounded px-2 py-1 text-xs mb-1" />
-            <input value={newSender.smtpHost} onChange={(e) => setNewSender((s) => ({ ...s, smtpHost: e.target.value }))} placeholder="SMTP Host" className="w-full border border-gray-300 rounded px-2 py-1 text-xs mb-1" />
-            <div className="grid grid-cols-2 gap-1 mb-1">
-              <input value={newSender.smtpPort} onChange={(e) => setNewSender((s) => ({ ...s, smtpPort: Number(e.target.value || 587) }))} placeholder="Port" className="border border-gray-300 rounded px-2 py-1 text-xs" />
-              <input value={newSender.smtpUser} onChange={(e) => setNewSender((s) => ({ ...s, smtpUser: e.target.value }))} placeholder="SMTP User" className="border border-gray-300 rounded px-2 py-1 text-xs" />
-            </div>
-            <input type="password" value={newSender.smtpPassword} onChange={(e) => setNewSender((s) => ({ ...s, smtpPassword: e.target.value }))} placeholder="SMTP Password" className="w-full border border-gray-300 rounded px-2 py-1 text-xs mb-2" />
+        {/* Tab nav */}
+        <div className="flex items-center gap-0 ml-4">
+          {TABS.map((t) => (
             <button
-              onClick={() => {
-                if (!newSender.name || !newSender.fromEmail || !newSender.smtpHost || !newSender.smtpUser || !newSender.smtpPassword) return;
-                setSenderProfiles((prev) => [...prev, { ...newSender, id: `sender_${Date.now()}` }]);
-                setNewSender({ id: '', name: '', fromEmail: '', smtpHost: '', smtpPort: 587, smtpUser: '', smtpPassword: '' });
-              }}
-              className="w-full border border-blue-600 text-blue-600 rounded px-2 py-1 text-xs"
-            >Add Sender</button>
-            <div className="mt-2 space-y-1 max-h-[120px] overflow-auto">
-              {senderProfiles.map((s) => <div key={s.id} className="text-xs border border-gray-200 rounded p-1 bg-slate-50">{s.name} ({s.fromEmail})</div>)}
-            </div>
-          </div>
-        </div>
-
-        <div className="xl:col-span-2 bg-white border border-gray-300 rounded-xl p-3">
-          <div className="text-sm font-semibold text-black mb-2">Canvas</div>
-          <div className="h-[700px] border border-gray-200 rounded" onDrop={onDropCanvas} onDragOver={onDragOverCanvas}>
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onInit={setReactFlowInstance}
-              onNodeClick={(_, node) => { setSelectedNodeId(node.id); setSelectedEdgeId(null); }}
-              onEdgeClick={(_, edge) => { setSelectedEdgeId(edge.id); setSelectedNodeId(null); }}
-              onPaneClick={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
-              nodeTypes={nodeTypes}
-              fitView
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                activeTab === t.key
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              }`}
             >
-              <MiniMap className="bg-white" pannable zoomable />
-              <Controls />
-              <Background gap={20} size={1} color="#e5e7eb" />
-            </ReactFlow>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1" />
+        {/* Overview stats */}
+        {[
+          { label: 'Total', value: overview.total_instances ?? 0, color: 'text-gray-700' },
+          { label: 'Completed', value: overview.completed ?? 0, color: 'text-green-600' },
+          { label: 'Running', value: overview.running ?? 0, color: 'text-blue-600' },
+          { label: 'Failed', value: overview.failed ?? 0, color: 'text-red-500' },
+          { label: 'Waiting', value: overview.waiting ?? 0, color: 'text-yellow-600' },
+        ].map((stat) => (
+          <div key={stat.label} className="text-center px-3 border-l border-gray-100 first:border-0">
+            <div className={`text-base font-bold ${stat.color}`}>{stat.value}</div>
+            <div className="text-[9px] text-gray-400 font-medium uppercase tracking-wide">{stat.label}</div>
           </div>
-          {validationErrors.length > 0 ? (
-            <div className="mt-3 border border-rose-300 bg-rose-50 rounded p-2">
-              <div className="text-sm font-semibold text-rose-700">Fix before saving</div>
-              <ul className="text-xs text-rose-700 list-disc pl-5">
-                {validationErrors.map((err, i) => <li key={i}>{err}</li>)}
-              </ul>
+        ))}
+      </div>
+
+      {activeTab === 'workflows' && (
+        <div className="flex-1 min-h-0 overflow-auto p-4">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4 flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-gray-800">Email Notification Setup</div>
+              <div className="text-xs text-gray-500">Active SMTP configs: {emailConfigCount}</div>
             </div>
-          ) : null}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={configureEmailSettings}
+                className="text-xs px-3 py-1.5 border border-blue-300 text-blue-700 rounded bg-blue-50 hover:bg-blue-100"
+              >
+                Configure SMTP
+              </button>
+              <button
+                onClick={testEmailSettings}
+                className="text-xs px-3 py-1.5 border border-green-300 text-green-700 rounded bg-green-50 hover:bg-green-100"
+              >
+                Send Test Email
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-200 text-sm font-semibold text-gray-800">
+              Saved Workflows ({sortedDefinitions.length})
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs text-gray-600 uppercase">
+                <tr>
+                  <th className="text-left px-4 py-2">Name</th>
+                  <th className="text-left px-4 py-2">Trigger</th>
+                  <th className="text-left px-4 py-2">Version</th>
+                  <th className="text-left px-4 py-2">Status</th>
+                  <th className="text-left px-4 py-2">Updated</th>
+                  <th className="text-left px-4 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedDefinitions.map((d) => (
+                  <tr key={d.id} className="border-t border-gray-100">
+                    <td className="px-4 py-2 font-medium text-gray-800">{d.name}</td>
+                    <td className="px-4 py-2 text-gray-600">{d.trigger_event}</td>
+                    <td className="px-4 py-2 text-gray-600">v{d.version}</td>
+                    <td className="px-4 py-2">
+                      <span className={`text-xs px-2 py-1 rounded-full ${d.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {d.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-gray-500">{d.updated_at ? new Date(d.updated_at).toLocaleString() : '-'}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedId(d.id);
+                            setActiveTab('builder');
+                          }}
+                          className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          Open
+                        </button>
+                        <button
+                          onClick={() => triggerSelected(d.id)}
+                          className="text-xs px-2 py-1 border border-green-300 text-green-700 rounded bg-green-50 hover:bg-green-100"
+                        >
+                          Test
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {sortedDefinitions.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-8 text-center text-gray-400" colSpan={6}>
+                      No workflows saved yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Non-builder tabs */}
+      {activeTab === 'analytics' && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <AnalyticsTab />
+        </div>
+      )}
+      {activeTab === 'approvals' && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <ApprovalsTab />
+        </div>
+      )}
+      {activeTab === 'schedules' && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <SchedulesTab definitions={definitions} />
+        </div>
+      )}
+
+      {/* Builder tab (hidden when other tab active, to preserve state) */}
+      <div className={activeTab === 'builder' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
+
+      {/* Toolbar */}
+      <TopToolbar
+        definitions={definitions}
+        selectedId={selectedId}
+        selectedDefinition={selectedDefinition}
+        name={name}
+        isActive={isActive}
+        saving={saving}
+        onSelectDefinition={setSelectedId}
+        onNameChange={setName}
+        onToggleActive={() => setIsActive((v) => !v)}
+        onSave={saveDefinition}
+        onTrigger={triggerSelected}
+        onDelete={deleteDefinition}
+        onNewWorkflow={resetDraft}
+        onShowVersions={handleShowVersions}
+        onShowTemplates={() => setShowTemplates(true)}
+        onShowAI={() => setShowAI((v) => !v)}
+        onFitView={() => fitView({ padding: 0.1 })}
+        onZoomIn={() => zoomIn()}
+        onZoomOut={() => zoomOut()}
+      />
+
+      {/* 3-panel body */}
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Left: Node Palette */}
+        <div className="w-48 shrink-0 flex flex-col min-h-0">
+          <NodePalette
+            palette={palette}
+            onDragStart={onDragStart}
+            onAddNode={(item) => {
+              // Click-to-add: place in center of canvas
+              const nodeKey = `${item.key}_${Date.now()}`;
+              const isStart = item.group === 'triggers';
+              const isEnd = item.key === 'end';
+              const nodeType = isStart ? 'start' : isEnd ? 'end' : item.group === 'conditions' ? 'condition' : item.group === 'approvals' ? 'approval' : item.group === 'timers' ? 'timer' : item.key === 'subworkflow' ? 'subworkflow' : 'action';
+              const config = { ...defaultConfigForGroup(item.group) };
+              if (isStart) config.trigger_type = item.key;
+              if (nodeType === 'action') config.action_name = item.key;
+              if (nodeType === 'condition') config.condition_kind = item.key;
+              setNodes((nds) => [...nds, { id: nodeKey, type: 'workflowNode', position: { x: 250, y: 150 + nds.length * 100 }, data: { nodeKey, nodeType, label: item.label, config, isStart, isTerminal: isEnd } }]);
+            }}
+          />
         </div>
 
-        <div className="xl:col-span-1 space-y-4">
-          <div className="bg-white border border-gray-300 rounded-xl p-3">
-            <h3 className="font-semibold text-black mb-2">Node Palette</h3>
-            <div className="space-y-2 max-h-[220px] overflow-auto">
-              <div className="text-xs font-semibold text-gray-700">Triggers</div>
-              {TRIGGERS.map((t) => (
-                <button key={t.key} draggable onDragStart={(e) => e.dataTransfer.setData('application/workflow-item', JSON.stringify(t))} onClick={() => addNode(t)} className="w-full text-left border border-gray-300 rounded px-2 py-1 text-xs hover:bg-gray-50">{t.label}</button>
-              ))}
-              <div className="text-xs font-semibold text-gray-700">Approvals</div>
-              {APPROVALS.map((a) => (
-                <button key={a.key} draggable onDragStart={(e) => e.dataTransfer.setData('application/workflow-item', JSON.stringify(a))} onClick={() => addNode(a)} className="w-full text-left border border-gray-300 rounded px-2 py-1 text-xs hover:bg-gray-50">{a.label}</button>
-              ))}
-              <div className="text-xs font-semibold text-gray-700">Actions</div>
-              {ACTIONS.map((a) => (
-                <button key={a.key} draggable onDragStart={(e) => e.dataTransfer.setData('application/workflow-item', JSON.stringify(a))} onClick={() => addNode(a)} className="w-full text-left border border-gray-300 rounded px-2 py-1 text-xs hover:bg-gray-50">{a.label}</button>
-              ))}
-              <div className="text-xs font-semibold text-gray-700">Timers</div>
-              {TIMERS.map((t) => (
-                <button key={t.key} draggable onDragStart={(e) => e.dataTransfer.setData('application/workflow-item', JSON.stringify(t))} onClick={() => addNode(t)} className="w-full text-left border border-gray-300 rounded px-2 py-1 text-xs hover:bg-gray-50">{t.label}</button>
-              ))}
-              <div className="text-xs font-semibold text-gray-700">Conditions By Module</div>
-              {Object.entries(CONDITION_GROUPS).map(([module, items]) => (
-                <div key={module} className="border border-gray-200 rounded p-2 bg-slate-50">
-                  <div className="text-[11px] font-semibold uppercase text-gray-700 mb-1">{module}</div>
-                  {items.map((c) => {
-                    const it: PaletteItem = { key: c.key, label: c.label, group: 'condition', module };
-                    return <button key={c.key} draggable onDragStart={(e) => e.dataTransfer.setData('application/workflow-item', JSON.stringify(it))} onClick={() => addNode(it)} className="w-full text-left border border-gray-300 rounded px-2 py-1 text-xs bg-white hover:bg-gray-50 mb-1">{c.label}</button>;
-                  })}
-                </div>
-              ))}
-              <button onClick={() => addNode({ key: 'end', label: 'End', group: 'control' })} className="w-full text-left border border-gray-300 rounded px-2 py-1 text-xs hover:bg-gray-50">End Node</button>
+        {/* Center: Canvas */}
+        <div className="flex-1 min-w-0 relative" ref={reactFlowWrapper}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onInit={setReactFlowInstance}
+            onDrop={onDropCanvas}
+            onDragOver={onDragOverCanvas}
+            onNodeClick={(_, node) => { setSelectedNodeId(node.id); setSelectedEdgeId(null); }}
+            onEdgeClick={(_, edge) => { setSelectedEdgeId(edge.id); setSelectedNodeId(null); }}
+            onPaneClick={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
+            nodeTypes={nodeTypes}
+            fitView
+            snapToGrid
+            snapGrid={[15, 15]}
+            className="bg-slate-50"
+          >
+            <MiniMap
+              nodeStrokeWidth={2}
+              className="!bg-white !border !border-gray-200 !rounded-lg"
+              maskColor="rgba(0,0,0,0.04)"
+            />
+            <Controls className="!bg-white !border !border-gray-200 !rounded-lg" />
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e2e8f0" />
+          </ReactFlow>
+
+          {/* Empty state */}
+          {nodes.length <= 2 && edges.length <= 1 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="text-center text-gray-300">
+                <div className="text-4xl mb-2">⟵</div>
+                <div className="text-sm font-medium">Drag nodes from the palette</div>
+                <div className="text-xs mt-1">or use the AI panel to generate a workflow</div>
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="bg-white border border-gray-300 rounded-xl p-3">
-            <h3 className="font-semibold text-black mb-2">Inspector</h3>
-            {!selectedNode ? <p className="text-xs text-gray-600">Select a node to configure.</p> : (
-              <div className="space-y-2">
-                <input value={selectedNode.data.label} onChange={(e) => setNodeLabel(selectedNode.id, e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1 text-xs" />
+          {/* Version drawer overlay */}
+          {showVersions && (
+            <VersionDrawer
+              versions={versions}
+              loading={versionsLoading}
+              onClose={() => setShowVersions(false)}
+              onRollback={handleRollback}
+            />
+          )}
 
-                {selectedNode.data.nodeType === 'approval' ? (
-                  <>
-                    <label className="text-xs text-gray-700">Approval Type</label>
-                    <select value={String(selectedNodeConfig.approval_type || 'single')} onChange={(e) => setNodeConfig(selectedNode.id, { approval_type: e.target.value })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs">
-                      {APPROVALS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
-                    </select>
-                    <label className="text-xs text-gray-700">Approver Users</label>
-                    <select multiple value={((selectedNodeConfig.approver_user_ids as number[] | undefined) || []).map(String)} onChange={(e) => setNodeConfig(selectedNode.id, { approver_user_ids: parseMultiSelectIds(e) })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs h-20">
-                      {users.map((u) => <option key={u.id} value={u.id}>{u.display_name || u.username || `User ${u.id}`}</option>)}
-                    </select>
-                    <label className="text-xs text-gray-700">Approver Roles</label>
-                    <select multiple value={((selectedNodeConfig.approver_role_ids as number[] | undefined) || []).map(String)} onChange={(e) => setNodeConfig(selectedNode.id, { approver_role_ids: parseMultiSelectIds(e) })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs h-20">
-                      {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                    </select>
-                    <label className="text-xs text-gray-700">Escalation After (days)</label>
-                    <input type="number" min={1} value={Number(selectedNodeConfig.timeout_days || 14)} onChange={(e) => setNodeConfig(selectedNode.id, { timeout_days: Number(e.target.value || 14) })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs" />
-                    <label className="text-xs text-gray-700">Escalation Users</label>
-                    <select multiple value={((selectedNodeConfig.escalation_user_ids as number[] | undefined) || []).map(String)} onChange={(e) => setNodeConfig(selectedNode.id, { escalation_user_ids: parseMultiSelectIds(e), on_timeout: 'escalate' })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs h-20">
-                      {users.map((u) => <option key={u.id} value={u.id}>{u.display_name || u.username || `User ${u.id}`}</option>)}
-                    </select>
-                    <label className="text-xs text-gray-700">Escalation Roles</label>
-                    <select multiple value={((selectedNodeConfig.escalation_role_ids as number[] | undefined) || []).map(String)} onChange={(e) => setNodeConfig(selectedNode.id, { escalation_role_ids: parseMultiSelectIds(e), on_timeout: 'escalate' })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs h-20">
-                      {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                    </select>
-                  </>
-                ) : null}
+          {/* AI panel overlay */}
+          {showAI && (
+            <AIPanel
+              onClose={() => setShowAI(false)}
+              aiPrompt={aiPrompt}
+              aiGenerating={aiGenerating}
+              aiSuggestions={aiSuggestions}
+              optimizationTips={optimizationTips}
+              onPromptChange={setAiPrompt}
+              onGenerate={generateFromNaturalLanguage}
+              onOptimize={runOptimization}
+              onUseSuggestion={handleUseSuggestion}
+              hasSelectedWorkflow={!!selectedId}
+            />
+          )}
+        </div>
 
-                {selectedNode.data.nodeType === 'action' ? (
-                  <>
-                    <label className="text-xs text-gray-700">Action</label>
-                    <select value={String(selectedNodeConfig.action_name || 'send_notification_email')} onChange={(e) => setNodeConfig(selectedNode.id, { action_name: e.target.value })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs">
-                      {ACTIONS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
-                    </select>
-                    {String(selectedNodeConfig.action_name || 'send_notification_email') === 'send_notification_email' ? (
-                      <>
-                        <label className="text-xs text-gray-700">Sender Profile</label>
-                        <select value={String(selectedNodeConfig.sender_profile_id || '')} onChange={(e) => setNodeConfig(selectedNode.id, { sender_profile_id: e.target.value })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs">
-                          <option value="">Select sender</option>
-                          {senderProfiles.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.fromEmail})</option>)}
-                        </select>
-                        <label className="text-xs text-gray-700">Message Template</label>
-                        <select
-                          value={String(selectedNodeConfig.template_id || '')}
-                          onChange={(e) => {
-                            const tpl = templates.find((t) => t.id === e.target.value);
-                            setNodeConfig(selectedNode.id, { template_id: e.target.value, subject: tpl?.subject || '', body_html: tpl?.body || '' });
-                          }}
-                          className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
-                        >
-                          <option value="">Select template</option>
-                          {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                        <label className="text-xs text-gray-700">Subject</label>
-                        <input value={String(selectedNodeConfig.subject || '')} onChange={(e) => setNodeConfig(selectedNode.id, { subject: e.target.value })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs" />
-                        <label className="text-xs text-gray-700">Body</label>
-                        <textarea value={String(selectedNodeConfig.body_html || '')} onChange={(e) => setNodeConfig(selectedNode.id, { body_html: e.target.value })} className="w-full min-h-[80px] border border-gray-300 rounded px-2 py-1 text-xs" />
-                        <label className="text-xs text-gray-700">Recipient Users</label>
-                        <select multiple value={((selectedNodeConfig.user_ids as number[] | undefined) || []).map(String)} onChange={(e) => setNodeConfig(selectedNode.id, { user_ids: parseMultiSelectIds(e) })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs h-20">
-                          {users.map((u) => <option key={u.id} value={u.id}>{u.display_name || u.username || `User ${u.id}`}</option>)}
-                        </select>
-                        <label className="text-xs text-gray-700">Recipient Roles</label>
-                        <select multiple value={((selectedNodeConfig.role_ids as number[] | undefined) || []).map(String)} onChange={(e) => setNodeConfig(selectedNode.id, { role_ids: parseMultiSelectIds(e) })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs h-20">
-                          {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                        </select>
-                        <label className="text-xs text-gray-700 flex items-center gap-2"><input type="checkbox" checked={Boolean(selectedNodeConfig.include_trigger_user)} onChange={(e) => setNodeConfig(selectedNode.id, { include_trigger_user: e.target.checked })} /> Include triggering user</label>
-                      </>
-                    ) : null}
-                  </>
-                ) : null}
-
-                {selectedNode.data.nodeType === 'condition' ? (
-                  <>
-                    <label className="text-xs text-gray-700">Condition Module</label>
-                    <select value={String(selectedNodeConfig.module || 'governance')} onChange={(e) => setNodeConfig(selectedNode.id, { module: e.target.value, condition_key: CONDITION_GROUPS[e.target.value]?.[0]?.key || '' })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs">
-                      {Object.keys(CONDITION_GROUPS).map((m) => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <label className="text-xs text-gray-700">Condition</label>
-                    <select value={String(selectedNodeConfig.condition_key || '')} onChange={(e) => setNodeConfig(selectedNode.id, { condition_key: e.target.value })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs">
-                      {(CONDITION_GROUPS[String(selectedNodeConfig.module || 'governance')] || []).map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                    </select>
-                    <label className="text-xs text-gray-700">Expected Value</label>
-                    <input value={String(selectedNodeConfig.expected_value || '')} onChange={(e) => setNodeConfig(selectedNode.id, { expected_value: e.target.value })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs" />
-                  </>
-                ) : null}
-
-                {selectedNode.data.nodeType === 'timer' ? (
-                  <>
-                    <label className="text-xs text-gray-700">Wait Seconds</label>
-                    <input type="number" min={0} value={Number(selectedNodeConfig.wait_seconds || 3600)} onChange={(e) => setNodeConfig(selectedNode.id, { wait_seconds: Number(e.target.value || 3600) })} className="w-full border border-gray-300 rounded px-2 py-1 text-xs" />
-                  </>
-                ) : null}
-              </div>
-            )}
-
-            {selectedEdge ? (
-              <div className="mt-3 border-t pt-3">
-                <div className="text-xs font-semibold text-gray-700 mb-1">Selected Edge</div>
-                <input value={String((selectedEdge.data as Record<string, unknown>)?.priority || 1)} onChange={(e) => setEdges((prev) => prev.map((ed) => ed.id === selectedEdge.id ? { ...ed, data: { ...(ed.data as Record<string, unknown>), priority: Number(e.target.value || 1) } } : ed))} className="w-full border border-gray-300 rounded px-2 py-1 text-xs mb-1" />
-                <select
-                  value={String(((selectedEdge.data as Record<string, unknown>)?.condition as Record<string, unknown> | undefined)?._label || 'always')}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    const condition = next === 'always' ? {} : next === 'true' ? { path: 'step.condition_result', operator: 'eq', value: true, _label: 'true' } : next === 'false' ? { path: 'step.condition_result', operator: 'eq', value: false, _label: 'false' } : { _label: next };
-                    setEdges((prev) => prev.map((ed) => ed.id === selectedEdge.id ? { ...ed, data: { ...(ed.data as Record<string, unknown>), condition } } : ed));
-                  }}
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
-                >
-                  <option value="always">Always</option>
-                  <option value="true">True branch</option>
-                  <option value="false">False branch</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-              </div>
-            ) : null}
-          </div>
+        {/* Right: Config Panel */}
+        <div className="w-60 shrink-0 flex flex-col min-h-0">
+          <ConfigPanel
+            actorUsers={actorUsers}
+            actorRoles={actorRoles}
+            actionOptions={actionOptions}
+            conditionPathOptions={conditionPathOptions}
+            selectedNode={selectedNode}
+            selectedEdge={selectedEdge}
+            nodeConfigText={nodeConfigText}
+            edgeConditionText={edgeConditionText}
+            edgeLabel={edgeLabel}
+            edgePriority={edgePriority}
+            onUpdateNodeConfig={updateSelectedNode}
+            onApplyNodeConfig={applyNodeConfig}
+            onApplyEdgeConfig={applyEdgeConfig}
+            onSetNodeConfigText={setNodeConfigText}
+            onSetEdgeConditionText={setEdgeConditionText}
+            onSetEdgeLabel={setEdgeLabel}
+            onSetEdgePriority={setEdgePriority}
+            onDeleteSelected={deleteSelected}
+            onClose={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
+          />
         </div>
       </div>
+
+      {/* Templates modal */}
+      {showTemplates && (
+        <TemplatesModal
+          templates={templates}
+          onClose={() => setShowTemplates(false)}
+          onUse={handleUseTemplate}
+        />
+      )}
+      </div>{/* end builder tab wrapper */}
     </div>
   );
 }
 
+// ─── Root Export ──────────────────────────────────────────────────────────────
+
 export default function WorkflowEngineAdminPage() {
   return (
     <ReactFlowProvider>
-      <WorkflowEngineAdminContent />
+      <WorkflowEngineContent />
     </ReactFlowProvider>
   );
 }

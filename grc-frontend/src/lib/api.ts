@@ -1980,6 +1980,14 @@ export const workflowEngineApi = {
   events: {
     publish: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/events/publish', data),
   },
+  notifications: {
+    checkSetup: () => apiClient.get('/workflow-engine/notifications/check-setup'),
+    listEmailConfigs: () => apiClient.get('/workflow-engine/notifications/email-config'),
+    createEmailConfig: (data: Record<string, unknown>) => apiClient.post('/workflow-engine/notifications/email-config', data),
+    updateEmailConfig: (id: number, data: Record<string, unknown>) => apiClient.patch(`/workflow-engine/notifications/email-config/${id}`, data),
+    testEmailConfig: (id: number, testEmail: string) =>
+      apiClient.post(`/workflow-engine/notifications/email-config/${id}/test`, undefined, { params: { test_email: testEmail } }),
+  },
 };
 
 export default apiClient;

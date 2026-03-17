@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
 
 from ....models import (
     WorkflowDefinition,
@@ -15,24 +14,6 @@ from ..schemas import WorkflowTemplateCreate, WorkflowTemplateResponse
 from ..services.definition_versions import snapshot_definition
 
 router = APIRouter(prefix="/templates", tags=["Workflow Engine Templates"])
-
-
-class DocumentApprovalBootstrapRequest(BaseModel):
-    name: str = "Governance Document Approval Workflow"
-    description: str | None = "Reviewer and approver flow with timeout escalation"
-    trigger_event: str = "governance.policy_draft.created"
-    include_reviewer_step: bool = True
-    reviewer_user_ids: list[int] = Field(default_factory=list)
-    reviewer_role_ids: list[int] = Field(default_factory=list)
-    approver_user_ids: list[int] = Field(default_factory=list)
-    approver_role_ids: list[int] = Field(default_factory=list)
-    escalation_user_ids: list[int] = Field(default_factory=list)
-    escalation_role_ids: list[int] = Field(default_factory=list)
-    escalation_after_days: int = 14
-    notify_user_ids: list[int] = Field(default_factory=list)
-    notify_role_ids: list[int] = Field(default_factory=list)
-    followup_user_ids: list[int] = Field(default_factory=list)
-    followup_role_ids: list[int] = Field(default_factory=list)
 
 
 @router.post("", response_model=WorkflowTemplateResponse, status_code=status.HTTP_201_CREATED)
@@ -151,28 +132,32 @@ def instantiate_template(
     db.flush()
 
     for node in template.nodes_json or []:
+        node_cfg = dict(node.get("config") or {})
         db.add(
             WorkflowNode(
                 workflow_definition_id=definition.id,
                 node_key=node.get("node_key"),
                 node_type=node.get("node_type") or "action",
                 name=node.get("name") or "Node",
-                config=node.get("config") or {},
-                position_x=int(node.get("position_x", 0)),
-                position_y=int(node.get("position_y", 0)),
-                is_start=bool(node.get("is_start", False)),
-                is_terminal=bool(node.get("is_terminal", False)),
+                is_start=bool(node.get("is_start")),
+                is_terminal=bool(node.get("is_terminal")),
+                config=node_cfg,
+                position_x=float(node.get("position_x", 0) or 0),
+                position_y=float(node.get("position_y", 0) or 0),
             )
         )
 
-    for edge in template.edges_json or []:
+    for idx, edge in enumerate(template.edges_json or []):
+        condition = dict(edge.get("condition") or {})
+        if "priority" not in condition:
+            condition["priority"] = int(edge.get("priority", 100) or 100)
         db.add(
             WorkflowEdge(
                 workflow_definition_id=definition.id,
                 source_node_key=edge.get("source_node_key"),
                 target_node_key=edge.get("target_node_key"),
-                condition=edge.get("condition") or {},
-                priority=int(edge.get("priority", 100)),
+                condition=condition,
+                priority=int(edge.get("priority", 100) or 100),
             )
         )
 
@@ -182,186 +167,3 @@ def instantiate_template(
     db.commit()
 
     return {"workflow_definition_id": definition.id, "template_id": template.id, "status": "created"}
-
-
-@router.post("/bootstrap/document-approval", status_code=status.HTTP_201_CREATED)
-def bootstrap_document_approval_workflow(
-    payload: DocumentApprovalBootstrapRequest,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-    _: bool = Depends(require_tenant_permission("workflow_engine:templates:publish")),
-):
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="User is not assigned to any tenant")
-
-    definition = WorkflowDefinition(
-        tenant_id=tenant_id,
-        name=payload.name,
-        description=payload.description,
-        trigger_event=payload.trigger_event,
-        trigger_conditions={},
-        definition_json={
-            "kind": "governance_document_approval",
-            "bootstrap": True,
-        },
-        is_active=True,
-        created_by_id=current_user.id,
-        updated_by_id=current_user.id,
-    )
-    db.add(definition)
-    db.flush()
-
-    nodes = [
-        {
-            "node_key": "start",
-            "node_type": "start",
-            "name": "Start",
-            "config": {},
-            "is_start": True,
-            "is_terminal": False,
-            "position_x": 80,
-            "position_y": 220,
-        },
-    ]
-
-    if payload.include_reviewer_step:
-        nodes.append(
-            {
-                "node_key": "reviewer",
-                "node_type": "approval",
-                "name": "Reviewer Approval",
-                "config": {
-                    "approval_type": "single",
-                    "required_approvals": 1,
-                    "reviewer_user_ids": payload.reviewer_user_ids,
-                    "reviewer_role_ids": payload.reviewer_role_ids,
-                    "on_timeout": "auto_reject",
-                },
-                "is_start": False,
-                "is_terminal": False,
-                "position_x": 300,
-                "position_y": 220,
-            }
-        )
-
-    nodes.extend(
-        [
-            {
-                "node_key": "approver",
-                "node_type": "approval",
-                "name": "Approver Approval",
-                "config": {
-                    "approval_type": "single",
-                    "required_approvals": 1,
-                    "approver_user_ids": payload.approver_user_ids,
-                    "approver_role_ids": payload.approver_role_ids,
-                    "on_timeout": "escalate",
-                    "timeout_days": payload.escalation_after_days,
-                    "escalation_user_ids": payload.escalation_user_ids,
-                    "escalation_role_ids": payload.escalation_role_ids,
-                },
-                "is_start": False,
-                "is_terminal": False,
-                "position_x": 540,
-                "position_y": 220,
-            },
-            {
-                "node_key": "notify_submitter",
-                "node_type": "action",
-                "name": "Notify Submitter",
-                "config": {
-                    "action_name": "send_notification_email",
-                    "payload": {
-                        "include_trigger_user": True,
-                        "subject": "Your document was approved",
-                    },
-                },
-                "is_start": False,
-                "is_terminal": False,
-                "position_x": 800,
-                "position_y": 160,
-            },
-            {
-                "node_key": "notify_followup",
-                "node_type": "action",
-                "name": "Notify Follow-up Review",
-                "config": {
-                    "action_name": "send_notification_email",
-                    "payload": {
-                        "user_ids": payload.followup_user_ids or payload.notify_user_ids,
-                        "role_ids": payload.followup_role_ids or payload.notify_role_ids,
-                        "subject": "Document review follow-up",
-                    },
-                },
-                "is_start": False,
-                "is_terminal": False,
-                "position_x": 1020,
-                "position_y": 160,
-            },
-            {
-                "node_key": "end",
-                "node_type": "end",
-                "name": "End",
-                "config": {},
-                "is_start": False,
-                "is_terminal": True,
-                "position_x": 1220,
-                "position_y": 220,
-            },
-        ]
-    )
-
-    edges = []
-    if payload.include_reviewer_step:
-        edges.append({"source_node_key": "start", "target_node_key": "reviewer", "condition": {}, "priority": 100})
-        edges.append({"source_node_key": "reviewer", "target_node_key": "approver", "condition": {}, "priority": 100})
-    else:
-        edges.append({"source_node_key": "start", "target_node_key": "approver", "condition": {}, "priority": 100})
-
-    edges.extend(
-        [
-            {"source_node_key": "approver", "target_node_key": "notify_submitter", "condition": {}, "priority": 100},
-            {"source_node_key": "notify_submitter", "target_node_key": "notify_followup", "condition": {}, "priority": 100},
-            {"source_node_key": "notify_followup", "target_node_key": "end", "condition": {}, "priority": 100},
-        ]
-    )
-
-    for node in nodes:
-        db.add(
-            WorkflowNode(
-                workflow_definition_id=definition.id,
-                node_key=node["node_key"],
-                node_type=node["node_type"],
-                name=node["name"],
-                config=node["config"],
-                position_x=node["position_x"],
-                position_y=node["position_y"],
-                is_start=node["is_start"],
-                is_terminal=node["is_terminal"],
-            )
-        )
-
-    for edge in edges:
-        db.add(
-            WorkflowEdge(
-                workflow_definition_id=definition.id,
-                source_node_key=edge["source_node_key"],
-                target_node_key=edge["target_node_key"],
-                condition=edge["condition"],
-                priority=edge["priority"],
-            )
-        )
-
-    db.flush()
-    db.refresh(definition)
-    snapshot_definition(db, definition, change_summary="Bootstrapped governance document approval workflow")
-    db.commit()
-
-    return {
-        "status": "created",
-        "workflow_definition_id": definition.id,
-        "trigger_event": definition.trigger_event,
-        "name": definition.name,
-        "include_reviewer_step": payload.include_reviewer_step,
-    }
