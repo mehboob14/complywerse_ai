@@ -59,8 +59,15 @@ attached_assets/
 cookies.txt
 *.sql
 
+# ALL zip/archive files anywhere in the repo
+**/*.zip
+**/*.tar.gz
+**/*.tar
+**/*.rar
+**/*.7z
+
 # Project-specific generated directories
-backend/venv_version_11/
+backend/venv/
 backend/__pycache__/
 backend/grc/__pycache__/
 backend/static/
@@ -73,8 +80,6 @@ grc-frontend/out/
 grc-frontend/dist/
 grc-frontend/build/
 grc-frontend/uploads/
-grc-frontend/*.zip
-backend/*.zip
 
 # Generic nested dependency/cache folders
 **/node_modules/
