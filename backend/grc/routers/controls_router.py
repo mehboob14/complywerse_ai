@@ -404,12 +404,14 @@ def list_framework_controls(
             "section_number": control.section_number,
             "parent_section": control.parent_section,
             "ai_confidence": control.ai_confidence,
+            "ai_notes": control.ai_notes,
             "is_verified": control.is_verified,
             "framework_id": control.uploaded_framework_id,
             "framework_name": control.uploaded_framework.name if control.uploaded_framework else None,
             "framework_version": control.uploaded_framework.version if control.uploaded_framework else None,
             "created_at": control.created_at.isoformat() if control.created_at else None,
             "evidence_count": evidence_counts.get(control.id, 0),
+            "evidence_requirements": control.evidence_requirements or [],
         })
     
     return {
@@ -417,6 +419,53 @@ def list_framework_controls(
         "total": total,
         "skip": skip,
         "limit": limit
+    }
+
+
+@router.get("/framework-control/{framework_control_id}", response_model=dict)
+def get_framework_control_detail(
+    framework_control_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Get details of a specific framework control with evidence requirements"""
+    control = db.query(ParsedFrameworkControl).options(
+        joinedload(ParsedFrameworkControl.uploaded_framework)
+    ).filter(ParsedFrameworkControl.id == framework_control_id).first()
+    
+    if not control:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework control not found"
+        )
+    
+    # Get evidence count
+    evidence_count = db.query(func.count(EvidenceControlMapping.id)).filter(
+        EvidenceControlMapping.parsed_control_id == framework_control_id
+    ).scalar() or 0
+    
+    return {
+        "id": control.id,
+        "control_id": control.control_id,
+        "original_reference": control.original_reference,
+        "title": control.title,
+        "description": control.description,
+        "full_text": control.full_text,
+        "domain": control.domain,
+        "category": control.category,
+        "is_mandatory": control.is_mandatory,
+        "priority": control.priority,
+        "section_number": control.section_number,
+        "parent_section": control.parent_section,
+        "ai_confidence": control.ai_confidence,
+        "ai_notes": control.ai_notes,
+        "is_verified": control.is_verified,
+        "framework_id": control.uploaded_framework_id,
+        "framework_name": control.uploaded_framework.name if control.uploaded_framework else None,
+        "framework_version": control.uploaded_framework.version if control.uploaded_framework else None,
+        "created_at": control.created_at.isoformat() if control.created_at else None,
+        "evidence_requirements": control.evidence_requirements or [],
+        "evidence_count": evidence_count,
     }
 
 

@@ -1,6 +1,11 @@
 from datetime import datetime, timedelta
+import logging
 
-from ....models import ApprovalRequest, WorkflowAuditLog, WorkflowDefinition, WorkflowEngineSchedule, WorkflowEngineStep, WorkflowInstance
+from ....models import ApprovalRequest, WorkflowAuditLog, WorkflowEngineSchedule, WorkflowEngineStep
+from .notification_service import send_workflow_notification
+
+
+logger = logging.getLogger(__name__)
 
 
 def _compute_next_cron(cron_expr: str, after: datetime) -> datetime:
@@ -36,7 +41,11 @@ class TimerService:
             .all()
         )
 
+        if due_steps:
+            logger.info("workflow.timer.steps_due count=%s", len(due_steps))
+
         for step in due_steps:
+            logger.debug("workflow.timer.step_resume_queued step_id=%s", step.id)
             self.event_queue.publish({"kind": "resume_step", "step_id": step.id})
         fired += len(due_steps)
 
@@ -53,7 +62,17 @@ class TimerService:
             .all()
         )
 
+        if schedules:
+            logger.info("workflow.scheduler.due count=%s", len(schedules))
+
         for schedule in schedules:
+            logger.info(
+                "workflow.scheduler.fire schedule_id=%s tenant_id=%s workflow_definition_id=%s schedule_type=%s",
+                schedule.id,
+                schedule.tenant_id,
+                schedule.workflow_definition_id,
+                schedule.schedule_type,
+            )
             self.event_queue.publish(
                 {
                     "kind": "start_instance",
@@ -69,129 +88,128 @@ class TimerService:
             if schedule.schedule_type == "once":
                 schedule.is_active = False
                 schedule.next_run_at = None
+                logger.info("workflow.scheduler.completed_once schedule_id=%s", schedule.id)
             elif schedule.schedule_type == "cron" and schedule.cron_expression:
                 schedule.next_run_at = _compute_next_cron(schedule.cron_expression, datetime.utcnow())
+                logger.info(
+                    "workflow.scheduler.next_run schedule_id=%s next_run_at=%s",
+                    schedule.id,
+                    schedule.next_run_at.isoformat() if schedule.next_run_at else None,
+                )
             else:
                 interval = int(schedule.interval_minutes or 60)
                 schedule.next_run_at = datetime.utcnow() + timedelta(minutes=interval)
+                logger.info(
+                    "workflow.scheduler.next_run schedule_id=%s interval_minutes=%s next_run_at=%s",
+                    schedule.id,
+                    interval,
+                    schedule.next_run_at.isoformat() if schedule.next_run_at else None,
+                )
 
         fired += len(schedules)
 
-        # 3. SLA breach detection — escalate overdue pending approvals
-        fired += self._check_sla_breaches(db)
+        # 3. SLA reminders and timeout evaluation for pending approvals
+        fired += self._process_approval_sla(db)
+
+        if fired:
+            logger.info("workflow.timer.cycle_fired total=%s", fired)
 
         return fired
 
-    def _check_sla_breaches(self, db) -> int:
-        """Find pending approvals that have breached their SLA and escalate them."""
+    @staticmethod
+    def _parse_iso_datetime(value):
+        if not value:
+            return None
+        try:
+            text = str(value).strip()
+            if text.endswith("Z"):
+                text = text[:-1] + "+00:00"
+            return datetime.fromisoformat(text)
+        except Exception:
+            return None
+
+    def _process_approval_sla(self, db) -> int:
+        """Send pre-deadline escalation reminders and queue runtime timeout handling."""
         now = datetime.utcnow()
-        overdue = (
+        pending = (
             db.query(ApprovalRequest)
             .filter(
                 ApprovalRequest.status == "pending",
                 ApprovalRequest.due_at.isnot(None),
-                ApprovalRequest.due_at <= now,
             )
-            .limit(100)
+            .order_by(ApprovalRequest.due_at.asc())
+            .limit(300)
             .all()
         )
 
-        escalated = 0
-        for approval in overdue:
-            meta = approval.request_metadata or {}
-            on_timeout = meta.get("on_timeout", "auto_reject")
-            delegate_to = meta.get("delegate_to_user_id")
+        if not pending:
+            return 0
 
-            instance = db.query(WorkflowInstance).filter(
-                WorkflowInstance.id == approval.workflow_instance_id
-            ).first()
-
-            if not instance:
+        touched = 0
+        for approval in pending:
+            metadata = dict(approval.request_metadata or {})
+            due_at = approval.due_at
+            if due_at is None:
                 continue
 
-            definition = db.query(WorkflowDefinition).filter(
-                WorkflowDefinition.id == instance.workflow_definition_id
-            ).first()
+            # Reminder: notify escalation recipients before the due date.
+            reminder_before_seconds = int(metadata.get("reminder_before_seconds") or 0)
+            reminder_sent_at = self._parse_iso_datetime(metadata.get("reminder_sent_at"))
+            if reminder_before_seconds > 0 and reminder_sent_at is None:
+                remaining_seconds = int((due_at - now).total_seconds())
+                if 0 < remaining_seconds <= reminder_before_seconds:
+                    escalation_user_ids = metadata.get("escalation_user_ids") or []
+                    escalation_role_ids = metadata.get("escalation_role_ids") or []
+                    if not escalation_user_ids and approval.approver_user_id:
+                        escalation_user_ids = [approval.approver_user_id]
 
-            if on_timeout == "auto_approve":
-                approval.status = "approved"
-                approval.decision_comment = "Auto-approved due to SLA timeout"
-                approval.responded_at = now
-                db.add(WorkflowAuditLog(
-                    tenant_id=instance.tenant_id,
-                    workflow_definition_id=instance.workflow_definition_id,
-                    workflow_instance_id=instance.id,
-                    event_type="approval.sla_auto_approved",
-                    message=f"Approval #{approval.id} auto-approved after SLA breach",
-                    payload={"approval_id": approval.id, "due_at": approval.due_at.isoformat()},
-                ))
-                # Resume the waiting step
-                step = db.query(WorkflowEngineStep).filter(
-                    WorkflowEngineStep.id == approval.workflow_step_id
-                ).first()
-                if step:
-                    self.event_queue.publish({"kind": "resume_step", "step_id": step.id})
+                    channels = metadata.get("notification_channels") or ["in_app", "email"]
+                    remaining_days = max(1, int((remaining_seconds + 86399) // 86400))
+                    result = send_workflow_notification(
+                        db,
+                        tenant_id=approval.tenant_id,
+                        user_ids=escalation_user_ids,
+                        role_ids=escalation_role_ids,
+                        channels=channels,
+                        workflow_instance_id=approval.workflow_instance_id,
+                        notification_type="warning",
+                        subject="Approval Escalation Reminder",
+                        message=(
+                            f"Approval request #{approval.id} is still pending and due in "
+                            f"{remaining_days} day(s) on {due_at.strftime('%Y-%m-%d %H:%M UTC')}."
+                        ),
+                    )
 
-            elif on_timeout == "delegate" and delegate_to:
-                # Reassign to delegate
-                approval.approver_user_id = int(delegate_to)
-                # Extend due date by same original SLA window (default 24h)
-                approval.due_at = now + timedelta(hours=24)
-                db.add(WorkflowAuditLog(
-                    tenant_id=instance.tenant_id,
-                    workflow_definition_id=instance.workflow_definition_id,
-                    workflow_instance_id=instance.id,
-                    event_type="approval.sla_delegated",
-                    message=f"Approval #{approval.id} delegated to user {delegate_to} after SLA breach",
-                    payload={"approval_id": approval.id, "delegated_to": delegate_to},
-                ))
+                    metadata["reminder_sent_at"] = now.isoformat()
+                    approval.request_metadata = metadata
+                    db.add(
+                        WorkflowAuditLog(
+                            tenant_id=approval.tenant_id,
+                            workflow_definition_id=None,
+                            workflow_instance_id=approval.workflow_instance_id,
+                            workflow_step_id=approval.workflow_step_id,
+                            event_type="approval.escalation_reminder_sent",
+                            message="Escalation reminder sent before approval due date",
+                            payload={
+                                "approval_request_id": approval.id,
+                                "remaining_seconds": remaining_seconds,
+                                "notified_users": result.get("notified_users", 0),
+                                "channels": result.get("channels", []),
+                            },
+                        )
+                    )
+                    touched += 1
 
-            else:
-                # Default: auto_reject
-                approval.status = "rejected"
-                approval.decision_comment = "Auto-rejected due to SLA timeout"
-                approval.responded_at = now
-                db.add(WorkflowAuditLog(
-                    tenant_id=instance.tenant_id,
-                    workflow_definition_id=instance.workflow_definition_id,
-                    workflow_instance_id=instance.id,
-                    event_type="approval.sla_auto_rejected",
-                    message=f"Approval #{approval.id} auto-rejected after SLA breach",
-                    payload={"approval_id": approval.id, "due_at": approval.due_at.isoformat()},
-                ))
-                step = db.query(WorkflowEngineStep).filter(
-                    WorkflowEngineStep.id == approval.workflow_step_id
-                ).first()
-                if step:
-                    self.event_queue.publish({"kind": "resume_step", "step_id": step.id})
+            # Timeout: queue runtime to apply configured on_timeout policy.
+            if due_at <= now:
+                queued_at = self._parse_iso_datetime(metadata.get("timeout_resume_queued_at"))
+                if queued_at is None or (now - queued_at) >= timedelta(minutes=5):
+                    self.event_queue.publish({"kind": "resume_step", "step_id": approval.workflow_step_id})
+                    metadata["timeout_resume_queued_at"] = now.isoformat()
+                    approval.request_metadata = metadata
+                    touched += 1
 
-            # Send escalation email to management
-            try:
-                from .email_service import send_email, _notification_html
-                wf_name = definition.name if definition else f"Workflow #{instance.workflow_definition_id}"
-                subject = f"SLA Breach Alert: Approval overdue in {wf_name}"
-                body = (
-                    f"An approval request has breached its SLA deadline.<br><br>"
-                    f"<b>Workflow:</b> {wf_name}<br>"
-                    f"<b>Approval ID:</b> {approval.id}<br>"
-                    f"<b>Due:</b> {approval.due_at.strftime('%Y-%m-%d %H:%M UTC')}<br>"
-                    f"<b>Action taken:</b> {on_timeout.replace('_', ' ').title()}"
-                )
-                from ....models import TenantUser, GRCUser
-                users = (
-                    db.query(GRCUser)
-                    .join(TenantUser, TenantUser.user_id == GRCUser.id)
-                    .filter(TenantUser.tenant_id == instance.tenant_id, GRCUser.is_active.is_(True))
-                    .limit(5)
-                    .all()
-                )
-                for u in users:
-                    if u.email:
-                        send_email(db, instance.tenant_id, u.email, subject,
-                                   _notification_html(subject, body))
-            except Exception:
-                pass  # Email failure must not break SLA processing
+        if touched:
+            logger.info("workflow.sla.processed touched=%s", touched)
 
-            escalated += 1
-
-        return escalated
+        return touched

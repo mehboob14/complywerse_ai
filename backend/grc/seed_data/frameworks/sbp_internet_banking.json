@@ -1,497 +1,1255 @@
 {
   "metadata": {
     "name": "SBP Internet Banking Framework",
-    "description": "The State Bank of Pakistan Internet Banking Framework provides regulatory requirements for financial institutions in Pakistan to offer secure internet banking services while protecting customers and maintaining operational resilience.",
+    "description": "The State Bank of Pakistan Regulations for the Security of Internet Banking, issued by the Payment Systems Department, provides a mandatory security framework for all banks in Pakistan offering internet banking services.",
     "version": "2023",
-    "source_organization": "State Bank of Pakistan (SBP)",
+    "source_organization": "State Bank of Pakistan (SBP) - Payment Systems Department",
     "effective_date": "2023-01-01",
     "classification": "compliance",
     "framework_type": "regulatory",
     "classification_confidence": 0.95,
-    "classification_reasoning": "The SBP Internet Banking Framework is a mandatory regulatory framework issued by the State Bank of Pakistan for financial institutions offering internet banking services. Compliance is monitored through SBP supervision and reporting requirements.",
-    "framework_purpose": "To establish regulatory requirements for financial institutions in Pakistan to provide secure, reliable, and customer-friendly internet banking services while protecting against fraud and cyber threats.",
-    "framework_scope": "All financial institutions regulated by the State Bank of Pakistan that offer internet banking services to retail and corporate customers.",
+    "classification_reasoning": "The SBP Regulations for the Security of Internet Banking is a mandatory regulatory framework issued by the State Bank of Pakistan for all banks in Pakistan offering internet banking services. Compliance is monitored through SBP supervision and reporting requirements.",
+    "framework_purpose": "To help banks in Pakistan develop a formal Internet Banking Security Framework containing administrative, technical and physical safeguards based on best international practices, protecting against financial and reputational risks arising from IT security breaches.",
+    "framework_scope": "All banks in Pakistan providing financial and/or non-financial transactions through internet, irrespective of software tool used by the bank and access devices used by its customers.",
     "framework_objectives": [
-      "Ensure secure authentication of internet banking users",
-      "Protect customer transactions from fraud and unauthorized access",
-      "Maintain availability and reliability of internet banking services",
-      "Implement effective fraud prevention and detection mechanisms",
-      "Protect customer data and privacy in digital channels",
-      "Enable secure innovation in digital banking services"
+      "Ensure security and integrity of data and systems so that customers' information has not been modified and systems are free from unauthorized access",
+      "Ensure confidentiality of customers' data in storage, during processing and in transit",
+      "Ensure reliability and availability of Internet Banking systems to provide prompt access to registered users and maintain operational effectiveness",
+      "Ensure accountability by designing SOPs, policies and controls to ensure traceability of all transactions",
+      "Adopt a proactive approach to detect unauthorized access and identify potential fraudulent transactions"
     ],
-    "target_audience": "CISOs, IT Security Teams, Digital Banking Teams, Fraud Prevention Teams, and Compliance Officers of SBP-regulated financial institutions offering internet banking",
+    "target_audience": "Board of Directors, Senior Management, IT Security Teams, Digital Banking Teams, Fraud Prevention Teams, and Compliance Officers of all SBP-regulated banks offering internet banking",
     "certification_body": null,
     "certification_validity_period": null,
     "certification_levels": null,
     "certification_lifecycle": null,
-    "required_artifacts": null,
-    "regulatory_authority": "State Bank of Pakistan (SBP)",
+    "required_artifacts": [
+      "Internet Banking Security Framework document (BOD approved)",
+      "Security Risk Assessment document (reviewed by BOD, at least annually)",
+      "Security Controls Implementation documentation",
+      "Security Controls Monitoring mechanism (formally approved)",
+      "Customer Awareness Program",
+      "Quarterly Security Breach Reports to Payment Systems Department (Annexure-I)"
+    ],
+    "regulatory_authority": "State Bank of Pakistan (SBP) - Payment Systems Department",
     "compliance_deadline": null,
     "penalty_for_non_compliance": "Non-compliance may result in regulatory penalties, restrictions on internet banking services, and enforcement actions as per SBP regulations.",
-    "adoption_approach": "Risk-based implementation with mandatory compliance for all financial institutions offering internet banking services.",
+    "adoption_approach": "Risk-based implementation with mandatory compliance for all banks providing internet banking services in Pakistan.",
     "hierarchy_structure": {
-      "levels": ["Domain", "Section", "Requirement"],
-      "numbering_pattern": "N.N"
+      "levels": ["Section", "Sub-Section", "Sub-Sub-Section", "Lettered Requirement", "Numbered Sub-Requirement"],
+      "numbering_pattern": "N / N.N / N.N.N / N.N.N(letter) / N.N.N(letter)(numeral)"
     },
     "document_structure": {
       "sections": [
-        "1 Authentication",
-        "2 Authorization",
-        "3 Transaction Security",
-        "4 Customer Protection",
-        "5 Fraud Prevention",
-        "6 System Security",
-        "7 Operational Resilience"
+        "Preface",
+        "Definitions",
+        "1. Scope of the Regulations",
+        "2. Internet Banking Security Framework",
+        "2.1. Security Risk Assessment",
+        "2.2. Security Controls Implementation",
+        "2.2.1. Authentication Controls",
+        "2.2.2. Security Controls for In-house Functions",
+        "2.2.3. Security Controls Implementation for Outsourced Functions",
+        "2.3. Security Controls Monitoring",
+        "3. Customer Awareness",
+        "4. Reporting Requirements",
+        "5. Regulatory Requirements",
+        "Annexure-I: Details of Established Security Breaches in IB"
       ],
       "control_patterns": {
-        "primary_pattern": "N.N",
-        "secondary_patterns": ["N.N.N"],
-        "examples": ["1.1", "2.3", "4.2"]
+        "primary_pattern": "N",
+        "secondary_patterns": ["N.N", "N.N.N", "N.N.N(letter)", "N.N.N(letter)(numeral)"],
+        "examples": ["1", "2", "2.1", "2.1(a)", "2.2.1(b)", "2.2.3(d)(i)"]
       },
       "requirement_indicators": {
         "mandatory_keywords": ["shall", "must", "required"],
-        "advisory_keywords": ["should", "may", "recommended"]
+        "advisory_keywords": ["should", "may", "encouraged"]
       },
-      "total_expected_controls": 40
+      "total_expected_controls": 67
     },
     "exported_at": "2026-01-28T14:00:00.000000",
     "source_framework_id": null,
-    "total_controls": 32
+    "total_controls": 67
   },
   "controls": [
+
     {
-      "control_id": "1.1",
-      "original_reference": "1.1",
-      "title": "Multi-Factor Authentication",
-      "description": "Implement multi-factor authentication for all internet banking access.",
-      "full_text": "Financial institutions shall implement multi-factor authentication (MFA) for all internet banking access. At least two independent authentication factors shall be required, combining something the customer knows, has, or is.",
-      "domain": "Authentication",
-      "category": "Multi-Factor Authentication",
-      "section_number": "1.1",
-      "parent_section": "1",
+      "control_id": "1",
+      "original_reference": "1",
+      "title": "Scope of the Regulations",
+      "description": "These regulations are applicable to all banks in Pakistan providing financial and/or non-financial transactions through internet irrespective of software tool used by the bank and access devices used by its customers.",
+      "full_text": "These regulations are applicable to all banks in Pakistan providing financial and/or non financial transactions through internet irrespective of software tool used by the bank and access devices used by its customers.",
+      "domain": "Scope",
+      "category": "Applicability",
+      "section_number": "1",
+      "parent_section": null,
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["MFA implementation documentation", "Authentication flow diagrams", "MFA enrollment statistics"]
+      "evidence_requirements": [
+        "Confirmation that bank offers internet banking services",
+        "Documentation of all internet banking delivery channels and access devices in use"
+      ]
     },
+
     {
-      "control_id": "1.2",
-      "original_reference": "1.2",
-      "title": "Password Policy",
-      "description": "Enforce strong password policies for internet banking credentials.",
-      "full_text": "Financial institutions shall enforce strong password policies for internet banking credentials including minimum length, complexity requirements, expiration periods, and protection against commonly used passwords.",
-      "domain": "Authentication",
-      "category": "Password Management",
-      "section_number": "1.2",
-      "parent_section": "1",
+      "control_id": "2",
+      "original_reference": "2",
+      "title": "Internet Banking Security Framework",
+      "description": "Bank shall develop, implement and regularly review an Internet Banking Security Framework based on defined security objectives. The framework must be approved by BODs, clearly define roles and responsibilities, and include Security Risk Assessment, Security Controls Implementation and Security Controls Monitoring.",
+      "full_text": "Bank shall develop, implement and regularly review Internet Banking Security Framework based on the following key security objectives: a) Security and integrity of data and systems, to ensure that customers' information has not been modified and systems are free from unauthorized access; b) Confidentiality of customers' data in storage, during processing and in transit; c) Reliability and availability of Internet Banking systems to provide prompt access to systems for registered users and maintaining operational effectiveness; d) Accountability by designing SOPs, policies and controls to ensure traceability of all transactions; e) Proactive approach to detect unauthorized access and identification of potential fraudulent transactions. While developing the Internet Banking Security Framework the bank should take into account the complexity of systems, applications and products/services offered while at the same time ensuring the ease of usage and customers' convenience. Further the framework should clearly define the roles and responsibilities of Board of Directors (BODs), senior management and employees with regard to its approval, development and implementation. This Framework and any reviews thereafter should be duly approved by the BODs. The Internet Banking Security Framework shall include the following components: Security Risk Assessment, Implementation of Security Controls and Monitoring of Security Controls.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Framework Governance",
+      "section_number": "2",
+      "parent_section": null,
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Password policy document", "System configuration evidence", "Complexity enforcement settings"]
+      "evidence_requirements": [
+        "Board of Directors approved Internet Banking Security Framework document",
+        "Framework review records with BOD approval",
+        "Defined roles and responsibilities for BODs, senior management and employees",
+        "Documentation covering Security Risk Assessment, Security Controls Implementation and Security Controls Monitoring components"
+      ]
     },
     {
-      "control_id": "1.3",
-      "original_reference": "1.3",
-      "title": "Session Management",
-      "description": "Implement secure session management for internet banking sessions.",
-      "full_text": "Financial institutions shall implement secure session management including session timeout after inactivity, secure session tokens, prevention of concurrent sessions, and secure session termination upon logout.",
-      "domain": "Authentication",
-      "category": "Session Security",
-      "section_number": "1.3",
-      "parent_section": "1",
+      "control_id": "2(a)",
+      "original_reference": "2(a)",
+      "title": "Security Objective: Security and Integrity of Data and Systems",
+      "description": "The Internet Banking Security Framework shall ensure security and integrity of data and systems, ensuring that customers' information has not been modified and systems are free from unauthorized access.",
+      "full_text": "Security and integrity of data and systems, to ensure that customers' information has not been modified and systems are free from unauthorized access.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Framework Security Objectives",
+      "section_number": "2(a)",
+      "parent_section": "2",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Session management configuration", "Timeout settings", "Security testing results"]
+      "evidence_requirements": [
+        "Data integrity controls documentation",
+        "Evidence that systems are protected from unauthorized access",
+        "Integrity monitoring or verification mechanisms"
+      ]
     },
     {
-      "control_id": "1.4",
-      "original_reference": "1.4",
-      "title": "Failed Login Protection",
-      "description": "Implement account lockout after failed authentication attempts.",
-      "full_text": "Financial institutions shall implement account lockout mechanisms after a defined number of failed authentication attempts. Lockout shall be temporary or require manual unlock, with customer notification of lockout events.",
-      "domain": "Authentication",
-      "category": "Brute Force Protection",
-      "section_number": "1.4",
-      "parent_section": "1",
+      "control_id": "2(b)",
+      "original_reference": "2(b)",
+      "title": "Security Objective: Confidentiality of Customers' Data",
+      "description": "The Internet Banking Security Framework shall ensure confidentiality of customers' data in storage, during processing and in transit.",
+      "full_text": "Confidentiality of customers' data in storage, during processing and in transit.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Framework Security Objectives",
+      "section_number": "2(b)",
+      "parent_section": "2",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Lockout policy", "Lockout configuration", "Customer notification templates"]
+      "evidence_requirements": [
+        "Data confidentiality controls for data at rest (storage)",
+        "Data confidentiality controls for data in processing",
+        "Data confidentiality controls for data in transit"
+      ]
     },
     {
-      "control_id": "1.5",
-      "original_reference": "1.5",
-      "title": "Device Registration",
-      "description": "Implement device registration and recognition for internet banking access.",
-      "full_text": "Financial institutions shall implement device registration and recognition mechanisms. Transactions from unregistered or new devices shall require additional verification. Customers shall be notified of access from new devices.",
-      "domain": "Authentication",
-      "category": "Device Management",
-      "section_number": "1.5",
-      "parent_section": "1",
+      "control_id": "2(c)",
+      "original_reference": "2(c)",
+      "title": "Security Objective: Reliability and Availability of Internet Banking Systems",
+      "description": "The Internet Banking Security Framework shall ensure reliability and availability of Internet Banking systems to provide prompt access to systems for registered users and maintain operational effectiveness.",
+      "full_text": "Reliability and availability of Internet Banking systems to provide prompt access to systems for registered users and maintaining operational effectiveness.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Framework Security Objectives",
+      "section_number": "2(c)",
+      "parent_section": "2",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Device registration process", "New device verification flow", "Device notification logs"]
+      "evidence_requirements": [
+        "System availability targets and monitoring evidence",
+        "Operational effectiveness measures and reports"
+      ]
     },
+    {
+      "control_id": "2(d)",
+      "original_reference": "2(d)",
+      "title": "Security Objective: Accountability and Traceability",
+      "description": "The Internet Banking Security Framework shall ensure accountability by designing SOPs, policies and controls to ensure traceability of all transactions.",
+      "full_text": "Accountability by designing SOPs, policies and controls to ensure traceability of all transactions.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Framework Security Objectives",
+      "section_number": "2(d)",
+      "parent_section": "2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "SOPs and policies for transaction traceability",
+        "Transaction traceability controls implementation evidence"
+      ]
+    },
+    {
+      "control_id": "2(e)",
+      "original_reference": "2(e)",
+      "title": "Security Objective: Proactive Fraud Detection",
+      "description": "The Internet Banking Security Framework shall adopt a proactive approach to detect unauthorized access and identify potential fraudulent transactions.",
+      "full_text": "Proactive approach to detect unauthorized access and identification of potential fraudulent transactions.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Framework Security Objectives",
+      "section_number": "2(e)",
+      "parent_section": "2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Fraud detection mechanisms and tools documentation",
+        "Unauthorized access detection controls evidence"
+      ]
+    },
+
     {
       "control_id": "2.1",
       "original_reference": "2.1",
-      "title": "Role-Based Access Control",
-      "description": "Implement role-based access control for internet banking features.",
-      "full_text": "Financial institutions shall implement role-based access control for internet banking features and functions. Customer access rights shall be defined based on account type and service subscriptions.",
-      "domain": "Authorization",
-      "category": "Access Control",
+      "title": "Security Risk Assessment",
+      "description": "The bank shall conduct and document a formal Security Risk Assessment for Internet Banking to identify, estimate and prioritize risks. BODs shall review the risk assessment and any subsequent reviews. The assessment shall be reviewed at least annually and immediately after a major security breach, significant infrastructure change, or introduction of a new product or service.",
+      "full_text": "The bank shall conduct and document a formal Security Risk Assessment for Internet Banking with a view of identifying, estimating and prioritizing risks to which its operations are exposed due to Internet Banking. The BODs should review the risk assessment document and any reviews conducted thereafter. The Security Risk Assessment should be reviewed at least once a year; however, in case of a major security breach, significant changes to the infrastructure and introduction of a new product or service, an immediate review of risk assessment should be carried out. Further, in case of a major security breach, risk assessment review should include a detailed analysis of the factors that cause such security breaches.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Risk Assessment",
       "section_number": "2.1",
       "parent_section": "2",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["RBAC implementation documentation", "Role definitions", "Access control matrix"]
+      "evidence_requirements": [
+        "Formal Security Risk Assessment document",
+        "BOD review records of risk assessment",
+        "Evidence of at least annual review cycle",
+        "Ad-hoc review records triggered by security breaches, infrastructure changes or new product/service introductions",
+        "Root cause analysis in risk assessment reviews following major security breaches"
+      ]
     },
+    {
+      "control_id": "2.1(a)",
+      "original_reference": "2.1(a)",
+      "title": "Business and Technology Environment Description",
+      "description": "The Security Risk Assessment shall include a current and detailed description of the bank's business and technology environment and existing security measures, including identification of location, systems and methods for maintaining customers' information.",
+      "full_text": "A current and detailed description of bank's business and technology environment and existing security measures in place including identification of location, systems and methods for maintaining customers' information.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Risk Assessment",
+      "section_number": "2.1(a)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Documentation of bank's business and technology environment",
+        "Inventory of existing security measures",
+        "Identified locations, systems and methods for maintaining customers' information"
+      ]
+    },
+    {
+      "control_id": "2.1(b)",
+      "original_reference": "2.1(b)",
+      "title": "Identification of Information and Information Systems to be Protected",
+      "description": "The Security Risk Assessment shall include identification of information and the information systems to be protected.",
+      "full_text": "An identification of information and the information systems to be protected.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Risk Assessment",
+      "section_number": "2.1(b)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Inventory of information assets to be protected",
+        "Inventory of information systems to be protected"
+      ]
+    },
+    {
+      "control_id": "2.1(c)",
+      "original_reference": "2.1(c)",
+      "title": "Classification and Ranking of Sensitive Systems and Data",
+      "description": "The Security Risk Assessment shall include classification and ranking (high, medium, low) of sensitive systems, payment data and applications in order of importance based on assessment of threats and vulnerabilities.",
+      "full_text": "Classification and ranking (high, medium, low) of the sensitive systems, payment data and applications in order of their importance and based on the assessment of threats and vulnerabilities.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Risk Assessment",
+      "section_number": "2.1(c)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Classification and ranking records (high/medium/low) for sensitive systems, payment data and applications",
+        "Threat and vulnerability basis for the classification"
+      ]
+    },
+    {
+      "control_id": "2.1(d)",
+      "original_reference": "2.1(d)",
+      "title": "Assessment of Threats and Vulnerabilities",
+      "description": "The Security Risk Assessment shall include assessment of potential threats and vulnerabilities to the security and integrity of customers' information, payments data, IT systems and applications.",
+      "full_text": "Assessment of potential threats and vulnerabilities to security and integrity of customers' information, payments data, IT systems and applications.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Risk Assessment",
+      "section_number": "2.1(d)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Threat assessment documentation covering customers' information, payments data, IT systems and applications",
+        "Vulnerability assessment documentation covering customers' information, payments data, IT systems and applications"
+      ]
+    },
+    {
+      "control_id": "2.1(e)",
+      "original_reference": "2.1(e)",
+      "title": "Assessment of Identity Theft and Identity Fraud Risks",
+      "description": "The Security Risk Assessment shall include assessment of risks related to identity theft and identity fraud.",
+      "full_text": "Assessment of risks related to identity theft and identity fraud.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Risk Assessment",
+      "section_number": "2.1(e)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Identity theft risk assessment documentation",
+        "Identity fraud risk assessment documentation"
+      ]
+    },
+    {
+      "control_id": "2.1(f)",
+      "original_reference": "2.1(f)",
+      "title": "Evaluation of Existing Security Controls Effectiveness",
+      "description": "The Security Risk Assessment shall include an evaluation of existing Security Controls' effectiveness against each identified threat and vulnerability.",
+      "full_text": "An evaluation of existing Security Controls' effectiveness against each threat and vulnerability.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Risk Assessment",
+      "section_number": "2.1(f)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security controls effectiveness evaluation records mapped against each identified threat and vulnerability"
+      ]
+    },
+    {
+      "control_id": "2.1(g)",
+      "original_reference": "2.1(g)",
+      "title": "Service Providers Security and Contractual Responsibilities",
+      "description": "The Security Risk Assessment shall address the security and contractual responsibilities of Service Providers (SPs), including customers who have access to the bank's systems and data.",
+      "full_text": "The security and contractual responsibilities of Service Providers (SPs), including customers who have access to the bank's systems and data.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Risk Assessment",
+      "section_number": "2.1(g)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Documentation of security and contractual responsibilities of all Service Providers",
+        "Assessment of access rights of customers who access bank's systems and data"
+      ]
+    },
+    {
+      "control_id": "2.1(h)",
+      "original_reference": "2.1(h)",
+      "title": "Outsourcing Risk Assessment",
+      "description": "Risks including Compliance, Concentration, Operational, Country and Legal should be assessed by the banks before entering and while managing Internet Banking outsourcing arrangements with Service Providers.",
+      "full_text": "Risks like Compliance, Concentration, Operational, Country and Legal should be assessed by the banks before entering and while managing Internet Banking outsourcing arrangements with the SPs.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Risk Assessment",
+      "section_number": "2.1(h)",
+      "parent_section": "2.1",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "Outsourcing risk assessment covering Compliance, Concentration, Operational, Country and Legal risks",
+        "Pre-engagement risk assessments for Service Providers",
+        "Ongoing risk management records for existing outsourcing arrangements"
+      ]
+    },
+    {
+      "control_id": "2.1(i)",
+      "original_reference": "2.1(i)",
+      "title": "Legal Environment Risk Assessment",
+      "description": "The Security Risk Assessment shall address risks related to the legal environment and the bank's responsibilities under Section 32, Section 41, Section 43, Section 70 and other relevant provisions of the Payment Systems and Electronic Fund Transfers Act 2007.",
+      "full_text": "Risk Assessment related to legal environment and bank's responsibilities under Section 32 (Availability of Documentation and Proof), section 41 (Burden of Proof), Section 43 (Liability of banks/Authorized Parties), section 70 (Secrecy and Privacy) and other relevant provisions of the Payment Systems and Electronic Fund Transfers Act 2007.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Risk Assessment",
+      "section_number": "2.1(i)",
+      "parent_section": "2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Legal environment risk assessment referencing Payment Systems and Electronic Fund Transfers Act 2007",
+        "Assessment of compliance with Section 32 (Availability of Documentation and Proof)",
+        "Assessment of compliance with Section 41 (Burden of Proof)",
+        "Assessment of compliance with Section 43 (Liability of banks/Authorized Parties)",
+        "Assessment of compliance with Section 70 (Secrecy and Privacy)"
+      ]
+    },
+
     {
       "control_id": "2.2",
       "original_reference": "2.2",
-      "title": "Transaction Limits",
-      "description": "Implement and enforce transaction limits for internet banking.",
-      "full_text": "Financial institutions shall implement and enforce transaction limits for internet banking including daily limits, per-transaction limits, and cumulative limits. Limits shall be configurable and customers shall be able to set their own limits within bank-defined maximums.",
-      "domain": "Authorization",
-      "category": "Transaction Limits",
+      "title": "Security Controls Implementation",
+      "description": "The bank shall ensure appropriate security arrangements and security controls to protect IT assets are in place, developed based on the Security Risk Assessment and commensurate with risk levels. The bank shall define minimum baseline Security Controls covering Access Controls, Network Access Controls, Operating System Access Controls, Application Access and Remote Access Controls.",
+      "full_text": "The bank shall ensure that appropriate security arrangements and security controls to protect IT assets (such as systems, applications, networks, data, and information and communication systems) are in place. Bank shall develop a set of controls based on the Security Risk Assessment document, commensurate with the risk levels to meet the control objectives. Bank shall define its set of minimum baseline Security Controls that include Access Controls (Access Rights Management, Electronic Authentication etc), Network Access Controls, Operating System Access Controls, Application Access and Remote Access Controls.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls Implementation",
       "section_number": "2.2",
       "parent_section": "2",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Limit configuration documentation", "Customer limit settings interface", "Limit enforcement logs"]
+      "evidence_requirements": [
+        "Minimum baseline Security Controls definition document",
+        "Security controls mapped to Security Risk Assessment findings and risk levels",
+        "Evidence of Access Controls (Access Rights Management, Electronic Authentication)",
+        "Evidence of Network Access Controls",
+        "Evidence of Operating System Access Controls",
+        "Evidence of Application Access Controls",
+        "Evidence of Remote Access Controls"
+      ]
     },
+
+    {
+      "control_id": "2.2.1",
+      "original_reference": "2.2.1",
+      "title": "Authentication Controls",
+      "description": "Minimum authentication controls to be implemented by banks for Internet Banking customers, covering registration/enrollment, two-factor authentication, layered security for high-value transactions, account lockout and session controls, and periodic authentication risk assessment.",
+      "full_text": "Minimum Security Controls to be implemented by banks should include the following aspects under Authentication Controls.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Authentication Controls",
+      "section_number": "2.2.1",
+      "parent_section": "2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Authentication controls policy and implementation documentation"
+      ]
+    },
+    {
+      "control_id": "2.2.1(a)",
+      "original_reference": "2.2.1(a)",
+      "title": "Customer Registration and Enrollment",
+      "description": "Registration/enrollment for Internet Banking customers should be done prior to offering Internet Banking products and services after due verification through appropriate means.",
+      "full_text": "Registration/enrollment for Internet Banking customers should be done prior to offering Internet Banking products and services after due verification through appropriate means.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Authentication Controls",
+      "section_number": "2.2.1(a)",
+      "parent_section": "2.2.1",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "Customer registration/enrollment process documentation",
+        "Evidence of identity verification procedures applied prior to granting Internet Banking access"
+      ]
+    },
+    {
+      "control_id": "2.2.1(b)",
+      "original_reference": "2.2.1(b)",
+      "title": "Two Factor Authentication (2FA)",
+      "description": "In order to authenticate customers who use Internet Banking products and services the bank shall implement at least Two Factor Authentication (2FA) such as Passwords (1st factor) and One time tokens, Dongles etc (2nd factor).",
+      "full_text": "In order to authenticate customers who use Internet Banking products and services the bank shall implement at least Two Factor Authentication (2FA) such as Passwords (1 factor) and One time tokens, Dongles etc (2nd factor).",
+      "domain": "Internet Banking Security Framework",
+      "category": "Authentication Controls",
+      "section_number": "2.2.1(b)",
+      "parent_section": "2.2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Two Factor Authentication (2FA) implementation evidence",
+        "Documentation of 1st factor (e.g. passwords) and 2nd factor (e.g. OTP, Dongles) mechanisms deployed"
+      ]
+    },
+    {
+      "control_id": "2.2.1(c)",
+      "original_reference": "2.2.1(c)",
+      "title": "Layered Security for High Value Transactions",
+      "description": "Bank shall implement additional layered security programs for high value transactions processed through Internet Banking.",
+      "full_text": "Bank shall implement additional layered security programs for high value transactions processed through Internet Banking.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Authentication Controls",
+      "section_number": "2.2.1(c)",
+      "parent_section": "2.2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Layered security controls configuration for high-value transactions",
+        "Definition of thresholds that trigger additional security layers for high-value transactions"
+      ]
+    },
+    {
+      "control_id": "2.2.1(d)",
+      "original_reference": "2.2.1(d)",
+      "title": "Account Lockout, Session Timeout and Re-authentication Controls",
+      "description": "Authentication controls should take into account failed log-in attempts, frequency of password changes, session timeouts and re-authentication of customers based on predefined criteria.",
+      "full_text": "Authentication controls should also take into account failed log-in attempts, frequency of password changes, session time outs and re-authentication of customers based on predefined criteria.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Authentication Controls",
+      "section_number": "2.2.1(d)",
+      "parent_section": "2.2.1",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "Account lockout policy and configuration for failed log-in attempts",
+        "Password change frequency policy and configuration",
+        "Session timeout configuration",
+        "Re-authentication criteria and implementation evidence"
+      ]
+    },
+    {
+      "control_id": "2.2.1(e)",
+      "original_reference": "2.2.1(e)",
+      "title": "Periodic Risk Assessment of Authentication Controls",
+      "description": "Bank shall conduct periodic risk assessment of authentication controls to identify threats and vulnerabilities based on changes in applications' functionality, changes in internal and external environment, changes in customers' preferences and actual security breaches.",
+      "full_text": "Bank shall conduct periodic risk assessment of authentication controls to identify threats and vulnerabilities based on changes in applications' functionality, threats due to changes in internal and external environment, changes in customers' preferences and actual security breaches.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Authentication Controls",
+      "section_number": "2.2.1(e)",
+      "parent_section": "2.2.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Periodic risk assessment records for authentication controls",
+        "Evidence of reviews triggered by changes in application functionality",
+        "Evidence of reviews triggered by changes in internal and external environment",
+        "Evidence of reviews triggered by changes in customers' preferences",
+        "Evidence of reviews triggered by actual security breaches"
+      ]
+    },
+
+    {
+      "control_id": "2.2.2",
+      "original_reference": "2.2.2",
+      "title": "Security Controls for In-house Functions",
+      "description": "Security controls applicable to bank employees who are users of Internet Banking related systems, covering access rights management, OS controls, remote access, physical access, network security, firewalls, IDS/IPS, identity theft prevention, encryption, traceability and training.",
+      "full_text": "The following controls shall apply on bank employees who are users of Internet Banking related systems.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2",
+      "parent_section": "2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Overall in-house security controls policy covering all sub-requirements under 2.2.2"
+      ]
+    },
+    {
+      "control_id": "2.2.2(a)",
+      "original_reference": "2.2.2(a)",
+      "title": "Access Rights Management",
+      "description": "Users' access rights should be appropriate and commensurate with their job functions, periodically reviewed per risk ranking from the Security Risk Assessment, and changes applied only after due authorization, ensuring proper implementation of Least Privilege Principle.",
+      "full_text": "Access Rights Management: Users' access rights should be appropriate and commensurate with their job functions and should be periodically reviewed keeping in view the risk ranking of the systems, data and applications as outlined in Security Risk Assessment document. Changes in Access Rights should be based on personal or systems change and should only be applied after due authorization while ensuring proper implementation of 'Least Privilege Principle'.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(a)",
+      "parent_section": "2.2.2",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "Access rights policy implementing Least Privilege Principle",
+        "Periodic access rights review records (per risk ranking of systems, data and applications from Security Risk Assessment)",
+        "Access rights change authorization records confirming changes are based on personal or systems change and duly authorized"
+      ]
+    },
+    {
+      "control_id": "2.2.2(b)",
+      "original_reference": "2.2.2(b)",
+      "title": "Operating Systems Controls",
+      "description": "Necessary Operating Systems' controls should be implemented to ensure access is physically and logically secured, with privileged access restricted, regularly monitored and periodically audited.",
+      "full_text": "Operating Systems Controls: Necessary Operating Systems' controls should be implemented to ensure that access is physically and logically secured by ensuring that privileged access is restricted, regularly monitored and periodically audited.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(b)",
+      "parent_section": "2.2.2",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "Operating system access controls configuration showing physical and logical security",
+        "Privileged access restriction evidence",
+        "Privileged access monitoring records",
+        "Periodic privileged access audit records"
+      ]
+    },
+    {
+      "control_id": "2.2.2(c)",
+      "original_reference": "2.2.2(c)",
+      "title": "Remote Access",
+      "description": "Remote access to high risk IT assets shall only be granted after management's written approval, shall be subject to regular audits, and shall be based on strong authentication and encryption to secure communications.",
+      "full_text": "Remote Access: Remote access to high risk IT assets shall only be granted after management's approval in writing and should be subject to regular audits. Remote access shall also be based on strong authentication and encryption to secure communications.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(c)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Written management approvals for remote access to high risk IT assets",
+        "Regular audit records for remote access",
+        "Strong authentication implementation for remote access",
+        "Encryption implementation for remote access communications"
+      ]
+    },
+    {
+      "control_id": "2.2.2(d)",
+      "original_reference": "2.2.2(d)",
+      "title": "Physical Access",
+      "description": "Banks shall ensure that physical access to different systems, segments and data sites is restricted, regularly monitored and duly logged.",
+      "full_text": "Physical Access: Banks shall ensure that physical access to different systems, segments and data sites is restricted, regularly monitored and duly logged.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(d)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Physical access restriction controls for systems, segments and data sites",
+        "Physical access monitoring records",
+        "Physical access logs"
+      ]
+    },
+    {
+      "control_id": "2.2.2(e)",
+      "original_reference": "2.2.2(e)",
+      "title": "IT Network Security",
+      "description": "IT networks shall be secured through the use of multiple layers of controls.",
+      "full_text": "IT Network Security: IT networks shall be secured through the use of multiple layers of controls.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(e)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "IT network security architecture documentation showing multiple layers of controls"
+      ]
+    },
+    {
+      "control_id": "2.2.2(f)",
+      "original_reference": "2.2.2(f)",
+      "title": "Firewalls",
+      "description": "Firewalls shall be deployed between different security domains to control network traffic. Firewall selection and deployment policy should be devised according to the characteristics of the network including traffic volume and risk classification of IT assets.",
+      "full_text": "Firewalls: Firewalls shall be deployed between different security domains to control network traffic. Firewalls selection and deployment policy should be devised according to the characteristics of network (i.e. traffic volume, and risk classification of IT assets).",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(f)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Firewall deployment architecture showing placement between different security domains",
+        "Firewall selection and deployment policy based on traffic volume and risk classification of IT assets"
+      ]
+    },
+    {
+      "control_id": "2.2.2(g)",
+      "original_reference": "2.2.2(g)",
+      "title": "IDS/IPS Deployment",
+      "description": "Network Intrusion Detection Systems (IDS) and Intrusion Prevention Systems (IPS) should be deployed between different security domains as per their risk classification.",
+      "full_text": "IDS/IPS: Network Intrusion Detection Systems (IDS) and Intrusion Prevention Systems (IPS) should be deployed between different security domains as per their risk classification.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(g)",
+      "parent_section": "2.2.2",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "IDS/IPS deployment architecture showing placement between security domains per risk classification"
+      ]
+    },
+    {
+      "control_id": "2.2.2(h)",
+      "original_reference": "2.2.2(h)",
+      "title": "Identity Theft Prevention Program",
+      "description": "Bank shall develop and implement a proactive Identity Theft Prevention Program which includes procedures for identification of information to be protected, threats due to thefts and frauds, and methods for responding appropriately to identified threats.",
+      "full_text": "Identity Theft Prevention: Bank shall develop and implement a proactive Identity Theft Prevention Program which includes procedures for identification of information to be protected, and threats due to thefts and frauds as well as methods for responding appropriately to identified threats.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(h)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Identity Theft Prevention Program documentation",
+        "Procedures for identification of information to be protected from identity theft",
+        "Threat identification procedures covering thefts and frauds",
+        "Response methods for identified identity theft threats"
+      ]
+    },
+    {
+      "control_id": "2.2.2(i)",
+      "original_reference": "2.2.2(i)",
+      "title": "Encryption",
+      "description": "Access, storage and data communication shall be encrypted using reliable encryption methods to strengthen the security of communications and sensitive payment data.",
+      "full_text": "Encryption: Access, storage and data communication shall be encrypted using reliable encryption methods to strengthen the security of communications and sensitive payment data.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(i)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Encryption implementation evidence for access channels",
+        "Encryption implementation evidence for data storage",
+        "Encryption implementation evidence for data communications",
+        "Reliable encryption methods documentation for securing sensitive payment data"
+      ]
+    },
+    {
+      "control_id": "2.2.2(j)",
+      "original_reference": "2.2.2(j)",
+      "title": "Traceability",
+      "description": "Bank shall maintain the traceability of transactions executed to discharge their obligations under the relevant sections of the Payment Systems and Electronic Fund Transfers Act 2007.",
+      "full_text": "Traceability: Bank shall maintain the traceability of transactions executed to discharge their obligations under the relevant sections of Payment Systems and Electronic Fund Transfers Act 2007.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(j)",
+      "parent_section": "2.2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Transaction traceability logs and audit trails",
+        "Evidence of compliance with relevant sections of Payment Systems and Electronic Fund Transfers Act 2007"
+      ]
+    },
+    {
+      "control_id": "2.2.2(k)",
+      "original_reference": "2.2.2(k)",
+      "title": "Employee Training",
+      "description": "Relevant bank employees shall have appropriate knowledge and background to perform their tasks. Regular trainings should be arranged to keep employees aware of security risks, security controls and monitoring mechanisms. Employees should be regularly updated about changes in internal policies and procedures to ensure operational effectiveness.",
+      "full_text": "Training: Relevant employees of the bank shall have appropriate knowledge and background to perform their tasks. Regular trainings should be arranged to keep employees aware of the security risks, security controls and security control monitoring mechanisms. Employees should be regularly updated about the changes in internal policies and procedures to ensure operational effectiveness.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for In-house Functions",
+      "section_number": "2.2.2(k)",
+      "parent_section": "2.2.2",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "Employee training records covering security risks, security controls and monitoring mechanisms",
+        "Training schedule and curriculum documentation",
+        "Records of employee updates on changes to internal policies and procedures"
+      ]
+    },
+
+    {
+      "control_id": "2.2.3",
+      "original_reference": "2.2.3",
+      "title": "Security Controls Implementation for Outsourced Functions",
+      "description": "Service Providers of outsourced Internet Banking functions are contractually bound to implement these regulations. Outsourcing does not relieve the bank of its compliance responsibility. Banks shall ensure all controls in section 2.2.2 plus the additional outsourcing-specific controls are followed.",
+      "full_text": "Service Providers of outsourced functions relating to Internet Banking are contractually bounded to implement these regulations. However, outsourcing does not relieve the bank from its responsibility of complying with these regulations. Further bank shall ensure that in addition to security controls mentioned in section 2.2.2, the following security controls for outsourced functions are also followed.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for Outsourced Functions",
+      "section_number": "2.2.3",
+      "parent_section": "2.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Service Provider contracts confirming contractual obligation to implement SBP regulations",
+        "Bank's own compliance records confirming outsourcing does not reduce bank's regulatory responsibility"
+      ]
+    },
+    {
+      "control_id": "2.2.3(a)",
+      "original_reference": "2.2.3(a)",
+      "title": "Non-Disclosure and Right to Audit in Service Provider Contracts",
+      "description": "Contracts with Service Providers should include Non-Disclosure provisions to ensure confidentiality and security of bank and customers' information, and shall grant the bank as well as SBP the right to audit Service Providers' security controls.",
+      "full_text": "Contracts with Service Providers should be equipped with provision relating to Non Disclosure to ensure the confidentiality and security of bank and customers' information and to bank's as well as SBP's right to audit Service Providers' security controls as per the requirements set forth in these regulations.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for Outsourced Functions",
+      "section_number": "2.2.3(a)",
+      "parent_section": "2.2.3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "Service Provider contracts containing Non-Disclosure provisions",
+        "Contract clauses granting the bank the right to audit Service Providers' security controls",
+        "Contract clauses granting SBP the right to audit Service Providers' security controls"
+      ]
+    },
+    {
+      "control_id": "2.2.3(b)",
+      "original_reference": "2.2.3(b)",
+      "title": "Customer Information Protection by Service Providers",
+      "description": "Appropriate measures to avoid any loss, theft or leakage of customers' information shall be developed and implemented by the Service Providers.",
+      "full_text": "Appropriate measures to avoid any loss, theft or leakage of customers' information are developed and implemented by the Service Providers.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for Outsourced Functions",
+      "section_number": "2.2.3(b)",
+      "parent_section": "2.2.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Service Provider implemented measures to prevent loss, theft or leakage of customers' information",
+        "Evidence of bank's verification that such measures are in place at Service Providers"
+      ]
+    },
+    {
+      "control_id": "2.2.3(c)",
+      "original_reference": "2.2.3(c)",
+      "title": "Controlled and Monitored Service Provider Access to Customer Information",
+      "description": "Service Providers' access to customer information shall be request-based, strictly monitored, logged and periodically audited. Customer information shall not be transferred to unauthorized storage or access medium.",
+      "full_text": "Service Providers' access to customer information is based on the request from the bank or the concerned customer and should be strictly monitored, logged and periodically audited. Further, customer information shall not be transferred to unauthorized storage or access medium.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for Outsourced Functions",
+      "section_number": "2.2.3(c)",
+      "parent_section": "2.2.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Request-based access process documentation for Service Provider access to customer information",
+        "Service Provider access monitoring records",
+        "Service Provider access logs",
+        "Periodic audit records for Service Provider customer information access",
+        "Controls ensuring customer information is not transferred to unauthorized storage or access medium"
+      ]
+    },
+    {
+      "control_id": "2.2.3(d)",
+      "original_reference": "2.2.3(d)",
+      "title": "Service Provider Disaster Recovery Requirements",
+      "description": "Service Providers shall have a Disaster Recovery plan aligned with bank's business requirements, different types of DR Sites (Cold/Warm/Hot/Satellite), and IT assets life cycle management documentation.",
+      "full_text": "Service Providers shall also have: i. A Disaster Recovery (DR) plan and its alignment with bank's business requirements. ii. Different types of Disaster Recovery (DR) Sites: Cold / Warm / Hot / Satellite. iii. Documentation related to IT assets life cycle management.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for Outsourced Functions",
+      "section_number": "2.2.3(d)",
+      "parent_section": "2.2.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Service Provider Disaster Recovery (DR) plan",
+        "Evidence of DR plan alignment with bank's business requirements",
+        "Documentation of Service Provider DR Site types (Cold/Warm/Hot/Satellite)",
+        "Service Provider IT assets life cycle management documentation"
+      ]
+    },
+    {
+      "control_id": "2.2.3(d)(i)",
+      "original_reference": "2.2.3(d)(i)",
+      "title": "Service Provider Disaster Recovery Plan",
+      "description": "Service Providers shall have a Disaster Recovery (DR) plan aligned with the bank's business requirements.",
+      "full_text": "A Disaster Recovery (DR) plan and its alignment with bank's business requirements.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for Outsourced Functions",
+      "section_number": "2.2.3(d)(i)",
+      "parent_section": "2.2.3(d)",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Service Provider Disaster Recovery (DR) plan document",
+        "Evidence of alignment of DR plan with bank's business requirements"
+      ]
+    },
+    {
+      "control_id": "2.2.3(d)(ii)",
+      "original_reference": "2.2.3(d)(ii)",
+      "title": "Service Provider Disaster Recovery Sites",
+      "description": "Service Providers shall have different types of Disaster Recovery (DR) Sites: Cold / Warm / Hot / Satellite.",
+      "full_text": "Different types of Disaster Recovery (DR) Sites: Cold / Warm / Hot / Satellite.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for Outsourced Functions",
+      "section_number": "2.2.3(d)(ii)",
+      "parent_section": "2.2.3(d)",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Documentation of Service Provider DR Site types (Cold/Warm/Hot/Satellite)",
+        "Evidence of operational DR sites at Service Provider"
+      ]
+    },
+    {
+      "control_id": "2.2.3(d)(iii)",
+      "original_reference": "2.2.3(d)(iii)",
+      "title": "Service Provider IT Assets Life Cycle Management",
+      "description": "Service Providers shall have documentation related to IT assets life cycle management.",
+      "full_text": "Documentation related to IT assets life cycle management.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls for Outsourced Functions",
+      "section_number": "2.2.3(d)(iii)",
+      "parent_section": "2.2.3(d)",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Service Provider IT assets life cycle management documentation"
+      ]
+    },
+
     {
       "control_id": "2.3",
       "original_reference": "2.3",
-      "title": "Beneficiary Management",
-      "description": "Implement secure beneficiary addition and management processes.",
-      "full_text": "Financial institutions shall implement secure beneficiary addition and management processes. Addition of new beneficiaries shall require additional authentication. Cooling-off periods shall be implemented before transactions to new beneficiaries are allowed.",
-      "domain": "Authorization",
-      "category": "Beneficiary Control",
+      "title": "Security Controls Monitoring",
+      "description": "Bank shall develop and implement a formally approved mechanism for monitoring of Security Controls, including an analysis of the effectiveness of existing or proposed monitoring methods.",
+      "full_text": "Bank shall develop and implement a formally approved mechanism for the monitoring of Security Controls. An analysis of the effectiveness of existing or proposed Security Controls Monitoring methods shall be part of this monitoring mechanism.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls Monitoring",
       "section_number": "2.3",
       "parent_section": "2",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Beneficiary management procedures", "Cooling-off period configuration", "Authentication requirements"]
+      "evidence_requirements": [
+        "Formally approved Security Controls Monitoring mechanism document",
+        "Effectiveness analysis of Security Controls Monitoring methods"
+      ]
     },
     {
-      "control_id": "2.4",
-      "original_reference": "2.4",
-      "title": "Dual Authorization for High-Value Transactions",
-      "description": "Require dual authorization for high-value or sensitive transactions.",
-      "full_text": "Financial institutions shall require dual authorization for high-value or sensitive transactions in corporate internet banking. Authorization workflows shall be configurable based on transaction type and amount.",
-      "domain": "Authorization",
-      "category": "Dual Control",
-      "section_number": "2.4",
-      "parent_section": "2",
+      "control_id": "2.3(a)",
+      "original_reference": "2.3(a)",
+      "title": "Network Activity Monitoring",
+      "description": "The monitoring mechanism shall cover monitoring of bank's network activity by collecting and analyzing host and network data related to security events, such as privileged access to sensitive operating systems, configuration changes, and access to critical applications.",
+      "full_text": "Monitoring of bank's network activity by collecting and analyzing the host and network data related to security events. Examples of security events include privileged access to sensitive operating systems, configuration changes, and access to critical applications etc.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls Monitoring",
+      "section_number": "2.3(a)",
+      "parent_section": "2.3",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Dual authorization configuration", "Workflow documentation", "Authorization audit trails"]
+      "evidence_requirements": [
+        "Network activity monitoring records (host and network data collection and analysis)",
+        "Security event logs covering privileged access to sensitive OS, configuration changes and access to critical applications"
+      ]
     },
     {
-      "control_id": "3.1",
-      "original_reference": "3.1",
-      "title": "Transaction Encryption",
-      "description": "Encrypt all internet banking transactions during transmission.",
-      "full_text": "Financial institutions shall encrypt all internet banking transactions during transmission using strong cryptographic protocols (TLS 1.2 or higher). End-to-end encryption shall be implemented for sensitive data.",
-      "domain": "Transaction Security",
-      "category": "Encryption",
-      "section_number": "3.1",
-      "parent_section": "3",
-      "is_mandatory": true,
+      "control_id": "2.3(b)",
+      "original_reference": "2.3(b)",
+      "title": "IDS/IPS Monitoring and Security Breach Response",
+      "description": "Methods for proactive monitoring of IDS/IPS and for responding to security breaches shall be detailed in the monitoring mechanism. A rapid response team shall be nominated and made responsible to respond immediately in case of a security breach.",
+      "full_text": "Methods for proactive monitoring of IDS/IPS and for responding to security breaches should be listed in detail in the monitoring mechanism. A rapid response team should be nominated and made responsible to respond immediately in case of a security breach.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls Monitoring",
+      "section_number": "2.3(b)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
       "priority": "high",
-      "evidence_requirements": ["TLS configuration", "Certificate inventory", "Encryption testing results"]
+      "evidence_requirements": [
+        "Detailed IDS/IPS proactive monitoring methods documentation",
+        "Security breach response procedures",
+        "Nominated rapid response team with defined responsibilities for immediate security breach response"
+      ]
     },
     {
-      "control_id": "3.2",
-      "original_reference": "3.2",
-      "title": "Transaction Signing",
-      "description": "Implement transaction signing for high-risk transactions.",
-      "full_text": "Financial institutions shall implement transaction signing mechanisms for high-risk transactions. Transaction data shall be displayed for customer verification before signing. Digital signatures or OTPs shall be used for transaction authorization.",
-      "domain": "Transaction Security",
-      "category": "Transaction Integrity",
-      "section_number": "3.2",
-      "parent_section": "3",
-      "is_mandatory": true,
+      "control_id": "2.3(c)",
+      "original_reference": "2.3(c)",
+      "title": "Authentication Controls Monitoring and Reporting",
+      "description": "The monitoring and reporting mechanism for Authentication Controls shall be formally documented and approved by senior management and implemented accordingly.",
+      "full_text": "Monitoring and reporting mechanism of Authentication Controls should be formally documented and approved by the senior management and implemented accordingly.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls Monitoring",
+      "section_number": "2.3(c)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
       "priority": "high",
-      "evidence_requirements": ["Transaction signing implementation", "Verification flow documentation", "Signature audit logs"]
+      "evidence_requirements": [
+        "Formally documented Authentication Controls monitoring and reporting mechanism",
+        "Senior management approval evidence for Authentication Controls monitoring mechanism"
+      ]
     },
     {
-      "control_id": "3.3",
-      "original_reference": "3.3",
-      "title": "Transaction Confirmation",
-      "description": "Provide real-time transaction confirmation to customers.",
-      "full_text": "Financial institutions shall provide real-time transaction confirmation to customers through multiple channels including on-screen confirmation, SMS alerts, and email notifications. Confirmation shall include transaction details for verification.",
-      "domain": "Transaction Security",
-      "category": "Customer Notification",
-      "section_number": "3.3",
-      "parent_section": "3",
-      "is_mandatory": true,
+      "control_id": "2.3(d)",
+      "original_reference": "2.3(d)",
+      "title": "System Restoration Procedures",
+      "description": "Procedures and time required for restoration of bank's systems shall be part of the Security Controls Monitoring process.",
+      "full_text": "Procedures and time required for restoration of bank's systems should be part of Security Controls Monitoring process.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls Monitoring",
+      "section_number": "2.3(d)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
       "priority": "high",
-      "evidence_requirements": ["Confirmation message templates", "Multi-channel delivery configuration", "Delivery confirmation logs"]
+      "evidence_requirements": [
+        "Documented system restoration procedures",
+        "Defined and tested restoration timeframes"
+      ]
     },
     {
-      "control_id": "3.4",
-      "original_reference": "3.4",
-      "title": "Non-Repudiation",
-      "description": "Implement non-repudiation controls for internet banking transactions.",
-      "full_text": "Financial institutions shall implement non-repudiation controls for internet banking transactions. Transaction logs shall capture sufficient detail to establish the authenticity and integrity of transactions and the identity of the initiator.",
-      "domain": "Transaction Security",
-      "category": "Audit Trail",
-      "section_number": "3.4",
-      "parent_section": "3",
-      "is_mandatory": true,
+      "control_id": "2.3(e)",
+      "original_reference": "2.3(e)",
+      "title": "Security Testing",
+      "description": "The monitoring mechanism shall include use of self-assessments, penetration testing, and independent security audits commensurate with the systems' complexity and risk exposures.",
+      "full_text": "Use of self-assessments, penetration testing, and independent security audits commensurate with the systems' complexity and risk exposures.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls Monitoring",
+      "section_number": "2.3(e)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
       "priority": "high",
-      "evidence_requirements": ["Transaction logging configuration", "Log completeness verification", "Non-repudiation controls documentation"]
+      "evidence_requirements": [
+        "Self-assessment records",
+        "Penetration testing records",
+        "Independent security audit records",
+        "Evidence that testing frequency and scope is commensurate with system complexity and risk exposures"
+      ]
     },
     {
-      "control_id": "4.1",
-      "original_reference": "4.1",
+      "control_id": "2.3(f)",
+      "original_reference": "2.3(f)",
+      "title": "Policy Violation and Unauthorized Configuration Change Identification",
+      "description": "The monitoring mechanism shall include identification and listing of bank's policy violations, unauthorized configuration changes and other conditions which can potentially increase the risk of security breaches.",
+      "full_text": "Identification and listing of bank's policy violations, unauthorized configuration changes and other conditions which can potentially increase the risk of security breaches.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls Monitoring",
+      "section_number": "2.3(f)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "Policy violation identification and listing records",
+        "Unauthorized configuration change identification and listing records",
+        "Records of other conditions identified as potentially increasing security breach risk"
+      ]
+    },
+    {
+      "control_id": "2.3(g)",
+      "original_reference": "2.3(g)",
+      "title": "Log and Audit Trail Monitoring and Retention",
+      "description": "Procedures shall ensure monitoring of logs and audit trails on a regular and predefined periodic basis. Internet Banking security logs and audit trails shall be retained for a period of ten years.",
+      "full_text": "Procedures to ensure the monitoring of logs and audit trails on regular and predefined periodic basis should be developed. The security logs and audit trials for IB should be retained for a period of ten years.",
+      "domain": "Internet Banking Security Framework",
+      "category": "Security Controls Monitoring",
+      "section_number": "2.3(g)",
+      "parent_section": "2.3",
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "Log and audit trail monitoring procedures (regular and predefined periodic basis)",
+        "Evidence that Internet Banking security logs and audit trails are retained for ten years"
+      ]
+    },
+
+    {
+      "control_id": "3",
+      "original_reference": "3",
       "title": "Customer Awareness",
-      "description": "Provide security awareness information to internet banking customers.",
-      "full_text": "Financial institutions shall provide security awareness information to internet banking customers including safe banking practices, phishing awareness, and reporting procedures for suspicious activity.",
-      "domain": "Customer Protection",
-      "category": "Security Awareness",
-      "section_number": "4.1",
-      "parent_section": "4",
-      "is_mandatory": true,
+      "description": "A formal customer awareness program regarding Internet Banking threats and safeguards to minimize frauds and Identity Theft risks should be developed and implemented by the banks.",
+      "full_text": "A formal customer awareness program regarding Internet Banking threats and safeguards to minimize frauds and Identity Theft risks should be developed and implemented by the banks.",
+      "domain": "Customer Awareness",
+      "category": "Customer Awareness Program",
+      "section_number": "3",
+      "parent_section": null,
+      "is_mandatory": false,
       "priority": "high",
-      "evidence_requirements": ["Customer awareness materials", "Website security tips", "Phishing awareness campaigns"]
+      "evidence_requirements": [
+        "Formal Customer Awareness Program document"
+      ]
     },
     {
-      "control_id": "4.2",
-      "original_reference": "4.2",
-      "title": "Secure Communication Channels",
-      "description": "Establish secure channels for customer communication.",
-      "full_text": "Financial institutions shall establish secure channels for customer communication. Sensitive information shall not be communicated via unencrypted email. Customers shall be educated to verify official bank communication channels.",
-      "domain": "Customer Protection",
-      "category": "Communication Security",
-      "section_number": "4.2",
-      "parent_section": "4",
-      "is_mandatory": true,
+      "control_id": "3(a)",
+      "original_reference": "3(a)",
+      "title": "Explanation of Liabilities, Roles and Responsibilities",
+      "description": "The customer awareness program shall include an explanation of liabilities, roles and responsibilities of the bank as well as its customers for using Internet Banking products and services offered by the bank.",
+      "full_text": "An explanation of liabilities, roles and responsibilities of bank as well as its customers for using Internet Banking products and services offered by the bank.",
+      "domain": "Customer Awareness",
+      "category": "Customer Awareness Program",
+      "section_number": "3(a)",
+      "parent_section": "3",
+      "is_mandatory": false,
       "priority": "high",
-      "evidence_requirements": ["Secure communication policy", "Official channel documentation", "Customer communication guidelines"]
+      "evidence_requirements": [
+        "Published documentation explaining liabilities, roles and responsibilities of both bank and customers for Internet Banking use"
+      ]
     },
     {
-      "control_id": "4.3",
-      "original_reference": "4.3",
-      "title": "Customer Dispute Resolution",
-      "description": "Establish clear dispute resolution procedures for internet banking transactions.",
-      "full_text": "Financial institutions shall establish clear dispute resolution procedures for internet banking transactions. Customers shall be informed of the process to dispute transactions. Dispute resolution timelines shall be defined and communicated.",
-      "domain": "Customer Protection",
-      "category": "Dispute Resolution",
-      "section_number": "4.3",
-      "parent_section": "4",
-      "is_mandatory": true,
+      "control_id": "3(b)",
+      "original_reference": "3(b)",
+      "title": "Disclosure Compliance - Section 30 of Payment Systems Act",
+      "description": "The customer awareness program shall ensure compliance with Disclosure requirements under Section 30 (Terms and Conditions of Transfers) of the Payment Systems and Electronic Fund Transfer Act 2007.",
+      "full_text": "Compliance of Disclosure requirements under Section 30 (Terms and Conditions of Transfers) of Payment Systems and Electronic Fund Transfer Act 2007.",
+      "domain": "Customer Awareness",
+      "category": "Customer Awareness Program",
+      "section_number": "3(b)",
+      "parent_section": "3",
+      "is_mandatory": false,
       "priority": "high",
-      "evidence_requirements": ["Dispute resolution policy", "Customer complaint procedures", "Resolution timeline documentation"]
+      "evidence_requirements": [
+        "Disclosure documentation compliant with Section 30 (Terms and Conditions of Transfers) of Payment Systems and Electronic Fund Transfer Act 2007"
+      ]
     },
     {
-      "control_id": "4.4",
-      "original_reference": "4.4",
-      "title": "Liability Framework",
-      "description": "Establish clear liability framework for unauthorized transactions.",
-      "full_text": "Financial institutions shall establish a clear liability framework for unauthorized internet banking transactions. Customer liability shall be limited where the customer has not acted negligently. Liability shall be clearly communicated in terms and conditions.",
-      "domain": "Customer Protection",
-      "category": "Liability",
-      "section_number": "4.4",
-      "parent_section": "4",
-      "is_mandatory": true,
+      "control_id": "3(c)",
+      "original_reference": "3(c)",
+      "title": "Help Desk Contact Details",
+      "description": "The customer awareness program shall include contact details of the help desk that customers might need in case of any issues including loss of security credentials, frauds and identity theft.",
+      "full_text": "Contact details of help desk that customer might need in case of any issues including loss of security credentials or frauds and identity theft.",
+      "domain": "Customer Awareness",
+      "category": "Customer Awareness Program",
+      "section_number": "3(c)",
+      "parent_section": "3",
+      "is_mandatory": false,
       "priority": "high",
-      "evidence_requirements": ["Liability policy", "Terms and conditions", "Customer liability limits documentation"]
+      "evidence_requirements": [
+        "Published help desk contact details covering lost security credentials, fraud and identity theft issues"
+      ]
     },
     {
-      "control_id": "5.1",
-      "original_reference": "5.1",
-      "title": "Fraud Monitoring System",
-      "description": "Implement real-time fraud monitoring for internet banking transactions.",
-      "full_text": "Financial institutions shall implement real-time fraud monitoring systems for internet banking transactions. Systems shall detect anomalous patterns, unusual transaction behavior, and known fraud signatures. Alerts shall be generated for suspicious activity.",
-      "domain": "Fraud Prevention",
-      "category": "Fraud Detection",
-      "section_number": "5.1",
-      "parent_section": "5",
-      "is_mandatory": true,
+      "control_id": "3(d)",
+      "original_reference": "3(d)",
+      "title": "Re-authentication Procedure",
+      "description": "The customer awareness program shall include the procedure for re-authentication of customers' Internet Banking.",
+      "full_text": "Procedure for re-authentication of customers Internet Banking.",
+      "domain": "Customer Awareness",
+      "category": "Customer Awareness Program",
+      "section_number": "3(d)",
+      "parent_section": "3",
+      "is_mandatory": false,
       "priority": "high",
-      "evidence_requirements": ["Fraud monitoring system documentation", "Detection rules configuration", "Alert handling procedures"]
+      "evidence_requirements": [
+        "Published customer-facing re-authentication procedure for Internet Banking"
+      ]
     },
     {
-      "control_id": "5.2",
-      "original_reference": "5.2",
-      "title": "Behavioral Analytics",
-      "description": "Implement behavioral analytics to detect anomalous customer behavior.",
-      "full_text": "Financial institutions shall implement behavioral analytics to detect anomalous customer behavior in internet banking. Customer baseline behavior shall be established, and deviations shall trigger additional verification or transaction blocking.",
-      "domain": "Fraud Prevention",
-      "category": "Behavioral Analysis",
-      "section_number": "5.2",
-      "parent_section": "5",
-      "is_mandatory": true,
+      "control_id": "3(e)",
+      "original_reference": "3(e)",
+      "title": "Complaint Handling and Dispute Resolution",
+      "description": "The customer awareness program shall include the complaint handling process including dispute resolution mechanism related to Internet Banking.",
+      "full_text": "Complaint handling process including dispute resolution mechanism related to Internet Banking.",
+      "domain": "Customer Awareness",
+      "category": "Customer Awareness Program",
+      "section_number": "3(e)",
+      "parent_section": "3",
+      "is_mandatory": false,
       "priority": "high",
-      "evidence_requirements": ["Behavioral analytics system", "Baseline establishment methodology", "Deviation detection rules"]
+      "evidence_requirements": [
+        "Complaint handling process documentation",
+        "Internet Banking dispute resolution mechanism documentation",
+        "Evidence that dispute resolution process is communicated to customers"
+      ]
     },
     {
-      "control_id": "5.3",
-      "original_reference": "5.3",
-      "title": "Transaction Blocking",
-      "description": "Implement ability to block suspicious transactions in real-time.",
-      "full_text": "Financial institutions shall implement ability to block suspicious transactions in real-time. Transactions matching high-risk patterns or exceeding risk thresholds shall be blocked pending verification. Customers shall be notified of blocked transactions.",
-      "domain": "Fraud Prevention",
-      "category": "Transaction Control",
-      "section_number": "5.3",
-      "parent_section": "5",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_requirements": ["Transaction blocking rules", "Block notification procedures", "Verification workflows"]
-    },
-    {
-      "control_id": "5.4",
-      "original_reference": "5.4",
-      "title": "Fraud Reporting to SBP",
-      "description": "Report significant fraud incidents to SBP as required.",
-      "full_text": "Financial institutions shall report significant internet banking fraud incidents to SBP within the required timeframe. Reports shall include details of the incident, impact, root cause analysis, and remediation actions.",
-      "domain": "Fraud Prevention",
-      "category": "Regulatory Reporting",
-      "section_number": "5.4",
-      "parent_section": "5",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_requirements": ["Fraud reporting procedures", "Incident report templates", "SBP reporting records"]
-    },
-    {
-      "control_id": "6.1",
-      "original_reference": "6.1",
-      "title": "Secure Application Development",
-      "description": "Develop internet banking applications following secure development practices.",
-      "full_text": "Financial institutions shall develop internet banking applications following secure development practices. Security requirements shall be defined, code reviews conducted, and security testing performed before deployment.",
-      "domain": "System Security",
-      "category": "Secure Development",
-      "section_number": "6.1",
-      "parent_section": "6",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_requirements": ["SDLC documentation", "Security requirements", "Code review records", "Security testing results"]
-    },
-    {
-      "control_id": "6.2",
-      "original_reference": "6.2",
-      "title": "Vulnerability Assessment",
-      "description": "Conduct regular vulnerability assessments of internet banking systems.",
-      "full_text": "Financial institutions shall conduct regular vulnerability assessments of internet banking systems including infrastructure, applications, and APIs. Identified vulnerabilities shall be remediated based on risk-based timelines.",
-      "domain": "System Security",
-      "category": "Vulnerability Management",
-      "section_number": "6.2",
-      "parent_section": "6",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_requirements": ["Vulnerability assessment reports", "Remediation tracking", "Scan schedules"]
-    },
-    {
-      "control_id": "6.3",
-      "original_reference": "6.3",
-      "title": "Penetration Testing",
-      "description": "Conduct annual penetration testing of internet banking systems.",
-      "full_text": "Financial institutions shall conduct annual penetration testing of internet banking systems by qualified professionals. Testing shall cover web applications, mobile applications, APIs, and network infrastructure. Findings shall be remediated before production deployment.",
-      "domain": "System Security",
-      "category": "Security Testing",
-      "section_number": "6.3",
-      "parent_section": "6",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_requirements": ["Penetration test reports", "Remediation evidence", "Tester qualifications"]
-    },
-    {
-      "control_id": "6.4",
-      "original_reference": "6.4",
-      "title": "API Security",
-      "description": "Implement security controls for internet banking APIs.",
-      "full_text": "Financial institutions shall implement security controls for internet banking APIs including authentication, authorization, rate limiting, and input validation. APIs shall be documented and access shall be controlled.",
-      "domain": "System Security",
-      "category": "API Security",
-      "section_number": "6.4",
-      "parent_section": "6",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_requirements": ["API security standards", "API documentation", "Rate limiting configuration"]
-    },
-    {
-      "control_id": "6.5",
-      "original_reference": "6.5",
-      "title": "Mobile Banking Security",
-      "description": "Implement additional security controls for mobile banking applications.",
-      "full_text": "Financial institutions shall implement additional security controls for mobile banking applications including app integrity verification, secure storage, jailbreak/root detection, and certificate pinning.",
-      "domain": "System Security",
-      "category": "Mobile Security",
-      "section_number": "6.5",
-      "parent_section": "6",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_requirements": ["Mobile security configuration", "App security testing", "Certificate pinning evidence"]
-    },
-    {
-      "control_id": "7.1",
-      "original_reference": "7.1",
-      "title": "High Availability",
-      "description": "Ensure high availability of internet banking services.",
-      "full_text": "Financial institutions shall ensure high availability of internet banking services with defined uptime targets. Redundant infrastructure shall be implemented. Failover capabilities shall be tested regularly.",
-      "domain": "Operational Resilience",
-      "category": "Availability",
-      "section_number": "7.1",
-      "parent_section": "7",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_requirements": ["Availability targets", "Redundancy architecture", "Failover test results"]
-    },
-    {
-      "control_id": "7.2",
-      "original_reference": "7.2",
-      "title": "Incident Response",
-      "description": "Establish incident response procedures for internet banking security incidents.",
-      "full_text": "Financial institutions shall establish incident response procedures for internet banking security incidents. Procedures shall include detection, containment, eradication, recovery, and lessons learned. Incident response shall be tested regularly.",
-      "domain": "Operational Resilience",
-      "category": "Incident Response",
-      "section_number": "7.2",
-      "parent_section": "7",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_requirements": ["Incident response plan", "Response team contacts", "Test exercise results"]
-    },
-    {
-      "control_id": "7.3",
-      "original_reference": "7.3",
-      "title": "Business Continuity",
-      "description": "Include internet banking in business continuity planning.",
-      "full_text": "Financial institutions shall include internet banking services in business continuity planning. Recovery procedures shall be documented and tested. Recovery time objectives shall be defined and achievable.",
-      "domain": "Operational Resilience",
-      "category": "Business Continuity",
-      "section_number": "7.3",
-      "parent_section": "7",
-      "is_mandatory": true,
-      "priority": "high",
-      "evidence_requirements": ["BCP documentation", "RTO/RPO definitions", "BCP test results"]
-    },
-    {
-      "control_id": "7.4",
-      "original_reference": "7.4",
-      "title": "Capacity Management",
-      "description": "Implement capacity management for internet banking systems.",
-      "full_text": "Financial institutions shall implement capacity management for internet banking systems. Capacity shall be monitored and planned to meet current and future demand. Peak load testing shall be conducted regularly.",
-      "domain": "Operational Resilience",
-      "category": "Capacity Planning",
-      "section_number": "7.4",
-      "parent_section": "7",
-      "is_mandatory": true,
+      "control_id": "3(f)",
+      "original_reference": "3(f)",
+      "title": "Annual Customer Guidelines",
+      "description": "The customer awareness program shall include regular issuance of guidelines to customers on a yearly basis for mitigating the risks associated with Internet Banking.",
+      "full_text": "Regular issuance of guidelines to customers on yearly basis for mitigating the risks associated with Internet Banking.",
+      "domain": "Customer Awareness",
+      "category": "Customer Awareness Program",
+      "section_number": "3(f)",
+      "parent_section": "3",
+      "is_mandatory": false,
       "priority": "medium",
-      "evidence_requirements": ["Capacity monitoring reports", "Capacity planning documentation", "Load test results"]
+      "evidence_requirements": [
+        "Records of annual guidelines issued to customers for mitigating Internet Banking risks"
+      ]
     },
     {
-      "control_id": "7.5",
-      "original_reference": "7.5",
-      "title": "Third Party Management",
-      "description": "Manage third-party risks for internet banking services.",
-      "full_text": "Financial institutions shall manage third-party risks for internet banking services including payment gateways, security service providers, and technology vendors. Third parties shall be assessed, monitored, and contractually bound to security requirements.",
-      "domain": "Operational Resilience",
-      "category": "Third Party Risk",
-      "section_number": "7.5",
-      "parent_section": "7",
+      "control_id": "3(g)",
+      "original_reference": "3(g)",
+      "title": "Management Review of Customer Awareness Programs",
+      "description": "The customer awareness program shall be regularly reviewed and evaluated by the management.",
+      "full_text": "Regular review and evaluation of the customer awareness programs by the management.",
+      "domain": "Customer Awareness",
+      "category": "Customer Awareness Program",
+      "section_number": "3(g)",
+      "parent_section": "3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "evidence_requirements": [
+        "Management review and evaluation records of customer awareness programs"
+      ]
+    },
+
+    {
+      "control_id": "4",
+      "original_reference": "4",
+      "title": "Reporting Requirements",
+      "description": "All established security breaches shall be reported to the Payment Systems Department, State Bank of Pakistan. Incident and analysis reports shall be furnished quarterly to PSD as per Annexure-I, including detailed impact on the institution's business, systems, applications and customers.",
+      "full_text": "All established security breaches should be reported to Payment Systems Department, State Bank of Pakistan. The incident and analysis reports of security breaches should be furnished on quarterly basis to PSD as per Annexure-I. Impact of security breach on institution's business, systems, applications and customers should also be submitted in detail.",
+      "domain": "Reporting Requirements",
+      "category": "Regulatory Reporting",
+      "section_number": "4",
+      "parent_section": null,
+      "is_mandatory": false,
+      "priority": "high",
+      "evidence_requirements": [
+        "Quarterly security breach incident and analysis reports submitted to SBP Payment Systems Department (Annexure-I format)",
+        "Detailed impact reports covering effects on institution's business, systems, applications and customers",
+        "Internal process for identifying and escalating established security breaches for regulatory reporting"
+      ]
+    },
+
+    {
+      "control_id": "5",
+      "original_reference": "5",
+      "title": "Regulatory Requirements",
+      "description": "These regulations are subject to all relevant SBP laws, rules and regulations including Guidelines on Outsourcing Arrangements, Guidelines on Information Technology Security, Guidelines on Information Systems Audits and System Switchover Planning, and Guidelines on Business Continuity Planning.",
+      "full_text": "These regulations are subject to all relevant laws, rules and regulations issued by SBP from time-to-time including but not limited to the following: a) Guidelines on the Outsourcing Arrangements (BPRD Circular No 9 dated July 13, 2007); b) Guidelines on the Information Technology Security (BSD Circular No 15 dated September 29, 2004); c) Information Systems: Guidelines on Audits and System Switchover Planning (BSD Circular No 8 dated December 12, 2005); d) Compliance of 'Guidelines on Business Continuity Planning' (BSD Circular No 13 dated September 04, 2004).",
+      "domain": "Regulatory Requirements",
+      "category": "Applicable Regulations",
+      "section_number": "5",
+      "parent_section": null,
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Third-party inventory", "Risk assessments", "Contract security clauses"]
+      "evidence_requirements": [
+        "Compliance documentation for all relevant SBP regulations"
+      ]
+    },
+    {
+      "control_id": "5(a)",
+      "original_reference": "5(a)",
+      "title": "Compliance with Outsourcing Arrangements Guidelines",
+      "description": "These regulations are subject to the Guidelines on the Outsourcing Arrangements (BPRD Circular No 9 dated July 13, 2007).",
+      "full_text": "Guidelines on the Outsourcing Arrangements (BPRD Circular No 9 dated July 13, 2007).",
+      "domain": "Regulatory Requirements",
+      "category": "Applicable Regulations",
+      "section_number": "5(a)",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Compliance documentation for BPRD Circular No 9 (July 13, 2007) - Guidelines on Outsourcing Arrangements"
+      ]
+    },
+    {
+      "control_id": "5(b)",
+      "original_reference": "5(b)",
+      "title": "Compliance with IT Security Guidelines",
+      "description": "These regulations are subject to the Guidelines on the Information Technology Security (BSD Circular No 15 dated September 29, 2004).",
+      "full_text": "Guidelines on the Information Technology Security (BSD Circular No 15 dated September 29, 2004).",
+      "domain": "Regulatory Requirements",
+      "category": "Applicable Regulations",
+      "section_number": "5(b)",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Compliance documentation for BSD Circular No 15 (September 29, 2004) - Guidelines on Information Technology Security"
+      ]
+    },
+    {
+      "control_id": "5(c)",
+      "original_reference": "5(c)",
+      "title": "Compliance with IS Audits and System Switchover Planning Guidelines",
+      "description": "These regulations are subject to the Information Systems Guidelines on Audits and System Switchover Planning (BSD Circular No 8 dated December 12, 2005).",
+      "full_text": "Information Systems: Guidelines on Audits and System Switchover Planning (BSD Circular No 8 dated December 12, 2005).",
+      "domain": "Regulatory Requirements",
+      "category": "Applicable Regulations",
+      "section_number": "5(c)",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Compliance documentation for BSD Circular No 8 (December 12, 2005) - Guidelines on Information Systems Audits and System Switchover Planning"
+      ]
+    },
+    {
+      "control_id": "5(d)",
+      "original_reference": "5(d)",
+      "title": "Compliance with Business Continuity Planning Guidelines",
+      "description": "These regulations are subject to the Guidelines on Business Continuity Planning (BSD Circular No 13 dated September 04, 2004).",
+      "full_text": "Compliance of 'Guidelines on Business Continuity Planning' (BSD Circular No 13 dated September 04, 2004).",
+      "domain": "Regulatory Requirements",
+      "category": "Applicable Regulations",
+      "section_number": "5(d)",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Compliance documentation for BSD Circular No 13 (September 04, 2004) - Guidelines on Business Continuity Planning"
+      ]
+    },
+
+    {
+      "control_id": "ANNEX-I",
+      "original_reference": "Annexure-I",
+      "title": "Details of Established Security Breaches in IB (Quarterly Report Template)",
+      "description": "Prescribed quarterly reporting format for banks to report established Internet Banking security breaches to the Payment Systems Department, SBP. Includes bank identification, submission details and structured breach information fields.",
+      "full_text": "Annexure-I: Details of Established Security Breaches in IB. Name of the bank, For the Quarter Ending, Submitted By (Name), Designation and Seal, Contact No. Table columns: Sr., Source of security breach discovery, Nature of security breach, Reasons for the occurrence of security breach (e.g. Breach of controls, Procedures were not followed, weaknesses in implemented security controls etc.), Impact of security breach (e.g. on banks business, systems, customers etc), Action(s) taken to rectify the Security Breaches, Remarks (further details, if any).",
+      "domain": "Reporting Requirements",
+      "category": "Reporting Template",
+      "section_number": "Annexure-I",
+      "parent_section": "4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Completed Annexure-I quarterly reports submitted to PSD, SBP",
+        "Report fields: bank name, quarter ending date, submitter name, designation and seal, contact number",
+        "Breach detail fields: source of breach discovery, nature of breach, reasons for occurrence, impact on business/systems/customers, rectification actions taken, remarks"
+      ]
     }
   ]
 }

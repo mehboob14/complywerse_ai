@@ -56,6 +56,10 @@ def get_tenant_from_request(
     
     resolved_token = token if isinstance(token, str) else None
     if not resolved_token:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            resolved_token = auth_header[7:].strip() or None
+    if not resolved_token:
         resolved_token = request.cookies.get("grc_auth_token")
 
     if resolved_token:
@@ -111,10 +115,16 @@ def get_current_tenant_user(
     token: Optional[str] = Cookie(None, alias="grc_auth_token"),
     tenant_db: Session = Depends(get_tenant_db)
 ) -> TenantUser:
-    if not token:
+    resolved_token = token
+    if not resolved_token:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            resolved_token = auth_header[7:].strip() or None
+
+    if not resolved_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    payload = decode_token(token)
+    payload = decode_token(resolved_token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
     

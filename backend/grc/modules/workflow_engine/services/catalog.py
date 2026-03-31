@@ -4,32 +4,94 @@ import re
 
 
 TRIGGER_NODE_TYPES = [
-    {"key": "framework_deadline_approaching", "label": "Framework deadline approaching"},
-    {"key": "risk_score_exceeds_threshold", "label": "Risk score exceeds threshold"},
-    {"key": "evidence_expires", "label": "Evidence expires"},
-    {"key": "new_vulnerability_detected", "label": "New vulnerability detected"},
-    {"key": "policy_review_due", "label": "Policy review due"},
-    {"key": "incident_reported", "label": "Incident reported"},
-    {"key": "kri_breach", "label": "KRI breach"},
-    {"key": "assessment_status_change", "label": "Assessment status change"},
+    # ── Core workflow triggers ────────────────────────────────────────────────
     {"key": "manual_trigger", "label": "Manual trigger"},
     {"key": "schedule_recurring", "label": "Schedule / recurring"},
     {"key": "webhook", "label": "Webhook trigger"},
+    # ── Evidence & compliance triggers ───────────────────────────────────────
+    {"key": "evidence_uploaded", "label": "Evidence uploaded"},
+    {"key": "evidence_approved", "label": "Evidence reviewed / approved"},
+    {"key": "evidence_expires", "label": "Evidence expires"},
+    {"key": "framework_deadline_approaching", "label": "Framework deadline approaching"},
+    {"key": "framework_evidence_complete", "label": "Framework evidence collection complete"},
+    {"key": "assessment_status_change", "label": "Assessment status change"},
+    {"key": "compliance_gap_detected", "label": "Compliance gap detected"},
+    {"key": "certification_expiry_approaching", "label": "Certification expiry approaching"},
+    # ── Risk triggers ─────────────────────────────────────────────────────────
+    {"key": "risk_created", "label": "Risk entry created"},
+    {"key": "risk_status_changed", "label": "Risk status changed"},
+    {"key": "risk_score_exceeds_threshold", "label": "Risk score exceeds threshold"},
+    {"key": "kri_breach", "label": "KRI breach"},
+    {"key": "incident_reported", "label": "Incident reported"},
+    # ── Vulnerability triggers ────────────────────────────────────────────────
+    {"key": "new_vulnerability_detected", "label": "New vulnerability detected"},
+    {"key": "vulnerability_sla_breach", "label": "Vulnerability SLA breached"},
+    {"key": "vulnerability_sla_warning", "label": "Vulnerability SLA warning (approaching)"},
+    # ── Governance & policy triggers ──────────────────────────────────────────
+    {"key": "policy_review_due", "label": "Policy review due"},
+    {"key": "policy_approved", "label": "Policy approved / published"},
+    {"key": "control_review_due", "label": "Control effectiveness review due"},
+    {"key": "attestation_overdue", "label": "Attestation campaign overdue"},
+    # ── Audit triggers ────────────────────────────────────────────────────────
+    {"key": "audit_finding_created", "label": "Audit finding created"},
 ]
 
 ACTION_NODE_TYPES = [
-    {"key": "create_risk_entry", "label": "Create risk entry"},
-    {"key": "request_evidence_upload", "label": "Request evidence upload"},
-    {"key": "assign_control_owner", "label": "Assign control owner"},
-    {"key": "send_notification_email", "label": "Send notification/email"},
-    {"key": "generate_report", "label": "Generate report"},
-    {"key": "update_compliance_status", "label": "Update compliance status"},
-    {"key": "create_audit_finding", "label": "Create audit finding"},
+    # ── Notifications & communication ─────────────────────────────────────────
+    {"key": "send_notification_email", "label": "Send notification / email"},
     {"key": "escalate_to_management", "label": "Escalate to management"},
-    {"key": "call_webhook_api", "label": "Call webhook/API"},
+    {"key": "call_webhook_api", "label": "Call webhook / API"},
+    {"key": "generate_report", "label": "Generate report"},
+    # ── Evidence & compliance actions ─────────────────────────────────────────
+    {"key": "request_evidence_upload", "label": "Request evidence upload"},
+    {"key": "request_evidence_review", "label": "Request evidence review"},
+    {"key": "approve_evidence", "label": "Approve evidence"},
+    {"key": "reject_evidence", "label": "Reject evidence / return for revision"},
+    {"key": "update_compliance_status", "label": "Update compliance status"},
+    {"key": "start_compliance_assessment", "label": "Start compliance assessment"},
+    {"key": "close_compliance_gap", "label": "Close / remediate compliance gap"},
+    {"key": "link_evidence_to_control", "label": "Link evidence to control"},
+    {"key": "assign_control_owner", "label": "Assign control owner"},
+    # ── Risk actions ──────────────────────────────────────────────────────────
+    {"key": "create_risk_entry", "label": "Create risk entry"},
+    {"key": "update_risk_status", "label": "Update risk status / treatment"},
+    {"key": "assign_risk_owner", "label": "Assign risk owner"},
+    {"key": "trigger_risk_review", "label": "Trigger risk review cycle"},
+    {"key": "create_remediation_task", "label": "Create remediation task"},
+    # ── Vulnerability actions ─────────────────────────────────────────────────
+    {"key": "assign_vulnerability_owner", "label": "Assign vulnerability owner"},
+    {"key": "update_vulnerability_status", "label": "Update vulnerability status"},
+    {"key": "create_vulnerability_entry", "label": "Create vulnerability entry"},
+    # ── Governance actions ────────────────────────────────────────────────────
+    {"key": "create_policy_review_task", "label": "Create policy review task"},
+    {"key": "publish_policy", "label": "Publish policy / document"},
+    {"key": "submit_policy_exception", "label": "Submit policy exception request"},
+    {"key": "approve_policy_exception", "label": "Approve policy exception"},
+    {"key": "request_attestation", "label": "Request policy attestation"},
+    # ── Audit actions ─────────────────────────────────────────────────────────
+    {"key": "create_audit_finding", "label": "Create audit finding"},
+    {"key": "create_audit_plan", "label": "Create audit plan"},
+    {"key": "close_audit_finding", "label": "Close / remediate audit finding"},
+    {"key": "assign_auditor", "label": "Assign auditor to audit"},
+    # ── Control library actions ───────────────────────────────────────────────
+    {"key": "update_control_effectiveness", "label": "Update control effectiveness rating"},
+    {"key": "set_control_not_applicable", "label": "Mark control as not applicable"},
 ]
 
 PLATFORM_FUNCTION_NODE_TYPES: list[dict] = []
+
+AUTOMATION_RELEVANT_PLATFORM_ACTIONS = {
+    "approve",
+    "assign",
+    "create",
+    "export",
+    "publish",
+    "reject",
+    "submit",
+    "trigger",
+    "update",
+    "upload",
+}
 
 
 def _slugify(value: str) -> str:
@@ -68,6 +130,8 @@ def _generate_functionality_action_nodes() -> list[dict]:
 
     def add_functionality(module_name: str, submodule_name: str, functionality: dict) -> None:
         action = str(functionality.get("action") or "trigger")
+        if action not in AUTOMATION_RELEVANT_PLATFORM_ACTIONS:
+            return
         func_name = str(functionality.get("name") or "Unnamed functionality")
         endpoint = str(functionality.get("endpoint") or "")
         key = (
@@ -218,6 +282,8 @@ def _generate_functionality_nodes_from_router_code() -> list[dict]:
 
             for method, route_path, fn_name in _extract_route_entries(text):
                 action = _action_from_http_method_and_path(method, route_path)
+                if action not in AUTOMATION_RELEVANT_PLATFORM_ACTIONS:
+                    continue
 
                 cleaned_fn = fn_name
                 for p in ["list_", "get_", "create_", "update_", "delete_", "post_", "put_", "patch_"]:
@@ -277,16 +343,24 @@ for n in [*_code_platform_nodes, *_json_platform_nodes]:
     _merged.append(n)
 
 PLATFORM_FUNCTION_NODE_TYPES = _merged
-ACTION_NODE_TYPES.extend(PLATFORM_FUNCTION_NODE_TYPES)
 
 CONDITION_NODE_TYPES = [
+    # ── Risk conditions ───────────────────────────────────────────────────────
     {"key": "check_risk_level", "label": "Check risk level"},
-    {"key": "check_user_role", "label": "Check user role"},
+    # ── Evidence & compliance conditions ─────────────────────────────────────
     {"key": "check_compliance_status", "label": "Check compliance status"},
     {"key": "check_evidence_age", "label": "Check evidence age"},
+    {"key": "check_evidence_completeness", "label": "Check evidence completeness (%)"},
+    {"key": "check_framework_coverage", "label": "Check framework coverage (%)"},
+    # ── Vulnerability conditions ──────────────────────────────────────────────
+    {"key": "check_vulnerability_severity", "label": "Check vulnerability severity"},
+    # ── Governance conditions ─────────────────────────────────────────────────
+    {"key": "check_policy_status", "label": "Check policy status"},
+    # ── Workflow / user conditions ────────────────────────────────────────────
     {"key": "check_approval_status", "label": "Check approval status"},
+    {"key": "check_user_role", "label": "Check user role"},
     {"key": "evaluate_business_unit", "label": "Evaluate business unit"},
-    {"key": "expression_builder", "label": "Expression builder"},
+    {"key": "expression_builder", "label": "Expression / custom rule"},
 ]
 
 APPROVAL_NODE_TYPES = [

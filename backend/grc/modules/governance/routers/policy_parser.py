@@ -21,8 +21,25 @@ from ..action_logger import log_governance_action
 
 router = APIRouter(prefix="/documents", tags=["Governance - Policy Parser"])
 
+MAX_PARSE_CHUNKS = 12
+MAX_PARSE_CHARACTERS = 180000
+
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+
+def _sanitize_policy_text(raw_text: str) -> str:
+    if not raw_text:
+        return ""
+
+    text = raw_text
+    text = re.sub(r"<script\b[^<]*(?:(?!</script>)<[^<]*)*</script>", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"<style\b[^<]*(?:(?!</style>)<[^<]*)*</style>", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = text.replace("\x00", " ")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 class ParsedStatementResponse(BaseModel):
@@ -158,7 +175,6 @@ def _split_text_into_chunks(text: str, chunk_size: int = 20000, overlap: int = 5
 
         if len(chunks) >= 2:
             return chunks
-
     chunks = []
     start = 0
     while start < len(text):
@@ -196,7 +212,7 @@ def _is_duplicate(new_text: str, existing_statements: List[dict], threshold: flo
     return False
 
 
-def parse_policy_statements_with_openai(text: str, document_title: str) -> List[dict]:
+def parse_policy_statements_with_openai(text: str, document_title: str, progress_callback=None) -> List[dict]:
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -208,7 +224,17 @@ def parse_policy_statements_with_openai(text: str, document_title: str) -> List[
         base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
     )
 
-    chunks = _split_text_into_chunks(text)
+    cleaned_text = _sanitize_policy_text(text)
+    if not cleaned_text:
+        return []
+
+    if len(cleaned_text) > MAX_PARSE_CHARACTERS:
+        cleaned_text = cleaned_text[:MAX_PARSE_CHARACTERS]
+
+    chunks = _split_text_into_chunks(cleaned_text)
+    if len(chunks) > MAX_PARSE_CHUNKS:
+        chunks = chunks[:MAX_PARSE_CHUNKS]
+
     all_statements: List[dict] = []
 
     system_message = (
@@ -219,7 +245,13 @@ def parse_policy_statements_with_openai(text: str, document_title: str) -> List[
         "Never skip or combine statements. Always respond with valid JSON."
     )
 
+    total_chunks = len(chunks)
+
     for chunk_idx, chunk_text in enumerate(chunks):
+        current_chunk = chunk_idx + 1
+        if progress_callback:
+            progress_callback(current_chunk=current_chunk, total_chunks=total_chunks, phase="processing")
+
         prompt = f"""You are a governance and compliance expert analyzing policy documents to extract individual policy statements.
 
 Analyze the following section from the document titled "{document_title}" and extract ALL distinct policy statements.
@@ -280,6 +312,9 @@ Return a JSON object with a "statements" array containing all extracted policy s
                 stmt_text = stmt.get("statement_text", "").strip()
                 if stmt_text and not _is_duplicate(stmt_text, all_statements):
                     all_statements.append(stmt)
+
+            if progress_callback:
+                progress_callback(current_chunk=current_chunk, total_chunks=total_chunks, phase="processed")
         
         except json.JSONDecodeError as e:
             raise HTTPException(
@@ -391,26 +426,59 @@ def _parse_policy_background(document_id: int, user_id: int):
 
         extracted_text = None
 
-        if document.content and document.content.strip():
-            extracted_text = document.content
-        elif file_path and os.path.exists(file_path):
+        # Prefer source file extraction for uploaded documents to avoid parsing rendered HTML blobs.
+        if file_path and os.path.exists(file_path):
             try:
                 extracted_text = extract_text_from_file(file_path, file_type)
             except Exception:
                 extracted_text = None
+
+        if (not extracted_text or not extracted_text.strip()) and document.content and document.content.strip():
+            extracted_text = document.content
 
         if not extracted_text or not extracted_text.strip():
             _parsing_status[document_id] = {"status": "failed", "error": "Document has no content or file to parse"}
             return
 
         try:
+            _parsing_status[document_id] = {
+                "status": "parsing",
+                "message": "Extracting policy statements with AI...",
+                "processed_chunks": 0,
+                "total_chunks": 0,
+                "current_chunk": 0,
+                "progress_percent": 0,
+            }
 
-            _parsing_status[document_id] = {"status": "parsing", "message": "Extracting policy statements with AI..."}
+            def _update_chunk_progress(current_chunk: int, total_chunks: int, phase: str = "processing"):
+                processed_chunks = max(current_chunk - 1, 0) if phase == "processing" else current_chunk
+                percent = int((processed_chunks / total_chunks) * 100) if total_chunks else 0
+                _parsing_status[document_id] = {
+                    "status": "parsing",
+                    "message": f"Parsing chunk {current_chunk}/{total_chunks}...",
+                    "processed_chunks": processed_chunks,
+                    "total_chunks": total_chunks,
+                    "current_chunk": current_chunk,
+                    "progress_percent": percent,
+                }
 
-            parsed_statements_data = parse_policy_statements_with_openai(extracted_text, document.title)
+            parsed_statements_data = parse_policy_statements_with_openai(
+                extracted_text,
+                document.title,
+                progress_callback=_update_chunk_progress,
+            )
 
             if not parsed_statements_data:
-                _parsing_status[document_id] = {"status": "completed", "total_statements": 0, "message": "No statements found"}
+                total_chunks = int(_parsing_status.get(document_id, {}).get("total_chunks") or 0)
+                _parsing_status[document_id] = {
+                    "status": "completed",
+                    "total_statements": 0,
+                    "message": "No statements found",
+                    "processed_chunks": total_chunks,
+                    "total_chunks": total_chunks,
+                    "current_chunk": total_chunks,
+                    "progress_percent": 100,
+                }
                 return
 
             version_id = None
@@ -477,7 +545,11 @@ def _parse_policy_background(document_id: int, user_id: int):
                     "status": "review_required",
                     "total_statements": len(parsed_statements_data),
                     "message": f"Found {len(proposals)} proposed changes. Review required before applying.",
-                    "has_proposals": True
+                    "has_proposals": True,
+                    "processed_chunks": _parsing_status.get(document_id, {}).get("total_chunks", 0),
+                    "total_chunks": _parsing_status.get(document_id, {}).get("total_chunks", 0),
+                    "current_chunk": _parsing_status.get(document_id, {}).get("total_chunks", 0),
+                    "progress_percent": 100,
                 }
             else:
                 for idx, statement_data in enumerate(parsed_statements_data, start=1):
@@ -515,7 +587,11 @@ def _parse_policy_background(document_id: int, user_id: int):
                 _parsing_status[document_id] = {
                     "status": "completed",
                     "total_statements": len(parsed_statements_data),
-                    "message": f"Successfully parsed {len(parsed_statements_data)} policy statements"
+                    "message": f"Successfully parsed {len(parsed_statements_data)} policy statements",
+                    "processed_chunks": _parsing_status.get(document_id, {}).get("total_chunks", 0),
+                    "total_chunks": _parsing_status.get(document_id, {}).get("total_chunks", 0),
+                    "current_chunk": _parsing_status.get(document_id, {}).get("total_chunks", 0),
+                    "progress_percent": 100,
                 }
         except Exception as e:
             db.rollback()
@@ -544,6 +620,12 @@ def parse_policy_document(
         return {"status": "parsing", "message": "Document is already being parsed"}
 
     _parsing_status[document_id] = {"status": "parsing", "message": "Starting policy statement extraction..."}
+    _parsing_status[document_id].update({
+        "processed_chunks": 0,
+        "total_chunks": 0,
+        "current_chunk": 0,
+        "progress_percent": 0,
+    })
 
     thread = threading.Thread(
         target=_parse_policy_background,

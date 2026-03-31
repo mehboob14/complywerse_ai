@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from ....models import GRCUser, get_db
-from ....routers.auth_router import require_auth, get_user_primary_tenant
+from ....models import GRCUser, WorkflowNotification, get_db
+from ....routers.auth_router import require_auth, get_user_primary_tenant, get_user_tenants, require_tenant_permission
 from ..schemas import EmailConfigCreate, EmailConfigUpdate, EmailConfigResponse
 
 router = APIRouter(prefix="/notifications", tags=["Workflow Notifications"])
@@ -242,3 +242,93 @@ def check_notification_setup(
         "requires_setup": email_configs == 0,
         "message": "Email notifications configured" if email_configs > 0 else "Please configure email settings to use notification nodes"
     }
+
+
+@router.get("/in-app")
+def list_in_app_notifications(
+    unread_only: bool = False,
+    limit: int = 100,
+    current_user: GRCUser = Depends(require_auth),
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_tenant_permission("workflow_engine:executions:view")),
+):
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        return {"items": [], "total": 0}
+
+    safe_limit = max(1, min(limit, 200))
+    query = db.query(WorkflowNotification).filter(
+        WorkflowNotification.tenant_id.in_(tenant_ids),
+        WorkflowNotification.user_id == current_user.id,
+    )
+    if unread_only:
+        query = query.filter(WorkflowNotification.is_read.is_(False))
+
+    items = query.order_by(WorkflowNotification.created_at.desc()).limit(safe_limit).all()
+    return {
+        "items": [
+            {
+                "id": item.id,
+                "workflow_instance_id": item.workflow_instance_id,
+                "notification_type": item.notification_type,
+                "subject": item.subject,
+                "message": item.message,
+                "is_read": item.is_read,
+                "read_at": item.read_at,
+                "created_at": item.created_at,
+            }
+            for item in items
+        ],
+        "total": len(items),
+    }
+
+
+@router.post("/in-app/{notification_id}/read")
+def mark_in_app_notification_read(
+    notification_id: int,
+    current_user: GRCUser = Depends(require_auth),
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_tenant_permission("workflow_engine:executions:view")),
+):
+    tenant_ids = get_user_tenants(current_user, db)
+    notification = db.query(WorkflowNotification).filter(
+        WorkflowNotification.id == notification_id,
+        WorkflowNotification.tenant_id.in_(tenant_ids),
+        WorkflowNotification.user_id == current_user.id,
+    ).first()
+
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    from datetime import datetime
+    notification.is_read = True
+    notification.read_at = datetime.utcnow()
+    db.commit()
+
+    return {"status": "ok", "notification_id": notification.id}
+
+
+@router.post("/in-app/read-all")
+def mark_all_in_app_notifications_read(
+    current_user: GRCUser = Depends(require_auth),
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_tenant_permission("workflow_engine:executions:view")),
+):
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        return {"status": "ok", "updated": 0}
+
+    from datetime import datetime
+    rows = db.query(WorkflowNotification).filter(
+        WorkflowNotification.tenant_id.in_(tenant_ids),
+        WorkflowNotification.user_id == current_user.id,
+        WorkflowNotification.is_read.is_(False),
+    ).all()
+
+    now = datetime.utcnow()
+    for row in rows:
+        row.is_read = True
+        row.read_at = now
+
+    db.commit()
+    return {"status": "ok", "updated": len(rows)}

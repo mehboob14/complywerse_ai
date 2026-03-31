@@ -1,11 +1,12 @@
 import json
 import os
 from datetime import datetime, timedelta
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ....models import Framework, WorkflowDefinition, WorkflowEngineStep, WorkflowInstance, GRCUser, get_db
+from ....models import Framework, WorkflowDefinition, WorkflowEngineStep, WorkflowInstance, GRCUser, TenantUser, get_db
 from ....routers.auth_router import require_auth, get_user_primary_tenant, get_user_tenants, require_tenant_permission
 from ..schemas import (
     IntelligentRoutingRequest,
@@ -58,11 +59,69 @@ def _catalog_summary() -> str:
     return "\n".join(lines)
 
 
-_NL_SYSTEM_PROMPT = """You are an expert GRC (Governance, Risk & Compliance) workflow designer.
+def _display_framework_name(framework: Framework) -> str:
+    name = (framework.name or "").strip()
+    version = (framework.version or "").strip()
+    if version and version.lower() not in name.lower():
+        return f"{name} {version}".strip()
+    return name
+
+
+def _get_ai_frameworks(db: Session) -> list[Framework]:
+    return (
+        db.query(Framework)
+        .filter(Framework.is_active.is_(True))
+        .order_by(Framework.name.asc(), Framework.version.asc())
+        .limit(300)
+        .all()
+    )
+
+
+def _get_ai_tenant_users(db: Session, tenant_id: int | None) -> list[GRCUser]:
+    if not tenant_id:
+        return []
+    return (
+        db.query(GRCUser)
+        .join(TenantUser, TenantUser.user_id == GRCUser.id)
+        .filter(
+            TenantUser.tenant_id == tenant_id,
+            GRCUser.is_active.is_(True),
+        )
+        .distinct()
+        .order_by(GRCUser.display_name.asc(), GRCUser.username.asc())
+        .limit(200)
+        .all()
+    )
+
+
+def _build_nl_system_prompt(frameworks: list[Framework], tenant_users: list[GRCUser]) -> str:
+    framework_lines = ["ACTIVE FRAMEWORKS IN THIS TENANT (use exact IDs for framework_id / framework_ids):"]
+    if frameworks:
+        framework_lines.extend(
+            f"- ID {framework.id}: {_display_framework_name(framework)}"
+            for framework in frameworks
+        )
+    else:
+        framework_lines.append("- None available")
+
+    user_lines = ["TENANT USERS (use exact IDs for recipient_user_ids, reviewer_user_ids, assignee_user_ids, approver_user_ids):"]
+    if tenant_users:
+        user_lines.extend(
+            f"- ID {user.id}: {(user.display_name or user.username)} ({user.email})"
+            for user in tenant_users
+        )
+    else:
+        user_lines.append("- None available")
+
+    return """You are an expert GRC (Governance, Risk & Compliance) workflow designer.
 
 Given a plain-English workflow description, generate a complete workflow graph.
 
 {catalog}
+
+{frameworks}
+
+{users}
 
 OUTPUT FORMAT — respond with ONLY valid JSON, no markdown, no extra text:
 {{
@@ -99,10 +158,171 @@ OUTPUT FORMAT — respond with ONLY valid JSON, no markdown, no extra text:
 RULES:
 - Always start with a 'start' node and end with an 'end' node (is_terminal: true)
 - Condition nodes must have two outgoing edges: one with condition {{"path":"step.condition_result","operator":"eq","value":true}} and one with value false
-- Keep it between 4–10 nodes; do not over-engineer
+- Keep it between 3-8 nodes; do not over-engineer
 - node_keys must be unique, snake_case identifiers
 - Map the description to the most relevant GRC trigger and actions from the catalog
-""".format(catalog=_catalog_summary())
+- Use only the exact action / trigger / condition keys listed above; do not invent keys
+- When a framework is mentioned and found in the tenant list, include its real ID in config.framework_id or config.framework_ids
+- When specific users are mentioned and found in the tenant list, include their real IDs in recipient_user_ids / assignee_user_ids / reviewer_user_ids / approver_user_ids
+- For notifications, use action_name='send_notification_email'
+- For "all required evidence uploaded" workflows, prefer trigger_type='framework_evidence_complete'
+""".format(
+        catalog=_catalog_summary(),
+        frameworks="\n".join(framework_lines),
+        users="\n".join(user_lines),
+    )
+
+
+def _normalize_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+
+
+def _tokenize_text(value: str) -> list[str]:
+    return [token for token in _normalize_text(value).split() if token]
+
+
+def _resolve_framework_ids(prompt: str, frameworks: list[Framework]) -> list[int]:
+    prompt_text = _normalize_text(prompt)
+    matches: list[int] = []
+    for framework in frameworks:
+        candidates = {
+            _normalize_text(_display_framework_name(framework)),
+            _normalize_text(framework.name or ""),
+            _normalize_text(getattr(framework, "short_code", "") or ""),
+        }
+        if any(candidate and candidate in prompt_text for candidate in candidates):
+            matches.append(framework.id)
+    return list(dict.fromkeys(matches))
+
+
+def _resolve_user_ids(prompt: str, tenant_users: list[GRCUser]) -> list[int]:
+    prompt_text = _normalize_text(prompt)
+    prompt_tokens = set(_tokenize_text(prompt))
+    matches: list[int] = []
+    for user in tenant_users:
+        candidate_values = [
+            _normalize_text(user.display_name or ""),
+            _normalize_text(user.username or ""),
+            _normalize_text(user.email or ""),
+        ]
+        candidate_tokens = {
+            token
+            for value in candidate_values
+            for token in value.split()
+            if token and len(token) >= 3
+        }
+        if any(value and value in prompt_text for value in candidate_values):
+            matches.append(user.id)
+            continue
+        if candidate_tokens and prompt_tokens.intersection(candidate_tokens):
+            matches.append(user.id)
+    return list(dict.fromkeys(matches))
+
+
+def _is_framework_evidence_completion_intent(prompt: str) -> bool:
+    prompt_text = _normalize_text(prompt)
+    evidence_markers = [
+        "all required evidence",
+        "evidence complete",
+        "evidence completed",
+        "evidence collection complete",
+        "all evidence uploaded",
+    ]
+    return any(marker in prompt_text for marker in evidence_markers)
+
+
+def _is_notification_intent(prompt: str) -> bool:
+    prompt_text = _normalize_text(prompt)
+    return any(marker in prompt_text for marker in [" notify ", " email ", " inform ", " alert "]) or prompt_text.startswith("notify ")
+
+
+def _build_framework_evidence_notification_workflow(
+    prompt: str,
+    frameworks: list[Framework],
+    recipient_user_ids: list[int],
+    framework_ids: list[int],
+) -> dict:
+    matched_framework = next((framework for framework in frameworks if framework.id == framework_ids[0]), None) if framework_ids else None
+    framework_name = _display_framework_name(matched_framework) if matched_framework else "selected framework"
+
+    start_config = {"trigger_type": "framework_evidence_complete"}
+    if framework_ids:
+        start_config["framework_id"] = framework_ids[0]
+        start_config["framework_ids"] = framework_ids
+
+    notify_config = {
+        "action_name": "send_notification_email",
+        "recipient_user_ids": recipient_user_ids,
+        "subject": f"Evidence completed for {framework_name}",
+        "body": f"All required evidence has been uploaded for {framework_name}.",
+    }
+    if framework_ids:
+        notify_config["framework_id"] = framework_ids[0]
+
+    return {
+        "name": f"Evidence Complete Notification - {framework_name}",
+        "description": f"Notify stakeholders when all required evidence is uploaded for {framework_name}.",
+        "trigger_event": "frameworks.evidence_complete",
+        "trigger_conditions": {},
+        "definition_json": {
+            "generated_at": datetime.utcnow().isoformat(),
+            "source": "nl_domain_template",
+            "intent": "framework_evidence_complete_notify",
+            "prompt": prompt,
+        },
+        "nodes": [
+            {
+                "node_key": "start",
+                "node_type": "start",
+                "name": "Framework Evidence Complete",
+                "is_start": True,
+                "config": start_config,
+                "x": 350,
+                "y": 30,
+            },
+            {
+                "node_key": "notify_stakeholders",
+                "node_type": "action",
+                "name": "Notify Stakeholders",
+                "config": notify_config,
+                "x": 350,
+                "y": 180,
+            },
+            {
+                "node_key": "end",
+                "node_type": "end",
+                "name": "End",
+                "is_terminal": True,
+                "config": {},
+                "x": 350,
+                "y": 330,
+            },
+        ],
+        "edges": [
+            {"source_node_key": "start", "target_node_key": "notify_stakeholders", "priority": 1, "condition": {}},
+            {"source_node_key": "notify_stakeholders", "target_node_key": "end", "priority": 1, "condition": {}},
+        ],
+        "ai_generated": True,
+    }
+
+
+def _build_deterministic_workflow_if_possible(
+    prompt: str,
+    frameworks: list[Framework],
+    tenant_users: list[GRCUser],
+) -> dict | None:
+    framework_ids = _resolve_framework_ids(prompt, frameworks)
+    recipient_user_ids = _resolve_user_ids(prompt, tenant_users)
+
+    if _is_framework_evidence_completion_intent(prompt) and _is_notification_intent(prompt):
+        return _build_framework_evidence_notification_workflow(
+            prompt=prompt,
+            frameworks=frameworks,
+            recipient_user_ids=recipient_user_ids,
+            framework_ids=framework_ids,
+        )
+
+    return None
 
 
 _SUGGESTIONS_SYSTEM_PROMPT = """You are a GRC expert. Given a list of active compliance frameworks and existing workflow names, suggest 5–8 specific GRC workflow automation ideas.
@@ -154,13 +374,22 @@ def ai_natural_language_to_workflow(
     current_user: GRCUser = Depends(require_auth),
     _: bool = Depends(require_tenant_permission("workflow_engine:ai:create")),
 ):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    frameworks = _get_ai_frameworks(db)
+    tenant_users = _get_ai_tenant_users(db, tenant_id)
+    system_prompt = _build_nl_system_prompt(frameworks, tenant_users)
+    deterministic_workflow = _build_deterministic_workflow_if_possible(payload.prompt, frameworks, tenant_users)
+
+    if deterministic_workflow:
+        return deterministic_workflow
+
     # Try GPT-4o first, fall back to rule-based
     try:
         client = _get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": _NL_SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Create a workflow for: {payload.prompt}"},
             ],
             temperature=0.3,
@@ -203,20 +432,51 @@ def ai_natural_language_to_workflow(
     # --- Rule-based fallback ---
     text = payload.prompt.lower()
     trigger_event = payload.target_trigger_event or "manual.trigger"
+    trigger_type = "manual_trigger"
+    framework_ids = _resolve_framework_ids(payload.prompt, frameworks)
+    recipient_user_ids = _resolve_user_ids(payload.prompt, tenant_users)
+
     if "risk" in text and ("critical" in text or "high" in text or "escalat" in text):
         trigger_event = "risks.update"
+        trigger_type = "risk_status_changed"
     elif "evidence" in text and ("expir" in text or "overdue" in text):
         trigger_event = "evidence.update"
+        trigger_type = "evidence_expires"
+    elif "all required evidence" in text or "evidence complete" in text or "framework evidence" in text:
+        trigger_event = "frameworks.evidence_complete"
+        trigger_type = "framework_evidence_complete"
     elif "vulnerability" in text or "vuln" in text:
         trigger_event = "vulnerabilities.update"
+        trigger_type = "new_vulnerability_detected"
     elif "incident" in text:
         trigger_event = "incidents.create"
+        trigger_type = "incident_reported"
     elif "policy" in text and "review" in text:
         trigger_event = "governance.update"
+        trigger_type = "policy_review_due"
+
+    start_config = {"trigger_type": trigger_type}
+    if framework_ids:
+        start_config["framework_id"] = framework_ids[0]
+        start_config["framework_ids"] = framework_ids
+
+    notification_body = "A workflow action has been triggered."
+    if framework_ids:
+        matched_framework = next((framework for framework in frameworks if framework.id == framework_ids[0]), None)
+        if matched_framework:
+            notification_body = f"All required evidence is complete for {_display_framework_name(matched_framework)}."
+
+    if trigger_type == "framework_evidence_complete":
+        return _build_framework_evidence_notification_workflow(
+            prompt=payload.prompt,
+            frameworks=frameworks,
+            recipient_user_ids=recipient_user_ids,
+            framework_ids=framework_ids,
+        )
 
     nodes = [
         {"node_key": "start", "node_type": "start", "name": "Trigger", "is_start": True,
-         "config": {"trigger_type": "manual_trigger"}, "x": 350, "y": 30},
+         "config": start_config, "x": 350, "y": 30},
         {"node_key": "condition_1", "node_type": "condition", "name": "Severity Check",
          "config": {"condition_kind": "check_risk_level",
                     "condition": {"path": "trigger.severity", "operator": "in", "value": ["critical", "high"]}},
@@ -226,6 +486,7 @@ def ai_natural_language_to_workflow(
          "x": 350, "y": 300},
         {"node_key": "notify_1", "node_type": "action", "name": "Send Notification",
          "config": {"action_name": "send_notification_email",
+                    "recipient_user_ids": recipient_user_ids,
                     "payload": {"subject": "Workflow Action Required"}},
          "x": 350, "y": 440},
         {"node_key": "end", "node_type": "end", "name": "End", "is_terminal": True, "config": {},

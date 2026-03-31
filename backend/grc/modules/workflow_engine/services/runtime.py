@@ -23,6 +23,7 @@ from ....models import (
 )
 from .condition_evaluator import ConditionEvaluator
 from .event_queue import WorkflowEventQueue
+from .notification_service import send_workflow_notification
 from .state_machine import WorkflowStateMachine
 from .step_executor import StepExecutor
 from .timer_service import TimerService
@@ -80,6 +81,9 @@ class WorkflowRuntime:
             self._thread.join(timeout=2)
         logger.info("Workflow runtime stopped")
 
+    def is_running(self) -> bool:
+        return bool(self._thread and self._thread.is_alive() and not self._stop_event.is_set())
+
     def publish_event(self, event_name: str, tenant_id: int, payload: Dict, correlation_id: str = None) -> None:
         self.dispatcher.publish_event(event_name, tenant_id, payload, correlation_id)
 
@@ -87,9 +91,16 @@ class WorkflowRuntime:
         while not self._stop_event.is_set():
             db = SessionLocal()
             try:
-                self.dispatcher.poll_platform_events(db)
-                self.timer_service.schedule_due_steps(db)
+                polled = self.dispatcher.poll_platform_events(db)
+                scheduled = self.timer_service.schedule_due_steps(db)
                 db.commit()
+                if polled or scheduled:
+                    logger.info(
+                        "workflow.runtime.cycle polled_events=%s scheduled_items=%s queue_size=%s",
+                        polled,
+                        scheduled,
+                        self.event_queue.size(),
+                    )
             except Exception as exc:
                 db.rollback()
                 logger.exception("Workflow poll cycle error: %s", exc)
@@ -117,6 +128,10 @@ class WorkflowRuntime:
     def _handle_item(self, db: Session, item: Dict) -> None:
         kind = item.get("kind")
         if kind == "event":
+            logger.debug("workflow.runtime.handle_item kind=%s", kind)
+        else:
+            logger.info("workflow.runtime.handle_item kind=%s", kind)
+        if kind == "event":
             self.dispatcher.dispatch_event(db, item)
             return
         if kind == "start_instance":
@@ -132,10 +147,18 @@ class WorkflowRuntime:
     def _start_instance(self, db: Session, item: Dict) -> None:
         definition = db.query(WorkflowDefinition).filter(WorkflowDefinition.id == item.get("workflow_definition_id")).first()
         if not definition or not definition.is_active:
+            logger.warning(
+                "workflow.runtime.start_instance.skipped workflow_definition_id=%s reason=missing_or_inactive",
+                item.get("workflow_definition_id"),
+            )
             return
 
         start_node = self._get_start_node(db, definition.id)
         if not start_node:
+            logger.warning(
+                "workflow.runtime.start_instance.skipped workflow_definition_id=%s reason=no_start_node",
+                definition.id,
+            )
             return
 
         instance = WorkflowInstance(
@@ -162,6 +185,16 @@ class WorkflowRuntime:
             )
         )
 
+        logger.info(
+            "workflow.runtime.instance_started instance_id=%s workflow_definition_id=%s tenant_id=%s start_node=%s trigger_event=%s correlation_id=%s",
+            instance.id,
+            definition.id,
+            instance.tenant_id,
+            start_node.node_key,
+            item.get("trigger_event"),
+            item.get("correlation_id"),
+        )
+
         self.event_queue.publish({"kind": "resume_instance", "instance_id": instance.id})
 
     def _resume_step(self, db: Session, step_id: Optional[int]) -> None:
@@ -169,13 +202,20 @@ class WorkflowRuntime:
             return
         step = db.query(WorkflowEngineStep).filter(WorkflowEngineStep.id == step_id).first()
         if not step:
+            logger.warning("workflow.runtime.resume_step.skipped reason=step_not_found step_id=%s", step_id)
             return
         instance = db.query(WorkflowInstance).filter(WorkflowInstance.id == step.workflow_instance_id).first()
         if not instance or instance.status in {"failed", "completed", "cancelled"}:
+            logger.warning(
+                "workflow.runtime.resume_step.skipped step_id=%s reason=instance_not_runnable instance_id=%s",
+                step_id,
+                step.workflow_instance_id,
+            )
             return
         if WorkflowStateMachine.can_transition_step(step.status, "running"):
             step.status = "running"
         self.event_queue.publish({"kind": "resume_instance", "instance_id": instance.id})
+        logger.info("workflow.runtime.resume_step.queued step_id=%s instance_id=%s", step_id, instance.id)
 
     def _run_instance(self, db: Session, instance_id: Optional[int]) -> None:
         if not instance_id:
@@ -183,8 +223,14 @@ class WorkflowRuntime:
 
         instance = db.query(WorkflowInstance).filter(WorkflowInstance.id == instance_id).first()
         if not instance:
+            logger.warning("workflow.runtime.run_instance.skipped reason=instance_not_found instance_id=%s", instance_id)
             return
         if instance.status in {"completed", "failed", "cancelled"}:
+            logger.info(
+                "workflow.runtime.run_instance.skipped reason=terminal_status instance_id=%s status=%s",
+                instance.id,
+                instance.status,
+            )
             return
 
         definition = db.query(WorkflowDefinition).filter(WorkflowDefinition.id == instance.workflow_definition_id).first()
@@ -193,6 +239,7 @@ class WorkflowRuntime:
             instance.failed_at = datetime.utcnow()
             instance.error_message = "Workflow definition not found"
             self._notify_webhooks(instance, "workflow.instance.failed")
+            logger.error("workflow.runtime.run_instance.failed reason=definition_not_found instance_id=%s", instance.id)
             return
 
         visited = 0
@@ -201,6 +248,7 @@ class WorkflowRuntime:
             if not instance.current_node_key:
                 self._mark_instance_completed(db, instance)
                 self._notify_webhooks(instance, "workflow.instance.completed")
+                logger.info("workflow.runtime.instance_completed instance_id=%s", instance.id)
                 break
 
             node = (
@@ -214,6 +262,11 @@ class WorkflowRuntime:
             if not node:
                 self._mark_instance_failed(db, instance, f"Node not found: {instance.current_node_key}")
                 self._notify_webhooks(instance, "workflow.instance.failed")
+                logger.error(
+                    "workflow.runtime.instance_failed instance_id=%s reason=node_not_found node_key=%s",
+                    instance.id,
+                    instance.current_node_key,
+                )
                 break
 
             waiting_step = (
@@ -262,6 +315,15 @@ class WorkflowRuntime:
             next_status = result.get("status", "completed")
             step.output_payload = result.get("output", {})
             step.attempts = (step.attempts or 0) + 1
+
+            logger.info(
+                "workflow.runtime.step_result instance_id=%s step_id=%s node_key=%s node_type=%s status=%s",
+                instance.id,
+                step.id,
+                node.node_key,
+                _node_runtime_type(node),
+                next_status,
+            )
 
             if next_status == "waiting_timer":
                 step.status = "waiting_timer"
@@ -317,6 +379,12 @@ class WorkflowRuntime:
                 step.completed_at = datetime.utcnow()
                 self._mark_instance_failed(db, instance, result.get("error", "Step execution failed"))
                 self._notify_webhooks(instance, "workflow.instance.failed")
+                logger.error(
+                    "workflow.runtime.instance_failed instance_id=%s step_id=%s error=%s",
+                    instance.id,
+                    step.id,
+                    result.get("error", "Step execution failed"),
+                )
                 break
 
             step.status = "completed"
@@ -344,13 +412,20 @@ class WorkflowRuntime:
             if not next_node_key or _is_terminal(node):
                 self._mark_instance_completed(db, instance)
                 self._notify_webhooks(instance, "workflow.instance.completed")
+                logger.info("workflow.runtime.instance_completed instance_id=%s", instance.id)
                 break
 
             instance.current_node_key = next_node_key
+            logger.info(
+                "workflow.runtime.instance_advance instance_id=%s next_node_key=%s",
+                instance.id,
+                next_node_key,
+            )
 
         if visited >= 200:
             self._mark_instance_failed(db, instance, "Execution limit exceeded (possible cycle)")
             self._notify_webhooks(instance, "workflow.instance.failed")
+            logger.error("workflow.runtime.instance_failed instance_id=%s reason=execution_limit", instance.id)
 
     def _resolve_next_node_key(self, db: Session, definition_id: int, source_node_key: str, data: Dict) -> Optional[str]:
         edges = (
@@ -444,6 +519,10 @@ class WorkflowRuntime:
             timeout_strategy = str(metadata.get("on_timeout") or "auto_reject").strip().lower()
             reminder_seconds = int(metadata.get("reminder_interval_seconds") or 0)
             delegate_to_user_id = metadata.get("delegate_to_user_id")
+            escalation_user_ids = metadata.get("escalation_user_ids") or []
+            escalation_role_ids = metadata.get("escalation_role_ids") or []
+            notification_channels = metadata.get("notification_channels") or ["in_app", "email"]
+            approval_window_seconds = metadata.get("approval_window_seconds")
 
             if timeout_strategy == "auto_approve":
                 request.status = "approved"
@@ -563,6 +642,23 @@ class WorkflowRuntime:
                     request.status = "rejected"
                     request.decision_comment = "Timed out and escalated"
                     request.responded_at = datetime.utcnow()
+
+                    escalation_notify_users = escalation_user_ids or next_users
+                    send_workflow_notification(
+                        db,
+                        tenant_id=instance.tenant_id,
+                        user_ids=escalation_notify_users,
+                        role_ids=escalation_role_ids,
+                        channels=notification_channels,
+                        workflow_instance_id=instance.id,
+                        notification_type="error",
+                        subject=f"Approval Escalated: {definition.name}",
+                        message=(
+                            f"Approval request #{request.id} was not approved within the configured window and "
+                            f"has been escalated."
+                        ),
+                    )
+
                     db.add(
                         WorkflowAuditLog(
                             tenant_id=instance.tenant_id,
@@ -586,7 +682,28 @@ class WorkflowRuntime:
 
             if parsed_delegate_id and request.approver_user_id != parsed_delegate_id:
                 request.approver_user_id = parsed_delegate_id
-                request.due_at = datetime.utcnow() + timedelta(seconds=max(reminder_seconds, 0))
+                extension_seconds = 86400
+                try:
+                    parsed_extension = int(approval_window_seconds) if approval_window_seconds is not None else 0
+                    if parsed_extension > 0:
+                        extension_seconds = parsed_extension
+                except Exception:
+                    extension_seconds = 86400
+                request.due_at = datetime.utcnow() + timedelta(seconds=extension_seconds)
+                send_workflow_notification(
+                    db,
+                    tenant_id=instance.tenant_id,
+                    user_ids=[parsed_delegate_id],
+                    role_ids=[],
+                    channels=notification_channels,
+                    workflow_instance_id=instance.id,
+                    notification_type="warning",
+                    subject=f"Approval Delegated: {definition.name}",
+                    message=(
+                        f"Approval request #{request.id} has been delegated to you due to timeout. "
+                        f"New due date: {request.due_at.strftime('%Y-%m-%d %H:%M UTC')}."
+                    ),
+                )
                 db.add(
                     WorkflowAuditLog(
                         tenant_id=instance.tenant_id,
@@ -677,3 +794,11 @@ def stop_runtime() -> None:
     global _runtime_instance
     if _runtime_instance is not None:
         _runtime_instance.stop()
+
+
+def runtime_status() -> dict:
+    runtime = get_runtime()
+    return {
+        "running": runtime.is_running(),
+        "worker_thread": "workflow-runtime",
+    }

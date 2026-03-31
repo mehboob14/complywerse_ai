@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ....models import ApprovalRequest, WorkflowInstance, WorkflowEngineStep, GRCUser, get_db
+from ....models import ApprovalRequest, WorkflowAuditLog, WorkflowInstance, WorkflowEngineStep, GRCUser, get_db
 from ....routers.auth_router import require_auth, get_user_primary_tenant, get_user_tenants, require_tenant_permission
 from ..schemas import (
     ApprovalDecisionRequest,
@@ -180,6 +180,9 @@ def decide_approval_request(
     if approval.status != "pending":
         raise HTTPException(status_code=400, detail="Approval request already decided")
 
+    if approval.approver_user_id and approval.approver_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You are not assigned to this approval request")
+
     approval.status = "approved" if payload.decision == "approve" else "rejected"
     approval.responded_at = datetime.utcnow()
     approval.decision_comment = payload.comment
@@ -193,6 +196,23 @@ def decide_approval_request(
         step = db.query(WorkflowEngineStep).filter(WorkflowEngineStep.id == approval.workflow_step_id).first()
         if step:
             step.status = "failed"
+
+    db.add(
+        WorkflowAuditLog(
+            tenant_id=approval.tenant_id,
+            workflow_definition_id=None,
+            workflow_instance_id=approval.workflow_instance_id,
+            workflow_step_id=approval.workflow_step_id,
+            event_type="approval.decided",
+            message=f"Approval request {approval.id} {approval.status} by user {current_user.id}",
+            payload={
+                "approval_request_id": approval.id,
+                "decision": approval.status,
+                "comment": payload.comment,
+                "decided_by": current_user.id,
+            },
+        )
+    )
 
     db.commit()
 
@@ -220,6 +240,7 @@ def get_approval_inbox(
     pending = db.query(ApprovalRequest).filter(
         ApprovalRequest.tenant_id.in_(user_tenants),
         ApprovalRequest.status == "pending",
+        ApprovalRequest.approver_user_id == current_user.id,
     ).order_by(ApprovalRequest.created_at.asc()).limit(100).all()
 
     return {

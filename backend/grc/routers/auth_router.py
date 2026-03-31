@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Cookie, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Cookie, Header, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -107,13 +107,25 @@ def get_user_primary_tenant(user: GRCUser, db: Session) -> Optional[int]:
     return first_tenant.tenant_id if first_tenant else None
 
 
+def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+    scheme, _, value = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not value:
+        return None
+    return value.strip() or None
+
+
 def get_current_user(
+    request: Request,
     token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
 ) -> Optional[GRCUser]:
-    if not token:
+    resolved_token = token or _extract_bearer_token(authorization) or _extract_bearer_token(request.headers.get("authorization"))
+    if not resolved_token:
         return None
-    payload = decode_token(token)
+    payload = decode_token(resolved_token)
     if not payload:
         return None
     username = payload.get("sub")
@@ -173,10 +185,12 @@ def get_current_user(
 
 
 def require_auth(
+    request: Request,
     token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
 ) -> GRCUser:
-    user = get_current_user(token, db)
+    user = get_current_user(request=request, token=token, authorization=authorization, db=db)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -192,15 +206,18 @@ def require_auth(
 
 def require_tenant_permission(permission_name: str):
     def permission_checker(
-        token: Optional[str] = Cookie(None, alias="grc_auth_token")
+        request: Request,
+        token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+        authorization: Optional[str] = Header(None, alias="Authorization"),
     ):
-        if not token:
+        resolved_token = token or _extract_bearer_token(authorization) or _extract_bearer_token(request.headers.get("authorization"))
+        if not resolved_token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated"
             )
 
-        payload = decode_token(token)
+        payload = decode_token(resolved_token)
         if not payload:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -837,7 +854,7 @@ def get_me(
         except Exception:
             pass
     
-    user = get_current_user(token, db)
+    user = get_current_user(request=request, token=token, authorization=request.headers.get("authorization"), db=db)
     if not user:
         return {"authenticated": False, "user": None}
     

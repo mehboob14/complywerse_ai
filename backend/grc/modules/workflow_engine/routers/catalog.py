@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from ....models import get_db
-from ....routers.auth_router import require_tenant_permission
-from ....routers.admin_router import get_tenant_db
-from ....tenant_models import TenantUser, Role
+from ....models import get_db, Framework, VulnerabilitySLAConfig, GRCUser, TenantUser, Role
+from ....routers.auth_router import require_tenant_permission, require_auth, get_user_primary_tenant
 
 from ..services.catalog import (
     ACTION_NODE_TYPES,
@@ -36,6 +35,94 @@ def list_node_types(
     }
 
 
+@router.get("/node-config-options")
+def get_node_config_options(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Return tenant-aware dynamic reference data for populating node configuration fields."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+
+    frameworks = (
+        db.query(Framework)
+        .filter(Framework.is_active.is_(True))
+        .order_by(Framework.name)
+        .limit(300)
+        .all()
+    )
+
+    sla_configs = []
+    if tenant_id:
+        sla_configs = (
+            db.query(VulnerabilitySLAConfig)
+            .filter(
+                VulnerabilitySLAConfig.tenant_id == tenant_id,
+                VulnerabilitySLAConfig.is_active.is_(True),
+            )
+            .all()
+        )
+
+    return {
+        "frameworks": [
+            {
+                "id": f.id,
+                "name": f.name,
+                "version": f.version or "",
+                "short_code": getattr(f, "short_code", "") or "",
+            }
+            for f in frameworks
+        ],
+        "vulnerability_sla_configs": [
+            {"severity": s.severity, "remediation_days": s.remediation_days}
+            for s in sla_configs
+        ],
+        # ── Static reference data ──────────────────────────────────────────────────
+        "risk_categories": [
+            "strategic", "operational", "financial", "compliance",
+            "technology", "third_party", "project_change",
+        ],
+        "risk_statuses": ["open", "in_progress", "mitigated", "accepted", "closed"],
+        "risk_levels": ["critical", "high", "medium", "low"],
+        "risk_treatment_types": ["mitigate", "accept", "transfer", "avoid"],
+        "compliance_statuses": [
+            "not_started", "in_progress", "submitted_for_review",
+            "approved", "certified", "expired", "rejected",
+        ],
+        "vulnerability_severities": ["critical", "high", "medium", "low", "info"],
+        "vulnerability_statuses": [
+            "open", "in_progress", "resolved", "accepted", "false_positive",
+        ],
+        "policy_categories": [
+            "Information Security", "Privacy & Data Protection", "Business Continuity",
+            "Acceptable Use", "Change Management", "Incident Response",
+            "Access Control", "Third Party Management", "Physical Security",
+            "Compliance", "Human Resources", "Financial Controls",
+        ],
+        "policy_statuses": ["draft", "under_review", "approved", "published", "archived"],
+        "audit_types": ["internal", "external", "supplier", "regulatory", "certification"],
+        "finding_severities": ["critical", "high", "medium", "low", "informational"],
+        "control_effectiveness_levels": [
+            "fully_effective", "largely_effective",
+            "partially_effective", "ineffective", "not_assessed",
+        ],
+        "evidence_categories": [
+            "policy", "procedure", "training_record", "technical_control",
+            "operational_control", "audit_report", "certification",
+            "screenshot", "log", "contract",
+        ],
+        "report_types": [
+            "executive_summary", "gap_analysis", "risk_register",
+            "compliance_status", "vulnerability_summary", "audit_report",
+            "evidence_completeness",
+        ],
+        "kri_categories": [
+            "financial", "operational", "compliance", "reputation",
+            "strategic", "technology",
+        ],
+        "remediation_priorities": ["critical", "high", "medium", "low"],
+    }
+
+
 @router.get("/templates/library")
 def list_template_library(
     _: bool = Depends(require_tenant_permission("workflow_engine:templates:view")),
@@ -53,54 +140,62 @@ def list_cross_module_integration_points(
 @router.get("/actors/users")
 def list_actor_users(
     search: Optional[str] = None,
-    tenant_db: Session = Depends(get_tenant_db),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
     _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
 ):
     """List tenant users available as workflow actors (approvers, assignees, recipients)."""
-    from ....tenant_manager import IS_SQLITE
-    tenant_schema = tenant_db.info.get('tenant_schema')
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        return {"users": []}
 
-    if IS_SQLITE:
-        query = tenant_db.query(TenantUser).filter(
-            TenantUser.tenant_id == tenant_schema,
-            TenantUser.is_active == True,
+    query = (
+        db.query(GRCUser)
+        .join(TenantUser, TenantUser.user_id == GRCUser.id)
+        .filter(
+            TenantUser.tenant_id == tenant_id,
+            GRCUser.is_active.is_(True),
         )
-    else:
-        query = tenant_db.query(TenantUser).filter(TenantUser.is_active == True)
+        .distinct()
+    )
 
     if search:
         query = query.filter(
-            TenantUser.username.ilike(f"%{search}%") | TenantUser.email.ilike(f"%{search}%")
+            GRCUser.username.ilike(f"%{search}%")
+            | GRCUser.email.ilike(f"%{search}%")
+            | GRCUser.display_name.ilike(f"%{search}%")
         )
-    users = query.order_by(TenantUser.username).limit(200).all()
+    users = query.order_by(GRCUser.display_name.asc(), GRCUser.username.asc()).limit(200).all()
     return {
         "users": [
             {
-                "id": u.id,
-                "username": u.username,
-                "email": u.email,
-                "display_name": u.display_name or u.username,
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "display_name": user.display_name or user.username,
             }
-            for u in users
+            for user in users
         ]
     }
 
 
 @router.get("/actors/roles")
 def list_actor_roles(
-    tenant_db: Session = Depends(get_tenant_db),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
     _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
 ):
     """List tenant roles available as workflow actors."""
-    from ....tenant_manager import IS_SQLITE
-    tenant_schema = tenant_db.info.get('tenant_schema')
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        return {"roles": []}
 
-    if IS_SQLITE:
-        roles = tenant_db.query(Role).filter(
-            Role.tenant_id == tenant_schema
-        ).order_by(Role.name).all()
-    else:
-        roles = tenant_db.query(Role).order_by(Role.name).all()
+    roles = (
+        db.query(Role)
+        .filter(or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)))
+        .order_by(Role.name)
+        .all()
+    )
 
     return {
         "roles": [

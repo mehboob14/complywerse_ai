@@ -1,10 +1,23 @@
 from datetime import datetime
+import logging
+import os
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ....models import AuditLog, WorkflowDefinition
 from .condition_evaluator import ConditionEvaluator
+
+
+logger = logging.getLogger(__name__)
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 # ---------------------------------------------------------------------------
@@ -72,8 +85,23 @@ class TriggerDispatcher:
     def __init__(self, event_queue):
         self.event_queue = event_queue
         self.last_audit_log_id = 0
+        self._bootstrap_complete = False
+        # Default behavior is real-time dispatch only; no historical replay flood on process restart.
+        self.replay_historical_audits = _env_bool("WORKFLOW_DISPATCH_REPLAY_AUDIT_LOGS", False)
+        # Read events are typically high-volume and low-signal for workflow automation.
+        self.include_read_events = _env_bool("WORKFLOW_DISPATCH_INCLUDE_READ_EVENTS", False)
 
     def poll_platform_events(self, db: Session) -> int:
+        if not self._bootstrap_complete:
+            self._bootstrap_complete = True
+            if not self.replay_historical_audits:
+                latest_id = db.query(func.max(AuditLog.id)).scalar() or 0
+                self.last_audit_log_id = int(latest_id)
+                logger.info(
+                    "workflow.dispatcher.bootstrap mode=tail latest_audit_log_id=%s",
+                    self.last_audit_log_id,
+                )
+
         logs = (
             db.query(AuditLog)
             .filter(AuditLog.id > self.last_audit_log_id)
@@ -83,8 +111,13 @@ class TriggerDispatcher:
         )
 
         processed = 0
+        skipped_read_logs = 0
         for log in logs:
             self.last_audit_log_id = max(self.last_audit_log_id, log.id)
+
+            if (log.action or "").strip().lower() == "read" and not self.include_read_events:
+                skipped_read_logs += 1
+                continue
 
             event_names = self._derive_event_names(log)
             enriched_payload = self._build_payload(log)
@@ -97,6 +130,20 @@ class TriggerDispatcher:
                     correlation_id=f"audit:{log.id}",
                 )
             processed += 1
+
+            logger.debug(
+                "workflow.dispatcher.audit_log_processed audit_log_id=%s tenant_id=%s mapped_events=%s",
+                log.id,
+                log.tenant_id,
+                len(event_names),
+            )
+
+        if processed or skipped_read_logs:
+            logger.info(
+                "workflow.dispatcher.poll_cycle processed_logs=%s skipped_read_logs=%s",
+                processed,
+                skipped_read_logs,
+            )
 
         return processed
 
@@ -175,6 +222,12 @@ class TriggerDispatcher:
         return payload
 
     def publish_event(self, event_name: str, tenant_id: int, payload: Dict[str, Any], correlation_id: Optional[str] = None) -> None:
+        logger.debug(
+            "workflow.dispatcher.publish_event event_name=%s tenant_id=%s correlation_id=%s",
+            event_name,
+            tenant_id,
+            correlation_id,
+        )
         self.event_queue.publish(
             {
                 "kind": "event",
@@ -192,6 +245,13 @@ class TriggerDispatcher:
 
         if not event_name or not tenant_id:
             return 0
+
+        logger.debug(
+            "workflow.dispatcher.dispatch_event.start event_name=%s tenant_id=%s correlation_id=%s",
+            event_name,
+            tenant_id,
+            event.get("correlation_id"),
+        )
 
         # Match on exact trigger_event OR wildcard patterns (e.g. "risks.*")
         definitions = db.query(WorkflowDefinition).filter(
@@ -216,5 +276,26 @@ class TriggerDispatcher:
                         }
                     )
                     triggered += 1
+                    logger.info(
+                        "workflow.dispatcher.dispatch_event.triggered workflow_definition_id=%s event_name=%s tenant_id=%s",
+                        definition.id,
+                        event_name,
+                        tenant_id,
+                    )
+
+        if triggered > 0:
+            logger.info(
+                "workflow.dispatcher.dispatch_event.done event_name=%s tenant_id=%s triggered=%s",
+                event_name,
+                tenant_id,
+                triggered,
+            )
+        else:
+            logger.debug(
+                "workflow.dispatcher.dispatch_event.done event_name=%s tenant_id=%s triggered=%s",
+                event_name,
+                tenant_id,
+                triggered,
+            )
 
         return triggered

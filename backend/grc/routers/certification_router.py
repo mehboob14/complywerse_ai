@@ -100,6 +100,83 @@ def normalize_evidence_requirements(raw_evidence: list) -> list:
     return normalized
 
 
+def get_framework_classification(framework: Optional[UploadedFramework]) -> str:
+    """Business rule: ISO and PCI DSS are certification, all others are compliance."""
+    if not framework:
+        return "compliance"
+
+    name = (framework.name or "").lower()
+    if "iso" in name or "pci" in name:
+        return "certification"
+    return "compliance"
+
+
+def get_framework_overview_payload(framework: Optional[UploadedFramework], classification: str) -> dict:
+    if not framework:
+        return {
+            "classification": classification,
+            "purpose": None,
+            "scope": None,
+            "objectives": [],
+            "target_audience": None,
+            "classification_reasoning": None,
+            "regulatory_authority": None,
+            "adoption_approach": [],
+        }
+
+    objectives = framework.framework_objectives if isinstance(framework.framework_objectives, list) else []
+    adoption_approach = framework.adoption_approach if isinstance(framework.adoption_approach, list) else []
+
+    return {
+        "classification": classification,
+        "purpose": framework.framework_purpose,
+        "scope": framework.framework_scope,
+        "objectives": objectives,
+        "target_audience": framework.target_audience,
+        "classification_reasoning": framework.classification_reasoning,
+        "regulatory_authority": framework.regulatory_authority,
+        "adoption_approach": adoption_approach,
+    }
+
+
+def resolve_parsed_control_evidence(parsed_control: ParsedFrameworkControl, db: Session) -> list:
+    """Resolve evidence with fallback to sibling controls then ControlEvidenceMapping rows."""
+    direct_evidence = normalize_evidence_requirements(parsed_control.evidence_requirements or [])
+    if direct_evidence:
+        return direct_evidence
+
+    sibling_controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == parsed_control.uploaded_framework_id,
+        ParsedFrameworkControl.control_id == parsed_control.control_id,
+        ParsedFrameworkControl.id != parsed_control.id
+    ).order_by(ParsedFrameworkControl.id.desc()).all()
+
+    for sibling in sibling_controls:
+        sibling_evidence = normalize_evidence_requirements(sibling.evidence_requirements or [])
+        if sibling_evidence:
+            return sibling_evidence
+
+    # Final fallback: build evidence list from ControlEvidenceMapping rows.
+    # Handles frameworks parsed before the JSON column was populated.
+    if parsed_control.evidence_mappings:
+        fallback = []
+        for mapping in parsed_control.evidence_mappings:
+            title = (
+                (mapping.evidence_description or "").split(":")[0].strip()
+                or (mapping.evidence_type or "document").replace("_", " ").title()
+            )
+            fallback.append({
+                "type": mapping.evidence_type or "document",
+                "title": title,
+                "description": mapping.evidence_description or title,
+                "is_required": mapping.is_required if mapping.is_required is not None else True,
+            })
+        if fallback:
+            return fallback
+
+    return []
+
+
 def get_phases_from_document_structure(framework: Optional[UploadedFramework]) -> List[dict]:
     """Extract certification phases from the framework's document structure.
     
@@ -335,8 +412,18 @@ def create_certification(
     controls = db.query(ParsedFrameworkControl).filter(
         ParsedFrameworkControl.uploaded_framework_id == journey_data.framework_id
     ).all()
-    
+
+    # Deduplicate by control_id and prefer the record with richer evidence payload.
+    selected_controls = {}
     for control in controls:
+        key = control.control_id or str(control.id)
+        current = selected_controls.get(key)
+        current_score = len(current.evidence_requirements or []) if current else -1
+        candidate_score = len(control.evidence_requirements or [])
+        if current is None or candidate_score > current_score:
+            selected_controls[key] = control
+
+    for control in selected_controls.values():
         implementation = ControlImplementation(
             journey_id=journey.id,
             parsed_control_id=control.id,
@@ -456,7 +543,8 @@ def get_certification(
         ControlImplementation.journey_id == journey_id
     ).all()
     
-    phases_list = get_phases_from_document_structure(framework) if framework else []
+    framework_classification = get_framework_classification(framework)
+    phases_list = get_phases_from_document_structure(framework) if framework_classification == "certification" else []
     
     total = len(implementations)
     implemented = sum(1 for i in implementations if i.status in ["implemented", "verified"])
@@ -469,6 +557,9 @@ def get_certification(
         "framework_name": framework.name if framework else None,
         "framework_short_code": framework.name[:10] if framework else None,
         "framework": {"id": framework.id, "name": framework.name} if framework else None,
+        "framework_classification": framework_classification,
+        "framework_type": framework.framework_type if framework else None,
+        "framework_overview": get_framework_overview_payload(framework, framework_classification),
         "name": journey.name,
         "target_date": journey.target_date.isoformat() if journey.target_date else None,
         "started_at": journey.started_at.isoformat() if journey.started_at else None,
@@ -530,6 +621,14 @@ def list_journey_controls(
     current_user: GRCUser = Depends(require_auth)
 ):
     journey = get_journey_or_404(journey_id, current_user, db)
+    logger.info(
+        "[JourneyTrace] list_journey_controls start journey_id=%s tenant_id=%s status_filter=%s priority=%s domain_id=%s",
+        journey_id,
+        journey.tenant_id,
+        status_filter,
+        priority,
+        domain_id,
+    )
     
     query = db.query(ControlImplementation).options(
         joinedload(ControlImplementation.framework_control).joinedload(FrameworkControl.objective).joinedload(ControlObjective.domain),
@@ -544,6 +643,7 @@ def list_journey_controls(
         query = query.filter(ControlImplementation.priority == priority)
     
     implementations = query.all()
+    logger.info("[JourneyTrace] fetched implementations journey_id=%s count=%s", journey_id, len(implementations))
 
     parsed_control_ids = [impl.parsed_control_id for impl in implementations if impl.parsed_control_id]
     framework_control_ids = [impl.framework_control_id for impl in implementations if impl.framework_control_id]
@@ -562,6 +662,14 @@ def list_journey_controls(
                 EvidenceControlMapping.framework_control_id.in_(framework_control_ids) if framework_control_ids else False
             )
         ).all()
+
+        logger.info(
+            "[JourneyTrace] evidence mappings fetched journey_id=%s rows=%s parsed_ids=%s framework_ids=%s",
+            journey_id,
+            len(mapping_rows),
+            len(parsed_control_ids),
+            len(framework_control_ids),
+        )
 
         for mapping, linked_evidence in mapping_rows:
             mapped_payload = {
@@ -603,14 +711,42 @@ def list_journey_controls(
     implementations.sort(key=natural_sort_key)
     
     result = []
+
+    def collect_sub_control_recommendations(sub_controls: list) -> list:
+        titles = []
+
+        def walk(items: list):
+            for item in items or []:
+                for ev in item.get("evidence_requirements") or []:
+                    title = (ev or {}).get("title") if isinstance(ev, dict) else None
+                    if title:
+                        titles.append(title)
+                for rec in item.get("evidence_recommendations") or []:
+                    if rec:
+                        titles.append(rec)
+                walk(item.get("sub_controls") or [])
+
+        walk(sub_controls)
+        seen = set()
+        unique = []
+        for title in titles:
+            normalized = title.strip().lower()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            unique.append(title)
+        return unique
     for impl in implementations:
         parsed_control = impl.parsed_control
         framework_control = impl.framework_control
         
         if parsed_control:
             control_code = parsed_control.control_id
+            original_control_code = parsed_control.original_reference or parsed_control.control_id
+            system_control_code = parsed_control.control_id
             control_name = parsed_control.title
             control_statement = parsed_control.description or parsed_control.full_text
+            control_statement_full = parsed_control.full_text or parsed_control.description or ""
             domain_id_val = None
             domain_code = parsed_control.domain
             domain_name = parsed_control.domain
@@ -633,7 +769,7 @@ def list_journey_controls(
                 
                 result = []
                 for child in children:
-                    child_evidence = normalize_evidence_requirements(child.evidence_requirements or [])
+                    child_evidence = resolve_parsed_control_evidence(child, db)
                     grandchildren = build_control_hierarchy(child.control_id, framework_id, visited.copy())
                     result.append({
                         "id": child.id,
@@ -648,14 +784,17 @@ def list_journey_controls(
                 return result
             
             sub_controls_list = build_control_hierarchy(parsed_control.control_id, parsed_control.uploaded_framework_id)
-            evidence_requirements = normalize_evidence_requirements(parsed_control.evidence_requirements or [])
+            evidence_requirements = resolve_parsed_control_evidence(parsed_control, db)
         elif framework_control:
             control = framework_control
             objective = control.objective if control else None
             domain = objective.domain if objective else None
             control_code = control.code if control else None
+            original_control_code = control.code if control else None
+            system_control_code = control.code if control else None
             control_name = control.name if control else None
             control_statement = control.statement if control else None
+            control_statement_full = control.statement if control else ""
             domain_id_val = domain.id if domain else None
             domain_code = domain.code if domain else None
             domain_name = domain.name if domain else None
@@ -675,8 +814,11 @@ def list_journey_controls(
             evidence_requirements = get_curated_evidence_for_control(impl.framework_control_id, db)
         else:
             control_code = None
+            original_control_code = None
+            system_control_code = None
             control_name = None
             control_statement = None
+            control_statement_full = ""
             domain_id_val = None
             domain_code = None
             domain_name = None
@@ -737,14 +879,33 @@ def list_journey_controls(
             if linked_id:
                 existing_linked_ids.add(linked_id)
         
+        evidence_recommendations = [ev.get("title", "") for ev in evidence_requirements if isinstance(ev, dict) and ev.get("title")]
+        if not evidence_recommendations:
+            evidence_recommendations = collect_sub_control_recommendations(sub_controls_list)
+
+        logger.debug(
+            "[JourneyTrace] control assembled impl_id=%s code=%s parsed_id=%s framework_id=%s req_count=%s rec_count=%s sub_count=%s evidence_count=%s",
+            impl.id,
+            control_code,
+            impl.parsed_control_id,
+            impl.framework_control_id,
+            len(evidence_requirements or []),
+            len(evidence_recommendations or []),
+            len(sub_controls_list or []),
+            len(evidence_list or []),
+        )
+
         result.append({
             "id": impl.id,
             "journey_id": impl.journey_id,
             "framework_control_id": impl.framework_control_id,
             "parsed_control_id": impl.parsed_control_id,
             "control_code": control_code,
+            "original_control_code": original_control_code,
+            "system_control_code": system_control_code,
             "control_name": control_name,
             "control_statement": control_statement,
+            "control_statement_full": control_statement_full,
             "domain_id": domain_id_val,
             "domain_code": domain_code,
             "domain_name": domain_name,
@@ -758,12 +919,55 @@ def list_journey_controls(
             "priority": impl.priority,
             "sub_controls": sub_controls_list,
             "evidence_requirements": evidence_requirements,
+            "evidence_recommendations": evidence_recommendations,
             "evidence": evidence_list,
             "evidence_count": len(evidence_list),
             "required_evidence_count": len(evidence_requirements)
         })
-    
-    return result
+
+    status_rank = {
+        "verified": 5,
+        "implemented": 4,
+        "in_progress": 3,
+        "not_started": 2,
+        "not_applicable": 1,
+    }
+
+    deduped = {}
+    dedupe_replaced = 0
+    for item in result:
+        key = (item.get("control_code") or str(item.get("id") or "")).strip().lower()
+        current = deduped.get(key)
+        if current is None:
+            deduped[key] = item
+            continue
+
+        current_score = (
+            len(current.get("evidence_requirements") or [])
+            + len(current.get("sub_controls") or [])
+            + len(current.get("evidence") or [])
+            + status_rank.get(current.get("status"), 0)
+        )
+        candidate_score = (
+            len(item.get("evidence_requirements") or [])
+            + len(item.get("sub_controls") or [])
+            + len(item.get("evidence") or [])
+            + status_rank.get(item.get("status"), 0)
+        )
+
+        if candidate_score > current_score:
+            deduped[key] = item
+            dedupe_replaced += 1
+
+    deduped_result = list(deduped.values())
+    logger.info(
+        "[JourneyTrace] list_journey_controls end journey_id=%s raw=%s deduped=%s replaced=%s",
+        journey_id,
+        len(result),
+        len(deduped_result),
+        dedupe_replaced,
+    )
+    return deduped_result
 
 
 @router.get("/{journey_id}/controls/{control_id}", response_model=dict)
@@ -1293,6 +1497,17 @@ def generate_journey_phases(
             detail="Framework not found for this journey"
         )
 
+    framework_classification = get_framework_classification(framework)
+    if framework_classification != "certification":
+        journey.generated_phases = []
+        flag_modified(journey, "generated_phases")
+        db.commit()
+        return {
+            "phases": [],
+            "cached": False,
+            "message": "Phases are disabled for compliance frameworks"
+        }
+
     controls = db.query(ParsedFrameworkControl).filter(
         ParsedFrameworkControl.uploaded_framework_id == framework.id
     ).all()
@@ -1453,6 +1668,11 @@ def get_journey_phases(
     framework = db.query(UploadedFramework).filter(
         UploadedFramework.id == journey.uploaded_framework_id
     ).first()
+
+    framework_classification = get_framework_classification(framework)
+    if framework_classification != "certification":
+        return {"phases": [], "generated": False}
+
     fallback_phases = get_phases_from_document_structure(framework) if framework else []
     return {"phases": fallback_phases, "generated": False}
 

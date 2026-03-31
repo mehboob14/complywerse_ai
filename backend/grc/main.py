@@ -30,6 +30,7 @@ from .modules.control_library import control_library_router
 from .modules.vuln_management import vuln_management_router
 from .modules.chatbot import chatbot_router
 from .modules.audit_management import audit_management_router
+from .modules.vendor_risk import vendor_risk_router
 from .modules.workflow_engine import (
     workflow_engine_router,
     start_workflow_engine_runtime,
@@ -111,6 +112,7 @@ app.include_router(control_library_router)
 app.include_router(vuln_management_router)
 app.include_router(chatbot_router)
 app.include_router(audit_management_router)
+app.include_router(vendor_risk_router)
 app.include_router(workflow_engine_router)
 
 
@@ -145,6 +147,7 @@ def root():
             "compliance-assessments",
             "control-library",
             "vuln-management",
+            "vendor-risk",
             "workflow-engine"
         ]
     }

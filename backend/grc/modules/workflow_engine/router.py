@@ -9,6 +9,7 @@ from .routers.events import router as events_router
 from .routers.integrations import router as integrations_router
 from .routers.notifications import router as notifications_router
 from .routers.templates import router as templates_router
+from .services.runtime import runtime_status
 
 router = APIRouter(prefix="/workflow-engine", tags=["Workflow Automation Engine"])
 
@@ -43,3 +44,8 @@ def workflow_engine_info():
             "/ai/suggestions",
         ],
     }
+
+
+@router.get("/runtime/status")
+def workflow_engine_runtime_status():
+    return runtime_status()

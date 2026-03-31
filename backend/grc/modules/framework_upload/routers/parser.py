@@ -361,9 +361,10 @@ CERTIFICATIONS YOU HOLD:
 - CISSP (Certified Information Systems Security Professional)
 - CRISC (Certified in Risk and Information Systems Control)
 - CGEIT (Certified in Governance of Enterprise IT)
-- ISO 27001 Lead Auditor
+- ISO 27001 and other ISO standards  Lead Auditor
 - PCI QSA (Qualified Security Assessor)
 - SOC 2 Type II Practitioner
+- SBP - State bank of Pakistan, internet outsourcing,cloud etc frameworks.
 
 FRAMEWORKS YOU KNOW INTIMATELY:
 1. ISO STANDARDS: ISO 27001/27002 (ISMS), ISO 27701 (Privacy), ISO 22301 (BCM), ISO 9001 (QMS), ISO 31000 (Risk), ISO 27017/27018 (Cloud)
@@ -373,6 +374,7 @@ FRAMEWORKS YOU KNOW INTIMATELY:
 5. PRIVACY: GDPR, CCPA/CPRA, HIPAA, LGPD, PDPA, POPIA
 6. INDUSTRY: COBIT, ITIL, CIS Controls, NERC CIP, FedRAMP, StateRAMP
 7. REGIONAL: NCA (Saudi), SAMA, ISR (Israel), TISAX (Auto), SWIFT CSP
+8. PAKISTAN: State Bank of Pakistan (SBP) frameworks for outsourcing, cloud, information security, etc.
 
 === YOUR ANALYTICAL APPROACH ===
 
@@ -1331,27 +1333,27 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
             if ai_ids:
                 db.query(AssessmentRemediation).filter(
                     AssessmentRemediation.assessment_item_id.in_(ai_ids)
-                ).delete(synchronize_session=False)
+                ).delete(synchronize_session="fetch")
                 
                 db.query(AssessmentEvidence).filter(
                     AssessmentEvidence.assessment_item_id.in_(ai_ids)
-                ).delete(synchronize_session=False)
+                ).delete(synchronize_session="fetch")
                 
                 db.query(AssessmentItem).filter(
                     AssessmentItem.id.in_(ai_ids)
-                ).delete(synchronize_session=False)
+                ).delete(synchronize_session="fetch")
             
             db.query(FrameworkControlAlignment).filter(
                 FrameworkControlAlignment.parsed_control_id.in_(existing_control_ids)
-            ).delete(synchronize_session=False)
+            ).delete(synchronize_session="fetch")
             
             db.query(ControlEvidenceMapping).filter(
                 ControlEvidenceMapping.parsed_control_id.in_(existing_control_ids)
-            ).delete(synchronize_session=False)
+            ).delete(synchronize_session="fetch")
             
             db.query(ParsedFrameworkControl).filter(
                 ParsedFrameworkControl.id.in_(existing_control_ids)
-            ).delete(synchronize_session=False)
+            ).delete(synchronize_session="fetch")
         
         db.flush()
         
@@ -1398,7 +1400,9 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
             db.flush()
             
             evidence_requirements = control_data.get("evidence_requirements", [])
+            # Always persist evidence_requirements as JSON so certification router can read them
             if evidence_requirements:
+                parsed_control.evidence_requirements = evidence_requirements
                 for ev_req in evidence_requirements:
                     if isinstance(ev_req, dict):
                         ev_type = ev_req.get("type", "document")
@@ -1957,23 +1961,23 @@ def retry_framework_parsing(
         if ai_ids:
             db.query(AssessmentRemediation).filter(
                 AssessmentRemediation.assessment_item_id.in_(ai_ids)
-            ).delete(synchronize_session=False)
+            ).delete(synchronize_session="fetch")
             db.query(AssessmentEvidence).filter(
                 AssessmentEvidence.assessment_item_id.in_(ai_ids)
-            ).delete(synchronize_session=False)
+            ).delete(synchronize_session="fetch")
             db.query(AssessmentItem).filter(
                 AssessmentItem.id.in_(ai_ids)
-            ).delete(synchronize_session=False)
+            ).delete(synchronize_session="fetch")
         
         db.query(FrameworkControlAlignment).filter(
             FrameworkControlAlignment.parsed_control_id.in_(ctrl_ids)
-        ).delete(synchronize_session=False)
+        ).delete(synchronize_session="fetch")
         db.query(ControlEvidenceMapping).filter(
             ControlEvidenceMapping.parsed_control_id.in_(ctrl_ids)
-        ).delete(synchronize_session=False)
+        ).delete(synchronize_session="fetch")
         db.query(ParsedFrameworkControl).filter(
             ParsedFrameworkControl.id.in_(ctrl_ids)
-        ).delete(synchronize_session=False)
+        ).delete(synchronize_session="fetch")
         db.flush()
     
     # Reset status and start fresh parsing
@@ -2119,27 +2123,27 @@ def parse_framework_document_sync(
             if ai_ids:
                 db.query(AssessmentRemediation).filter(
                     AssessmentRemediation.assessment_item_id.in_(ai_ids)
-                ).delete(synchronize_session=False)
+                ).delete(synchronize_session="fetch")
                 
                 db.query(AssessmentEvidence).filter(
                     AssessmentEvidence.assessment_item_id.in_(ai_ids)
-                ).delete(synchronize_session=False)
+                ).delete(synchronize_session="fetch")
                 
                 db.query(AssessmentItem).filter(
                     AssessmentItem.id.in_(ai_ids)
-                ).delete(synchronize_session=False)
+                ).delete(synchronize_session="fetch")
             
             db.query(FrameworkControlAlignment).filter(
                 FrameworkControlAlignment.parsed_control_id.in_(existing_control_ids)
-            ).delete(synchronize_session=False)
+            ).delete(synchronize_session="fetch")
             
             db.query(ControlEvidenceMapping).filter(
                 ControlEvidenceMapping.parsed_control_id.in_(existing_control_ids)
-            ).delete(synchronize_session=False)
+            ).delete(synchronize_session="fetch")
             
             db.query(ParsedFrameworkControl).filter(
                 ParsedFrameworkControl.id.in_(existing_control_ids)
-            ).delete(synchronize_session=False)
+            ).delete(synchronize_session="fetch")
         
         db.flush()
         
@@ -2187,7 +2191,9 @@ def parse_framework_document_sync(
             db.flush()
             
             evidence_requirements = control_data.get("evidence_requirements", [])
+            # Always persist evidence_requirements as JSON so certification router can read them
             if evidence_requirements:
+                parsed_control.evidence_requirements = evidence_requirements
                 for ev_req in evidence_requirements:
                     if isinstance(ev_req, dict):
                         ev_type = ev_req.get("type", "document")

@@ -9,6 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from grc.main import app as grc_app
 from grc.models import init_grc_db
+from grc.modules.workflow_engine import (
+    start_workflow_engine_runtime,
+    stop_workflow_engine_runtime,
+)
 
 app = FastAPI(title="ComplyVerse GRC Platform API", version="1.0.0")
 
@@ -33,6 +37,12 @@ os.makedirs(uploads_dir, exist_ok=True)
 @app.on_event("startup")
 def on_startup():
     init_grc_db()
+    start_workflow_engine_runtime()
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    stop_workflow_engine_runtime()
 
 
 @app.get("/")
