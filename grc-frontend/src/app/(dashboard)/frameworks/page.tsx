@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import apiClient, { certificationsApi } from '@/lib/api';
@@ -56,6 +56,17 @@ interface UploadedFramework {
   parsed_controls_count?: number;
 }
 
+const stripCertificationPostfix = (value?: string): string => {
+  if (!value) return '';
+  return value.replace(/\s+certification\s*$/i, '').trim();
+};
+
+const frameworkDedupeKey = (framework: UploadedFramework): string => {
+  const normalizedName = stripCertificationPostfix(framework.name).toLowerCase();
+  const version = (framework.version || '').toLowerCase();
+  return `${normalizedName}::${version}`;
+};
+
 export default function FrameworksPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -65,41 +76,6 @@ export default function FrameworksPage() {
   const [journeyDeleteError, setJourneyDeleteError] = useState<string | null>(null);
   const [enhancingFrameworkId, setEnhancingFrameworkId] = useState<number | null>(null);
   const [classifyingFrameworkId, setClassifyingFrameworkId] = useState<number | null>(null);
-
-  const bulkAnalyzeMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiClient.get('/framework-upload/upload');
-      const allFrameworks = Array.isArray(response.data?.items) ? response.data.items as UploadedFramework[] : [];
-      const targetFrameworks = allFrameworks.filter((framework) =>
-        ['uploaded', 'parsed', 'completed', 'published', 'classified'].includes(framework.upload_status)
-      );
-
-      let analyzed = 0;
-      let failed = 0;
-
-      for (const framework of targetFrameworks) {
-        try {
-          await apiClient.post(`/framework-upload/parser/${framework.id}/classify`);
-          await apiClient.post(`/framework-upload/parser/frameworks/${framework.id}/enhance`);
-          analyzed += 1;
-        } catch {
-          failed += 1;
-        }
-      }
-
-      return { analyzed, failed, total: targetFrameworks.length };
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['uploaded-frameworks'] });
-      const message = `AI analysis finished for ${result.analyzed}/${result.total} framework(s)` + (result.failed > 0 ? `, ${result.failed} failed` : '');
-      setRetrySuccess(message);
-      setTimeout(() => setRetrySuccess(null), 7000);
-    },
-    onError: () => {
-      setRetryError('Failed to run AI analysis on frameworks');
-      setTimeout(() => setRetryError(null), 5000);
-    },
-  });
 
   const deleteMutation = useMutation({
     mutationFn: async (frameworkId: number) => {
@@ -223,8 +199,23 @@ export default function FrameworksPage() {
     );
   }
 
-  const activeCertifications = (certifications as CertificationJourney[] || []).filter(
+  const activeCertificationsRaw = (certifications as CertificationJourney[] || []).filter(
     (c: CertificationJourney) => c.status === 'in_progress' || c.status === 'not_started'
+  );
+
+  const activeCertifications = Object.values(
+    activeCertificationsRaw.reduce((acc, cert) => {
+      const key = String(cert.framework_id || cert.uploaded_framework_id || cert.id);
+      const existing = acc[key];
+      if (!existing) {
+        acc[key] = cert;
+        return acc;
+      }
+      const existingTs = new Date(existing.started_at || 0).getTime();
+      const candidateTs = new Date(cert.started_at || 0).getTime();
+      if (candidateTs >= existingTs) acc[key] = cert;
+      return acc;
+    }, {} as Record<string, CertificationJourney>)
   );
 
   const activeCertificationFrameworkIds = new Set(
@@ -232,16 +223,57 @@ export default function FrameworksPage() {
   );
 
   const frameworksArray = Array.isArray(frameworks) ? frameworks : [];
+  const dedupedFrameworks = Object.values(
+    frameworksArray.reduce((acc, framework) => {
+      const key = frameworkDedupeKey(framework);
+      const existing = acc[key];
+      if (!existing) {
+        acc[key] = framework;
+        return acc;
+      }
+
+      const statusPriority = (status?: string) => {
+        const priorities: Record<string, number> = {
+          classified: 7,
+          published: 6,
+          completed: 5,
+          parsed: 4,
+          classifying: 3,
+          text_extracted: 2,
+          draft: 1,
+        };
+        return priorities[(status || '').toLowerCase()] || 0;
+      };
+
+      const existingScore = statusPriority(existing.upload_status);
+      const candidateScore = statusPriority(framework.upload_status);
+      if (candidateScore > existingScore) {
+        acc[key] = framework;
+        return acc;
+      }
+      if (candidateScore === existingScore) {
+        const existingTs = new Date(existing.created_at || 0).getTime();
+        const candidateTs = new Date(framework.created_at || 0).getTime();
+        if (candidateTs >= existingTs) acc[key] = framework;
+      }
+      return acc;
+    }, {} as Record<string, UploadedFramework>)
+  );
   
-  const processingFrameworks = frameworksArray.filter(
+  const processingFrameworks = dedupedFrameworks.filter(
     (f: UploadedFramework) => 
       f.upload_status === 'draft' || 
       f.upload_status === 'text_extracted' || 
-      f.upload_status === 'parsing'
+      f.upload_status === 'parsing' ||
+      f.upload_status === 'classifying'
   );
 
-  const completedFrameworks = frameworksArray.filter(
-    (f: UploadedFramework) => f.upload_status === 'completed' || f.upload_status === 'published' || f.upload_status === 'parsed'
+  const completedFrameworks = dedupedFrameworks.filter(
+    (f: UploadedFramework) =>
+      f.upload_status === 'completed' ||
+      f.upload_status === 'published' ||
+      f.upload_status === 'parsed' ||
+      f.upload_status === 'classified'
   );
 
   const getUploadStatusInfo = (status: string) => {
@@ -355,9 +387,10 @@ export default function FrameworksPage() {
 
   const handleStartCertification = async (framework: UploadedFramework) => {
     try {
+      const cleanName = stripCertificationPostfix(framework.name);
       const response = await certificationsApi.create({
         framework_id: framework.id,
-        name: framework.name.toLowerCase().includes('certification') ? framework.name : `${framework.name} Certification`,
+        name: cleanName || framework.name,
       });
       router.push(`/frameworks/${response.data.id}`);
     } catch (error) {
@@ -373,15 +406,13 @@ export default function FrameworksPage() {
           <p className="cw-text-muted">Manage frameworks and track certification journeys</p>
         </div>
         <div className="flex w-full items-center gap-3 lg:w-auto">
-          <button
-            onClick={() => bulkAnalyzeMutation.mutate()}
-            disabled={bulkAnalyzeMutation.isPending}
-            className="cw-btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
+          <Link
+            href="/framework-upload"
+            className="cw-btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium whitespace-nowrap lg:w-auto"
           >
-            {bulkAnalyzeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            <span className="sm:hidden">Run AI Analysis</span>
-            <span className="hidden sm:inline">Run AI Analysis (All Frameworks)</span>
-          </button>
+            <FileStack className="h-4 w-4" />
+            <span>Upload New Framework</span>
+          </Link>
         </div>
       </div>
 
@@ -423,7 +454,7 @@ export default function FrameworksPage() {
                       <Sparkles className="h-6 w-6 text-purple-600 animate-pulse" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold cw-text-default truncate">{framework.name}</h3>
+                      <h3 className="font-semibold cw-text-default truncate">{stripCertificationPostfix(framework.name)}</h3>
                       <p className="text-sm cw-text-muted">v{framework.version}</p>
                     </div>
                   </div>
@@ -493,7 +524,10 @@ export default function FrameworksPage() {
           </h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {activeCertifications.map((cert: CertificationJourney) => {
-              const progress = cert.progress?.completion_percentage || 0;
+              const progressData = cert.progress as any;
+              const progress = progressData?.readiness_percentage ?? progressData?.completion_percentage ?? 0;
+              const implemented = progressData?.implemented_count ?? progressData?.implemented ?? 0;
+              const inProgress = progressData?.in_progress_count ?? progressData?.in_progress ?? 0;
               return (
                 <div 
                   key={cert.id} 
@@ -506,14 +540,14 @@ export default function FrameworksPage() {
                         <Shield className="h-5 w-5 text-blue-600" />
                       </div>
                       <div>
-                        <h3 className="font-semibold cw-text-default">{cert.name}</h3>
+                        <h3 className="font-semibold cw-text-default">{stripCertificationPostfix(cert.name)}</h3>
                         <p className="text-sm cw-text-muted">
                           {cert.framework?.name || 'Framework'}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(cert.status)}`}>
+                      <span className={`rounded-lg px-2 py-1 text-xs font-medium whitespace-nowrap ${getStatusColor(cert.status)}`}>
                         {cert.status.replace('_', ' ')}
                       </span>
                       <button
@@ -547,11 +581,11 @@ export default function FrameworksPage() {
                     <div className="flex items-center gap-4 text-xs cw-text-muted">
                       <span className="flex items-center gap-1">
                         <CheckCircle2 className="h-3 w-3" />
-                        {cert.progress?.implemented || 0} implemented
+                        {implemented} implemented
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {cert.progress?.in_progress || 0} in progress
+                        {inProgress} in progress
                       </span>
                     </div>
                     <ArrowRight className="h-4 w-4 text-blue-600" />
@@ -587,7 +621,7 @@ export default function FrameworksPage() {
                     <FileStack className="h-6 w-6 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold cw-text-default truncate">{framework.name}</h3>
+                    <h3 className="font-semibold cw-text-default truncate">{stripCertificationPostfix(framework.name)}</h3>
                     <p className="text-sm cw-text-muted">v{framework.version}</p>
                   </div>
                 </div>
@@ -610,17 +644,13 @@ export default function FrameworksPage() {
 
                 {framework.classification && (
                   <div className="mt-2">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                    <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium whitespace-nowrap ${
                       framework.classification === 'certification' 
                         ? 'bg-emerald-50 text-emerald-700' 
                         : 'bg-blue-50 text-blue-700'
                     }`}>
                       {framework.classification === 'certification' ? '🏆 Certification' : '📋 Compliance'}
-                      {framework.classification_confidence && (
-                        <span className="cw-text-muted ml-1">
-                          ({Math.round(framework.classification_confidence * 100)}%)
-                        </span>
-                      )}
+                      <span className="cw-text-muted ml-1">(0%)</span>
                     </span>
                   </div>
                 )}
@@ -720,7 +750,7 @@ export default function FrameworksPage() {
           <div className="cw-card p-12 shadow-sm flex flex-col items-center justify-center text-center">
             <FileStack className="mb-4 h-12 w-12 cw-text-muted" />
             <h3 className="text-lg font-medium cw-text-default">No frameworks available</h3>
-            <p className="mt-1 cw-text-muted">Framework uploads are managed through customized setup. Run AI analysis once frameworks are available.</p>
+            <p className="mt-1 cw-text-muted">No frameworks uploaded yet. Use Upload New Framework to add your first framework.</p>
           </div>
         )}
       </section>

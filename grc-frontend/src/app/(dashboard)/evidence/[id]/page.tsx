@@ -170,7 +170,7 @@ interface ControlsResponse {
   evidence_name: string;
   total_mappings: number;
   normalized_controls: Array<{ id: number; normalized_control: { id: number; code: string; name: string } | null }>;
-  by_framework: Array<{ framework_id: number; framework_name: string; framework_code: string; controls: Array<{ id: number; framework_control: { id: number; code: string; name: string } | null }> }>;
+  by_framework: Array<{ framework_id: number; framework_name: string; framework_code: string; controls: Array<{ id: number; framework_control?: { id: number; code: string; name: string } | null; parsed_control?: { id: number; control_id: string; title: string } | null }> }>;
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -218,6 +218,17 @@ export default function EvidenceDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | null>(null);
   const [rejectComments, setRejectComments] = useState('');
+  const [ocrProcessMessage, setOcrProcessMessage] = useState<string | null>(null);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [selectedFrameworkId, setSelectedFrameworkId] = useState<number | null>(null);
+  const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
+  const [selectedNormalizedId, setSelectedNormalizedId] = useState<number | null>(null);
+  const [showRiskModal, setShowRiskModal] = useState(false);
+  const [showAssetModal, setShowAssetModal] = useState(false);
+  const [selectedRiskId, setSelectedRiskId] = useState<number | null>(null);
+  const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null);
+  const [linkingClauseIndex, setLinkingClauseIndex] = useState<number | null>(null);
+  const [linkFeedback, setLinkFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const { data: evidence, isLoading, error } = useQuery<EvidenceDetail>({
     queryKey: ['evidence-detail', evidenceId],
@@ -264,6 +275,36 @@ export default function EvidenceDetailPage() {
     enabled: activeTab === 'controls' || activeTab === 'assessment',
   });
 
+  const { data: availableControls } = useQuery<{
+    frameworks: Array<{ id: number; name: string; short_code: string; controls: Array<{ id: number; control_id: string; original_reference: string | null; title: string }> }>;
+    normalized_controls: Array<{ id: number; code: string; name: string }>;
+  }>({
+    queryKey: ['available-controls'],
+    queryFn: async () => {
+      const response = await apiClient.get('/evidence-mgmt/links/available-controls');
+      return response.data;
+    },
+    enabled: showLinkModal,
+  });
+
+  const { data: risksList } = useQuery<Array<{ id: number; title: string }>>({
+    queryKey: ['risks-list'],
+    queryFn: async () => {
+      const response = await apiClient.get('/risks');
+      return response.data;
+    },
+    enabled: showRiskModal,
+  });
+
+  const { data: assetsList } = useQuery<Array<{ id: number; name: string }>>({
+    queryKey: ['assets-list'],
+    queryFn: async () => {
+      const response = await apiClient.get('/assets');
+      return response.data;
+    },
+    enabled: showAssetModal,
+  });
+
   const { data: clauseMappings } = useQuery<ClauseMapping[]>({
     queryKey: ['evidence-clause-mappings', evidenceId],
     queryFn: async () => {
@@ -290,9 +331,25 @@ export default function EvidenceDetailPage() {
 
   const processOCRMutation = useMutation({
     mutationFn: () => apiClient.post(`/evidence-mgmt/ocr/${evidenceId}/process-ocr`),
-    onSuccess: () => {
+    onMutate: () => {
+      setOcrProcessMessage(null);
+    },
+    onSuccess: (response) => {
+      const status = response.data?.status as string | undefined;
+      const message = response.data?.message as string | undefined;
+
+      if (status === 'failed') {
+        setOcrProcessMessage(message || 'OCR processing failed. Please retry.');
+      } else if (message) {
+        setOcrProcessMessage(message);
+      }
+
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
       queryClient.invalidateQueries({ queryKey: ['evidence-ocr', evidenceId] });
+    },
+    onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
+      const detail = error.response?.data?.detail;
+      setOcrProcessMessage(detail || 'OCR request failed. Please retry.');
     },
   });
 
@@ -355,6 +412,48 @@ export default function EvidenceDetailPage() {
     },
   });
 
+  const linkControlMutation = useMutation({
+    mutationFn: () => {
+      if (selectedNormalizedId) {
+        return apiClient.post(`/evidence-mgmt/links/${evidenceId}/controls`, {
+          control_links: [{ normalized_control_id: selectedNormalizedId }],
+        });
+      }
+      if (selectedFrameworkId && selectedControlId) {
+        return apiClient.post(`/evidence-mgmt/links/${evidenceId}/controls`, {
+          control_links: [{ parsed_control_id: selectedControlId, uploaded_framework_id: selectedFrameworkId }],
+        });
+      }
+      return Promise.reject(new Error('Select a control to link'));
+    },
+    onSuccess: () => {
+      setShowLinkModal(false);
+      setSelectedControlId(null);
+      setSelectedFrameworkId(null);
+      setSelectedNormalizedId(null);
+      queryClient.invalidateQueries({ queryKey: ['evidence-controls', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+    },
+  });
+
+  const linkRiskMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/risks`, { risk_ids: [selectedRiskId] }),
+    onSuccess: () => {
+      setShowRiskModal(false);
+      setSelectedRiskId(null);
+      queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    },
+  });
+
+  const linkAssetMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/assets`, { asset_ids: [selectedAssetId] }),
+    onSuccess: () => {
+      setShowAssetModal(false);
+      setSelectedAssetId(null);
+      queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    },
+  });
+
   const unlockAssessmentMutation = useMutation({
     mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/unlock`),
     onSuccess: () => {
@@ -362,9 +461,6 @@ export default function EvidenceDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
     },
   });
-
-  const [linkingClauseIndex, setLinkingClauseIndex] = useState<number | null>(null);
-  const [linkFeedback, setLinkFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const linkFromAIMutation = useMutation({
     mutationFn: (clause: ClauseMapping) => 
@@ -809,6 +905,7 @@ export default function EvidenceDetailPage() {
             ocrContent={ocrContent}
             onProcessOCR={() => processOCRMutation.mutate()}
             isProcessing={processOCRMutation.isPending}
+            ocrProcessMessage={ocrProcessMessage}
             formatDateTime={formatDateTime}
           />
         )}
@@ -841,6 +938,7 @@ export default function EvidenceDetailPage() {
             controlsData={controlsData}
             onUnlink={(mappingId) => unlinkControlMutation.mutate(mappingId)}
             isUnlinking={unlinkControlMutation.isPending}
+            onOpenLinkModal={() => setShowLinkModal(true)}
           />
         )}
         {activeTab === 'cross-links' && (
@@ -849,9 +947,160 @@ export default function EvidenceDetailPage() {
             onUnlinkRisk={(linkId) => unlinkRiskMutation.mutate(linkId)}
             onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
             isUnlinking={unlinkRiskMutation.isPending || unlinkAssetMutation.isPending}
+            onOpenRiskModal={() => setShowRiskModal(true)}
+            onOpenAssetModal={() => setShowAssetModal(true)}
           />
         )}
       </div>
+        {showLinkModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-black">Link Control</h3>
+                <button onClick={() => setShowLinkModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Normalized Control (optional)</label>
+                  <select
+                    className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    value={selectedNormalizedId ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? Number(e.target.value) : null;
+                      setSelectedNormalizedId(val);
+                      if (val) {
+                        setSelectedControlId(null);
+                        setSelectedFrameworkId(null);
+                      }
+                    }}
+                  >
+                    <option value="">Select normalized control</option>
+                    {availableControls?.normalized_controls.map((nc) => (
+                      <option key={nc.id} value={nc.id}>{nc.code} - {nc.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Framework</label>
+                    <select
+                      className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      value={selectedFrameworkId ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value ? Number(e.target.value) : null;
+                        setSelectedFrameworkId(val);
+                        setSelectedControlId(null);
+                        if (val) {
+                          setSelectedNormalizedId(null);
+                        }
+                      }}
+                    >
+                      <option value="">Select framework</option>
+                      {availableControls?.frameworks.map((fw) => (
+                        <option key={fw.id} value={fw.id}>{fw.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Control</label>
+                    <select
+                      className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      value={selectedControlId ?? ''}
+                      onChange={(e) => setSelectedControlId(e.target.value ? Number(e.target.value) : null)}
+                    >
+                      <option value="">Select control</option>
+                      {availableControls?.frameworks
+                        .find((fw) => fw.id === selectedFrameworkId)?.controls
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>{c.control_id} - {c.title}</option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => setShowLinkModal(false)}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => linkControlMutation.mutate()}
+                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+                    disabled={linkControlMutation.isPending}
+                  >
+                    {linkControlMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Link'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showRiskModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-black">Link Risk</h3>
+                <button onClick={() => setShowRiskModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
+              </div>
+              <select
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                value={selectedRiskId ?? ''}
+                onChange={(e) => setSelectedRiskId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Select risk</option>
+                {risksList?.map((risk) => (
+                  <option key={risk.id} value={risk.id}>{risk.title || `Risk #${risk.id}`}</option>
+                ))}
+              </select>
+              <div className="mt-4 flex justify-end gap-3">
+                <button onClick={() => setShowRiskModal(false)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={() => linkRiskMutation.mutate()}
+                  disabled={!selectedRiskId || linkRiskMutation.isPending}
+                  className="rounded bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {linkRiskMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Link Risk'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showAssetModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-black">Link Asset</h3>
+                <button onClick={() => setShowAssetModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
+              </div>
+              <select
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                value={selectedAssetId ?? ''}
+                onChange={(e) => setSelectedAssetId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Select asset</option>
+                {assetsList?.map((asset) => (
+                  <option key={asset.id} value={asset.id}>{asset.name || `Asset #${asset.id}`}</option>
+                ))}
+              </select>
+              <div className="mt-4 flex justify-end gap-3">
+                <button onClick={() => setShowAssetModal(false)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={() => linkAssetMutation.mutate()}
+                  disabled={!selectedAssetId || linkAssetMutation.isPending}
+                  className="rounded bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {linkAssetMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Link Asset'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
     </div>
   );
 }
@@ -950,12 +1199,14 @@ function OCRTab({
   ocrContent,
   onProcessOCR,
   isProcessing,
+  ocrProcessMessage,
   formatDateTime
 }: { 
   evidence: EvidenceDetail;
   ocrContent?: OCRContent;
   onProcessOCR: () => void;
   isProcessing: boolean;
+  ocrProcessMessage?: string | null;
   formatDateTime: (d?: string | null) => string;
 }) {
   const content = ocrContent?.ocr_content;
@@ -1003,6 +1254,9 @@ function OCRTab({
           <XCircle className="mb-4 h-12 w-12 text-red-400" />
           <p className="text-lg font-medium text-black">OCR Processing Failed</p>
           <p className="text-gray-600">Try re-processing the document</p>
+          {ocrProcessMessage && (
+            <p className="mt-2 max-w-xl text-sm text-red-600">{ocrProcessMessage}</p>
+          )}
           <button
             onClick={onProcessOCR}
             disabled={isProcessing}
@@ -1450,11 +1704,13 @@ function AssessmentTab({
 function ControlsTab({ 
   controlsData,
   onUnlink,
-  isUnlinking
+  isUnlinking,
+  onOpenLinkModal
 }: { 
   controlsData?: ControlsResponse;
   onUnlink: (mappingId: number) => void;
   isUnlinking: boolean;
+  onOpenLinkModal: () => void;
 }) {
   if (!controlsData) {
     return (
@@ -1473,7 +1729,10 @@ function ControlsTab({
           <Shield className="h-5 w-5 text-blue-600" />
           Linked Controls ({totalControls})
         </h3>
-        <button className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
+        <button
+          onClick={onOpenLinkModal}
+          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+        >
           <Plus className="h-4 w-4" />
           Link Control
         </button>
@@ -1524,8 +1783,12 @@ function ControlsTab({
                     <div className="flex items-center gap-3">
                       <Shield className="h-5 w-5 text-blue-400" />
                       <div>
-                        <span className="text-sm font-medium text-blue-400">{mapping.framework_control?.code}</span>
-                        <p className="text-black">{mapping.framework_control?.name}</p>
+                        <span className="text-sm font-medium text-blue-400">
+                          {mapping.framework_control?.code || mapping.parsed_control?.control_id}
+                        </span>
+                        <p className="text-black">
+                          {mapping.framework_control?.name || mapping.parsed_control?.title}
+                        </p>
                       </div>
                     </div>
                     <button
@@ -1550,12 +1813,16 @@ function CrossLinksTab({
   links,
   onUnlinkRisk,
   onUnlinkAsset,
-  isUnlinking
+  isUnlinking,
+  onOpenRiskModal,
+  onOpenAssetModal
 }: { 
   links?: AllLinksResponse;
   onUnlinkRisk: (linkId: number) => void;
   onUnlinkAsset: (linkId: number) => void;
   isUnlinking: boolean;
+  onOpenRiskModal: () => void;
+  onOpenAssetModal: () => void;
 }) {
   if (!links) {
     return (
@@ -1608,7 +1875,10 @@ function CrossLinksTab({
           iconColor="text-red-400"
           count={links.risks.total}
           addButton={
-            <button className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
+            <button
+              onClick={onOpenRiskModal}
+              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+            >
               <Plus className="h-4 w-4" /> Add
             </button>
           }
@@ -1649,7 +1919,10 @@ function CrossLinksTab({
           iconColor="text-blue-400"
           count={links.assets.total}
           addButton={
-            <button className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
+            <button
+              onClick={onOpenAssetModal}
+              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+            >
               <Plus className="h-4 w-4" /> Add
             </button>
           }

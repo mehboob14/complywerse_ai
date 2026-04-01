@@ -732,17 +732,18 @@ export default function AssessmentPage() {
 
       {isNewAssessmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 p-4">
+          <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 p-4">
               <h2 className="text-lg font-semibold text-black">New Assessment</h2>
               <button
                 onClick={() => setIsNewAssessmentModalOpen(false)}
-                className="rounded p-1 text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900"
+                className="rounded p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-4 p-4">
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-600">
                   Framework <span className="text-red-600">*</span>
@@ -750,7 +751,7 @@ export default function AssessmentPage() {
                 <select
                   value={newAssessmentForm.uploaded_framework_id || ''}
                   onChange={(e) => setNewAssessmentForm({ ...newAssessmentForm, uploaded_framework_id: Number(e.target.value) })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   <option value="">Select a framework...</option>
                   {uniqueFrameworks.filter((f: UploadedFramework) => f.upload_status === 'parsed' && f.parsed_controls_count > 0).map((f: UploadedFramework) => (
@@ -769,17 +770,17 @@ export default function AssessmentPage() {
                   value={newAssessmentForm.name}
                   onChange={(e) => setNewAssessmentForm({ ...newAssessmentForm, name: e.target.value })}
                   placeholder="e.g., Q1 2026 SOC 2 Assessment"
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
-              <div>
+              <div className="md:col-span-2">
                 <label className="mb-1.5 block text-sm font-medium text-slate-600">Description</label>
                 <textarea
                   value={newAssessmentForm.description}
                   onChange={(e) => setNewAssessmentForm({ ...newAssessmentForm, description: e.target.value })}
                   placeholder="Brief description of the assessment scope and objectives"
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div>
@@ -788,14 +789,15 @@ export default function AssessmentPage() {
                   type="date"
                   value={newAssessmentForm.target_completion_date}
                   onChange={(e) => setNewAssessmentForm({ ...newAssessmentForm, target_completion_date: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
+              </div>
             </div>
-            <div className="flex justify-end gap-3 border-t border-slate-200 p-4">
+            <div className="flex justify-end gap-3 border-t border-gray-200 p-4">
               <button
                 onClick={() => setIsNewAssessmentModalOpen(false)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 transition-colors hover:bg-slate-200"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50"
               >
                 Cancel
               </button>

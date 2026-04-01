@@ -1,0 +1,2574 @@
+{
+  "summary": {
+    "total_mismatches": 161,
+    "missing_evidence_count": 3,
+    "pdf_controls_count": 56,
+    "json_controls_count": 108
+  },
+  "mismatches": {
+    "1.1.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.1.a",
+        "original_reference": "1.1.a",
+        "title": "Establish technology governance framework",
+        "description": "The Board must create a governance framework to ensure technology aligns with and supports the organization's goals.",
+        "full_text": "The Board of Directors of the FI(s) are responsible to establish a comprehensive enterprise technology governance framework which defines the leadership, organizational structures and processes to ensure that the FI(s)\u0019 technology sustains and extends the enterprise\u0019s strategies and objectives.",
+        "domain": "Governance",
+        "category": "Technology Governance",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.1.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear directive for the Board to establish a governance framework.",
+        "evidence_requirements": []
+      }
+    },
+    "1.1.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.1.b",
+        "original_reference": "1.1.b",
+        "title": "Monitor compliance to policies and performance against plans",
+        "description": "Regularly check adherence to policies and track performance against established plans.",
+        "full_text": "Monitor compliance to policies and performance against the plans.",
+        "domain": "Governance",
+        "category": "Technology Governance",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.1.b",
+        "parent_section": "1.1.a",
+        "ai_confidence": 0.9,
+        "ai_notes": "Monitoring is a critical component of governance frameworks.",
+        "evidence_requirements": []
+      }
+    },
+    "1.1.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.1.c",
+        "original_reference": "1.1.c",
+        "title": "Align IT and business strategies",
+        "description": "Ensure IT strategies are aligned with business strategies, focusing on value delivery, risk, and resource management.",
+        "full_text": "The basic principles of strategic alignment of IT and the business, value delivery to businesses, risk management, resource management (including project management) and performance management shall form the basis of this technology governance framework.",
+        "domain": "Governance",
+        "category": "Technology Governance",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.1.c",
+        "parent_section": "1.1.a",
+        "ai_confidence": 1.0,
+        "ai_notes": "Alignment is explicitly stated as a foundational principle.",
+        "evidence_requirements": []
+      }
+    },
+    "1.1.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.1.d",
+        "original_reference": "1.1.d",
+        "title": "Align technology governance framework with corporate governance",
+        "description": "Ensure the technology governance framework is integrated with the overall corporate governance framework.",
+        "full_text": "Technology governance framework shall be closely aligned with FI(s)\u0019s corporate governance framework and shall cover, among other things, policies and procedures to provide oversight and transparency in the use of technology.",
+        "domain": "Governance",
+        "category": "Technology Governance",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.1.d",
+        "parent_section": "1.1.a",
+        "ai_confidence": 1.0,
+        "ai_notes": "Alignment with corporate governance is explicitly required.",
+        "evidence_requirements": []
+      }
+    },
+    "1.1.e": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.1.e",
+        "original_reference": "1.1.e",
+        "title": "Adopt international standards for technology governance",
+        "description": "Adopt international standards and best practices to enhance technology governance.",
+        "full_text": "FI(s) are encouraged to adopt relevant aspects of international standards/best practices for effective and efficient enterprise technology governance.",
+        "domain": "Governance",
+        "category": "Technology Governance",
+        "is_mandatory": false,
+        "priority": "medium",
+        "section_number": "1.1.e",
+        "parent_section": "1.1.a",
+        "ai_confidence": 0.7,
+        "ai_notes": "Encouragement to adopt standards is not mandatory but recommended.",
+        "evidence_requirements": []
+      }
+    },
+    "1.2.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.2.a",
+        "original_reference": "1.2.a",
+        "title": "Approve IT Strategy",
+        "description": "The Board must formally approve the IT Strategy, ensuring it aligns with organizational goals and includes key operational elements.",
+        "full_text": "The BoD shall approve 'IT Strategy' covering overall design and plan of its operational framework including its vision and mission, stakeholders, business, workflow and processes, data processing, system access, adoption of best-in-class information security systems, practices and availability of IT resources.",
+        "domain": "Governance",
+        "category": "IT Strategy",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.2.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Explicit requirement for Board approval of IT Strategy.",
+        "evidence_requirements": []
+      }
+    },
+    "1.2.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.2.b",
+        "original_reference": "1.2.b",
+        "title": "Identify constraints and enablers for IT objectives",
+        "description": "Identify factors that may hinder or support the achievement of IT objectives.",
+        "full_text": "The FI(s) shall identify any organizational/environmental/cultural constraints and enablers to achieve the strategic IT objectives.",
+        "domain": "Governance",
+        "category": "IT Strategy",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "1.2.b",
+        "parent_section": "1.2.a",
+        "ai_confidence": 0.8,
+        "ai_notes": "Identification of constraints and enablers is implied as part of strategic planning.",
+        "evidence_requirements": []
+      }
+    },
+    "1.3.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.3.a",
+        "original_reference": "1.3.a",
+        "title": "Approve Digital Strategy for customer-focused products",
+        "description": "The board must formally approve a strategy that prioritizes the development of digital products and services tailored to customer needs.",
+        "full_text": "The board shall approve a 'Digital Strategy' covering, at least the following objectives: Development of customer-focused digital products and services.",
+        "domain": "Governance",
+        "category": "Digital Strategy",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.3.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear directive requiring board approval of a digital strategy.",
+        "evidence_requirements": []
+      }
+    },
+    "1.3.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.3.b",
+        "original_reference": "1.3.b",
+        "title": "Approve Digital Strategy for end-to-end digitization",
+        "description": "The board must approve a strategy that ensures complete digitization of processes to enhance delivery of digital products and services.",
+        "full_text": "The board shall approve a 'Digital Strategy' covering, at least the following objectives: End-to-end digitization of processes for delivery of digital products and services.",
+        "domain": "Governance",
+        "category": "Digital Strategy",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.3.b",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Directive clearly mandates board approval of digitization strategy.",
+        "evidence_requirements": []
+      }
+    },
+    "1.3.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.3.c",
+        "original_reference": "1.3.c",
+        "title": "Approve Digital Strategy for interoperability of delivery channels",
+        "description": "The board must approve a strategy that ensures seamless interoperability across various delivery channels.",
+        "full_text": "The board shall approve a 'Digital Strategy' covering, at least the following objectives: Interoperability of delivery channels.",
+        "domain": "Governance",
+        "category": "Digital Strategy",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.3.c",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Directive explicitly requires board approval of interoperability strategy.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.1.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.1.a",
+        "original_reference": "1.4.1.a",
+        "title": "BoD to review and approve IT governance framework",
+        "description": "The board must review and formally approve an IT governance framework to align technology use with corporate goals.",
+        "full_text": "The Board of Directors (BoD) sets the tone and direction for an FI(s) use of technology. BoD, at minimum, shall perform the following: Review and approve an IT governance framework to ensure that organization’s IT supports and enables the achievement of the corporate strategies and objectives.",
+        "domain": "Governance",
+        "category": "Roles and Responsibilities",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.1.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Directive clearly mandates board review and approval of IT governance framework.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.1.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.1.b",
+        "original_reference": "1.4.1.b",
+        "title": "BoD to review and approve IT and Digital Strategies",
+        "description": "The board must review and approve IT and digital strategies aligned with the bank's business strategy, ensuring regular updates.",
+        "full_text": "Review and approve 'IT Strategy' and 'Digital Strategy' in line with the business strategy of the bank and monitor & update the same on regular basis keeping in view potential opportunities and threats.",
+        "domain": "Governance",
+        "category": "Roles and Responsibilities",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.1.b",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Directive explicitly requires board review and approval of IT and digital strategies.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.1.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.1.c",
+        "original_reference": "1.4.1.c",
+        "title": "Establish IT organization structure",
+        "description": "The organization must establish a structured IT function aligned with the IT governance framework to ensure efficiency and effectiveness.",
+        "full_text": "Establish an efficient and effective IT organization structure in line with the IT governance framework.",
+        "domain": "Governance",
+        "category": "Roles and Responsibilities",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.1.c",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Directive clearly mandates establishment of IT organization structure.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.1.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.1.d",
+        "original_reference": "1.4.1.d",
+        "title": "Integrate technology risks with enterprise risk management",
+        "description": "Technology risks must be incorporated into the enterprise risk management framework to ensure robust protection of information assets.",
+        "full_text": "Ensure that technology risks are integrated with the enterprise risk management function to achieve security, reliability, resiliency, interoperability and recoverability of data/information and information assets.",
+        "domain": "Risk",
+        "category": "Technology Risk Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.1.d",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Directive clearly mandates integration of technology risks into enterprise risk management.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.1.e": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.1.e",
+        "original_reference": "1.4.1.e",
+        "title": "Approve and review technology-related policies",
+        "description": "The board must approve and periodically review all technology-related policies to ensure alignment with technological and regulatory changes.",
+        "full_text": "Approve all technology-related policies and review the same periodically in light of major technological/regulatory developments at least after every three (03) years.",
+        "domain": "Governance",
+        "category": "Policy Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.1.e",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Directive explicitly requires board approval and review of technology-related policies.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.1.f": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.1.f",
+        "original_reference": "1.4.1.f",
+        "title": "Maintain independent technology audit function",
+        "description": "The organization must maintain an independent technology audit function that matches the complexity of its technology risk profile.",
+        "full_text": "Ensure maintenance of an independent and effective technology audit function commensurate with the complexity of FI(s) technology risk profile.",
+        "domain": "Audit",
+        "category": "Technology Audit",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.1.f",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Directive clearly mandates maintenance of an independent technology audit function.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.1.g": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.1.g",
+        "original_reference": "1.4.1.g",
+        "title": "Address resource gaps in technology",
+        "description": "The organization must address identified resource gaps in technology, including personnel, processes, and tools, in a timely manner.",
+        "full_text": "Ensure that resource gaps (people, process & technology) identified by the management are adequately and timely fulfilled.",
+        "domain": "Governance",
+        "category": "Resource Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.1.g",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Directive clearly mandates addressing resource gaps in technology.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.1.h": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.1.h",
+        "original_reference": "1.4.1.h",
+        "title": "Ensure up-to-date skills for technology governance",
+        "description": "Ensure that personnel involved in technology governance and related areas have the necessary and current skills to perform their roles effectively.",
+        "full_text": "Ensure that the skills required for technology governance, service delivery, information security and risk management are sufficient and up-to-date.",
+        "domain": "Governance",
+        "category": "Skills Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.1.h",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear requirement to ensure skills are sufficient and current.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.1.i": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.1.i",
+        "original_reference": "1.4.1.i",
+        "title": "Approve and monitor major technology projects",
+        "description": "Ensure that the board approves and monitors major technology projects, including defining criteria for what constitutes a major project.",
+        "full_text": "Approve and receive periodic updates on major technology-related projects that may have significant impact on FI(s)’ operations, earnings or capital. Further, the board shall also define the criteria for major projects.",
+        "domain": "Governance",
+        "category": "Project Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.1.i",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Explicit requirement for board approval and monitoring.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.a",
+        "original_reference": "1.4.2.a",
+        "title": "Implement IT and Digital Strategy approved by BoD",
+        "description": "Ensure that the IT and Digital Strategies approved by the Board of Directors are implemented effectively.",
+        "full_text": "Implement “IT strategy” and “Digital Strategy” approved by the BoD.",
+        "domain": "Governance",
+        "category": "Strategy Implementation",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.2.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear directive to implement board-approved strategies.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.b",
+        "original_reference": "1.4.2.b",
+        "title": "Monitor and assess technology governance program",
+        "description": "Regularly monitor and evaluate the effectiveness of the technology governance program in supporting business objectives.",
+        "full_text": "Monitor implementation of the technology governance program and assess its effectiveness on business lines and processes.",
+        "domain": "Governance",
+        "category": "Program Monitoring",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.2.b",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Explicit requirement to monitor and assess the program.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.c",
+        "original_reference": "1.4.2.c",
+        "title": "Implement effective information security awareness program",
+        "description": "Establish and maintain an organization-wide program to raise awareness about information security risks and best practices.",
+        "full_text": "Ensure that an effective information security awareness program is implemented throughout the organization.",
+        "domain": "Security",
+        "category": "Awareness Training",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.2.c",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear requirement for an awareness program.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.d",
+        "original_reference": "1.4.2.d",
+        "title": "Inform BoD on cyber security developments and threats",
+        "description": "Provide regular updates to the Board of Directors on cybersecurity developments, including action plans, implementation progress, and major threats.",
+        "full_text": "Periodically inform BoD on the latest developments on cyber security action plan, its implementation status, and a summary report on major threats and attacks faced by the institution and their estimated impact on its operations.",
+        "domain": "Security",
+        "category": "Cybersecurity Reporting",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.2.d",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Explicit requirement for periodic updates to the Board.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.e": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.e",
+        "original_reference": "1.4.2.e",
+        "title": "Ensure documented SOPs are in place and followed",
+        "description": "Ensure that all technology operations have documented SOPs that are consistently followed.",
+        "full_text": "Ensure that the documented Standard Operating Procedures (SOPs) are in place and are effectively followed in letter and spirit in all areas of technology operations.",
+        "domain": "Operations",
+        "category": "SOP Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.2.e",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear requirement for documented and followed SOPs.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.f": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.f",
+        "original_reference": "1.4.2.f",
+        "title": "Ensure IT personnel capacity building",
+        "description": "Provide training and development opportunities to IT personnel to enhance their skills and support operational excellence.",
+        "full_text": "Ensure capacity building of the IT personnel to achieve desired service delivery and operational excellence.",
+        "domain": "HR",
+        "category": "Training and Development",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.2.f",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear requirement for IT personnel capacity building.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.g": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.g",
+        "original_reference": "1.4.2.g",
+        "title": "Select technology solutions meeting strategic requirements",
+        "description": "Ensure that technology solutions are selected based on their ability to meet strategic goals while optimizing resources.",
+        "full_text": "Select technology solutions that can meet strategic requirements within optimum resources.",
+        "domain": "Operations",
+        "category": "Technology Selection",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "1.4.2.g",
+        "parent_section": null,
+        "ai_confidence": 0.9,
+        "ai_notes": "Implicit requirement to align technology selection with strategy.",
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.h": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.h",
+        "original_reference": "1.4.2.h",
+        "title": "Monitor completion of technology projects",
+        "description": "This control ensures that technology projects are tracked to completion with sufficient resources to avoid delays or failures.",
+        "full_text": "Ensure that an effective mechanism is in place to monitor completion of technology projects and adequate resources are available to complete these projects.",
+        "domain": "Operations",
+        "category": "Project Monitoring",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.2.h",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.i": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.i",
+        "original_reference": "1.4.2.i",
+        "title": "Manage risks in technology outsourcing arrangements",
+        "description": "This control ensures that risks from outsourcing technology services, including cloud providers, are effectively managed.",
+        "full_text": "Identify, measure, monitor, and control the risks associated with technology-related outsourcing arrangements including cloud services.",
+        "domain": "Vendor",
+        "category": "Outsourcing Risk Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.2.i",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.j": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.j",
+        "original_reference": "1.4.2.j",
+        "title": "Develop and maintain Disaster Recovery and BCP",
+        "description": "This control ensures that disaster recovery and business continuity plans are created, tested, and maintained to minimize disruptions.",
+        "full_text": "Develop, conduct and maintain Disaster Recovery & Business Continuity Plans and document their testing in line with the policy approved by the board.",
+        "domain": "BCP",
+        "category": "Disaster Recovery",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.2.j",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "1.4.2.k": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "1.4.2.k",
+        "original_reference": "1.4.2.k",
+        "title": "Identify and address resource gaps",
+        "description": "This control ensures that gaps in resources such as personnel, processes, or technology are identified and addressed promptly.",
+        "full_text": "Identify resources gap (people, process & technology) and take appropriate steps to fill the gaps.",
+        "domain": "Operations",
+        "category": "Resource Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "1.4.2.k",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.4.8": {
+      "issues": {
+        "title_mismatch": {
+          "json": "Ensure encryption during network transmission",
+          "pdf": "Encryption"
+        },
+        "description_mismatch": {
+          "json": "This control ensures that sensitive data transmitted over networks is encrypted to prevent intercept",
+          "pdf": "The FI(s) shall ensure encryption at database level, storage level and during network transmission a"
+        },
+        "full_text_mismatch": {
+          "json": "The FI(s) shall ensure encryption during network transmission as per the classification and sensitiv",
+          "pdf": "The FI(s) shall ensure encryption at database level, storage level and during network transmission a"
+        }
+      },
+      "json": {
+        "control_id": "2.4.8",
+        "original_reference": "2.4.8",
+        "title": "Ensure encryption during network transmission",
+        "description": "This control ensures that sensitive data transmitted over networks is encrypted to prevent interception or unauthorized access.",
+        "full_text": "The FI(s) shall ensure encryption during network transmission as per the classification and sensitivity of the data.",
+        "domain": "Data",
+        "category": "Encryption",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.4.8",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      },
+      "pdf": {
+        "title": "Encryption",
+        "full_text": "The FI(s) shall ensure encryption at database level, storage level and during network transmission as per the classification and sensitivity of the data.",
+        "description": "The FI(s) shall ensure encryption at database level, storage level and during network transmission as per the classification and sensitivity of the data."
+      }
+    },
+    "2.5": {
+      "issues": {
+        "title_mismatch": {
+          "json": "Implement controls to prevent cyber security incidents",
+          "pdf": "Cyber Security Action Plan4"
+        },
+        "description_mismatch": {
+          "json": "This control ensures that preventive measures are implemented to reduce the likelihood of cybersecur",
+          "pdf": "The FI(s) shall formulate cyber security action plan in order to anticipate, withstand, detect and r"
+        },
+        "full_text_mismatch": {
+          "json": "The FI(s) shall implement appropriate controls to prevent any cyber security incident depending on t",
+          "pdf": "The FI(s) shall formulate cyber security action plan in order to anticipate, withstand, detect and r"
+        }
+      },
+      "json": {
+        "control_id": "2.5",
+        "original_reference": "2.5",
+        "title": "Implement controls to prevent cyber security incidents",
+        "description": "This control ensures that preventive measures are implemented to reduce the likelihood of cybersecurity incidents.",
+        "full_text": "The FI(s) shall implement appropriate controls to prevent any cyber security incident depending on the size and complexity of their information/cyber security environment.",
+        "domain": "Security",
+        "category": "Incident Prevention",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.5",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      },
+      "pdf": {
+        "title": "Cyber Security Action Plan4",
+        "full_text": "The FI(s) shall formulate cyber security action plan in order to anticipate, withstand, detect and respond to cyber attacks in line with international standards and best practices.5 The FI(s) shall implement appropriate controls to prevent any cyber security incident depending on the size and complexity of their information/cyber security environment keeping in view the following broader parameters:- 4 This section shall supersede earlier instructions issued vide BPRD Circular No. 07of June 22, 2016 titled “Prevention against Cyber Attacks”. 5 Instructions in this section are specifically addressing external interfaces/connections of the FIs. 17 Enterprise Technology Governance & Risk Management Framework for Financial Institutions a) A sound governance framework with strong leadership is essential for effective enterprise-wide cyber security management. Board and senior management-level engagement along with a clear chain of accountability is critical to the success of FI(s)’ cyber se",
+        "description": "The FI(s) shall formulate cyber security action plan in order to anticipate, withstand, detect and respond to cyber attacks in line with international standards and best practices.5 The FI(s) shall im"
+      }
+    },
+    "2.5.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.5.a",
+        "original_reference": "2.5.a",
+        "title": "Establish sound governance framework for cyber security",
+        "description": "Ensure the organization has a structured governance framework with leadership oversight to manage cyber security effectively across all levels.",
+        "full_text": "A sound governance framework with strong leadership is essential for effective enterprise-wide cyber security management.",
+        "domain": "Governance",
+        "category": "Cybersecurity Governance",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.5.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.5.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.5.b",
+        "original_reference": "2.5.b",
+        "title": "Develop and implement cyber security awareness program",
+        "description": "Create and execute a program to educate employees and stakeholders about cyber security risks and best practices.",
+        "full_text": "Developing and implementing a robust cyber security awareness program and ensuring that end-users are aware of the importance of protecting sensitive information and the risks of mishandling information.",
+        "domain": "Security",
+        "category": "Awareness and Training",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "2.5.b",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.5.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.5.d",
+        "original_reference": "2.5.d",
+        "title": "Establish written procedures for vendor access to sensitive data",
+        "description": "Define and document procedures for granting vendors access to sensitive data and systems securely.",
+        "full_text": "Establish written procedures to allow access to the vendors on sensitive data/information and systems.",
+        "domain": "Vendor",
+        "category": "Vendor Access Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.5.d",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.5.e": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.5.e",
+        "original_reference": "2.5.e",
+        "title": "Implement automated solutions to monitor cyber attacks",
+        "description": "Deploy tools and systems to continuously monitor and detect cyber attacks in real-time.",
+        "full_text": "Implement automated solutions to monitor and proactively track all types of cyber attacks.",
+        "domain": "Security",
+        "category": "Monitoring",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.5.e",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.5.f": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.5.f",
+        "original_reference": "2.5.f",
+        "title": "Incorporate consistent approach for selecting security controls",
+        "description": "Adopt a standardized methodology for identifying and implementing security controls across systems.",
+        "full_text": "Incorporate a consistent and comparable approach for selecting and specifying security controls for computer systems.",
+        "domain": "Security",
+        "category": "Control Selection",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "2.5.f",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.5.g": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.5.g",
+        "original_reference": "2.5.g",
+        "title": "Develop and implement internal assessment methods for security controls",
+        "description": "Create procedures to regularly assess the effectiveness of implemented security controls.",
+        "full_text": "Develop and implement internal assessment methods/procedures for determining security control effectiveness.",
+        "domain": "Security",
+        "category": "Assessment",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "2.5.g",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.5.h": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.5.h",
+        "original_reference": "2.5.h",
+        "title": "Deploy multi-layer security model",
+        "description": "Implement a layered security approach to protect systems and data using multiple defensive mechanisms.",
+        "full_text": "Deploy multi-layer security model including firewalls, secure sign-on, dual authentication with triangulation of access and real-time security event monitoring.",
+        "domain": "Security",
+        "category": "Multi-layer Security",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.5.h",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.6.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.6.a",
+        "original_reference": "2.6.a",
+        "title": "Submit significant incidents to IT Steering Committee",
+        "description": "Ensure significant incidents are reported to the IT Steering Committee for review and decision-making.",
+        "full_text": "Significant incidents are submitted for review to the IT Steering Committee on a regular basis.",
+        "domain": "Incident",
+        "category": "Incident Reporting",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.6.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.6.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.6.b",
+        "original_reference": "2.6.b",
+        "title": "Report cyber security breaches to BPRD within 48 hours",
+        "description": "Ensure all significant cyber security breaches are reported to the BPRD within 48 hours of detection.",
+        "full_text": "The FI(s) shall report to Banking Policy & Regulation Department (BPRD), SBP within forty-eight (48) hours after the incident all established information/cyber security breaches and related incidents involving financial loss, stealing of confidential data and major disruption in the banking system or communication channel.",
+        "domain": "Incident",
+        "category": "Incident Reporting",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.6.b",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.7.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.7.a",
+        "original_reference": "2.7.a",
+        "title": "Use testing results to improve information security",
+        "description": "Leverage findings from security testing to enhance the organization's information and cyber security posture.",
+        "full_text": "The results of the testing program shall be used by the FI(s) to support the improvement in their Information/cyber security.",
+        "domain": "Security",
+        "category": "Testing",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "2.7.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.7.b.i": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.7.b.i",
+        "original_reference": "2.7.b.i",
+        "title": "Perform vulnerability assessments",
+        "description": "Regularly assess systems and processes to identify security vulnerabilities and risks.",
+        "full_text": "FI(s) shall perform vulnerability assessments to identify and assess security vulnerabilities in their systems and processes.",
+        "domain": "Security",
+        "category": "Vulnerability Assessment",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.7.b.i",
+        "parent_section": "2.7.b",
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.7.b.ii": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.7.b.ii",
+        "original_reference": "2.7.b.ii",
+        "title": "Conduct scenario-based testing for response and recovery plans",
+        "description": "Test response, resumption, and recovery plans using realistic scenarios to ensure effectiveness during incidents.",
+        "full_text": "FI(s)\u0019 response, resumption and recovery plans shall be subject to periodic review and testing.",
+        "domain": "BCP",
+        "category": "Scenario Testing",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.7.b.ii",
+        "parent_section": "2.7.b",
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.7.b.iii": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.7.b.iii",
+        "original_reference": "2.7.b.iii",
+        "title": "Carry out periodic penetration tests",
+        "description": "Perform penetration tests regularly to identify vulnerabilities in systems, networks, and processes.",
+        "full_text": "FI(s) shall carry out periodic penetration tests to identify vulnerabilities that may affect their systems, networks, people or processes.",
+        "domain": "Security",
+        "category": "Penetration Testing",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "2.7.b.iii",
+        "parent_section": "2.7.b",
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "2.7.b.iv": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "2.7.b.iv",
+        "original_reference": "2.7.b.iv",
+        "title": "Ensure independent QA function for in-house developments",
+        "description": "Establish an independent QA function to review in-house developments for vulnerabilities and risks.",
+        "full_text": "FI(s) shall ensure that a proper and independent QA function exists and operates to testify in-house developments for any vulnerability that may pose a risk.",
+        "domain": "Security",
+        "category": "Quality Assurance",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "2.7.b.iv",
+        "parent_section": "2.7.b",
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2": {
+      "issues": {
+        "title_mismatch": {
+          "json": "Assess and mitigate operational risks in software development/acquisition",
+          "pdf": "System Development and Acquisition Framework"
+        },
+        "description_mismatch": {
+          "json": "Identify and address operational risks in software development or acquisition using SDLC or equivale",
+          "pdf": "The FI(s) shall assess and mitigate operational risks associated with the development or acquisition"
+        },
+        "full_text_mismatch": {
+          "json": "The FI(s) shall assess and mitigate operational risks associated with the development or acquisition",
+          "pdf": "The FI(s) shall assess and mitigate operational risks associated with the development or acquisition"
+        }
+      },
+      "json": {
+        "control_id": "4.2",
+        "original_reference": "4.2",
+        "title": "Assess and mitigate operational risks in software development/acquisition",
+        "description": "Identify and address operational risks in software development or acquisition using SDLC or equivalent methodologies.",
+        "full_text": "The FI(s) shall assess and mitigate operational risks associated with the development or acquisition of software by using a Secure System Development Life Cycle (SDLC) or similar methodology appropriate for their specific technology environment.",
+        "domain": "Risk",
+        "category": "Operational Risk",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      },
+      "pdf": {
+        "title": "System Development and Acquisition Framework",
+        "full_text": "The FI(s) shall assess and mitigate operational risks associated with the development or acquisition of software by using a Secure System Development Life Cycle (SDLC) or similar methodology appropriate for their specific technology environment. The extent or use of the 24 Enterprise Technology Governance & Risk Management Framework for Financial Institutions SDLC shall depend on the size and complexity of the institution and the type of development activities performed. The system development and acquisition framework shall at least cover the following aspects:-",
+        "description": "The FI(s) shall assess and mitigate operational risks associated with the development or acquisition of software by using a Secure System Development Life Cycle (SDLC) or similar methodology appropria"
+      }
+    },
+    "4.2.1.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.1.a",
+        "original_reference": "4.2.1.a",
+        "title": "Establish project management standards",
+        "description": "Ensure that formal project management standards are established to guide project planning, execution, and oversight, including risk management and approval processes.",
+        "full_text": "FI(s) shall ensure that project management standards are in place to address issues such as need assessment, risk management procedures and project approval authorities.",
+        "domain": "Governance",
+        "category": "Project Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.1.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2.1.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.1.b",
+        "original_reference": "4.2.1.b",
+        "title": "Include functional, security, and control features in system standards",
+        "description": "Ensure system standards define functional capabilities, security measures, and automated controls for applications.",
+        "full_text": "System control standards shall include an application's functional, security, and automated control features.",
+        "domain": "Security",
+        "category": "System Standards",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.1.b",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2.1.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.1.c",
+        "original_reference": "4.2.1.c",
+        "title": "Define quality assurance standards",
+        "description": "Establish quality assurance standards to validate project assumptions, ensure compliance with standards, and test product performance.",
+        "full_text": "Quality assurance standards shall address issues such as validation of project assumptions, adherence to project standards and testing of a product's performance.",
+        "domain": "Governance",
+        "category": "Quality Assurance",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.1.c",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2.1.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.1.d",
+        "original_reference": "4.2.1.d",
+        "title": "Conduct security and vulnerability assessments of software modules",
+        "description": "Perform regular security and vulnerability assessments to identify and mitigate risks in software modules.",
+        "full_text": "Security and vulnerability assessment of software modules shall be conducted.",
+        "domain": "Security",
+        "category": "Vulnerability Assessment",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.1.d",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2.1.e": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.1.e",
+        "original_reference": "4.2.1.e",
+        "title": "Establish escrow arrangements for vendor-developed core applications",
+        "description": "Ensure escrow agreements are in place for vendor-developed applications where source code is not provided.",
+        "full_text": "An escrow arrangement shall exist in cases where core applications are developed by vendors but the source codes were not released to the FI(s).",
+        "domain": "Vendor",
+        "category": "Escrow Arrangements",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "4.2.1.e",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.a.i": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.a.i",
+        "original_reference": "4.2.2.a.i",
+        "title": "Formulate RFP and BRD for major IT acquisitions",
+        "description": "Develop and maintain policies for creating RFPs and BRDs to guide major IT acquisitions.",
+        "full_text": "FI(s) shall develop/update technology procurement policy covering formulation of RFP and Business Requirement Document (BRD).",
+        "domain": "Governance",
+        "category": "Procurement Policy",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.2.a.i",
+        "parent_section": "4.2.2.a",
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.a.ii": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.a.ii",
+        "original_reference": "4.2.2.a.ii",
+        "title": "Define roles and responsibilities for procurement stakeholders",
+        "description": "Clearly define roles and responsibilities for all stakeholders involved in the procurement process.",
+        "full_text": "FI(s) shall develop/update technology procurement policy covering roles and responsibilities of relevant stakeholders.",
+        "domain": "Governance",
+        "category": "Procurement Policy",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "4.2.2.a.ii",
+        "parent_section": "4.2.2.a",
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.a.iii": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.a.iii",
+        "original_reference": "4.2.2.a.iii",
+        "title": "Establish approval matrix for RFP and BRD",
+        "description": "Define an approval matrix for RFPs and BRDs to ensure proper authorization and accountability.",
+        "full_text": "FI(s) shall develop/update technology procurement policy covering approval matrix of RFP and BRD.",
+        "domain": "Governance",
+        "category": "Procurement Policy",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "4.2.2.a.iii",
+        "parent_section": "4.2.2.a",
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.b",
+        "original_reference": "4.2.2.b",
+        "title": "Include vendor and asset selection criteria in procurement policy",
+        "description": "Ensure procurement policy includes detailed criteria for selecting vendors and technology assets, along with acquisition and monitoring processes.",
+        "full_text": "The technology procurement policy shall include types of technology assets for both hardware & software, types of vendors for hardware & software, selection criteria for vendors, acquisition process, payment procedures & monitoring, delivery assurance & verification process, technical vetting requirement and need assessment.",
+        "domain": "Vendor",
+        "category": "Procurement Policy",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.2.b",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.c",
+        "original_reference": "4.2.2.c",
+        "title": "Identify and record functional, operational, and regulatory requirements in RFP/ITT",
+        "description": "Ensure RFPs and ITTs include all functional, operational, and regulatory requirements to guide vendor responses.",
+        "full_text": "FI(s) shall ensure that functional, operational and regulatory requirements are identified and recorded in Request-For-Proposals (RFP) or Invitations-To-Tender (ITT) in the bid solicitation process.",
+        "domain": "Compliance",
+        "category": "Procurement Requirements",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.2.c",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.d",
+        "original_reference": "4.2.2.d",
+        "title": "Review RFP and BRD for alignment with IT strategy and business objectives",
+        "description": "Ensure that the RFP and BRD documents for new technology acquisitions align with the organization's IT strategy, business goals, and emerging technology trends.",
+        "full_text": "The RFP and BRD for any new technology acquisition shall be reviewed to ascertain comprehensiveness of the documents, their alignment with IT strategy & business objectives and technical alignments with emerging trends and technologies.",
+        "domain": "Governance",
+        "category": "Procurement Review",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "4.2.2.d",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear directive to review RFP and BRD for alignment.",
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.e": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.e",
+        "original_reference": "4.2.2.e",
+        "title": "Obtain expert consultancy for procurement process if necessary",
+        "description": "Engage expert consultants for procurement processes when needed, ensuring reasons and justifications are documented.",
+        "full_text": "FI(s) may obtain expert consultancy/advisory services for the formulation of RFP/BRD/Procurement process, where it deems necessary, provided they record reasons and rationale for the same.",
+        "domain": "Vendor",
+        "category": "Procurement Advisory",
+        "is_mandatory": false,
+        "priority": "low",
+        "section_number": "4.2.2.e",
+        "parent_section": null,
+        "ai_confidence": 0.8,
+        "ai_notes": "Optional control; evidence requirements focus on documentation of rationale.",
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.f": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.f",
+        "original_reference": "4.2.2.f",
+        "title": "Conduct system selection analysis to meet user and business requirements",
+        "description": "Perform a detailed analysis to ensure selected systems meet user needs, business goals, and compliance requirements.",
+        "full_text": "FI(s) shall conduct a system (hardware, software and services) selection analysis to ensure that user and business requirements are met, expected service levels are properly achieved as per contract agreements and all applicable legal/regulatory requirements are complied with.",
+        "domain": "Compliance",
+        "category": "System Selection",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.2.f",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Mandatory control with clear requirements for analysis and compliance.",
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.g": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.g",
+        "original_reference": "4.2.2.g",
+        "title": "Ensure transparent and competitive procurement processes",
+        "description": "Ensure that major procurements are conducted through a transparent and competitive process to promote fairness and accountability.",
+        "full_text": "FI(s) shall undergo a transparent and competitive process of acquisitions in major procurements.",
+        "domain": "Governance",
+        "category": "Procurement Process",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.2.g",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear directive for transparent procurement processes.",
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.h": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.h",
+        "original_reference": "4.2.2.h",
+        "title": "Manage procurement process by independent unit and IT Steering Committee",
+        "description": "Ensure that an independent unit and the IT Steering Committee oversee procurement processes to maintain governance and accountability.",
+        "full_text": "The procurement process shall be managed by an independent unit and governed by IT Steering Committee for different scope/level/size of procurements.",
+        "domain": "Governance",
+        "category": "Procurement Governance",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "4.2.2.h",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Mandatory control with clear governance requirements.",
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.i": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.i",
+        "original_reference": "4.2.2.i",
+        "title": "Form a forum to monitor technology procurement processes",
+        "description": "Establish a forum or structure to oversee and monitor technology procurement processes.",
+        "full_text": "FI(s) shall form an appropriate forum/structure to monitor the process of technology-related procurements.",
+        "domain": "Governance",
+        "category": "Procurement Monitoring",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "4.2.2.i",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Mandatory control with clear monitoring requirements.",
+        "evidence_requirements": []
+      }
+    },
+    "4.2.2.j": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.2.j",
+        "original_reference": "4.2.2.j",
+        "title": "Ensure vendor delivery aligns with contract terms",
+        "description": "Verify that vendors deliver products and services in accordance with the agreed contract terms and conditions.",
+        "full_text": "FI(s) shall also ensure that vendors deliver hardware/software as per terms and conditions set in the contract/agreement.",
+        "domain": "Vendor",
+        "category": "Vendor Delivery",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.2.j",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Mandatory control with clear focus on vendor compliance.",
+        "evidence_requirements": []
+      }
+    },
+    "4.2.3.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "4.2.3.a",
+        "original_reference": "4.2.3.a",
+        "title": "Promote only tested and approved systems to production",
+        "description": "Ensure that only systems that have been thoroughly tested and approved are deployed to the production environment.",
+        "full_text": "FI(s) shall ensure that only properly tested and approved systems are promoted to the production environment.",
+        "domain": "Operations",
+        "category": "System Testing",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "4.2.3.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Mandatory control with clear focus on system testing and approval.",
+        "evidence_requirements": []
+      }
+    },
+    "5.3.1.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.1.a",
+        "original_reference": "5.3.1.a",
+        "title": "Identify and address contingency scenarios",
+        "description": "Identify potential contingency scenarios and implement measures to address them, including system faults, hardware failures, and datacenter outages.",
+        "full_text": "Identify and address various types of contingency scenarios, which may be caused by system faults, hardware malfunction, operating errors or security incidents and total incapacitation of the primary Datacenter.",
+        "domain": "BCP",
+        "category": "Disaster Recovery",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "5.3.1.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Mandatory control with clear focus on contingency planning.",
+        "evidence_requirements": []
+      }
+    },
+    "5.3.1.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.1.b",
+        "original_reference": "5.3.1.b",
+        "title": "Evaluate and update recovery plan annually",
+        "description": "Review and update the recovery plan and incident response procedures annually or when significant changes occur.",
+        "full_text": "Evaluate the recovery plan and incident response procedures at least annually and update them as and when changes to business operations, systems and networks occur.",
+        "domain": "BCP",
+        "category": "Disaster Recovery",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "5.3.1.b",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Mandatory control with clear focus on annual review and updates.",
+        "evidence_requirements": []
+      }
+    },
+    "5.3.1.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.1.c",
+        "original_reference": "5.3.1.c",
+        "title": "Implement replication and rapid recovery capabilities",
+        "description": "Ensure systems and applications have mechanisms for replication and quick recovery to minimize downtime during disruptions.",
+        "full_text": "Implement replication, rapid backup and recovery capabilities at the individual system or application cluster level.",
+        "domain": "BCP",
+        "category": "Disaster Recovery",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "5.3.1.c",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "5.3.1.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.1.d",
+        "original_reference": "5.3.1.d",
+        "title": "Consider interdependencies in recovery planning",
+        "description": "Account for how critical systems depend on each other when creating recovery plans and testing contingencies.",
+        "full_text": "Consider inter-dependencies between critical systems in drawing up its recovery plan and conducting contingency tests.",
+        "domain": "BCP",
+        "category": "Disaster Recovery",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "5.3.1.d",
+        "parent_section": null,
+        "ai_confidence": 0.9,
+        "ai_notes": "Interdependencies are implied but not explicitly detailed in the control.",
+        "evidence_requirements": []
+      }
+    },
+    "5.3.1.g": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.1.g",
+        "original_reference": "5.3.1.g",
+        "title": "Select DR specifications based on BIA",
+        "description": "Use the results of the Business Impact Analysis (BIA) to determine disaster recovery specifications that address threats and meet recovery goals.",
+        "full_text": "The selection of DR specifications shall be made according to the BIA to address the identified threats and to meet the recovery objectives.",
+        "domain": "BCP",
+        "category": "Disaster Recovery",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "5.3.1.g",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "5.3.2.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.2.a",
+        "original_reference": "5.3.2.a",
+        "title": "Adopt approved and rehearsed recovery measures",
+        "description": "Ensure recovery measures are formally approved, tested, and rehearsed to confirm their effectiveness.",
+        "full_text": "Adopt approved, tested and rehearsed recovery measures.",
+        "domain": "BCP",
+        "category": "Disaster Recovery Testing",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "5.3.2.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "5.3.2.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.2.b",
+        "original_reference": "5.3.2.b",
+        "title": "Test recovery requirements annually",
+        "description": "Conduct annual tests to ensure recovery requirements are effective and staff can execute recovery procedures.",
+        "full_text": "Test and validate, at least annually, the effectiveness of recovery requirements and the ability of staff to execute the necessary emergency and recovery procedures.",
+        "domain": "BCP",
+        "category": "Disaster Recovery Testing",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "5.3.2.b",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "5.3.2.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.2.c",
+        "original_reference": "5.3.2.c",
+        "title": "Cover various scenarios in DR tests",
+        "description": "Include diverse scenarios in disaster recovery tests, such as full site shutdowns and individual component failures.",
+        "full_text": "Cover various scenarios in disaster recovery tests including total shutdown/complete switchover of the primary site as well as component failure at the individual system or application cluster level.",
+        "domain": "BCP",
+        "category": "Disaster Recovery Testing",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "5.3.2.c",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "5.3.2.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.2.d",
+        "original_reference": "5.3.2.d",
+        "title": "Test recovery dependencies between systems",
+        "description": "Verify that recovery dependencies between systems are tested to ensure seamless recovery.",
+        "full_text": "Test the recovery dependencies between systems.",
+        "domain": "BCP",
+        "category": "Disaster Recovery Testing",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "5.3.2.d",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "5.3.2.e": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.2.e",
+        "original_reference": "5.3.2.e",
+        "title": "Conduct BCP/DR drills with third parties annually",
+        "description": "Conduct annual BCP/DR drills involving third parties to ensure coordinated recovery efforts.",
+        "full_text": "BCP/DR drills planned with third parties, if any, shall be performed annually.",
+        "domain": "BCP",
+        "category": "Disaster Recovery Testing",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "5.3.2.e",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "5.3.2.f": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.2.f",
+        "original_reference": "5.3.2.f",
+        "title": "Include all aspects in BCP testing",
+        "description": "Ensure BCP tests cover all organizational aspects, including people, processes, and technology, and that staff are familiar with the plans.",
+        "full_text": "Testing of BCP shall include all aspects and constituents of a bank i.e. people, processes and resources (including technology). BCP tests shall ensure that all members of the recovery team and relevant staff are aware of the plans.",
+        "domain": "BCP",
+        "category": "Disaster Recovery Testing",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "5.3.2.f",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "5.3.2.g": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.2.g",
+        "original_reference": "5.3.2.g",
+        "title": "Involve business users in DR test design",
+        "description": "Engage business users in designing and executing test cases to ensure recovered systems meet functional requirements.",
+        "full_text": "Involve business users in the design and execution of comprehensive test cases to verify that recovered systems function properly.",
+        "domain": "BCP",
+        "category": "Disaster Recovery Testing",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "5.3.2.g",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "5.3.2.h": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.2.h",
+        "original_reference": "5.3.2.h",
+        "title": "Participate in service provider DR tests",
+        "description": "Ensure active participation in disaster recovery tests conducted by service providers, including offshore systems, to validate recovery capabilities.",
+        "full_text": "Participate in disaster recovery tests that are conducted by its service provider(s), including those systems, which are located offshore.",
+        "domain": "BCP",
+        "category": "Disaster Recovery Testing",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "5.3.2.h",
+        "parent_section": null,
+        "ai_confidence": 0.9,
+        "ai_notes": "Participation is explicitly required, but evidence specifics are inferred.",
+        "evidence_requirements": []
+      }
+    },
+    "5.3.2.i": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.2.i",
+        "original_reference": "5.3.2.i",
+        "title": "Involve business heads in DR-BCP test sign-off",
+        "description": "Ensure business group/unit heads review and approve the results of DR-BCP drills to confirm alignment with business needs.",
+        "full_text": "Involve the respective business group heads/unit heads while signing-off test results of DR-BCP drills.",
+        "domain": "BCP",
+        "category": "Disaster Recovery Testing",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "5.3.2.i",
+        "parent_section": null,
+        "ai_confidence": 0.95,
+        "ai_notes": "Sign-off requirement is explicit, but evidence specifics are inferred.",
+        "evidence_requirements": []
+      }
+    },
+    "5.3.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.d",
+        "original_reference": "5.3.d",
+        "title": "Define recovery priorities and objectives",
+        "description": "Establish clear recovery priorities and objectives, including RTO and RPO, to guide disaster recovery efforts.",
+        "full_text": "Define system recovery, business resumption priorities and establish specific recovery objectives including Recovery Time Objectives (RTO) and Recovery Point Objective (RPO) for IT systems and applications.",
+        "domain": "BCP",
+        "category": "Disaster Recovery",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "5.3.d",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear SHALL requirement for defining recovery objectives.",
+        "evidence_requirements": []
+      }
+    },
+    "5.3.f": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "5.3.f",
+        "original_reference": "5.3.f",
+        "title": "Establish geographically separated recovery site",
+        "description": "Set up a recovery site in a different geographic location to ensure business continuity during primary site disruptions.",
+        "full_text": "Establish a recovery site that is geographically separated from the primary site to enable the restoration of critical systems and resumption of business operations in case of disruption at the primary site.",
+        "domain": "BCP",
+        "category": "Disaster Recovery",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "5.3.f",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Requirement for a geographically separated recovery site is explicit.",
+        "evidence_requirements": []
+      }
+    },
+    "6.1.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.1.a",
+        "original_reference": "6.1.a",
+        "title": "Develop annual IT audit plan",
+        "description": "Create a comprehensive annual IT audit plan covering goals, schedules, resources, and reporting requirements.",
+        "full_text": "An annual audit plan detailing IT audit's budgeting and planning processes including audit goals, schedules, staffing needs and reporting requirements.",
+        "domain": "Audit",
+        "category": "IT Audit Program",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.1.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Annual IT audit plan is explicitly required.",
+        "evidence_requirements": []
+      }
+    },
+    "6.1.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.1.d",
+        "original_reference": "6.1.d",
+        "title": "Define audit report format",
+        "description": "Define and document the structure and content of audit reports to ensure they meet organizational and regulatory requirements.",
+        "full_text": "Audit report format.",
+        "domain": "Audit",
+        "category": "IT Audit Program",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "6.1.d",
+        "parent_section": null,
+        "ai_confidence": 0.9,
+        "ai_notes": "This control overlaps with the previous one but focuses on the definition process.",
+        "evidence_requirements": []
+      }
+    },
+    "6.1.e": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.1.e",
+        "original_reference": "6.1.e",
+        "title": "Maintain IT audit findings documentation",
+        "description": "Ensure IT audit findings are documented, maintained, and retained in accordance with the defined policy.",
+        "full_text": "Document maintenance and retention policy for IT findings.",
+        "domain": "Audit",
+        "category": "IT Audit Program",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "6.1.e",
+        "parent_section": null,
+        "ai_confidence": 0.9,
+        "ai_notes": "This control focuses on the operational aspect of maintaining documentation.",
+        "evidence_requirements": []
+      }
+    },
+    "6.1.f": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.1.f",
+        "original_reference": "6.1.f",
+        "title": "Follow-up processes for significant IT audit findings",
+        "description": "Ensure compliance with follow-up processes for addressing significant IT audit findings.",
+        "full_text": "Follow-up processes for significant IT audit findings.",
+        "domain": "Compliance",
+        "category": "Audit Follow-Up",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.1.f",
+        "parent_section": null,
+        "ai_confidence": 0.95,
+        "ai_notes": "Similar to the previous control but with a compliance focus.",
+        "evidence_requirements": []
+      }
+    },
+    "6.2.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.2.a",
+        "original_reference": "6.2.a",
+        "title": "Identify weaknesses and review management's plans",
+        "description": "Identify control weaknesses, recommend improvements, and evaluate management's remediation plans.",
+        "full_text": "Identification of weaknesses, providing meaningful recommendations and reviewing management's plans for addressing those weaknesses.",
+        "domain": "Risk",
+        "category": "Audit Scope",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.2.a",
+        "parent_section": null,
+        "ai_confidence": 0.9,
+        "ai_notes": "Focuses on risk identification and management review.",
+        "evidence_requirements": []
+      }
+    },
+    "6.2.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.2.b",
+        "original_reference": "6.2.b",
+        "title": "Review adequacy of general controls",
+        "description": "Assess the adequacy of general IT controls across various operational and strategic areas.",
+        "full_text": "Reviewing the adequacy of general controls in place covering areas such as IT strategic & business planning, IT operations, DR/BCP, IT outsourcing, information security, development and acquisitions, ADCs, IT Procurements and Project Management.",
+        "domain": "Governance",
+        "category": "General Controls",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.2.b",
+        "parent_section": null,
+        "ai_confidence": 0.95,
+        "ai_notes": "Covers a broad range of IT governance areas.",
+        "evidence_requirements": []
+      }
+    },
+    "6.2.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.2.c",
+        "original_reference": "6.2.c",
+        "title": "Comprehensive audit of CSP arrangements",
+        "description": "Conduct regular audits of financial institutions' arrangements with cloud service providers to ensure compliance and risk management.",
+        "full_text": "A regular, comprehensive audit of FI(s) arrangements with the CSPs.",
+        "domain": "Vendor",
+        "category": "Cloud Service Providers",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.2.c",
+        "parent_section": null,
+        "ai_confidence": 0.95,
+        "ai_notes": "Focuses on vendor risk management and compliance.",
+        "evidence_requirements": []
+      }
+    },
+    "6.2.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.2.d",
+        "original_reference": "6.2.d",
+        "title": "Application System Review (ASR)",
+        "description": "Perform a detailed review of application systems to ensure controls are in place to protect data confidentiality, integrity, and accuracy.",
+        "full_text": "Application System Review (ASR) to identify, document, test and evaluate the application controls to ensure confidentiality, integrity and accuracy of the systems and the related data/information.",
+        "domain": "Security",
+        "category": "Application Controls",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.2.d",
+        "parent_section": null,
+        "ai_confidence": 0.95,
+        "ai_notes": "Critical for ensuring application security and data integrity.",
+        "evidence_requirements": []
+      }
+    },
+    "6.3.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.3.a",
+        "original_reference": "6.3.a",
+        "title": "Report IT audit findings and conclusions",
+        "description": "Ensure that IT audit findings, conclusions, and recommendations are documented and shared, including any limitations in scope.",
+        "full_text": "Report the findings, conclusions, recommendations and qualifications or limitations in scope with respect to the IT audit.",
+        "domain": "Compliance",
+        "category": "Reporting",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.3.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Directive language indicates mandatory reporting of findings.",
+        "evidence_requirements": []
+      }
+    },
+    "6.3.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.3.b",
+        "original_reference": "6.3.b",
+        "title": "Discuss draft report with management",
+        "description": "Engage management in reviewing the draft audit report to ensure accuracy and alignment before finalization.",
+        "full_text": "Discuss the draft report contents with management in the subject area prior to finalization and release of the final report.",
+        "domain": "Compliance",
+        "category": "Reporting",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "6.3.b",
+        "parent_section": null,
+        "ai_confidence": 0.9,
+        "ai_notes": "Implicit requirement to engage management in discussions before finalization.",
+        "evidence_requirements": []
+      }
+    },
+    "6.3.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.3.c",
+        "original_reference": "6.3.c",
+        "title": "Ensure report is signed, dated, and distributed",
+        "description": "Finalize the audit report by signing, dating, and distributing it in accordance with the audit program's requirements.",
+        "full_text": "Ensure that report is signed, dated and distributed according to the format as defined in the audit program.",
+        "domain": "Compliance",
+        "category": "Reporting",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "6.3.c",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": "Clear directive to ensure proper finalization and distribution of reports.",
+        "evidence_requirements": []
+      }
+    },
+    "6.3.d.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.3.d.a",
+        "original_reference": "6.3.d.a",
+        "title": "Submit consolidated report on information/cyber security",
+        "description": "Provide the Audit Committee with periodic updates on the organization's information and cyber security posture.",
+        "full_text": "Periodically submit a consolidated report to the Audit Committee on information/cyber security.",
+        "domain": "Security",
+        "category": "Reporting",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.3.d.a",
+        "parent_section": "6.3.d",
+        "ai_confidence": 1.0,
+        "ai_notes": "Periodic submission is explicitly required.",
+        "evidence_requirements": []
+      }
+    },
+    "6.3.d.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.3.d.b",
+        "original_reference": "6.3.d.b",
+        "title": "Submit consolidated report on IT service delivery and operations",
+        "description": "Provide the Audit Committee with updates on IT service delivery and operational performance.",
+        "full_text": "Periodically submit a consolidated report to the Audit Committee on IT service delivery and operations.",
+        "domain": "Operations",
+        "category": "Reporting",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.3.d.b",
+        "parent_section": "6.3.d",
+        "ai_confidence": 1.0,
+        "ai_notes": "Explicit requirement for periodic reporting.",
+        "evidence_requirements": []
+      }
+    },
+    "6.3.d.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.3.d.c",
+        "original_reference": "6.3.d.c",
+        "title": "Submit consolidated report on IT outsourcing",
+        "description": "Provide the Audit Committee with updates on IT outsourcing arrangements, including cloud services.",
+        "full_text": "Periodically submit a consolidated report to the Audit Committee on IT outsourcing including cloud services arrangements.",
+        "domain": "Vendor",
+        "category": "Reporting",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.3.d.c",
+        "parent_section": "6.3.d",
+        "ai_confidence": 1.0,
+        "ai_notes": "Explicit requirement for periodic reporting.",
+        "evidence_requirements": []
+      }
+    },
+    "6.3.d.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.3.d.d",
+        "original_reference": "6.3.d.d",
+        "title": "Submit consolidated report on IT project management",
+        "description": "Provide the Audit Committee with updates on IT project management, acquisition, and development activities.",
+        "full_text": "Periodically submit a consolidated report to the Audit Committee on IT project management, acquisition & development.",
+        "domain": "Operations",
+        "category": "Reporting",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.3.d.d",
+        "parent_section": "6.3.d",
+        "ai_confidence": 1.0,
+        "ai_notes": "Explicit requirement for periodic reporting.",
+        "evidence_requirements": []
+      }
+    },
+    "6.3.d.e": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.3.d.e",
+        "original_reference": "6.3.d.e",
+        "title": "Submit consolidated report on IT procurement",
+        "description": "Provide the Audit Committee with updates on IT procurement activities and performance.",
+        "full_text": "Periodically submit a consolidated report to the Audit Committee on IT procurement.",
+        "domain": "Operations",
+        "category": "Reporting",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "6.3.d.e",
+        "parent_section": "6.3.d",
+        "ai_confidence": 1.0,
+        "ai_notes": "Explicit requirement for periodic reporting.",
+        "evidence_requirements": []
+      }
+    },
+    "6.3.d.f": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.3.d.f",
+        "original_reference": "6.3.d.f",
+        "title": "Submit consolidated report on performance management",
+        "description": "Provide the Audit Committee with updates on IT performance management metrics and outcomes.",
+        "full_text": "Periodically submit a consolidated report to the Audit Committee on performance management.",
+        "domain": "Operations",
+        "category": "Reporting",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "6.3.d.f",
+        "parent_section": "6.3.d",
+        "ai_confidence": 1.0,
+        "ai_notes": "Explicit requirement for periodic reporting.",
+        "evidence_requirements": []
+      }
+    },
+    "6.3.d.g": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.3.d.g",
+        "original_reference": "6.3.d.g",
+        "title": "Submit consolidated report on BCP and DRP",
+        "description": "Provide the Audit Committee with updates on the organization's business continuity and disaster recovery plans.",
+        "full_text": "Periodically submit a consolidated report to the Audit Committee on BCP & DRP.",
+        "domain": "BCP",
+        "category": "Reporting",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.3.d.g",
+        "parent_section": "6.3.d",
+        "ai_confidence": 1.0,
+        "ai_notes": "Explicit requirement for periodic reporting.",
+        "evidence_requirements": []
+      }
+    },
+    "6.4.a": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.4.a",
+        "original_reference": "6.4.a",
+        "title": "Ensure senior management approves audit recommendation procedures",
+        "description": "Senior management must formally approve procedures to ensure audit recommendations are implemented promptly.",
+        "full_text": "The audit function shall ensure that senior management approves a procedure to ensure timely implementation of audit recommendations.",
+        "domain": "Governance",
+        "category": "Audit Follow-Up",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.4.a",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "6.4.b": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.4.b",
+        "original_reference": "6.4.b",
+        "title": "Monitor implementation of corrective actions",
+        "description": "The audit team must track and verify that corrective actions recommended by audits are being implemented effectively.",
+        "full_text": "The audit function shall monitor the implementation of management's corrective actions.",
+        "domain": "Governance",
+        "category": "Audit Follow-Up",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.4.b",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "6.4.c": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "6.4.c",
+        "original_reference": "6.4.c",
+        "title": "Communicate status of recommendations to BoD or Audit Committee",
+        "description": "The audit team must provide quarterly updates to the Board of Directors or Audit Committee on the status of audit recommendations.",
+        "full_text": "The audit function shall communicate status of the recommendations to the BoD or Audit Committee at least on a quarterly basis.",
+        "domain": "Governance",
+        "category": "Audit Follow-Up",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "6.4.c",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "9.d": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "9.d",
+        "original_reference": "9.d",
+        "title": "Integrate technology risks with enterprise risk management",
+        "description": "Technology risks must be incorporated into the broader enterprise risk management framework to ensure comprehensive risk oversight.",
+        "full_text": "Ensure that technology risks are integrated with the enterprise risk management function to achieve security, reliability, resiliency, interoperability and recoverability of data/information and information assets.",
+        "domain": "Risk",
+        "category": "Risk Integration",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "9.d",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "9.e": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "9.e",
+        "original_reference": "9.e",
+        "title": "Approve and periodically review technology-related policies",
+        "description": "Technology-related policies must be formally approved and reviewed at least every three years or when significant changes occur.",
+        "full_text": "Approve all technology-related policies and review the same periodically in light of major technological/regulatory developments at least after every three (03) years.",
+        "domain": "Governance",
+        "category": "Policy Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "9.e",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "9.f": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "9.f",
+        "original_reference": "9.f",
+        "title": "Maintain independent and effective technology audit function",
+        "description": "The organization must have an independent technology audit function that aligns with the complexity of its technology risks.",
+        "full_text": "Ensure maintenance of an independent and effective technology audit function commensurate with the complexity of FI(s) technology risk profile.",
+        "domain": "Audit",
+        "category": "Technology Audit",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "9.f",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "9.g": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "9.g",
+        "original_reference": "9.g",
+        "title": "Fulfill resource gaps identified by management",
+        "description": "Management must address resource gaps in personnel, processes, and technology promptly to ensure operational effectiveness.",
+        "full_text": "Ensure that resource gaps (people, process & technology) identified by the management are adequately and timely fulfilled.",
+        "domain": "Operations",
+        "category": "Resource Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "9.g",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "9.h": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "9.h",
+        "original_reference": "9.h",
+        "title": "Ensure sufficient and up-to-date skills for technology governance",
+        "description": "The organization must ensure that personnel have the necessary and current skills for technology governance and related functions.",
+        "full_text": "Ensure that the skills required for technology governance, service delivery, information security and risk management are sufficient and up-to-date.",
+        "domain": "HR",
+        "category": "Skill Management",
+        "is_mandatory": true,
+        "priority": "high",
+        "section_number": "9.h",
+        "parent_section": null,
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "9.i": {
+      "issue": "CONTROL_NOT_FOUND_IN_PDF",
+      "json": {
+        "control_id": "9.i",
+        "original_reference": "9.i",
+        "title": "Define criteria for major technology projects",
+        "description": "The board must establish clear criteria for identifying and categorizing major technology projects.",
+        "full_text": "The board shall also define the criteria for major projects.",
+        "domain": "Governance",
+        "category": "Project Oversight",
+        "is_mandatory": true,
+        "priority": "medium",
+        "section_number": "9.i",
+        "parent_section": "9.i",
+        "ai_confidence": 1.0,
+        "ai_notes": null,
+        "evidence_requirements": []
+      }
+    },
+    "1.1": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Technology Governance Framework",
+        "full_text": "a) The Board of Directors of the FI(s) are responsible to establish a comprehensive enterprise technology governance framework which defines the leadership, organizational structures and processes to ensure that the FI(s)’ technology sustains and extends the enterprise’s strategies and objectives. b) The primary objective of the technology governance framework is to evaluate the current and future use of technology, direct the preparation and implementation of plans and policies to ensure that use of technology meets business objectives and monitor compliance to policies and performance against the plans. c) The basic principles of strategic alignment of IT and the business, value delivery to businesses, risk management, resource management (including project management) and performance management shall form the basis of this technology governance framework. 8 Enterprise Technology Governance & Risk Management Framework for Financial Institutions d) Technology governance framework shal",
+        "description": "a) The Board of Directors of the FI(s) are responsible to establish a comprehensive enterprise technology governance framework which defines the leadership, organizational structures and processes to "
+      }
+    },
+    "1.3": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Digital Strategy",
+        "full_text": "The board shall also approve a “Digital Strategy” covering, at least the following objectives:- a) Development of customer focused digital products and services. b) End to end digitization of processes for delivery of digital products and services. c) Interoperability of delivery channels.",
+        "description": "The board shall also approve a “Digital Strategy” covering, at least the following objectives:- a) Development of customer focused digital products and services. b) End to end digitization of processe"
+      }
+    },
+    "1.5": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Organizational Structure",
+        "full_text": "1.5.1 Board IT Committee a) A Board IT Committee shall be constituted in all FI(s) except foreign banks, DFIs and Microfinance Banks. However, Microfinance Banks doing Branchless Banking (BB) operations shall also setup a Board IT Committee. b) The Board IT Committee shall have a minimum of three (03) directors as its members, one of whom shall be an independent director and at least one member shall have relevant qualification or experience of IT. c) The committee shall be mainly responsible for advising and reporting to the board on the status of technology activities and digital initiatives in the FI(s). These reports shall enable the board to make decisions without having to be involved in routine activities. d) The committee shall review IT and Digital strategies and relevant policies before submission to the board. e) The committee shall ensure that risk management strategies are designed and implemented to achieve resilience, such as the ability to effectively respond to wide- s",
+        "description": "1.5.1 Board IT Committee a) A Board IT Committee shall be constituted in all FI(s) except foreign banks, DFIs and Microfinance Banks. However, Microfinance Banks doing Branchless Banking (BB) operatio"
+      }
+    },
+    "1.7": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Management Information System (MIS)",
+        "full_text": "a) The BoD shall put in place an appropriate MIS to oversee the implementation of IT strategy and business plan, exception from board-approved IT policies and progress on major IT projects. The format/ contents of this MIS shall be the part of policy which shall be approved by the BoD. b) The management shall formulate an appropriate MIS to monitor the implementation of “IT governance and risk management framework”. This MIS shall be the part of procedures to be approved by the management.",
+        "description": "a) The BoD shall put in place an appropriate MIS to oversee the implementation of IT strategy and business plan, exception from board-approved IT policies and progress on major IT projects. The format"
+      }
+    },
+    "2.1": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Information/Cyber Security Management Framework",
+        "full_text": "An information/cyber security management framework shall be developed3 to manage information/cyber security risks in a systematic and consistent manner. The framework, at minimum, shall include:- a) Identification and prioritization of critical information system assets; b) Risk management process including risk identification, risk assessment and risk treatment c) Security controls implementation d) Cyber security action plan to proactively address the likely cyber attacks in order to anticipate, withstand, detect, and respond to cyber attacks in line with international standards and best practices. e) Incident reporting f) Security requirement & testing g) Risk monitoring & reporting h) Threat intelligence & industry collaboration",
+        "description": "An information/cyber security management framework shall be developed3 to manage information/cyber security risks in a systematic and consistent manner. The framework, at minimum, shall include:- a) I"
+      }
+    },
+    "2.3": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Information Security Risk Management",
+        "full_text": "FIs shall institute the following components of risk management for the technology and infrastructure security that commensurate with size, services and complexity of the FIs operations:-",
+        "description": "FIs shall institute the following components of risk management for the technology and infrastructure security that commensurate with size, services and complexity of the FIs operations:-"
+      }
+    },
+    "2.7": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Security Requirements and Testing",
+        "full_text": "a) The FI(s) shall establish a comprehensive testing program to validate the effectiveness of its information security environment on a regular basis. The results of the testing 6 for reporting template, refer to Annexure-I PSD Circular No. 03 of 2015 available at http://www.sbp.org.pk/psd/2015/C3-Annexure-A.pdf 18 Enterprise Technology Governance & Risk Management Framework for Financial Institutions program shall be used by the FI(s) to support the improvement in their Information/cyber security. Where applicable, these tests shall include both internal and external stakeholders such as business line management, incident & crisis response teams and any other relevant departments/functions. Further, the FI(s) shall also ensure that the all production data is properly masked in the test environment involving any external party, however, for internal testing purposes, appropriate data masking may be done based on the criticality of data. b) Keeping in view the complexities of operations",
+        "description": "a) The FI(s) shall establish a comprehensive testing program to validate the effectiveness of its information security environment on a regular basis. The results of the testing 6 for reporting templa"
+      }
+    },
+    "2.9": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Threat Intelligence and Industry Collaboration",
+        "full_text": "The FI(s) shall: a) Gather and interpret information about relevant cyber threats arising out from the FI(s) participants, services and utility providers and other FI(s). In this context, relevant cyber threat intelligence may include information that may trigger cyber attacks on any entity within the FI(s)’ ecosystem. b) Ensure that cyber threat intelligence is shared with relevant staff with responsibility for the mitigation of cyber risks at the strategic, tactical and operational levels through a secure method. c) Use a platform within the industry for the purpose of collecting and exchanging timely information that may facilitate in detection, response, resumption and recovery of FI(s) systems following a cyber attack, breach or incident. d) Identify key lessons learnt from cyber events that have occurred within and outside the organization in order to improve their resilience capabilities and prevention mechanisms. e) Monitor technological developments and keep abreast with new c",
+        "description": "The FI(s) shall: a) Gather and interpret information about relevant cyber threats arising out from the FI(s) participants, services and utility providers and other FI(s). In this context, relevant cyb"
+      }
+    },
+    "3.1": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "IT Service Management Framework",
+        "full_text": "The FI(s) shall put in place a robust IT service management framework for managing and supporting IT systems. The framework shall comprise the Preventive Maintenance Plan, Incident & Problem Management, Patch Management, Capacity Management processes and procedures for building and maintaining data centers.",
+        "description": "The FI(s) shall put in place a robust IT service management framework for managing and supporting IT systems. The framework shall comprise the Preventive Maintenance Plan, Incident & Problem Managemen"
+      }
+    },
+    "3.3": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Incident and Problem Management",
+        "full_text": "The objective of the incident management is to restore the service as quickly as possible to meet Service Level Agreements. The process is primarily aimed at the user level. On the other hands, problem management deals with solving the underlying cause of one or more incidents. In order to have effective incident management, FI(s) shall: a) Continuously develop problem and error controls. 21 Enterprise Technology Governance & Risk Management Framework for Financial Institutions b) Formulate a tiered support structure, where the team understands different levels of tiers. c) Formulate a continual service improvement program that measures efficiency and effectiveness through KPIs aligned to organizational goals and objectives. d) Assign clear and documented roles and responsibilities within IT in terms of desired outcomes. For effective problem management, the FI (s) shall ensure that:- a) The problem management process has well-defined and relevant KPIs. b) IT function signs an internal",
+        "description": "The objective of the incident management is to restore the service as quickly as possible to meet Service Level Agreements. The process is primarily aimed at the user level. On the other hands, proble"
+      }
+    },
+    "3.5": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Capacity Planning",
+        "full_text": "a) The FI(s) shall initiate capacity planning to address internal factors (growth, mergers, acquisitions, new product lines and the implementation of new technologies) and external factors (shift in customer preferences, competitor capability or regulatory or market requirements). b) The FI(s) shall monitor technology resources for capacity planning including platform processing speed, core storage for each platform's central processing unit, data storage, and voice/data communication bandwidth. c) Capacity planning shall be closely integrated with the budgeting and strategic planning processes. It shall also address personnel issues including staff size, appropriate training and staff succession plans. 22 Enterprise Technology Governance & Risk Management Framework for Financial Institutions",
+        "description": "a) The FI(s) shall initiate capacity planning to address internal factors (growth, mergers, acquisitions, new product lines and the implementation of new technologies) and external factors (shift in c"
+      }
+    },
+    "3.7": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "User Support/Help Desk",
+        "full_text": "The FI(s) may create users’ help desk to ensure that they perform their job functions in an efficient and effective manner. The Help Desk may record and track incoming problem reports, being handled by live operators or automated systems. Further, FI(s) may also define Key performance indicators (KPI) for the resolution of different problems / issues. 23 Enterprise Technology Governance & Risk Management Framework for Financial Institutions 4. ACQUISITION & IMPLEMENTATION OF IT SYSTEMS The critical role of technology in financial institutions requires the use of appropriate development, acquisition and maintenance standards. Development and acquisition refers to an organization's ability to identify, acquire, install and maintain appropriate information technology systems. The process includes the internal development of software applications or systems and the purchase or acquisition of hardware, software, or services from third parties. The development, acquisition and maintenance pr",
+        "description": "The FI(s) may create users’ help desk to ensure that they perform their job functions in an efficient and effective manner. The Help Desk may record and track incoming problem reports, being handled b"
+      }
+    },
+    "4.3": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Outsourcing of IT Services",
+        "full_text": "The FI(s) shall define the business requirements for the functions or activities to be outsourced. All IT activities to be outsourced shall be governed under the instructions conveyed through BP&RD Circular No 9 dated 13th July, 2007 as amended from time to time.",
+        "description": "The FI(s) shall define the business requirements for the functions or activities to be outsourced. All IT activities to be outsourced shall be governed under the instructions conveyed through BP&RD Ci"
+      }
+    },
+    "5.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Business Continuity Planning Process",
+        "full_text": "Business continuity planning process includes a Business Impact Analysis (BIA), risk assessment, risk management, risk monitoring and testing.",
+        "description": "Business continuity planning process includes a Business Impact Analysis (BIA), risk assessment, risk management, risk monitoring and testing."
+      }
+    },
+    "6.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Scope of IT Audit",
+        "full_text": "The scope of IT audit shall include:- a) Identification of weaknesses, providing meaningful recommendations and reviewing management's plans for addressing those weaknesses. b) Reviewing the adequacy of general controls in place covering areas such as IT strategic & business planning, IT operations, DR/BCP, IT outsourcing, information security, development and acquisitions, ADCs, IT Procurements and Project Management etc. c) A regular, comprehensive audit of FI(s) arrangements with the CSPs. d) Application System Review (ASR) to identify, document, test and evaluate the application controls to ensure confidentiality, integrity and accuracy of the systems and the related data/information.",
+        "description": "The scope of IT audit shall include:- a) Identification of weaknesses, providing meaningful recommendations and reviewing management's plans for addressing those weaknesses. b) Reviewing the adequacy "
+      }
+    },
+    "6.4": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Post-closing/Monitoring Activities",
+        "full_text": "a) The audit function shall ensure that senior management approves a procedure to ensure timely implementation of audit recommendations. b) The audit function shall monitor the implementation of management's corrective actions. c) The audit function shall communicate status of the recommendations to the BoD or Audit Committee at least on a quarterly basis.",
+        "description": "a) The audit function shall ensure that senior management approves a procedure to ensure timely implementation of audit recommendations. b) The audit function shall monitor the implementation of manag"
+      }
+    },
+    "1.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "IT Strategy",
+        "full_text": "a) The BoD shall approve “IT Strategy” covering overall design and plan of its operational framework including its vision and mission, stakeholders, business, work flow and processes, data processing, system access, adoption of best-in-class information security systems, practices and availability of IT resources. b) The FI(s) shall identify any organizational/environmental/cultural constraints and enablers to achieve the strategic IT objectives. Further, the FI(s) shall also put in place a strategic review process to ensure that the “IT Strategy” remains relevant with the organizational strategies and direction to achieve business objectives.",
+        "description": "a) The BoD shall approve “IT Strategy” covering overall design and plan of its operational framework including its vision and mission, stakeholders, business, work flow and processes, data processing,"
+      }
+    },
+    "1.4": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Roles and Responsibilities",
+        "full_text": "1.4.1 Board of Directors The Board of Directors (BoD) sets the tone and direction for an FI(s) use of technology. BoD, at minimum, shall perform the following:- a) Review and approve an IT governance framework to ensure that organization’s IT supports and enables the achievement of the corporate strategies and objectives. b) Review and approve “IT Strategy” and “Digital Strategy” in line with the business strategy of the bank and monitor & update the same on regular basis keeping in view potential opportunities and threats. c) Establish an efficient and effective IT organization structure in line with the IT governance framework. 9 Enterprise Technology Governance & Risk Management Framework for Financial Institutions d) Ensure that technology risks are integrated with the enterprise risk management function to achieve security, reliability, resiliency, interoperability and recoverability of data/information and information assets. e) Approve all technology-related policies and review ",
+        "description": "1.4.1 Board of Directors The Board of Directors (BoD) sets the tone and direction for an FI(s) use of technology. BoD, at minimum, shall perform the following:- a) Review and approve an IT governance "
+      }
+    },
+    "1.4.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Senior Management",
+        "full_text": "The senior management, at a minimum, shall:- a) Implement “IT strategy” and “Digital Strategy” approved by the BoD. b) Monitor implementation of the technology governance program and assess its effectiveness on business lines and processes. c) Implement BoD approved technology-related policies and ensure that an effective information security awareness program is implemented throughout the organization. d) Periodically inform BoD on the latest developments on cyber security action plan its implementation status and a summary report on major threats and attacks faced by the institution and their estimated impact on its operations. e) Ensure that the documented Standard Operating Procedures (SOPs) are in place and are effectively followed in letter and spirit in all areas of technology operations. f) Ensure capacity building of the IT personnel to achieve desired service delivery and operational excellence. g) Select technology solutions that can meet strategic requirements within optimu",
+        "description": "The senior management, at a minimum, shall:- a) Implement “IT strategy” and “Digital Strategy” approved by the BoD. b) Monitor implementation of the technology governance program and assess its effect"
+      }
+    },
+    "1.5.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "IT Steering Committee",
+        "full_text": "a) The terms of reference of IT Steering Committee shall be approved by the Board IT Committee. 11 Enterprise Technology Governance & Risk Management Framework for Financial Institutions b) The committee shall be formulated with senior officials from different functions including IT, information security, risk management, compliance, operations and business segments. c) The committee shall assist the senior management in implementing IT and digital strategies approved by the BoD and shall also play an advisory role to the senior management in all technology-related matters. d) The committee shall monitor implementation of all technology-related projects. e) The committee shall ensure that IT procurement is in line with the business plan. f) Ensure that the outsourcing to Cloud Service Providers (CSPs) is conducted in line with the Service Level Agreement. g) The committee shall, among other things, be responsible to ensure an efficient IT operating environment that supports the institu",
+        "description": "a) The terms of reference of IT Steering Committee shall be approved by the Board IT Committee. 11 Enterprise Technology Governance & Risk Management Framework for Financial Institutions b) The commit"
+      }
+    },
+    "1.5.3": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "IT Management Structure",
+        "full_text": "a) The enterprise-wide IT organizational structure shall commensurate with the size, scale, business objectives and nature of business activities carried out by the FI(s). b) The head of information security/CISO shall be responsible for management and mitigation of information/cyber security risks across the enterprise and devising strategies to monitor and address current and emerging risks. c) The head of information security /CISO shall be independent of the technology function to avoid any conflict of interest.",
+        "description": "a) The enterprise-wide IT organizational structure shall commensurate with the size, scale, business objectives and nature of business activities carried out by the FI(s). b) The head of information s"
+      }
+    },
+    "1.6": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Policies, Standards and Procedures",
+        "full_text": "a) The FI(s) shall formulate technology policy framework which shall be reviewed and updated at-least after every three (03) years. This framework, at a minimum, shall cover the following areas: i) Information/cyber Security ii) Services delivery & operations management iii) Project management, acquisition, development & implementation of technology solutions/systems 12 Enterprise Technology Governance & Risk Management Framework for Financial Institutions iv) Business Continuity and Disaster Recovery",
+        "description": "a) The FI(s) shall formulate technology policy framework which shall be reviewed and updated at-least after every three (03) years. This framework, at a minimum, shall cover the following areas: i) In"
+      }
+    },
+    "1.8": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Capacity Building/Training",
+        "full_text": "To ensure that an adequate training program is in place for IT personnel, it is essential to establish a process to identify material skill gaps of staff responsible for technology-related functions. FI(s) may encourage and where appropriate, facilitate their staff to acquire relevant professional qualifications. The FI(s) shall ensure:- a) That hiring and training process are governed by appropriate policies and procedures. b) That staff members have the expertise necessary to perform their jobs and achieve institutional goals & objectives. c) Developing training programs for major new technologies before their deployment. d) That employees are encouraged to obtain well-recognized professional certifications in order to support the business/technology objectives. e) That staff, with privileged system access or having sensitive business functions, shall receive additional and specific information security training. 13 Enterprise Technology Governance & Risk Management Framework for Fin",
+        "description": "To ensure that an adequate training program is in place for IT personnel, it is essential to establish a process to identify material skill gaps of staff responsible for technology-related functions. "
+      }
+    },
+    "2.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Identification and prioritization of Information System Assets",
+        "full_text": "a) FI(s) shall adequately protect critical information system assets from unauthorized access, misuse or fraudulent modification, insertion, deletion, substitution, suppression or disclosure. b) FI(s) shall formulate a policy on information system asset protection in which, criticality of information system assets shall be identified and ascertained in order to develop appropriate plans to protect them. 3 If no such framework exists, FIs shall develop the same. For FIs which already have such frameworks, the same may be updated accordingly. 14 Enterprise Technology Governance & Risk Management Framework for Financial Institutions",
+        "description": "a) FI(s) shall adequately protect critical information system assets from unauthorized access, misuse or fraudulent modification, insertion, deletion, substitution, suppression or disclosure. b) FI(s)"
+      }
+    },
+    "2.3.1": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Risk Identification",
+        "full_text": "a) FI(s) shall annually conduct a risk-based vulnerabilities identification exercise across the entire institution covering critical information systems and supporting infrastructure assets. b) On the basis of threats and vulnerabilities, the FI(s) shall formulate a list of all risks that may create severe harm and disruption to the operations of FI(s).",
+        "description": "a) FI(s) shall annually conduct a risk-based vulnerabilities identification exercise across the entire institution covering critical information systems and supporting infrastructure assets. b) On the"
+      }
+    },
+    "2.3.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Risk Assessment",
+        "full_text": "a) After risk identification, the FI(s) shall perform an analysis and quantify the potential impact, consequences of vulnerabilities and associated risks identified in the risk identification exercise on the overall business and operations. b) FI(s) shall develop a methodology to assess the impact of the threats to its information security environment and prioritize all material information security risks.",
+        "description": "a) After risk identification, the FI(s) shall perform an analysis and quantify the potential impact, consequences of vulnerabilities and associated risks identified in the risk identification exercise"
+      }
+    },
+    "2.3.3": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Risk Treatment",
+        "full_text": "a) FI(s) shall develop and implement risk mitigation and control strategies that are consistent with the value of the information system assets and the level of risk tolerance. b) FI(s) shall give priority to threat and vulnerability pairings with high risk ranking, which can cause significant harm or impact to the FI’s operations. c) When deciding the adoption of alternative controls and security measures, the FI(s) shall also keep in view costs and effectiveness of the controls with regard to the risks being mitigated. d) FI(s) shall refrain from implementing and running a system where the threats to the safety and soundness of the information systems cannot be adequately controlled. e) As a risk mitigating measure, the FI(s) may consider taking insurance cover for various insurable risks, including recovery and restoration costs.",
+        "description": "a) FI(s) shall develop and implement risk mitigation and control strategies that are consistent with the value of the information system assets and the level of risk tolerance. b) FI(s) shall give pri"
+      }
+    },
+    "2.4": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Security Controls Implementation",
+        "full_text": "2.4.1 Asset Classification and Control The FI(s) shall maintain an inventory of all information assets and identify the information owners, who shall be responsible to ensure confidentiality, integrity and protection of these 15 Enterprise Technology Governance & Risk Management Framework for Financial Institutions assets. Further, the management shall implement an information classification strategy in accordance with the degree of sensitivity and criticality of information assets. Moreover, the FI(s) shall develop guidelines and definitions for each classification and define an appropriate set of controls and procedures for information protection in accordance with the classification scheme. In addition, the FI(s) shall establish secure processes for disposal and destruction of sensitive information in both paper and electronic media.",
+        "description": "2.4.1 Asset Classification and Control The FI(s) shall maintain an inventory of all information assets and identify the information owners, who shall be responsible to ensure confidentiality, integrit"
+      }
+    },
+    "2.4.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Physical and Environmental Protection",
+        "full_text": "Physical security measures shall be in place to protect IT facilities and equipment from damage or unauthorized access. Critical information processing facilities shall be housed in secure areas such as data centers and network equipment rooms with appropriate security barriers and entry controls. Access to these areas shall be restricted to authorized personnel only and the access rights shall be reviewed and updated regularly. The FI(s) shall consider environmental threats when selecting the locations of data centers. Further, physical and environmental controls shall be implemented to monitor environmental conditions which can adversely affect the operation of information processing facilities. Moreover, FI (s) shall take adequate measures to protect equipment from power failures and electrical supply fluctuations.",
+        "description": "Physical security measures shall be in place to protect IT facilities and equipment from damage or unauthorized access. Critical information processing facilities shall be housed in secure areas such "
+      }
+    },
+    "2.4.3": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Security Administration and Monitoring",
+        "full_text": "The FI(s) shall put in place a security administration function and set formal procedures for administering the allocation of access rights to system resources and application systems and monitoring the use of system resources to detect any unusual or unauthorized activities. Further, FI(s) shall employ the \"least privilege\" principle throughout IT operations. Moreover, individuals with systems and security administrator roles and privileges shall have no transactional authority.",
+        "description": "The FI(s) shall put in place a security administration function and set formal procedures for administering the allocation of access rights to system resources and application systems and monitoring t"
+      }
+    },
+    "2.4.4": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Authentication and Access Control",
+        "full_text": "The FI(s) shall have an effective process to manage user authentication and access control. For this purpose, appropriate user authentication mechanism commensurate with the classification of information to be accessed shall be selected. Users, who can access internal systems, shall be required to accept/acknowledge an Acceptable-Use Policy (AUP) document before using a system. Staff assigned a security management function shall not perform other duties which can create any conflict of interest.",
+        "description": "The FI(s) shall have an effective process to manage user authentication and access control. For this purpose, appropriate user authentication mechanism commensurate with the classification of informat"
+      }
+    },
+    "2.4.5": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "System Security",
+        "full_text": "The FI(s) shall put in place, at a minimum, following controls and security requirements to safeguard operating systems, software and databases:- a) Definition of a set of access privilege for different groups of users and access to data and programs. b) Prohibition on installation of unlicensed software. 16 Enterprise Technology Governance & Risk Management Framework for Financial Institutions c) Installation of updated versions of software. d) Secure configuration of hardware, operating systems, software, applications, databases and servers with all unnecessary services and programs disabled or removed. e) Adequate documentation of all configurations and settings of operating systems, software, databases and servers. f) Adequate logging and monitoring of systems and user activities to detect irregularities and secure protection of logs from manipulation.",
+        "description": "The FI(s) shall put in place, at a minimum, following controls and security requirements to safeguard operating systems, software and databases:- a) Definition of a set of access privilege for differe"
+      }
+    },
+    "2.4.6": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Network Security",
+        "full_text": "a) The FI(s) shall evaluate and implement appropriate controls relative to the complexity of their network. Further, the FI(s) shall deploy an effective mechanism to monitor security policy violations and atypical activities on their network. b) The FI(s) shall consider the criticality, network protocols, performance requirements and trustworthiness in determining the network security controls appropriate to the operations of the institution and each of the security domain. c) The FI(s) shall create backup of all device configurations on regular basis.",
+        "description": "a) The FI(s) shall evaluate and implement appropriate controls relative to the complexity of their network. Further, the FI(s) shall deploy an effective mechanism to monitor security policy violations"
+      }
+    },
+    "2.4.7": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Remote Access",
+        "full_text": "The FI(s) shall establish control procedures covering approval process on user requests; authentication controls for remote access to networks, host data and/or systems; protection of equipment and devices; logging and monitoring of all remote access communications and provision of more stringent security controls (i.e., data encryption, two-factor authentication process).",
+        "description": "The FI(s) shall establish control procedures covering approval process on user requests; authentication controls for remote access to networks, host data and/or systems; protection of equipment and de"
+      }
+    },
+    "2.6": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Incident Reporting",
+        "full_text": "a. The FI(s) shall ensure that MIS on incidents, logs, breaches etc. are regularly reviewed by the Senior Management and significant incidents are submitted for review to the IT Steering Committee on a regular basis. b. The FI(s) shall report to Banking Policy & Regulation Department (BPRD), SBP within forty eight (48) hours after the incident6 all established information/cyber security breaches and related incidents involving financial loss, stealing of confidential data and major disruption in the banking system or communication channel resulting in non availability of banking services for customers for more than two (02) hours",
+        "description": "a. The FI(s) shall ensure that MIS on incidents, logs, breaches etc. are regularly reviewed by the Senior Management and significant incidents are submitted for review to the IT Steering Committee on "
+      }
+    },
+    "2.8": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Risk Monitoring and Reporting",
+        "full_text": "a) The FI(s) shall maintain a risk register to facilitate the monitoring and reporting of risks by prioritizing and closely monitoring high risk activities with regular reporting on the actions that have been taken to mitigate them. Further, the FI(s) shall update the risk register periodically and develop a monitoring and review process for continuous assessment and treatment of risks.7 7 For this purpose, template for Risk Control & Self Assessment issued vide BPRD Circular # 04 dated May 20, 2014 available at http://www.sbp.org.pk/bprd/2014/C4-Annexure-1.pdf may be used accordingly. 19 Enterprise Technology Governance & Risk Management Framework for Financial Institutions b) For risk reporting to management, the FI(s) shall develop IT risk reporting methodologies to highlight systems, processes or infrastructure that have high risk exposure. In determining the IT risk reporting methodology, the FI(s) may consider risk events, regulatory requirements and audit observations. c) The FI",
+        "description": "a) The FI(s) shall maintain a risk register to facilitate the monitoring and reporting of risks by prioritizing and closely monitoring high risk activities with regular reporting on the actions that h"
+      }
+    },
+    "3.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Preventive Maintenance Plan (PMP)",
+        "full_text": "Preventive maintenance may help in smooth and efficient functioning of IT operations, prolong the life of equipment and reduce the overall maintenance costs. Therefore, The FI(s) shall formulate preventive maintenance plan on the basis of following principles: a) Before organizing preventive maintenance plan, FI(s) need to set goals that are to be achieved by using the system. b) Create a list of all IT assets along with their full details. c) Determine priority assets keeping in view the sensitivity of operations they perform. Thereafter, FI(s) shall determine that the performance of assets is in line with the operational goals. d) Keeping in view the cost effectiveness, the FI(s) shall prioritize all IT assets, which shall be included in Preventive Maintenance Plan (PMP). e) The FI(s) shall create a schedule for preventive maintenance plan for all the prioritized assets. Further, the IT management shall regularly review the results of the PMP. f) The FI(s) shall focus on the capacity",
+        "description": "Preventive maintenance may help in smooth and efficient functioning of IT operations, prolong the life of equipment and reduce the overall maintenance costs. Therefore, The FI(s) shall formulate preve"
+      }
+    },
+    "3.4": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Patch Management",
+        "full_text": "Patch Management is a practice designed to proactively prevent the exploitation of vulnerabilities on IT devices. The FI(s) shall establish procedures to test patches in a segregated environment, and to install them when appropriate. The procedures shall include the identification, categorization, prioritization of security patches and their testing processes.",
+        "description": "Patch Management is a practice designed to proactively prevent the exploitation of vulnerabilities on IT devices. The FI(s) shall establish procedures to test patches in a segregated environment, and "
+      }
+    },
+    "3.6": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Data Center",
+        "full_text": "The FI(s) shall formulate procedures in line with best international standards for building and maintaining data center structures and operations.",
+        "description": "The FI(s) shall formulate procedures in line with best international standards for building and maintaining data center structures and operations."
+      }
+    },
+    "4.2.1": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "System Development",
+        "full_text": "Software development projects can be completed by the FI in-house, through outsourcing or by a combined approach. To manage such type of projects, the FI(s) shall ensure that: a) Project management standards are in place to address issues such as need assessment, risk management procedures and project approval authorities. b) System control standards include an application's functional, security, and automated control features. c) Quality assurance standards address issues such as validation of project assumptions, adherence to project standards and testing of a product's performance. d) Security and vulnerability assessment of software modules is conducted. e) An escrow arrangement exists in cases where core applications are developed by vendors but the source codes were not released to the FI(s).",
+        "description": "Software development projects can be completed by the FI in-house, through outsourcing or by a combined approach. To manage such type of projects, the FI(s) shall ensure that: a) Project management st"
+      }
+    },
+    "4.2.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "System Acquisition",
+        "full_text": "a) For major IT acquisitions, FI(s) shall develop/update technology procurement policy covering, at least, the following areas:- i) Formulation of RFP and Business Requirement Document (BRD) ii) Roles and responsibilities of relevant stakeholders iii) Approval matrix of RFP and BRD b) The technology procurement policy shall also include types of technology assets for both hardware & software, types of vendors for hardware & software, selection criteria for vendors, acquisition process, payment procedures & monitoring, delivery assurance & verification process, technical vetting requirement and need assessment. c) The FI(s) shall ensure that functional, operational and regulatory requirements are identified and recorded in Request-For-Proposals (RFP) or Invitations-To-Tender (ITT) in the bid solicitation process. Public sector FI(s) shall also follow PPRA rules for procurement of any software or hardware solutions or consultancy services. 25 Enterprise Technology Governance & Risk Manag",
+        "description": "a) For major IT acquisitions, FI(s) shall develop/update technology procurement policy covering, at least, the following areas:- i) Formulation of RFP and Business Requirement Document (BRD) ii) Roles"
+      }
+    },
+    "4.2.3": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "System Testing",
+        "full_text": "The FI(s) shall: a) Ensure that only properly tested and approved systems are promoted to the production environment. b) Carry out system and User Acceptance Testing (UAT) in an environment separate from the production environment. c) Ensure that production data is not used in development or acceptance testing unless the data has been desensitized and prior approval from the information owner has been obtained. d) Carry out performance testing of newly developed critical systems to ensure effective and smooth operation before deploying the same in production environment. 26 Enterprise Technology Governance & Risk Management Framework for Financial Institutions e) Conduct system testing using documented test plans encompassing all predetermined data or processing problems and business scenarios. f) Ensure that adequate test scenarios are formulated and sufficiently tested in UAT. g) Confirm that test activities are successful and recorded before the modified programs is transferred to t",
+        "description": "The FI(s) shall: a) Ensure that only properly tested and approved systems are promoted to the production environment. b) Carry out system and User Acceptance Testing (UAT) in an environment separate f"
+      }
+    },
+    "4.2.4": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "System Migration",
+        "full_text": "The FI(s) shall: a) Establish a secured library or quarantine area for program pending migration to the production environment, which are accessible by the personnel, who have performed the migration process. b) Put in place an appropriate procedure to verify changes and to ensure that no unauthorized changes have been made. c) Implement version controls to ensure that only authorized programs are migrated to quarantine and production environments. d) Archive old versions of source codes with a clear indication of the precise date, time and all necessary information.",
+        "description": "The FI(s) shall: a) Establish a secured library or quarantine area for program pending migration to the production environment, which are accessible by the personnel, who have performed the migration "
+      }
+    },
+    "4.2.5": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "System Documentation",
+        "full_text": "The FI(s) shall: a) Formulate procedures on system development and all related documentation including development, testing, trainings, production, operational administration and user manuals. b) Maintain the type and level of documentation for each project phase including project requests, feasibility studies, project plans, testing plans etc. c) Establish system documentation including system concept narratives, data flow charts and database specifications. d) Establish application documentation including application descriptions, programming flowcharts, work flow processes, operations and user instructions. 27 Enterprise Technology Governance & Risk Management Framework for Financial Institutions e) Define roles and responsibilities of officers to ensure that all changes to system, application and configuration documentation are made according to prescribed standards. f) Control access to documentation libraries with appropriate library and version controls. g) Ensure that complete ",
+        "description": "The FI(s) shall: a) Formulate procedures on system development and all related documentation including development, testing, trainings, production, operational administration and user manuals. b) Main"
+      }
+    },
+    "4.2.6": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Change Management",
+        "full_text": "a) FI(s) shall establish a change management process to ensure that changes to production systems are approved, implemented and reviewed in a controlled manner. b) The change management process shall apply to changes pertaining to system and security configurations, patches for hardware devices and software updates. c) FI(s) shall perform a risk and impact analysis of the change request in relation to existing infrastructure, network, up-stream and downstream systems. d) FI(s) shall adequately test the impending change and ensure that it is accepted by users prior to the migration of the changed modules to the production system. The FI(s) shall develop and document appropriate test plans for the impending change. Further, they shall obtain test results with user sign-offs prior to the migration. e) FI(s) shall establish a rollback plan to revert to a former version of the system or application if a problem is encountered during or after the deployment. The FI(s) shall establish alterna",
+        "description": "a) FI(s) shall establish a change management process to ensure that changes to production systems are approved, implemented and reviewed in a controlled manner. b) The change management process shall "
+      }
+    },
+    "4.2.7": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Post-Implementation Review",
+        "full_text": "For critical projects/systems, the FI(s) shall: a) Conduct a post implementation review at the end of a project to validate the application's operational performance. b) Assess the relative success of the project by comparing planned and actual cost, benefits and completion time. 28 Enterprise Technology Governance & Risk Management Framework for Financial Institutions c) Record reasons in a post implementation evaluation report if the planned objectives do not materialize. d) Present post implementation evaluation report to senior management highlighting operational or project management deficiencies (if any).",
+        "description": "For critical projects/systems, the FI(s) shall: a) Conduct a post implementation review at the end of a project to validate the application's operational performance. b) Assess the relative success of"
+      }
+    },
+    "4.4": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Cloud Computing",
+        "full_text": "4.4.1 Due Diligence of the Cloud Service Provider (CSP) When evaluating the feasibility of outsourcing to a CSP, FI(s) shall keep in view the legal, regulatory & compliance risks, cost effectiveness and quality of services etc. Further, FI(s) shall carry out due-diligence of the prospective CSPs including their competence, business structure, experience, track record, financial strength, physical security/internal controls placed by the CSP. The board shall formulate a comprehensive policy on due-diligence and risk management of CSP based on the following parameters before allowing services on cloud:- a) Data ownership: The FI (s) shall be ultimate responsible for the security of the data. b) Data Separation/Isolation: FI’s data must be segregated from other data held by the CSP. c) Security, Privacy & Confidentiality: The CSP or any other entity shall not have the right to view or access the information being routed or stored with the CSP. The sole discretion of access to all such inf",
+        "description": "4.4.1 Due Diligence of the Cloud Service Provider (CSP) When evaluating the feasibility of outsourcing to a CSP, FI(s) shall keep in view the legal, regulatory & compliance risks, cost effectiveness a"
+      }
+    },
+    "4.4.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Permissible Cloud Computing Arrangements",
+        "full_text": "The Board IT Committee shall approve all cloud-based outsourcing arrangements in line with the policy approved by the board keeping in view the following:- a) Given the potential issues related to business operations, confidentiality of customer data and legal/regulatory compliance, FI(s) shall only use cloud services for non-core operations and business support processes (e.g., communication tools, office productivity, collaboration tools, HR-related services, procurement functions, Inventory management etc.) b) For all types of cloud services including Software as a Service (SaaS), Platform as a Service (PaaS) and Infrastructure as a Service (IaaS), the CSPs shall be located in Pakistan and all physical servers and services (data centers and allied infrastructure) shall reside and operate from Pakistan. c) Core banking applications/services/operations and business processes used to process and store customer/borrower data/information shall not be placed under cloud-based outsourcing ",
+        "description": "The Board IT Committee shall approve all cloud-based outsourcing arrangements in line with the policy approved by the board keeping in view the following:- a) Given the potential issues related to bus"
+      }
+    },
+    "5.2.1": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Business Impact Analysis",
+        "full_text": "The FI(s) shall: a) Assess and prioritize all business functions and processes, including their interdependencies, as part of a work flow analysis, b) Identify potential impact of business disruptions resulting from uncontrolled, non-specific events on the institution's business functions and processes, c) Identify legal and regulatory requirements for the FI(s) business functions and processes, 31 Enterprise Technology Governance & Risk Management Framework for Financial Institutions d) Estimate maximum allowable downtime as well as the acceptable level of losses, associated with business functions and processes and e) Estimate recovery time objectives (RTOs), recovery point objectives (RPOs) and recovery of the critical path.",
+        "description": "The FI(s) shall: a) Assess and prioritize all business functions and processes, including their interdependencies, as part of a work flow analysis, b) Identify potential impact of business disruptions"
+      }
+    },
+    "5.2.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Risk Assessment",
+        "full_text": "The FI(s) shall: a) Evaluate the BIA assumptions using various threat scenarios; b) Analyze threats based upon the impact to the institution, its customers and other relevant stakeholders; c) Prioritize potential business disruptions based on their severity; and d) Perform a \"gap analysis\" to compare existing BCP to the policies and procedures which shall be implemented based on prioritized disruptions identified and their resulting impact on the FI(s). 5.2.3. Risk Management Risk management is the process of identifying, assessing, and reducing risk to an acceptable level through the development, implementation and maintenance of a written, enterprise-wide BCP. The BCP shall be based on a comprehensive BIA and risk assessment exercise, reviewed and approved by the board at least annually. It shall be documented in a written program and disseminated across the FI(s). The BCP shall, among other things, specify the conditions which shall prompt implementation of the plan and the process ",
+        "description": "The FI(s) shall: a) Evaluate the BIA assumptions using various threat scenarios; b) Analyze threats based upon the impact to the institution, its customers and other relevant stakeholders; c) Prioriti"
+      }
+    },
+    "5.3": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Disaster Recovery",
+        "full_text": "FI(s) shall achieve high systems availability (or near zero system downtime) for critical systems which is associated with maintaining adequate capacity, reliable performance, fast response time, scalability and swift recovery capability. Built-in redundancies for single points of failure shall be developed and contingency plans shall be tested so that business and operating disruptions can be minimized. 5.3.1. Disaster Recovery Plan The FI(s) shall: a) Identify and address various types of contingency scenarios, which may be caused by system faults, hardware malfunction, operating errors or security incidents and total incapacitation of the primary Datacenter. b) Evaluate the recovery plan and incident response procedures at least annually and update them as and when changes to business operations, systems and networks occur. c) Implement replication, rapid backup and recovery capabilities at the individual system or application cluster level. d) Consider inter-dependencies between cr",
+        "description": "FI(s) shall achieve high systems availability (or near zero system downtime) for critical systems which is associated with maintaining adequate capacity, reliable performance, fast response time, scal"
+      }
+    },
+    "5.3.2": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Disaster Recovery Testing",
+        "full_text": "1. The FI(s) shall: a) Adopt approved, tested and rehearsed recovery measures. b) Test and validate, at least annually, the effectiveness of recovery requirements and the ability of staff to execute the necessary emergency and recovery procedures. c) Cover various scenarios in disaster recovery tests including total shutdown/complete switchover of the primary site as well as component failure at the individual system or application cluster level. d) Test the recovery dependencies between systems. e) BCP/DR drills planned with third parties, if any, shall be performed annually. f) Testing of BCP shall include all aspects and constituents of a bank i.e. people, processes and resources (including technology). BCP tests shall ensure that all members of the recovery team and relevant staff are aware of the plans. g) Involve business users in the design and execution of comprehensive test cases to verify that recovered systems function properly. h) Participate in disaster recovery tests that",
+        "description": "1. The FI(s) shall: a) Adopt approved, tested and rehearsed recovery measures. b) Test and validate, at least annually, the effectiveness of recovery requirements and the ability of staff to execute t"
+      }
+    },
+    "6.3": {
+      "issue": "MISSING_IN_JSON",
+      "pdf": {
+        "title": "Reporting Methodology",
+        "full_text": "The audit function shall: a) Report the findings, conclusions, recommendations and qualifications or limitations in scope with respect to the IT audit. 35 Enterprise Technology Governance & Risk Management Framework for Financial Institutions b) Discuss the draft report contents with management in the subject area prior to finalization and release of the final report. c) Ensure that report is signed, dated and distributed according to the format as defined in the audit program. d) Periodically submit a consolidated report to the Audit Committee on the following areas:- a. Information/cyber security b. IT service delivery and operations c. IT outsourcing including cloud services arrangements d. IT Project management, acquisition & development e. IT procurement f. Performance Management g. BCP & DRP",
+        "description": "The audit function shall: a) Report the findings, conclusions, recommendations and qualifications or limitations in scope with respect to the IT audit. 35 Enterprise Technology Governance & Risk Manag"
+      }
+    }
+  },
+  "missing_evidence": [
+    {
+      "control_id": "2.4.8",
+      "title": "Ensure encryption during network transmission",
+      "issue": "NO_EVIDENCE_REQUIREMENTS"
+    },
+    {
+      "control_id": "2.5",
+      "title": "Implement controls to prevent cyber security incidents",
+      "issue": "NO_EVIDENCE_REQUIREMENTS"
+    },
+    {
+      "control_id": "4.2",
+      "title": "Assess and mitigate operational risks in software development/acquisition",
+      "issue": "NO_EVIDENCE_REQUIREMENTS"
+    }
+  ],
+  "pdf_controls_sample": {
+    "1.1": {
+      "title": "Technology Governance Framework",
+      "full_text": "a) The Board of Directors of the FI(s) are responsible to establish a comprehensive enterprise technology governance framework which defines the leadership, organizational structures and processes to ensure that the FI(s)’ technology sustains and extends the enterprise’s strategies and objectives. b) The primary objective of the technology governance framework is to evaluate the current and future use of technology, direct the preparation and implementation of plans and policies to ensure that use of technology meets business objectives and monitor compliance to policies and performance against the plans. c) The basic principles of strategic alignment of IT and the business, value delivery to businesses, risk management, resource management (including project management) and performance management shall form the basis of this technology governance framework. 8 Enterprise Technology Governance & Risk Management Framework for Financial Institutions d) Technology governance framework shal",
+      "description": "a) The Board of Directors of the FI(s) are responsible to establish a comprehensive enterprise technology governance framework which defines the leadership, organizational structures and processes to "
+    },
+    "1.3": {
+      "title": "Digital Strategy",
+      "full_text": "The board shall also approve a “Digital Strategy” covering, at least the following objectives:- a) Development of customer focused digital products and services. b) End to end digitization of processes for delivery of digital products and services. c) Interoperability of delivery channels.",
+      "description": "The board shall also approve a “Digital Strategy” covering, at least the following objectives:- a) Development of customer focused digital products and services. b) End to end digitization of processe"
+    },
+    "1.5": {
+      "title": "Organizational Structure",
+      "full_text": "1.5.1 Board IT Committee a) A Board IT Committee shall be constituted in all FI(s) except foreign banks, DFIs and Microfinance Banks. However, Microfinance Banks doing Branchless Banking (BB) operations shall also setup a Board IT Committee. b) The Board IT Committee shall have a minimum of three (03) directors as its members, one of whom shall be an independent director and at least one member shall have relevant qualification or experience of IT. c) The committee shall be mainly responsible for advising and reporting to the board on the status of technology activities and digital initiatives in the FI(s). These reports shall enable the board to make decisions without having to be involved in routine activities. d) The committee shall review IT and Digital strategies and relevant policies before submission to the board. e) The committee shall ensure that risk management strategies are designed and implemented to achieve resilience, such as the ability to effectively respond to wide- s",
+      "description": "1.5.1 Board IT Committee a) A Board IT Committee shall be constituted in all FI(s) except foreign banks, DFIs and Microfinance Banks. However, Microfinance Banks doing Branchless Banking (BB) operatio"
+    }
+  }
+}

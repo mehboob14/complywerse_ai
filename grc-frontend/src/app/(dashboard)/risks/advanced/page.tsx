@@ -813,12 +813,12 @@ function IncidentsTab() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs ${severity?.color}`}>
+                      <span className={`rounded-lg px-2 py-1 text-xs ${severity?.color}`}>
                         {severity?.label}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs ${status?.color}`}>
+                      <span className={`rounded-lg px-2 py-1 text-xs ${status?.color}`}>
                         {status?.label}
                       </span>
                     </td>

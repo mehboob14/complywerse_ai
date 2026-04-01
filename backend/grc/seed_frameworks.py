@@ -1882,6 +1882,17 @@ def framework_exists(db, name: str, tenant_id: int = None) -> bool:
     return query.first() is not None
 
 
+def deactivate_existing_frameworks(db, name: str, tenant_id: int = None) -> int:
+    """Soft-hide existing frameworks with the same name so replacements stay clean."""
+    query = db.query(UploadedFramework).filter(UploadedFramework.name == name)
+    if tenant_id:
+        query = query.filter(UploadedFramework.tenant_id == tenant_id)
+    updated = query.update({"is_active": False}, synchronize_session=False)
+    if updated:
+        print(f"Deactivated {updated} existing framework(s) named '{name}'")
+    return updated
+
+
 def get_default_tenant(db) -> Optional[int]:
     """Get the default tenant ID (first tenant or create one)."""
     tenant = db.query(Tenant).first()
@@ -1912,6 +1923,9 @@ def seed_framework_from_json(db, data: Dict[str, Any], tenant_id: int = None,
     if not name:
         print("Framework JSON missing 'name' in metadata")
         return None
+    
+    if force:
+        deactivate_existing_frameworks(db, name, tenant_id)
     
     # Check if framework already exists (idempotent)
     if not force and framework_exists(db, name, tenant_id):

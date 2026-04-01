@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from ....models import (
     Evidence, EvidenceControlMapping, NormalizedControl, FrameworkControl,
     ControlObjective, FrameworkDomain, Framework, GRCUser, get_db,
-    ParsedFrameworkControl, UploadedFramework, ControlImplementation, 
+    ParsedFrameworkControl, UploadedFramework, ControlImplementation,
     ImplementationEvidence, CertificationJourney
 )
 from ....routers.auth_router import require_auth, get_user_tenants
@@ -20,6 +20,8 @@ router = APIRouter(prefix="/links", tags=["Evidence - Control Links"])
 class ControlLinkCreate(BaseModel):
     normalized_control_id: Optional[int] = None
     framework_control_id: Optional[int] = None
+    parsed_control_id: Optional[int] = None
+    uploaded_framework_id: Optional[int] = None
 
 
 class BulkControlLinkCreate(BaseModel):
@@ -33,6 +35,64 @@ class AIClauseLinkCreate(BaseModel):
     clause_reference: Optional[str] = None
     confidence: Optional[float] = None
     matching_rationale: Optional[str] = None
+
+
+@router.get("/available-controls")
+def list_available_controls(
+    q: Optional[str] = Query(None, description="Search term for framework or control titles"),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Return uploaded frameworks with their parsed controls (for manual linking UI)."""
+    user_tenants = get_user_tenants(current_user, db)
+    scope_filter = or_(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        UploadedFramework.is_shared == True,
+        UploadedFramework.tenant_id.is_(None)
+    )
+
+    frameworks_q = db.query(UploadedFramework).filter(scope_filter)
+    if q:
+        frameworks_q = frameworks_q.filter(UploadedFramework.name.ilike(f"%{q}%"))
+    frameworks = frameworks_q.order_by(UploadedFramework.name.asc()).all()
+
+    response = []
+    for fw in frameworks:
+        controls_q = db.query(ParsedFrameworkControl).filter(ParsedFrameworkControl.uploaded_framework_id == fw.id)
+        if q:
+            controls_q = controls_q.filter(
+                or_(
+                    ParsedFrameworkControl.control_id.ilike(f"%{q}%"),
+                    ParsedFrameworkControl.original_reference.ilike(f"%{q}%"),
+                    ParsedFrameworkControl.title.ilike(f"%{q}%"),
+                )
+            )
+        controls = controls_q.order_by(ParsedFrameworkControl.control_id.asc()).limit(limit).all()
+        response.append({
+            "id": fw.id,
+            "name": fw.name,
+            "short_code": fw.name,
+            "controls": [
+                {
+                    "id": c.id,
+                    "control_id": c.control_id,
+                    "original_reference": c.original_reference,
+                    "title": c.title,
+                }
+                for c in controls
+            ]
+        })
+
+    normalized_controls = db.query(NormalizedControl).order_by(NormalizedControl.code.asc()).limit(limit).all()
+
+    return {
+        "frameworks": response,
+        "normalized_controls": [
+            {"id": nc.id, "code": nc.code, "name": nc.name}
+            for nc in normalized_controls
+        ]
+    }
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -56,6 +116,8 @@ def serialize_control_mapping(mapping: EvidenceControlMapping) -> dict:
         "evidence_id": mapping.evidence_id,
         "normalized_control_id": mapping.normalized_control_id,
         "framework_control_id": mapping.framework_control_id,
+        "parsed_control_id": mapping.parsed_control_id,
+        "uploaded_framework_id": mapping.uploaded_framework_id,
     }
     
     if mapping.normalized_control:
@@ -88,6 +150,23 @@ def serialize_control_mapping(mapping: EvidenceControlMapping) -> dict:
         }
     else:
         result["framework_control"] = None
+
+    if mapping.parsed_control:
+        result["parsed_control"] = {
+            "id": mapping.parsed_control.id,
+            "control_id": mapping.parsed_control.control_id,
+            "original_reference": mapping.parsed_control.original_reference,
+            "title": mapping.parsed_control.title,
+            "uploaded_framework_id": mapping.parsed_control.uploaded_framework_id,
+        }
+        if mapping.parsed_control.uploaded_framework:
+            result["parsed_control"]["framework"] = {
+                "id": mapping.parsed_control.uploaded_framework.id,
+                "name": mapping.parsed_control.uploaded_framework.name,
+                "short_code": mapping.parsed_control.uploaded_framework.name,
+            }
+    else:
+        result["parsed_control"] = None
     
     return result
 
@@ -117,6 +196,9 @@ def get_evidence_controls(
         .joinedload(FrameworkControl.objective)
         .joinedload(ControlObjective.domain)
         .joinedload(FrameworkDomain.framework)
+        ,
+        joinedload(EvidenceControlMapping.parsed_control)
+        .joinedload(ParsedFrameworkControl.uploaded_framework)
     ).filter(
         EvidenceControlMapping.evidence_id == evidence_id
     ).all()
@@ -143,6 +225,18 @@ def get_evidence_controls(
                         "controls": []
                     }
                 by_framework[fw_key]["controls"].append(serialized)
+
+        elif mapping.parsed_control and mapping.parsed_control.uploaded_framework:
+            fw = mapping.parsed_control.uploaded_framework
+            fw_key = f"parsed-{fw.id}"
+            if fw_key not in by_framework:
+                by_framework[fw_key] = {
+                    "framework_id": fw.id,
+                    "framework_name": fw.name,
+                    "framework_code": fw.short_code if hasattr(fw, "short_code") else fw.name,
+                    "controls": []
+                }
+            by_framework[fw_key]["controls"].append(serialized)
     
     return {
         "evidence_id": evidence_id,
@@ -177,9 +271,9 @@ def link_evidence_to_controls(
     skipped = []
     
     for link in links.control_links:
-        if not link.normalized_control_id and not link.framework_control_id:
+        if not link.normalized_control_id and not link.framework_control_id and not link.parsed_control_id:
             skipped.append({
-                "reason": "Either normalized_control_id or framework_control_id is required"
+                "reason": "One of normalized_control_id, framework_control_id, or parsed_control_id is required"
             })
             continue
         
@@ -204,11 +298,24 @@ def link_evidence_to_controls(
                     "reason": "Framework control not found"
                 })
                 continue
+
+        parsed_control = None
+        if link.parsed_control_id:
+            parsed_control = db.query(ParsedFrameworkControl).filter(
+                ParsedFrameworkControl.id == link.parsed_control_id
+            ).first()
+            if not parsed_control:
+                skipped.append({
+                    "parsed_control_id": link.parsed_control_id,
+                    "reason": "Parsed control not found"
+                })
+                continue
         
         existing = db.query(EvidenceControlMapping).filter(
             EvidenceControlMapping.evidence_id == evidence_id,
             EvidenceControlMapping.normalized_control_id == link.normalized_control_id,
-            EvidenceControlMapping.framework_control_id == link.framework_control_id
+            EvidenceControlMapping.framework_control_id == link.framework_control_id,
+            EvidenceControlMapping.parsed_control_id == link.parsed_control_id
         ).first()
         
         if existing:
@@ -222,10 +329,44 @@ def link_evidence_to_controls(
         mapping = EvidenceControlMapping(
             evidence_id=evidence_id,
             normalized_control_id=link.normalized_control_id,
-            framework_control_id=link.framework_control_id
+            framework_control_id=link.framework_control_id,
+            parsed_control_id=link.parsed_control_id,
+            uploaded_framework_id=link.uploaded_framework_id or (parsed_control.uploaded_framework_id if parsed_control else None),
         )
         db.add(mapping)
         db.flush()
+
+        # Auto-link into journey implementations so it appears on controls/auditor screens
+        impl_query = db.query(ControlImplementation).join(CertificationJourney).filter(
+            CertificationJourney.tenant_id.in_(user_tenants)
+        )
+        if link.parsed_control_id:
+            impl_query = impl_query.filter(ControlImplementation.parsed_control_id == link.parsed_control_id)
+        elif link.framework_control_id:
+            impl_query = impl_query.filter(ControlImplementation.framework_control_id == link.framework_control_id)
+        implementations = impl_query.all()
+
+        for impl in implementations:
+            exists_impl_ev = db.query(ImplementationEvidence).filter(
+                ImplementationEvidence.implementation_id == impl.id,
+                ImplementationEvidence.evidence_id == evidence_id
+            ).first()
+            if exists_impl_ev:
+                continue
+            impl_ev = ImplementationEvidence(
+                implementation_id=impl.id,
+                evidence_id=evidence_id,
+                file_name=evidence.file_name or evidence.name,
+                file_path=evidence.file_path,
+                file_size=getattr(evidence, "file_size", None),
+                mime_type=evidence.file_type,
+                uploaded_by=current_user.id,
+                review_status="pending",
+                ai_confidence_score=None,
+                ai_assessment_notes=None,
+            )
+            db.add(impl_ev)
+
         created_mappings.append(mapping.id)
     
     db.commit()

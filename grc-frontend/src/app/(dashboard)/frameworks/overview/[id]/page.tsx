@@ -54,6 +54,11 @@ interface FrameworkOverview {
   parsed_controls_count?: number;
 }
 
+const stripCertificationPostfix = (value?: string): string => {
+  if (!value) return '';
+  return value.replace(/\s+certification\s*$/i, '').trim();
+};
+
 const lifecyclePhases = [
   { name: 'Preparation', icon: BookOpen, description: 'Document policies and procedures' },
   { name: 'Assessment', icon: ClipboardCheck, description: 'Gap analysis and readiness check' },
@@ -144,7 +149,7 @@ export default function FrameworkOverviewPage() {
               )}
             </div>
             <div>
-              <h1 className="text-2xl font-bold cw-text">{framework.name}</h1>
+              <h1 className="text-2xl font-bold cw-text">{stripCertificationPostfix(framework.name)}</h1>
               <p className="cw-text-muted">Version {framework.version}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${

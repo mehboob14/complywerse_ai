@@ -39,7 +39,13 @@ import {
   BackendEdge,
   BackendNode,
   CONDITION_KEYS,
+  EMPTY_NODE_CONFIG_OPTIONS,
+  enrichWorkflowNodeConfig,
+  formatWorkflowContextLabel,
   FlowNodeData,
+  getCatalogContextForKey,
+  NodeConfigOptions,
+  NodeOptionItem,
   PaletteItem,
   TIMER_KEYS,
   TRIGGER_EVENT_MAP,
@@ -55,15 +61,19 @@ function normalizeBackendNode(node: BackendNode): FlowNodeData {
   let nodeType = node.node_type || 'action';
   if (node.is_start || TRIGGER_KEYS.has(node.node_key)) nodeType = 'start';
   if (node.is_terminal || node.node_key === 'end') nodeType = 'end';
+  const config = enrichWorkflowNodeConfig(nodeType, (node.config as Record<string, unknown>) || {}, node.node_key);
   return {
     nodeKey: node.node_key,
     nodeType,
     label:
       node.name ||
-      (node.config?.action_name as string) ||
-      (node.config?.trigger_type as string) ||
+      (config?.action_name as string) ||
+      (config?.trigger_type as string) ||
       node.node_key,
-    config: (node.config as Record<string, unknown>) || {},
+    config,
+    module: typeof config.module === 'string' ? config.module : undefined,
+    submodule: typeof config.submodule === 'string' ? config.submodule : undefined,
+    domains: Array.isArray(config.domains) ? (config.domains as FlowNodeData['domains']) : undefined,
     isStart: node.is_start,
     isTerminal: node.is_terminal,
   };
@@ -107,7 +117,7 @@ function extractApiErrorMessage(error: unknown): string {
 }
 
 
-type CatalogItem = { key: string; label: string; module?: string; submodule?: string; functionality_name?: string };
+type CatalogItem = NodeOptionItem & { functionality_name?: string };
 type CatalogResponse = {
   triggers?: CatalogItem[];
   actions?: CatalogItem[];
@@ -182,9 +192,39 @@ function normalizePlatformFunctionLabel(item: CatalogItem, moduleNameFallback?: 
 
 function buildPalette(catalog: CatalogResponse): PaletteItem[] {
   const defaults: PaletteItem[] = [
-    ...Array.from(TRIGGER_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'triggers' as const })),
-    ...Array.from(ACTION_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'actions' as const })),
-    ...Array.from(CONDITION_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'conditions' as const })),
+    ...Array.from(TRIGGER_KEYS).map((k) => {
+      const context = getCatalogContextForKey(k);
+      return {
+        key: k,
+        label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        description: '',
+        group: 'triggers' as const,
+        module: context.module,
+        submodule: context.submodule,
+      };
+    }),
+    ...Array.from(ACTION_KEYS).map((k) => {
+      const context = getCatalogContextForKey(k);
+      return {
+        key: k,
+        label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        description: '',
+        group: 'actions' as const,
+        module: context.module,
+        submodule: context.submodule,
+      };
+    }),
+    ...Array.from(CONDITION_KEYS).map((k) => {
+      const context = getCatalogContextForKey(k);
+      return {
+        key: k,
+        label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        description: '',
+        group: 'conditions' as const,
+        module: context.module,
+        submodule: context.submodule,
+      };
+    }),
     ...Array.from(APPROVAL_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'approvals' as const })),
     ...Array.from(TIMER_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'timers' as const })),
     { key: 'subworkflow', label: 'Sub-Workflow', description: '', group: 'control' },
@@ -293,6 +333,18 @@ function toFlowNodes(rawNodes: BackendNode[], definitionJson: Record<string, unk
   });
 }
 
+function configWithPaletteContext(item: Pick<PaletteItem, 'key' | 'module' | 'submodule'>, nodeType: string, config: Record<string, unknown>) {
+  return enrichWorkflowNodeConfig(
+    nodeType,
+    {
+      ...config,
+      ...(item.module ? { module: item.module } : {}),
+      ...(item.submodule ? { submodule: item.submodule } : {}),
+    },
+    item.key,
+  );
+}
+
 function toFlowEdges(rawEdges: BackendEdge[]): Edge[] {
   return rawEdges.map((e, idx) => ({
     id: `${e.source_node_key}-${e.target_node_key}-${idx}`,
@@ -322,7 +374,8 @@ function WorkflowEngineContent() {
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
   const [overview, setOverview] = useState<AnalyticsOverview>({});
   const [actorUsers, setActorUsers] = useState<Array<{ id: number; username?: string; email: string; display_name: string }>>([]);
-  const [actorRoles, setActorRoles] = useState<Array<{ id: number; name: string; description?: string }>>([]);
+  const [actorRoles, setActorRoles] = useState<Array<{ id: number; name: string; description?: string }>>([]); 
+  const [nodeConfigOptions, setNodeConfigOptions] = useState<NodeConfigOptions>(EMPTY_NODE_CONFIG_OPTIONS);
   const [emailConfigCount, setEmailConfigCount] = useState(0);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -412,6 +465,22 @@ function WorkflowEngineContent() {
       }
 
       try {
+        const configOptsRes = await workflowEngineApi.catalog.nodeConfigOptions();
+        const d = configOptsRes.data as NodeConfigOptions;
+        if (d && Array.isArray(d.frameworks)) setNodeConfigOptions(d);
+      } catch {
+        // silently ignore; config panel will fall back to empty defaults
+      }
+
+      try {
+        const configOptsRes = await workflowEngineApi.catalog.nodeConfigOptions();
+        const data = configOptsRes.data as NodeConfigOptions;
+        if (data && data.frameworks) setNodeConfigOptions(data);
+      } catch {
+        // silently ignore; config panel will use empty defaults
+      }
+
+      try {
         const setupRes = await workflowEngineApi.notifications.checkSetup();
         setEmailConfigCount(Number(setupRes.data?.email_config_count || 0));
       } catch {
@@ -477,7 +546,8 @@ function WorkflowEngineContent() {
     setDefinitionJsonText('{}');
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
-    const startNode: Node<FlowNodeData> = { id: 'start', type: 'workflowNode', position: { x: 200, y: 60 }, data: { nodeKey: 'start', nodeType: 'start', label: 'Start', config: { trigger_type: 'manual_trigger' }, isStart: true } };
+    const startConfig = enrichWorkflowNodeConfig('start', { trigger_type: 'manual_trigger' }, 'start');
+    const startNode: Node<FlowNodeData> = { id: 'start', type: 'workflowNode', position: { x: 200, y: 60 }, data: { nodeKey: 'start', nodeType: 'start', label: 'Start', config: startConfig, module: typeof startConfig.module === 'string' ? startConfig.module : undefined, submodule: typeof startConfig.submodule === 'string' ? startConfig.submodule : undefined, domains: Array.isArray(startConfig.domains) ? (startConfig.domains as FlowNodeData['domains']) : undefined, isStart: true } };
     const endNode: Node<FlowNodeData> = { id: 'end', type: 'workflowNode', position: { x: 200, y: 240 }, data: { nodeKey: 'end', nodeType: 'end', label: 'End', config: {}, isTerminal: true } };
     setNodes([startNode, endNode]);
     setEdges([{ id: 'start-end', source: 'start', target: 'end', sourceHandle: 'out', animated: true, markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' }, style: { stroke: '#64748b', strokeWidth: 1.5 }, data: {} }]);
@@ -607,8 +677,8 @@ function WorkflowEngineContent() {
     }
   }, [actorUsers]);
 
-  const triggerSelected = useCallback(async (workflowDefinitionId?: number) => {
-    const targetId = workflowDefinitionId || selectedId;
+  const triggerSelected = useCallback(async (workflowDefinitionId?: number | unknown) => {
+    const targetId = typeof workflowDefinitionId === 'number' ? workflowDefinitionId : selectedId;
     if (!targetId) return;
     const triggerEvent = window.prompt('Trigger event for simulation', 'manual.trigger') ?? 'manual.trigger';
     const payloadInput = window.prompt('Simulation payload JSON', '{}');
@@ -920,17 +990,28 @@ function WorkflowEngineContent() {
       const isStart = item.group === 'triggers';
       const isEnd = item.key === 'end';
       const nodeType = isStart ? 'start' : isEnd ? 'end' : item.group === 'conditions' ? 'condition' : item.group === 'approvals' ? 'approval' : item.group === 'timers' ? 'timer' : item.key === 'subworkflow' ? 'subworkflow' : 'action';
-      const config = { ...defaultConfigForGroup(item.group) };
+      let config = { ...defaultConfigForGroup(item.group) };
       if (isStart) config.trigger_type = item.key;
       if (nodeType === 'action') config.action_name = item.key;
       if (nodeType === 'condition') config.condition_kind = item.key;
       if (nodeType === 'approval') config.approval_type = item.key;
       if (nodeType === 'timer') config.timer_kind = item.key;
+      config = configWithPaletteContext(item, nodeType, config);
       const newNode: Node<FlowNodeData> = {
         id: nodeKey,
         type: 'workflowNode',
         position,
-        data: { nodeKey, nodeType, label: item.label, config, isStart, isTerminal: isEnd },
+        data: {
+          nodeKey,
+          nodeType,
+          label: item.label,
+          config,
+          module: typeof config.module === 'string' ? config.module : undefined,
+          submodule: typeof config.submodule === 'string' ? config.submodule : undefined,
+          domains: Array.isArray(config.domains) ? (config.domains as FlowNodeData['domains']) : undefined,
+          isStart,
+          isTerminal: isEnd,
+        },
       };
       setNodes((nds) => [...nds, newNode]);
     },
@@ -948,7 +1029,20 @@ function WorkflowEngineContent() {
         nds.map((n) => {
           if (n.id !== selectedNodeId) return n;
           if (field === 'label') return { ...n, data: { ...n.data, label: value as string } };
-          return { ...n, data: { ...n.data, config: { ...n.data.config, [field]: value } } };
+          let nextConfig = { ...n.data.config, [field]: value };
+          if (['trigger_type', 'action_name', 'condition_kind', 'approval_type', 'timer_kind', 'module', 'submodule'].includes(field)) {
+            nextConfig = enrichWorkflowNodeConfig(n.data.nodeType, nextConfig, n.id);
+          }
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              config: nextConfig,
+              module: typeof nextConfig.module === 'string' ? nextConfig.module : undefined,
+              submodule: typeof nextConfig.submodule === 'string' ? nextConfig.submodule : undefined,
+              domains: Array.isArray(nextConfig.domains) ? (nextConfig.domains as FlowNodeData['domains']) : undefined,
+            },
+          };
         })
       );
     },
@@ -961,7 +1055,17 @@ function WorkflowEngineContent() {
       setNodes((nds) =>
         nds.map((n) => {
           if (n.id !== selectedNodeId) return n;
-          return { ...n, data: { ...n.data, config: parsed } };
+          const nextConfig = enrichWorkflowNodeConfig(n.data.nodeType, parsed, n.id);
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              config: nextConfig,
+              module: typeof nextConfig.module === 'string' ? nextConfig.module : undefined,
+              submodule: typeof nextConfig.submodule === 'string' ? nextConfig.submodule : undefined,
+              domains: Array.isArray(nextConfig.domains) ? (nextConfig.domains as FlowNodeData['domains']) : undefined,
+            },
+          };
         })
       );
     } catch {
@@ -1171,7 +1275,7 @@ function WorkflowEngineContent() {
         onNameChange={setName}
         onToggleActive={() => setIsActive((v) => !v)}
         onSave={saveDefinition}
-        onTrigger={triggerSelected}
+        onTrigger={() => triggerSelected()}
         onDelete={deleteDefinition}
         onNewWorkflow={resetDraft}
         onShowVersions={handleShowVersions}
@@ -1195,11 +1299,27 @@ function WorkflowEngineContent() {
               const isStart = item.group === 'triggers';
               const isEnd = item.key === 'end';
               const nodeType = isStart ? 'start' : isEnd ? 'end' : item.group === 'conditions' ? 'condition' : item.group === 'approvals' ? 'approval' : item.group === 'timers' ? 'timer' : item.key === 'subworkflow' ? 'subworkflow' : 'action';
-              const config = { ...defaultConfigForGroup(item.group) };
+              let config = { ...defaultConfigForGroup(item.group) };
               if (isStart) config.trigger_type = item.key;
               if (nodeType === 'action') config.action_name = item.key;
               if (nodeType === 'condition') config.condition_kind = item.key;
-              setNodes((nds) => [...nds, { id: nodeKey, type: 'workflowNode', position: { x: 250, y: 150 + nds.length * 100 }, data: { nodeKey, nodeType, label: item.label, config, isStart, isTerminal: isEnd } }]);
+              config = configWithPaletteContext(item, nodeType, config);
+              setNodes((nds) => [...nds, {
+                id: nodeKey,
+                type: 'workflowNode',
+                position: { x: 250, y: 150 + nds.length * 100 },
+                data: {
+                  nodeKey,
+                  nodeType,
+                  label: item.label,
+                  config,
+                  module: typeof config.module === 'string' ? config.module : undefined,
+                  submodule: typeof config.submodule === 'string' ? config.submodule : undefined,
+                  domains: Array.isArray(config.domains) ? (config.domains as FlowNodeData['domains']) : undefined,
+                  isStart,
+                  isTerminal: isEnd,
+                },
+              }]);
             }}
           />
         </div>
@@ -1278,6 +1398,7 @@ function WorkflowEngineContent() {
             actorRoles={actorRoles}
             actionOptions={actionOptions}
             conditionPathOptions={conditionPathOptions}
+            nodeConfigOptions={nodeConfigOptions}
             selectedNode={selectedNode}
             selectedEdge={selectedEdge}
             nodeConfigText={nodeConfigText}

@@ -198,7 +198,7 @@ export default function AssessmentDetailPage() {
     queryKey: ['assessment-item-evidence', assessmentId, Array.from(expandedEvidence)],
     queryFn: async () => {
       const results: Record<number, EvidenceUpload[]> = {};
-      for (const itemId of expandedEvidence) {
+      for (const itemId of Array.from(expandedEvidence)) {
         try {
           const response = await apiClient.get(`/compliance/assessments/${assessmentId}/items/${itemId}/evidence`);
           const evidenceData = response.data?.evidence || response.data || [];

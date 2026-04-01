@@ -3,12 +3,14 @@ import json
 import uuid
 import random
 import logging
+import io
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from sqlalchemy.orm.attributes import flag_modified
+from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -370,6 +372,10 @@ def list_certifications(
         )
     
     journeys = query.order_by(CertificationJourney.started_at.desc()).offset(skip).limit(limit).all()
+
+    for journey in journeys:
+        journey.progress = calculate_progress_summary(journey, db)
+
     return journeys
 
 
@@ -545,11 +551,18 @@ def get_certification(
     
     framework_classification = get_framework_classification(framework)
     phases_list = get_phases_from_document_structure(framework) if framework_classification == "certification" else []
-    
-    total = len(implementations)
-    implemented = sum(1 for i in implementations if i.status in ["implemented", "verified"])
-    verified = sum(1 for i in implementations if i.status == "verified")
-    
+
+    progress_summary = get_progress_summary(journey_id, db=db, current_user=current_user)
+    progress_payload = progress_summary.model_dump()
+    # Provide legacy keys for compatibility with existing UI components
+    progress_payload.update({
+        "implemented": progress_summary.implemented_count,
+        "verified": progress_summary.verified_count,
+        "in_progress": progress_summary.in_progress_count,
+        "not_started": progress_summary.not_started_count,
+        "not_applicable": progress_summary.not_applicable_count,
+    })
+
     return {
         "id": journey.id,
         "tenant_id": journey.tenant_id,
@@ -569,12 +582,7 @@ def get_certification(
         "notes": journey.notes,
         "phases": phases_list,
         "has_generated_phases": bool(journey.generated_phases and len(journey.generated_phases) > 0),
-        "progress": {
-            "total_controls": total,
-            "implemented": implemented,
-            "verified": verified,
-            "completion_percentage": round((implemented / total * 100) if total > 0 else 0, 1)
-        }
+        "progress": progress_payload
     }
 
 
@@ -883,6 +891,19 @@ def list_journey_controls(
         if not evidence_recommendations:
             evidence_recommendations = collect_sub_control_recommendations(sub_controls_list)
 
+        approved_evidence_count = sum(1 for ev in evidence_list if ev.get("review_status") == "approved")
+        required_evidence_count = len(evidence_requirements)
+        has_any_evidence = len(evidence_list) > 0
+        evidence_coverage = 0.0
+        if required_evidence_count > 0:
+            evidence_coverage = min(1.0, len(evidence_list) / required_evidence_count)
+        elif has_any_evidence:
+            evidence_coverage = 1.0
+
+        effective_status = impl.status
+        if effective_status not in ["implemented", "verified", "not_applicable"] and has_any_evidence:
+            effective_status = "in_progress"
+
         logger.debug(
             "[JourneyTrace] control assembled impl_id=%s code=%s parsed_id=%s framework_id=%s req_count=%s rec_count=%s sub_count=%s evidence_count=%s",
             impl.id,
@@ -911,7 +932,7 @@ def list_journey_controls(
             "domain_name": domain_name,
             "objective_code": objective_code,
             "objective_name": objective_name,
-            "status": impl.status,
+            "status": effective_status,
             "implementation_notes": impl.implementation_notes,
             "implementation_date": impl.implementation_date.isoformat() if impl.implementation_date else None,
             "verified_date": impl.verified_date.isoformat() if impl.verified_date else None,
@@ -922,7 +943,10 @@ def list_journey_controls(
             "evidence_recommendations": evidence_recommendations,
             "evidence": evidence_list,
             "evidence_count": len(evidence_list),
-            "required_evidence_count": len(evidence_requirements)
+            "required_evidence_count": required_evidence_count,
+            "approved_evidence_count": approved_evidence_count,
+            "evidence_coverage": evidence_coverage,
+            "status_source": impl.status
         })
 
     status_rank = {
@@ -1273,81 +1297,208 @@ def review_evidence(
     }
 
 
-@router.get("/{journey_id}/progress", response_model=ProgressSummary)
-def get_progress_summary(
-    journey_id: int,
+@router.post("/evidence/{evidence_id}/review")
+def review_evidence_by_impl_id(
+    evidence_id: int,
+    review_data: EvidenceReviewAction,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    journey = get_journey_or_404(journey_id, current_user, db)
-    
+    """Auditor portal review by ImplementationEvidence ID (no control/journey path params)."""
+    user_tenants = get_user_tenants(current_user, db)
+
+    impl_evidence = db.query(ImplementationEvidence).join(
+        ControlImplementation,
+        ControlImplementation.id == ImplementationEvidence.implementation_id
+    ).join(
+        CertificationJourney,
+        CertificationJourney.id == ControlImplementation.journey_id
+    ).filter(
+        ImplementationEvidence.id == evidence_id,
+        CertificationJourney.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not impl_evidence:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence not found"
+        )
+
+    normalized_action = review_data.action.lower().strip()
+    if normalized_action == "approve":
+        normalized_action = "approved"
+    if normalized_action == "reject":
+        normalized_action = "rejected"
+
+    if normalized_action not in ["approved", "rejected"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Action must be 'approved' or 'rejected'"
+        )
+
+    impl_evidence.review_status = normalized_action
+    impl_evidence.reviewed_by = current_user.id
+    impl_evidence.reviewed_at = datetime.utcnow()
+    impl_evidence.review_notes = review_data.notes
+
+    db.commit()
+    db.refresh(impl_evidence)
+
+    return {
+        "id": impl_evidence.id,
+        "review_status": impl_evidence.review_status,
+        "reviewed_by": impl_evidence.reviewed_by,
+        "reviewed_at": impl_evidence.reviewed_at.isoformat() if impl_evidence.reviewed_at else None,
+        "review_notes": impl_evidence.review_notes
+    }
+
+
+def calculate_progress_summary(journey: CertificationJourney, db: Session) -> ProgressSummary:
+    journey_id = journey.id
+
     implementations = db.query(ControlImplementation).options(
         joinedload(ControlImplementation.framework_control).joinedload(FrameworkControl.objective).joinedload(ControlObjective.domain),
-        joinedload(ControlImplementation.parsed_control)
+        joinedload(ControlImplementation.parsed_control),
+        joinedload(ControlImplementation.evidence_attachments)
     ).filter(ControlImplementation.journey_id == journey_id).all()
-    
+
+    parsed_control_ids = [impl.parsed_control_id for impl in implementations if impl.parsed_control_id]
+    framework_control_ids = [impl.framework_control_id for impl in implementations if impl.framework_control_id]
+
+    mapped_evidence_by_parsed = {}
+    mapped_evidence_by_framework = {}
+
+    if parsed_control_ids or framework_control_ids:
+        mapping_rows = db.query(EvidenceControlMapping, Evidence).join(
+            Evidence,
+            Evidence.id == EvidenceControlMapping.evidence_id
+        ).filter(
+            Evidence.tenant_id == journey.tenant_id,
+            or_(
+                EvidenceControlMapping.parsed_control_id.in_(parsed_control_ids) if parsed_control_ids else False,
+                EvidenceControlMapping.framework_control_id.in_(framework_control_ids) if framework_control_ids else False
+            )
+        ).all()
+
+        for mapping, linked_evidence in mapping_rows:
+            if mapping.parsed_control_id:
+                mapped_evidence_by_parsed.setdefault(mapping.parsed_control_id, []).append(linked_evidence)
+            if mapping.framework_control_id:
+                mapped_evidence_by_framework.setdefault(mapping.framework_control_id, []).append(linked_evidence)
+
     total = len(implementations)
     by_status = {}
     by_domain_dict = {}
-    
+
+    implemented_count = 0
+    verified_count = 0
+    in_progress_count = 0
+    not_started_count = 0
+    not_applicable_count = 0
+    with_evidence_count = 0
+    fully_evidenced_count = 0
+    approved_evidence_controls = 0
+
     for impl in implementations:
-        status = impl.status
-        by_status[status] = by_status.get(status, 0) + 1
-        
         parsed_control = impl.parsed_control
         framework_control = impl.framework_control
-        
+
+        required_evidence_count = 0
+        if parsed_control:
+            required_evidence_count = len(resolve_parsed_control_evidence(parsed_control, db))
+        elif framework_control:
+            required_evidence_count = len(get_curated_evidence_for_control(impl.framework_control_id, db))
+
+        evidence_ids = set()
+        evidence_total = 0
+        approved_total = 0
+
+        for ev in impl.evidence_attachments:
+            evidence_total += 1
+            if ev.evidence_id:
+                evidence_ids.add(ev.evidence_id)
+            if ev.review_status == "approved":
+                approved_total += 1
+
+        mapped_list = []
+        if impl.parsed_control_id:
+            mapped_list.extend(mapped_evidence_by_parsed.get(impl.parsed_control_id, []))
+        if impl.framework_control_id:
+            mapped_list.extend(mapped_evidence_by_framework.get(impl.framework_control_id, []))
+
+        for linked_ev in mapped_list:
+            if linked_ev.id in evidence_ids:
+                continue
+            evidence_ids.add(linked_ev.id)
+            evidence_total += 1
+
+        has_any_evidence = evidence_total > 0
+        if has_any_evidence:
+            with_evidence_count += 1
+
+        if required_evidence_count > 0 and evidence_total >= required_evidence_count:
+            fully_evidenced_count += 1
+        elif required_evidence_count == 0 and has_any_evidence:
+            fully_evidenced_count += 1
+
+        if required_evidence_count > 0 and approved_total >= required_evidence_count:
+            approved_evidence_controls += 1
+        elif required_evidence_count == 0 and approved_total > 0:
+            approved_evidence_controls += 1
+
+        effective_status = impl.status
+        if effective_status not in ["implemented", "verified", "not_applicable"] and has_any_evidence:
+            effective_status = "in_progress"
+
+        by_status[effective_status] = by_status.get(effective_status, 0) + 1
+
         if parsed_control:
             domain_name = parsed_control.domain or "General"
             domain_id = domain_name
-            if domain_id not in by_domain_dict:
-                by_domain_dict[domain_id] = {
-                    "domain_id": domain_id,
-                    "domain_name": domain_name,
-                    "total": 0,
-                    "completed": 0,
-                    "in_progress": 0,
-                    "not_started": 0
-                }
-            by_domain_dict[domain_id]["total"] += 1
-            if impl.status in ["implemented", "verified"]:
-                by_domain_dict[domain_id]["completed"] += 1
-            elif impl.status == "in_progress":
-                by_domain_dict[domain_id]["in_progress"] += 1
-            else:
-                by_domain_dict[domain_id]["not_started"] += 1
         elif framework_control and framework_control.objective and framework_control.objective.domain:
             domain = framework_control.objective.domain
             domain_id = domain.id
             domain_name = domain.name
-            if domain_id not in by_domain_dict:
-                by_domain_dict[domain_id] = {
-                    "domain_id": domain_id,
-                    "domain_name": domain_name,
-                    "total": 0,
-                    "completed": 0,
-                    "in_progress": 0,
-                    "not_started": 0
-                }
-            by_domain_dict[domain_id]["total"] += 1
-            if impl.status in ["implemented", "verified"]:
-                by_domain_dict[domain_id]["completed"] += 1
-            elif impl.status == "in_progress":
-                by_domain_dict[domain_id]["in_progress"] += 1
-            else:
-                by_domain_dict[domain_id]["not_started"] += 1
-    
+        else:
+            domain_id = "general"
+            domain_name = "General"
+
+        if domain_id not in by_domain_dict:
+            by_domain_dict[domain_id] = {
+                "domain_id": domain_id,
+                "domain_name": domain_name,
+                "total": 0,
+                "completed": 0,
+                "in_progress": 0,
+                "not_started": 0
+            }
+
+        by_domain_dict[domain_id]["total"] += 1
+        if effective_status in ["implemented", "verified"]:
+            by_domain_dict[domain_id]["completed"] += 1
+        elif effective_status == "in_progress":
+            by_domain_dict[domain_id]["in_progress"] += 1
+        else:
+            by_domain_dict[domain_id]["not_started"] += 1
+
+        if effective_status in ["implemented", "verified"]:
+            implemented_count += 1
+        if effective_status == "verified":
+            verified_count += 1
+        if effective_status == "in_progress":
+            in_progress_count += 1
+        if effective_status == "not_started":
+            not_started_count += 1
+        if effective_status == "not_applicable":
+            not_applicable_count += 1
+
     by_domain = list(by_domain_dict.values())
-    
-    implemented_count = by_status.get("implemented", 0) + by_status.get("verified", 0)
-    verified_count = by_status.get("verified", 0)
-    in_progress_count = by_status.get("in_progress", 0)
-    not_started_count = by_status.get("not_started", 0)
-    not_applicable_count = by_status.get("not_applicable", 0)
-    
+
     applicable_total = total - not_applicable_count
     completion_percentage = round((implemented_count / applicable_total * 100) if applicable_total > 0 else 0, 1)
-    
+    evidence_coverage_percentage = round((fully_evidenced_count / applicable_total * 100) if applicable_total > 0 else 0, 1)
+    readiness_percentage = round((approved_evidence_controls / applicable_total * 100) if applicable_total > 0 else 0, 1)
+
     return ProgressSummary(
         total_controls=total,
         implemented_count=implemented_count,
@@ -1356,8 +1507,123 @@ def get_progress_summary(
         not_started_count=not_started_count,
         not_applicable_count=not_applicable_count,
         completion_percentage=completion_percentage,
+        with_evidence_count=with_evidence_count,
+        fully_evidenced_count=fully_evidenced_count,
+        approved_evidence_controls=approved_evidence_controls,
+        evidence_coverage_percentage=evidence_coverage_percentage,
+        readiness_percentage=readiness_percentage,
         by_status=by_status,
         by_domain=by_domain
+    )
+
+
+@router.get("/{journey_id}/progress", response_model=ProgressSummary)
+def get_progress_summary(
+    journey_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    journey = get_journey_or_404(journey_id, current_user, db)
+    return calculate_progress_summary(journey, db)
+
+
+@router.get("/{journey_id}/report")
+def download_certification_report(
+    journey_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Generate a plain-text readiness report for the journey and stream it as a download."""
+    journey = get_journey_or_404(journey_id, current_user, db)
+
+    progress = calculate_progress_summary(journey, db)
+
+    implementations = db.query(ControlImplementation).options(
+        joinedload(ControlImplementation.evidence_attachments).joinedload(ImplementationEvidence.uploader),
+        joinedload(ControlImplementation.evidence_attachments).joinedload(ImplementationEvidence.reviewer),
+        joinedload(ControlImplementation.parsed_control),
+        joinedload(ControlImplementation.framework_control)
+    ).filter(ControlImplementation.journey_id == journey_id).all()
+
+    evidence_records = []
+    for impl in implementations:
+        for ev in impl.evidence_attachments:
+            evidence_records.append((impl, ev))
+
+    total_evidence = len(evidence_records)
+    pending_evidence = sum(1 for _, ev in evidence_records if ev.review_status == "pending")
+    approved_evidence = sum(1 for _, ev in evidence_records if ev.review_status == "approved")
+    rejected_evidence = sum(1 for _, ev in evidence_records if ev.review_status == "rejected")
+
+    uploaders = sorted({
+        (ev.uploader.display_name or ev.uploader.username or ev.uploader.email)
+        for _, ev in evidence_records if ev.uploader
+    })
+
+    reviewers = sorted({
+        (ev.reviewer.full_name or ev.reviewer.username or ev.reviewer.email)
+        for _, ev in evidence_records if ev.reviewer
+    })
+
+    controls_with_evidence = sum(1 for impl in implementations if impl.evidence_attachments)
+    domains_covered = len((progress.by_domain or {}))
+
+    buffer = io.StringIO()
+    buffer.write(f"Framework Report: {journey.name}\n")
+    buffer.write(f"Framework ID: {journey.uploaded_framework_id or journey.framework_id or journey.id}\n")
+    buffer.write(f"Journey ID: {journey.id}\n")
+    buffer.write(f"Tenant ID: {journey.tenant_id}\n")
+    buffer.write(f"Target Date: {journey.target_date.isoformat() if journey.target_date else 'Not set'}\n")
+    buffer.write(f"Status: {journey.status}\n")
+    buffer.write("\n=== Progress ===\n")
+    buffer.write(f"Total Controls: {progress.total_controls}\n")
+    buffer.write(f"Implemented: {progress.implemented_count}\n")
+    buffer.write(f"Verified: {progress.verified_count}\n")
+    buffer.write(f"In Progress: {progress.in_progress_count}\n")
+    buffer.write(f"Not Started: {progress.not_started_count}\n")
+    buffer.write(f"Not Applicable: {progress.not_applicable_count}\n")
+    buffer.write(f"Completion %: {progress.completion_percentage}\n")
+    buffer.write(f"Readiness %: {progress.readiness_percentage}\n")
+    buffer.write(f"Evidence Coverage %: {progress.evidence_coverage_percentage}\n")
+    buffer.write(f"Domains Covered: {domains_covered}\n")
+
+    buffer.write("\n=== Evidence ===\n")
+    buffer.write(f"Total Evidence: {total_evidence}\n")
+    buffer.write(f"Pending Review: {pending_evidence}\n")
+    buffer.write(f"Approved: {approved_evidence}\n")
+    buffer.write(f"Rejected: {rejected_evidence}\n")
+    buffer.write(f"Controls With Evidence: {controls_with_evidence}\n")
+
+    if uploaders:
+        buffer.write("Uploaded By: " + ", ".join(uploaders) + "\n")
+    else:
+        buffer.write("Uploaded By: None\n")
+
+    if reviewers:
+        buffer.write("Reviewed By: " + ", ".join(reviewers) + "\n")
+    else:
+        buffer.write("Reviewed By: None\n")
+
+    buffer.write("\n=== Pending Approval Details ===\n")
+    for impl, ev in evidence_records:
+        if ev.review_status == "pending":
+            control_code = None
+            control_name = None
+            if impl.parsed_control:
+                control_code = impl.parsed_control.control_id
+                control_name = impl.parsed_control.title
+            elif impl.framework_control:
+                control_code = impl.framework_control.code
+                control_name = impl.framework_control.name
+            buffer.write(f"- Evidence ID {ev.id} | {ev.file_name} | Control {control_code or 'N/A'} {control_name or ''} | Uploaded {ev.uploaded_at.isoformat() if ev.uploaded_at else 'N/A'}\n")
+
+    content = buffer.getvalue()
+    buffer.close()
+
+    return StreamingResponse(
+        iter([content]),
+        media_type="text/plain",
+        headers={"Content-Disposition": f"attachment; filename=framework-{journey_id}-report.txt"}
     )
 
 
@@ -2084,24 +2350,49 @@ def get_auditor_evidence_for_framework(
     """Get all evidence uploaded against framework controls for auditor review."""
     user_tenants = get_user_tenants(current_user, db)
     
-    # Get the framework
-    framework = db.query(UploadedFramework).filter(
-        UploadedFramework.id == framework_id
-    ).filter(
-        (UploadedFramework.tenant_id.in_(user_tenants)) | (UploadedFramework.tenant_id.is_(None))
-    ).first()
-    
-    if not framework:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Framework not found"
-        )
-    
-    # Get all journeys for this framework
-    journeys = db.query(CertificationJourney).filter(
-        CertificationJourney.uploaded_framework_id == framework_id,
+    # Prefer interpreting the path param as a certification journey ID first to avoid collisions
+    journeys: List[CertificationJourney] = []
+    framework: Optional[UploadedFramework] = None
+
+    journey_lookup = db.query(CertificationJourney).filter(
+        CertificationJourney.id == framework_id,
         CertificationJourney.tenant_id.in_(user_tenants)
-    ).all()
+    ).first()
+
+    if journey_lookup:
+        journeys = [journey_lookup]
+        lookup_framework_id = journey_lookup.uploaded_framework_id or journey_lookup.framework_id
+        if lookup_framework_id:
+            framework = db.query(UploadedFramework).filter(
+                UploadedFramework.id == lookup_framework_id
+            ).filter(
+                (UploadedFramework.tenant_id.in_(user_tenants)) | (UploadedFramework.tenant_id.is_(None))
+            ).first()
+
+    if not journeys:
+        # If no journey matched, interpret as uploaded framework ID
+        framework = db.query(UploadedFramework).filter(
+            UploadedFramework.id == framework_id
+        ).filter(
+            (UploadedFramework.tenant_id.in_(user_tenants)) | (UploadedFramework.tenant_id.is_(None))
+        ).first()
+
+        if framework:
+            journeys = db.query(CertificationJourney).filter(
+                CertificationJourney.uploaded_framework_id == framework.id,
+                CertificationJourney.tenant_id.in_(user_tenants)
+            ).all()
+
+    if not framework and not journeys:
+        return {
+            "framework": {
+                "id": framework_id,
+                "name": "Unknown Framework",
+                "version": None
+            },
+            "evidence": [],
+            "stats": {"total": 0, "pending": 0, "approved": 0, "rejected": 0}
+        }
     
     if not journeys:
         return {
@@ -2122,21 +2413,29 @@ def get_auditor_evidence_for_framework(
     journey_ids = [j.id for j in journeys]
     
     # Get all implementations and evidence
-    query = db.query(ImplementationEvidence).join(
+    base_query = db.query(ImplementationEvidence).join(
         ControlImplementation,
         ImplementationEvidence.implementation_id == ControlImplementation.id
-    ).join(
+    ).outerjoin(
         ParsedFrameworkControl,
         ControlImplementation.parsed_control_id == ParsedFrameworkControl.id
+    ).outerjoin(
+        FrameworkControl,
+        ControlImplementation.framework_control_id == FrameworkControl.id
     ).filter(
         ControlImplementation.journey_id.in_(journey_ids)
     )
-    
+
+    # Stats must reflect all records, not the filtered view
+    status_rows = base_query.with_entities(ImplementationEvidence.review_status).all()
+
+    list_query = base_query
     if status_filter:
-        query = query.filter(ImplementationEvidence.review_status == status_filter)
-    
-    evidence_records = query.options(
+        list_query = list_query.filter(ImplementationEvidence.review_status == status_filter)
+
+    evidence_records = list_query.options(
         joinedload(ImplementationEvidence.implementation).joinedload(ControlImplementation.parsed_control),
+        joinedload(ImplementationEvidence.implementation).joinedload(ControlImplementation.framework_control),
         joinedload(ImplementationEvidence.uploader),
         joinedload(ImplementationEvidence.reviewer)
     ).all()
@@ -2145,8 +2444,16 @@ def get_auditor_evidence_for_framework(
     evidence_list = []
     for ev in evidence_records:
         impl = ev.implementation
-        control = impl.parsed_control if impl else None
-        
+        control = None
+        if impl:
+            control = impl.parsed_control or impl.framework_control
+
+        uploader_name = None
+        uploader_email = None
+        if ev.uploader:
+            uploader_name = getattr(ev.uploader, "display_name", None) or getattr(ev.uploader, "username", None)
+            uploader_email = getattr(ev.uploader, "email", None)
+
         evidence_list.append({
             "id": ev.id,
             "file_name": ev.file_name,
@@ -2156,20 +2463,22 @@ def get_auditor_evidence_for_framework(
             "uploaded_at": ev.uploaded_at.isoformat() if ev.uploaded_at else None,
             "uploaded_by": {
                 "id": ev.uploader.id,
-                "name": ev.uploader.full_name,
-                "email": ev.uploader.email
+                "name": uploader_name,
+                "email": uploader_email
             } if ev.uploader else None,
             "control": {
                 "id": control.id,
-                "control_id": control.control_id,
-                "title": control.title,
-                "description": control.description
+                "control_id": getattr(control, "control_id", None) or getattr(control, "code", None),
+                "title": getattr(control, "title", None) or getattr(control, "name", None),
+                "description": getattr(control, "description", None)
             } if control else None,
             "review_status": ev.review_status,
-            "reviewed_by": {
+            "reviewed_by": None if not ev.reviewer else {
                 "id": ev.reviewer.id,
-                "name": ev.reviewer.full_name
-            } if ev.reviewer else None,
+                "name": getattr(ev.reviewer, "display_name", None)
+                    or getattr(ev.reviewer, "username", None)
+                    or getattr(ev.reviewer, "email", None)
+            },
             "reviewed_at": ev.reviewed_at.isoformat() if ev.reviewed_at else None,
             "review_notes": ev.review_notes,
             "ai_confidence_score": ev.ai_confidence_score,
@@ -2178,18 +2487,21 @@ def get_auditor_evidence_for_framework(
     
     # Calculate stats
     stats = {
-        "total": len(evidence_records),
-        "pending": len([e for e in evidence_records if e.review_status == "pending"]),
-        "approved": len([e for e in evidence_records if e.review_status == "approved"]),
-        "rejected": len([e for e in evidence_records if e.review_status == "rejected"])
+        "total": len(status_rows),
+        "pending": len([status for (status,) in status_rows if status == "pending"]),
+        "approved": len([status for (status,) in status_rows if status == "approved"]),
+        "rejected": len([status for (status,) in status_rows if status == "rejected"])
     }
     
+    primary_journey = journeys[0] if journeys else None
+    framework_payload = {
+        "id": framework.id if framework else (primary_journey.uploaded_framework_id if primary_journey else framework_id),
+        "name": (framework.name if framework else primary_journey.name) if (framework or primary_journey) else "Unknown Framework",
+        "version": framework.version if framework else None
+    }
+
     return {
-        "framework": {
-            "id": framework.id,
-            "name": framework.name,
-            "version": framework.version
-        },
+        "framework": framework_payload,
         "evidence": evidence_list,
         "stats": stats
     }

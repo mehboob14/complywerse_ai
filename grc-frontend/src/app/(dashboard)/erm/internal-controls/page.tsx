@@ -468,14 +468,14 @@ export default function InternalControlsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}
+                        className={`inline-flex rounded-full whitespace-nowrap px-2 py-1 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}
                       >
                         {statusStyle.label}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${effectivenessStyle.bg} ${effectivenessStyle.text}`}
+                        className={`inline-flex rounded-full whitespace-nowrap px-2 py-1 text-xs font-medium ${effectivenessStyle.bg} ${effectivenessStyle.text}`}
                       >
                         {effectivenessStyle.label}
                       </span>

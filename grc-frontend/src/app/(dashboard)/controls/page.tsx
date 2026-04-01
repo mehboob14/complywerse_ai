@@ -43,12 +43,18 @@ interface FrameworkControl {
   section_number: string | null;
   parent_section: string | null;
   ai_confidence: number | null;
+  ai_notes: string | null;
   is_verified: boolean;
   framework_id: number;
   framework_name: string;
   framework_version: string | null;
   created_at: string | null;
   evidence_count: number;
+  evidence_requirements: Array<{
+    title: string;
+    description?: string;
+    artifact_type?: string;
+  }>;
 }
 
 interface FrameworkSummary {
@@ -476,7 +482,7 @@ export default function ControlsPage() {
                       <Link
                         href={`/evidence?control_id=${control.id}`}
                         onClick={(e) => e.stopPropagation()}
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors ${
+                        className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-colors ${
                           control.evidence_count > 0
                             ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-500/30'
                             : 'bg-slate-200 text-slate-500 hover:bg-slate-600'
@@ -538,8 +544,18 @@ export default function ControlsPage() {
                             )}
                             {control.parent_section && (
                               <div>
-                                <h4 className="text-sm font-medium text-slate-600">Parent Section</h4>
-                                <p className="mt-1 text-sm text-slate-600">{control.parent_section}</p>
+                                <h4 className="text-sm font-medium text-slate-600">Parent Control</h4>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSearchTerm(control.parent_section || '');
+                                    setPage(0);
+                                  }}
+                                  className="mt-1 inline-flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1 text-sm text-blue-600 hover:bg-blue-100 transition-colors"
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                  {control.parent_section}
+                                </button>
                               </div>
                             )}
                           </div>
@@ -555,6 +571,37 @@ export default function ControlsPage() {
                             <div>
                               <h4 className="text-sm font-medium text-slate-600">Full Requirement Text</h4>
                               <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{control.full_text}</p>
+                            </div>
+                          )}
+
+                          {control.evidence_requirements && control.evidence_requirements.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-amber-600" />
+                                Recommended Evidence
+                              </h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {control.evidence_requirements.map((evidence, idx) => (
+                                  <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                                    <div className="flex items-start gap-2">
+                                      <div className="flex-shrink-0 mt-0.5 text-amber-600">
+                                        {getEvidenceTypeIcon(evidence.artifact_type || 'document')}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <h5 className="text-sm font-medium text-black">{evidence.title}</h5>
+                                        {evidence.description && (
+                                          <p className="text-xs text-slate-600 mt-1">{evidence.description}</p>
+                                        )}
+                                        {evidence.artifact_type && (
+                                          <span className="inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700 mt-2 capitalize">
+                                            {evidence.artifact_type}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
                           

@@ -565,7 +565,7 @@ export default function InternalControlDetailPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${resultStyle.bg} ${resultStyle.text}`}
+                            className={`inline-flex rounded-lg px-2 py-1 text-xs font-medium whitespace-nowrap capitalize ${resultStyle.bg} ${resultStyle.text}`}
                           >
                             {test.result?.replace('_', ' ') || 'Pending'}
                           </span>
@@ -682,7 +682,7 @@ export default function InternalControlDetailPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span
-                      className={`rounded-full px-2 py-1 text-xs ${
+                      className={`rounded-lg px-2 py-1 text-xs ${
                         esc.is_active
                           ? 'bg-green-500/20 text-green-400'
                           : 'bg-slate-500/20 text-slate-600'

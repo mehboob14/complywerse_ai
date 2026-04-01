@@ -395,6 +395,19 @@ export interface CertificationJourney {
   framework_id?: number | null;
   uploaded_framework_id?: number | null;
   framework?: Framework;
+  framework_name?: string;
+  framework_classification?: 'certification' | 'compliance';
+  framework_type?: string;
+  framework_overview?: {
+    classification: 'certification' | 'compliance';
+    purpose?: string | null;
+    scope?: string | null;
+    objectives?: string[];
+    target_audience?: string | null;
+    classification_reasoning?: string | null;
+    regulatory_authority?: string | null;
+    adoption_approach?: string[];
+  };
   name: string;
   target_date?: string;
   started_at: string;
@@ -435,13 +448,19 @@ export interface ImplementationEvidence {
 
 export interface ProgressSummary {
   total_controls: number;
-  implemented: number;
-  verified: number;
-  in_progress: number;
-  not_started: number;
-  not_applicable: number;
+  implemented_count: number;
+  verified_count: number;
+  in_progress_count: number;
+  not_started_count: number;
+  not_applicable_count: number;
   completion_percentage: number;
-  by_domain: { domain_id: number; domain_name: string; total: number; completed: number }[];
+  with_evidence_count: number;
+  fully_evidenced_count: number;
+  approved_evidence_controls: number;
+  evidence_coverage_percentage: number;
+  readiness_percentage: number;
+  by_domain: { domain_id: number | string; domain_name: string; total: number; completed: number; in_progress: number; not_started: number }[];
+  by_status?: Record<string, number>;
 }
 
 export interface GapAnalysis {
@@ -500,8 +519,11 @@ export interface CertificationControl {
   framework_control_id: number;
   parsed_control_id?: number;
   control_code: string;
+  original_control_code?: string;
+  system_control_code?: string;
   control_name: string;
   control_statement: string;
+  control_statement_full?: string;
   domain_id: number;
   domain_code: string;
   domain_name: string;
@@ -515,9 +537,13 @@ export interface CertificationControl {
   priority: number;
   sub_controls: SubControlWithEvidence[];
   evidence_requirements: EvidenceRequirement[];
+  evidence_recommendations?: string[];
   evidence: ControlEvidence[];
   evidence_count: number;
   required_evidence_count: number;
+  approved_evidence_count?: number;
+  evidence_coverage?: number;
+  status_source?: string;
 }
 
 // Advanced ERM Types

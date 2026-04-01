@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..models import (
     Evidence, EvidenceVersion, EvidenceControlMapping, EvidenceAIAssessment,
-    NormalizedControl, GRCUser, Tenant, get_db
+    NormalizedControl, GRCUser, Tenant, get_db,
+    ParsedFrameworkControl, ControlImplementation, ImplementationEvidence, CertificationJourney
 )
 from ..schemas import (
     EvidenceCreate, EvidenceUpdate, EvidenceResponse,
@@ -418,13 +419,56 @@ def map_evidence_to_control(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Normalized control not found"
             )
-    
+
+    parsed_control = None
+    if mapping.parsed_control_id:
+        parsed_control = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.id == mapping.parsed_control_id
+        ).first()
+        if not parsed_control:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Parsed control not found"
+            )
+
     db_mapping = EvidenceControlMapping(
         evidence_id=evidence_id,
         normalized_control_id=mapping.normalized_control_id,
-        framework_control_id=mapping.framework_control_id
+        framework_control_id=mapping.framework_control_id,
+        parsed_control_id=mapping.parsed_control_id,
+        uploaded_framework_id=mapping.uploaded_framework_id or (parsed_control.uploaded_framework_id if parsed_control else None),
     )
     db.add(db_mapping)
+
+    # Auto-link to existing control implementations for auditor visibility
+    impl_query = db.query(ControlImplementation).join(CertificationJourney).filter(
+        CertificationJourney.tenant_id.in_(user_tenants)
+    )
+    if mapping.parsed_control_id:
+        impl_query = impl_query.filter(ControlImplementation.parsed_control_id == mapping.parsed_control_id)
+    elif mapping.framework_control_id:
+        impl_query = impl_query.filter(ControlImplementation.framework_control_id == mapping.framework_control_id)
+    implementations = impl_query.all()
+
+    for impl in implementations:
+        exists_impl_ev = db.query(ImplementationEvidence).filter(
+            ImplementationEvidence.implementation_id == impl.id,
+            ImplementationEvidence.evidence_id == evidence_id
+        ).first()
+        if exists_impl_ev:
+            continue
+        impl_ev = ImplementationEvidence(
+            implementation_id=impl.id,
+            evidence_id=evidence_id,
+            file_name=evidence.file_name or evidence.name,
+            file_path=evidence.file_path,
+            file_size=getattr(evidence, "file_size", None),
+            mime_type=evidence.file_type,
+            uploaded_by=current_user.id,
+            review_status="pending"
+        )
+        db.add(impl_ev)
+
     db.commit()
     db.refresh(db_mapping)
     return db_mapping

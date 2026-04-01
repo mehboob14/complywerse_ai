@@ -266,6 +266,12 @@ export default function PolicyDetailPage() {
           setIsParsing(false);
           toast({ type: 'success', title: 'Policy Parsed', message: data.message || `${data.total_statements || 0} statements extracted.` });
           queryClient.invalidateQueries({ queryKey: ['document-policy-statements', id] });
+        } else if (data.status === 'review_required') {
+          stopParsePolling();
+          setIsParsing(false);
+          toast({ type: 'info', title: 'Review Required', message: data.message || 'Re-parse proposals are ready for review.' });
+          queryClient.invalidateQueries({ queryKey: ['document-policy-statements', id] });
+          queryClient.invalidateQueries({ queryKey: ['reparse-proposals', id] });
         } else if (data.status === 'failed') {
           stopParsePolling();
           setIsParsing(false);

@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   Play,
   Check,
+  Search,
   XCircle,
   ArrowLeft,
   Layers,
@@ -30,7 +31,6 @@ import {
   Building2,
   Users,
   Percent,
-  Search,
   Filter,
   ChevronUp,
   Circle,
@@ -161,6 +161,11 @@ const ANNEX_A_DOMAINS = [
   { id: 'A.8', name: 'Technological Controls', controlCount: 34 },
 ];
 
+const stripCertificationPostfix = (value?: string): string => {
+  if (!value) return '';
+  return value.replace(/\s+certification\s*$/i, '').trim();
+};
+
 type TabType = 'overview' | 'phases' | 'controls' | string;
 type ScopingSubTab = 'definition' | 'locations' | 'exclusions' | 'departments';
 type SoaSubTab = 'controls' | 'summary' | 'export';
@@ -183,6 +188,8 @@ export default function CertificationJourneyPage() {
   const [selectedControl, setSelectedControl] = useState<ControlImplementation | null>(null);
   const [showControlModal, setShowControlModal] = useState(false);
   const [expandedControls, setExpandedControls] = useState<number[]>([]);
+  const [expandedSubControlKeys, setExpandedSubControlKeys] = useState<string[]>([]);
+  const [expandedRequirementTextIds, setExpandedRequirementTextIds] = useState<number[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('default');
@@ -193,6 +200,11 @@ export default function CertificationJourneyPage() {
     queryKey: ['certification', journeyId],
     queryFn: async () => {
       const response = await certificationsApi.getById(journeyId);
+      console.info('[JourneyTrace] certification payload', {
+        journeyId,
+        frameworkName: response?.data?.framework_name,
+        classification: (response?.data as any)?.framework_classification,
+      });
       return response.data as CertificationJourney;
     },
   });
@@ -201,6 +213,17 @@ export default function CertificationJourneyPage() {
     queryKey: ['certification-controls', journeyId],
     queryFn: async () => {
       const response = await certificationsApi.getControls(journeyId);
+      console.info('[JourneyTrace] controls payload', {
+        journeyId,
+        totalControls: response?.data?.length || 0,
+        sample: (response?.data || []).slice(0, 5).map((c: any) => ({
+          id: c.id,
+          code: c.control_code,
+          evidenceRequirements: c.evidence_requirements?.length || 0,
+          evidenceRecommendations: c.evidence_recommendations?.length || 0,
+          subControls: c.sub_controls?.length || 0,
+        })),
+      });
       return response.data as CertificationControl[];
     },
     enabled: !!journeyId,
@@ -274,6 +297,25 @@ export default function CertificationJourneyPage() {
   const [reviewingRecord, setReviewingRecord] = useState<any>(null);
   const [reviewComment, setReviewComment] = useState('');
   const [applicabilityStatusFilter, setApplicabilityStatusFilter] = useState<string>('all');
+
+  const generateReportMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.get(`/certifications/${journeyId}/report`, {
+        responseType: 'blob'
+      });
+      return response.data as Blob;
+    },
+    onSuccess: (blob) => {
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `framework-${journeyId}-report.txt`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    }
+  });
 
   const enhanceMutation = useMutation({
     mutationFn: async (frameworkId: number) => {
@@ -351,10 +393,20 @@ export default function CertificationJourneyPage() {
   const phasesGenerated = journeyPhasesData?.generated || false;
   const phaseGenerationTriggered = useRef(false);
 
+  const frameworkClassification = ((journey as any)?.framework_classification || '').toLowerCase();
+  const fallbackName = (((journey as any)?.framework_name || journey?.framework?.name || '') as string).toLowerCase();
+  const isCertificationFramework = frameworkClassification
+    ? frameworkClassification === 'certification'
+    : (fallbackName.includes('iso') || fallbackName.includes('pci'));
+  const entityLabel = isCertificationFramework ? 'Control' : 'Requirement';
+  const entityLabelPlural = isCertificationFramework ? 'Controls' : 'Requirements';
+  const frameworkOverview = (journey as any)?.framework_overview || {};
+
   useEffect(() => {
     if (
       journeyId &&
       journeyPhasesData &&
+      isCertificationFramework &&
       !journeyPhasesData.generated &&
       !generatingPhaseTasks &&
       !generatePhasesMutation.isPending &&
@@ -363,7 +415,7 @@ export default function CertificationJourneyPage() {
       phaseGenerationTriggered.current = true;
       generatePhasesMutation.mutate();
     }
-  }, [journeyId, journeyPhasesData?.generated]);
+  }, [journeyId, journeyPhasesData?.generated, isCertificationFramework]);
 
   const phases = (journeyPhasesData?.phases || []).map((phase: any) => ({
     id: phase.phase_number || phase.id,
@@ -467,30 +519,16 @@ export default function CertificationJourneyPage() {
   });
 
   const isLoading = journeyLoading || controlsLoading;
+  const totalControlsProgress = progress?.total_controls || 0;
+  const implementedCount = (progress as any)?.implemented_count ?? (progress as any)?.implemented ?? 0;
+  const verifiedCount = (progress as any)?.verified_count ?? (progress as any)?.verified ?? 0;
+  const inProgressCount = (progress as any)?.in_progress_count ?? (progress as any)?.in_progress ?? 0;
+  const notApplicableCount = (progress as any)?.not_applicable_count ?? (progress as any)?.not_applicable ?? 0;
   const completionPercentage = progress?.completion_percentage || 0;
-
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
-    );
-  }
-
-  if (journeyError || !journey) {
-    return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
-        <AlertCircle className="mb-2 h-8 w-8" />
-        <p>Failed to load certification journey</p>
-        <button 
-          onClick={() => router.push('/frameworks')}
-          className="btn-secondary mt-4"
-        >
-          Back to Frameworks
-        </button>
-      </div>
-    );
-  }
+  const evidenceCoveragePercentage = (progress as any)?.evidence_coverage_percentage ?? completionPercentage;
+  const readinessPercentage = (progress as any)?.readiness_percentage ?? completionPercentage;
+  const controlsWithEvidence = (progress as any)?.with_evidence_count ?? 0;
+  const fullyEvidencedControls = (progress as any)?.fully_evidenced_count ?? 0;
 
   const togglePhase = (phaseId: number) => {
     setExpandedPhases(prev => 
@@ -509,11 +547,56 @@ export default function CertificationJourneyPage() {
   };
 
   const toggleControl = (controlId: number) => {
+    console.info('[JourneyTrace] toggle control accordion', { controlId });
     setExpandedControls(prev => 
       prev.includes(controlId) 
         ? prev.filter(id => id !== controlId)
         : [...prev, controlId]
     );
+  };
+
+  const makeSubControlKey = (sub: SubControlWithEvidence, depth: number, index: number): string => {
+    return `${sub.id || 'na'}::${sub.code || 'no-code'}::${depth}::${index}`;
+  };
+
+  const toggleSubControl = (key: string, meta: { code?: string; depth: number; hasChildren: boolean }) => {
+    console.info('[JourneyTrace] toggle sub-control', { key, ...meta });
+    setExpandedSubControlKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const focusControlByCode = (controlCode?: string) => {
+    if (!controlCode) return;
+    const trimmed = controlCode.trim();
+    if (!trimmed) return;
+
+    const match = (controls || []).find((ctrl: CertificationControl) => {
+      const code = (ctrl.control_code || '').trim();
+      return code === trimmed || code.startsWith(`${trimmed}.`) || trimmed.startsWith(`${code}.`);
+    });
+
+    console.info('[JourneyTrace] focusControlByCode', {
+      requestedCode: trimmed,
+      controlsCount: (controls || []).length,
+      foundMatch: !!match,
+      activeFilters: {
+        categoryFilter,
+        statusFilter,
+        sortOrder,
+        searchQuery,
+      },
+    });
+
+    if (!match) return;
+
+    setExpandedControls((prev) => (prev.includes(match.id) ? prev : [...prev, match.id]));
+    setTimeout(() => {
+      const el = document.getElementById(`control-${match.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 80);
   };
 
   const handleFileUpload = (controlId: number, event: React.ChangeEvent<HTMLInputElement>) => {
@@ -579,11 +662,24 @@ export default function CertificationJourneyPage() {
     }
     return true;
   }).sort((a: CertificationControl, b: CertificationControl) => {
-    const codeA = a.control_code || '';
-    const codeB = b.control_code || '';
+    const codeA = a.original_control_code || a.system_control_code || a.control_code || '';
+    const codeB = b.original_control_code || b.system_control_code || b.control_code || '';
     const result = naturalSortCompare(codeA, codeB);
     return sortOrder === 'desc' ? -result : result;
   }) || [];
+
+  useEffect(() => {
+    console.info('[JourneyTrace] filtered controls recalculated', {
+      totalControls: (controls || []).length,
+      filteredControls: filteredControls.length,
+      filters: {
+        searchQuery,
+        categoryFilter,
+        statusFilter,
+        sortOrder,
+      },
+    });
+  }, [controls, filteredControls.length, searchQuery, categoryFilter, statusFilter, sortOrder]);
 
   const controlStats = {
     total: controls?.length || 0,
@@ -600,7 +696,10 @@ export default function CertificationJourneyPage() {
     }
   };
 
-  const totalEvidence = controls?.reduce((acc: number, c: CertificationControl) => acc + c.evidence_count, 0) || 0;
+  const totalEvidence = (controls || []).reduce(
+    (acc: number, c: CertificationControl) => acc + (c.evidence_count ?? (c.evidence ? c.evidence.length : 0)),
+    0
+  );
 
   const handleControlClick = (control: ControlImplementation) => {
     setSelectedControl(control);
@@ -613,18 +712,47 @@ export default function CertificationJourneyPage() {
   }));
 
   const isPciDssFramework = (
-    (journey as any).framework_name ||
-    journey.framework?.name ||
+    (journey as any)?.framework_name ||
+    journey?.framework?.name ||
     ''
   ).toLowerCase().includes('pci');
+
+  const toggleRequirementText = (controlId: number) => {
+    setExpandedRequirementTextIds((prev) =>
+      prev.includes(controlId) ? prev.filter((id) => id !== controlId) : [...prev, controlId]
+    );
+  };
   
   const tabs: { id: TabType; label: string; icon?: React.ReactNode }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'phases', label: 'Phases' },
+    ...(isCertificationFramework ? [{ id: 'phases' as TabType, label: 'Phases' }] : []),
     ...(isPciDssFramework ? [{ id: 'cde-scope' as TabType, label: 'CDE Scope' }] : []),
-    { id: 'controls', label: 'Controls' },
+    { id: 'controls', label: entityLabelPlural },
     { id: 'applicability', label: 'Applicability' },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+      </div>
+    );
+  }
+
+  if (journeyError || !journey) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+        <AlertCircle className="mb-2 h-8 w-8" />
+        <p>Failed to load certification journey</p>
+        <button 
+          onClick={() => router.push('/frameworks')}
+          className="btn-secondary mt-4"
+        >
+          Back to Frameworks
+        </button>
+      </div>
+    );
+  }
 
   const CircularProgress = ({ percentage }: { percentage: number }) => {
     const circumference = 2 * Math.PI * 45;
@@ -664,6 +792,88 @@ export default function CertificationJourneyPage() {
   };
 
   const renderOverviewTab = () => (
+    !isCertificationFramework ? (
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="cw-card p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold cw-text">
+              <Sparkles className="h-5 w-5 text-blue-600" />
+              AI Framework Overview
+            </h3>
+            <div className="space-y-4 text-sm text-gray-700">
+              {frameworkOverview.purpose && (
+                <div>
+                  <p className="font-semibold text-black">Purpose</p>
+                  <p>{frameworkOverview.purpose}</p>
+                </div>
+              )}
+              {frameworkOverview.scope && (
+                <div>
+                  <p className="font-semibold text-black">Scope</p>
+                  <p>{frameworkOverview.scope}</p>
+                </div>
+              )}
+              {frameworkOverview.classification_reasoning && (
+                <div>
+                  <p className="font-semibold text-black">AI Assessment</p>
+                  <p>{frameworkOverview.classification_reasoning}</p>
+                </div>
+              )}
+              {Array.isArray(frameworkOverview.objectives) && frameworkOverview.objectives.length > 0 && (
+                <div>
+                  <p className="mb-2 font-semibold text-black">Key Objectives</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {frameworkOverview.objectives.slice(0, 8).map((item: string, idx: number) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(frameworkOverview.adoption_approach) && frameworkOverview.adoption_approach.length > 0 && (
+                <div>
+                  <p className="mb-2 font-semibold text-black">Adoption Approach</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {frameworkOverview.adoption_approach.slice(0, 8).map((item: string, idx: number) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {!frameworkOverview.purpose && !frameworkOverview.scope && !frameworkOverview.classification_reasoning && (
+                <p className="text-gray-500">AI overview data is not yet available for this framework.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="cw-card p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold cw-text">
+              <BarChart3 className="h-5 w-5 text-blue-600" />
+              Key Metrics
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="cw-text-muted">{entityLabelPlural} Implemented</span>
+                <span className="font-semibold cw-text">{progress?.implemented || 0}/{progress?.total_controls || 0}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="cw-text-muted">{entityLabelPlural} In Progress</span>
+                <span className="font-semibold text-blue-600">{progress?.in_progress || 0}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="cw-text-muted">Evidence Collected</span>
+                <span className="font-semibold cw-text">{totalEvidence}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="cw-text-muted">Open Gaps</span>
+                <span className="font-semibold text-orange-600">{(gaps as any)?.not_implemented?.length || 0}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
         <div className="cw-card p-6">
@@ -758,11 +968,11 @@ export default function CertificationJourneyPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="cw-text-muted">Controls Implemented</span>
-              <span className="font-semibold cw-text">{progress?.implemented || 0}/{progress?.total_controls || 0}</span>
+                <span className="font-semibold cw-text">{implementedCount}/{totalControlsProgress}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="cw-text-muted">Controls In Progress</span>
-              <span className="font-semibold text-blue-600">{progress?.in_progress || 0}</span>
+                <span className="font-semibold text-blue-600">{inProgressCount || controlsWithEvidence}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="cw-text-muted">Evidence Collected</span>
@@ -770,7 +980,7 @@ export default function CertificationJourneyPage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="cw-text-muted">Not Applicable</span>
-              <span className="font-semibold text-gray-500">{progress?.not_applicable || 0}</span>
+                <span className="font-semibold text-gray-500">{notApplicableCount}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="cw-text-muted">Open Gaps</span>
@@ -787,7 +997,7 @@ export default function CertificationJourneyPage() {
           <div className="space-y-3">
             {(gaps as any)?.not_implemented?.length > 0 && (
               <div className="rounded-lg bg-orange-50 border border-orange-200 p-3">
-                <p className="text-sm font-medium text-orange-700">{(gaps as any).not_implemented.length} controls not implemented</p>
+                <p className="text-sm font-medium text-orange-700">{(gaps as any).not_implemented.length} {entityLabelPlural.toLowerCase()} not implemented</p>
                 <p className="text-xs text-gray-600">Require implementation</p>
               </div>
             )}
@@ -810,9 +1020,16 @@ export default function CertificationJourneyPage() {
         </div>
       </div>
     </div>
+    )
   );
 
   const renderPhasesTab = () => (
+    !isCertificationFramework ? (
+      <div className="cw-card p-8 text-center">
+        <p className="text-lg font-semibold text-black">Phases are disabled for compliance frameworks</p>
+        <p className="mt-2 text-sm text-gray-600">Use the Overview and {entityLabelPlural} tabs to manage compliance implementation.</p>
+      </div>
+    ) : (
     <div className="cw-card p-6">
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -960,6 +1177,7 @@ export default function CertificationJourneyPage() {
         })}
       </div>
     </div>
+    )
   );
 
   const renderScopingTab = () => (
@@ -1104,14 +1322,35 @@ export default function CertificationJourneyPage() {
     
     return (
       <div className={`space-y-2 ${depth > 0 ? `pl-4 border-l-2 ${borderColor}` : `pl-4 border-l-2 ${borderColor}`}`}>
-        {subControls.map((sub, idx) => (
+        {subControls.map((sub, idx) => {
+          const key = makeSubControlKey(sub, depth, idx);
+          const hasChildren = !!(sub.sub_controls && sub.sub_controls.length > 0);
+          const isExpanded = expandedSubControlKeys.includes(key);
+
+          return (
           <div key={sub.id || idx} className={`rounded-lg ${bgColor} border border-gray-200 p-3`}>
             <div className="flex items-start gap-3">
               <ChevronRight className={`h-4 w-4 mt-0.5 flex-shrink-0 ${depth === 0 ? 'text-blue-600' : depth === 1 ? 'text-cyan-600' : 'text-purple-600'}`} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className={`font-mono text-xs ${depth === 0 ? 'text-blue-600' : depth === 1 ? 'text-cyan-600' : 'text-purple-600'}`}>{sub.code}</span>
-                  <span className="text-sm font-medium text-black">{sub.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (hasChildren) {
+                        toggleSubControl(key, { code: sub.code, depth, hasChildren });
+                      } else {
+                        focusControlByCode(sub.code);
+                      }
+                    }}
+                    className="flex items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-blue-50"
+                    title={hasChildren ? 'Expand/collapse sub-controls in place' : `Locate ${entityLabel.toLowerCase()} ${sub.code}`}
+                  >
+                    {hasChildren ? (
+                      isExpanded ? <ChevronDown className="h-3 w-3 text-gray-600" /> : <ChevronRight className="h-3 w-3 text-gray-600" />
+                    ) : null}
+                    <span className={`font-mono text-xs ${depth === 0 ? 'text-blue-600' : depth === 1 ? 'text-cyan-600' : 'text-purple-600'}`}>{sub.code}</span>
+                    <span className="text-sm font-medium text-black underline decoration-dotted underline-offset-2">{sub.name}</span>
+                  </button>
                   {depth > 0 && (
                     <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">Level {depth + 1}</span>
                   )}
@@ -1131,7 +1370,19 @@ export default function CertificationJourneyPage() {
                     )}
                   </div>
                 )}
-                {sub.sub_controls && sub.sub_controls.length > 0 && (
+                {(!sub.evidence_requirements || sub.evidence_requirements.length === 0) && sub.evidence_recommendations && sub.evidence_recommendations.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {sub.evidence_recommendations.slice(0, 4).map((rec, recIdx) => (
+                      <span key={recIdx} className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">
+                        {rec}
+                      </span>
+                    ))}
+                    {sub.evidence_recommendations.length > 4 && (
+                      <span className="text-xs text-gray-600">+{sub.evidence_recommendations.length - 4} more</span>
+                    )}
+                  </div>
+                )}
+                {sub.sub_controls && sub.sub_controls.length > 0 && isExpanded && (
                   <div className="mt-3">
                     <p className="text-xs text-gray-600 mb-2">Sub-controls ({sub.sub_controls.length})</p>
                     {renderSubControlsRecursive(sub.sub_controls, depth + 1)}
@@ -1140,7 +1391,8 @@ export default function CertificationJourneyPage() {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -1156,9 +1408,18 @@ export default function CertificationJourneyPage() {
       not_applicable: { label: 'N/A', color: 'bg-gray-50 text-gray-700' },
     };
     const status = statusConfig[control.status] || statusConfig.not_started;
+    const evidenceCount = control.evidence_count ?? (control.evidence ? control.evidence.length : 0);
+    const requiredEvidenceCount = control.required_evidence_count ?? (control.evidence_requirements ? control.evidence_requirements.length : 0);
+    const approvedEvidenceCount = control.approved_evidence_count ?? (control.evidence ? control.evidence.filter((ev) => ev.review_status === 'approved').length : 0);
+    const hasEvidence = evidenceCount > 0;
+    const evidenceCoverageValue = control.evidence_coverage ?? (requiredEvidenceCount > 0 ? Math.min(1, evidenceCount / requiredEvidenceCount) : hasEvidence ? 1 : 0);
+    const isRequirementTextExpanded = expandedRequirementTextIds.includes(control.id);
+    const requirementTextFull = control.control_statement_full || control.control_statement || '';
+    const requirementTextShort = control.control_statement || requirementTextFull;
+    const hasLongRequirementText = requirementTextFull.length > 160;
     
     return (
-      <div key={control.id} className="rounded-lg border border-gray-200 bg-white">
+      <div id={`control-${control.id}`} key={control.id} className="rounded-lg border border-gray-200 bg-white">
         <button
           onClick={() => toggleControl(control.id)}
           className="flex w-full items-center justify-between p-4 text-left"
@@ -1172,19 +1433,31 @@ export default function CertificationJourneyPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm text-blue-600">{control.control_code}</span>
-                <span className="font-medium text-black truncate">{control.control_name}</span>
+                <span className="font-medium text-black">{control.control_name}</span>
               </div>
-              <p className="text-sm text-gray-500 truncate mt-0.5">{control.control_statement}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+                    Original: {control.original_control_code || control.control_code}
+                  </span>
+                  <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                    System: {control.system_control_code || control.control_code}
+                  </span>
+                </div>
+              <p className="text-sm text-gray-500 mt-0.5 whitespace-pre-wrap break-words">{control.control_statement}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 ml-4">
             <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700">{category}</span>
-            <span className={`rounded-full px-2 py-1 text-xs ${control.is_applicable ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-700'}`}>
+            <span className={`rounded-lg px-2 py-1 text-xs ${control.is_applicable ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-700'}`}>
               {control.is_applicable ? 'Applicable' : 'N/A'}
             </span>
-            <span className={`rounded-full px-2 py-1 text-xs ${status.color}`}>{status.label}</span>
-            <span className="text-xs text-gray-500">{control.evidence_count}/{control.required_evidence_count}</span>
-            <Circle className={`h-4 w-4 ${control.evidence_count > 0 ? 'text-emerald-600 fill-emerald-600' : 'text-gray-300'}`} />
+            <span className={`rounded-lg px-2 py-1 text-xs ${status.color}`}>{status.label}</span>
+            <span className="text-xs text-gray-500">{approvedEvidenceCount}/{requiredEvidenceCount || '—'} approved</span>
+            <span className="text-xs text-gray-500">{evidenceCount}/{requiredEvidenceCount || '—'} evidence</span>
+            <div className="flex items-center gap-1">
+              <Circle className={`h-4 w-4 ${hasEvidence ? 'text-emerald-600 fill-emerald-600' : 'text-gray-300'}`} />
+              <span className="text-[10px] text-gray-500">{Math.round(evidenceCoverageValue * 100)}%</span>
+            </div>
           </div>
         </button>
         {isExpanded && (
@@ -1194,7 +1467,7 @@ export default function CertificationJourneyPage() {
               <div className="mb-6">
                 <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-black">
                   <Layers className="h-4 w-4 text-blue-600" />
-                  Control Hierarchy ({control.sub_controls.length} sub-controls)
+                  {entityLabel} Hierarchy ({control.sub_controls.length} sub-controls)
                 </h4>
                 {renderSubControlsRecursive(control.sub_controls, 0)}
               </div>
@@ -1206,7 +1479,7 @@ export default function CertificationJourneyPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-black">
                     <Paperclip className="h-4 w-4 text-blue-600" />
-                    Linked Evidence ({control.evidence_count})
+                    Linked Evidence ({evidenceCount})
                   </h4>
                   {showUpload && (
                     <label className="cursor-pointer">
@@ -1357,7 +1630,7 @@ export default function CertificationJourneyPage() {
               <div>
                 <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-black">
                   <FileCheck className="h-4 w-4 text-blue-600" />
-                  Required Evidence for {control.control_code}
+                  Required Evidence for {entityLabel} {control.control_code}
                 </h4>
                 {control.evidence_requirements?.length > 0 ? (
                   <div className="space-y-2">
@@ -1386,7 +1659,14 @@ export default function CertificationJourneyPage() {
                             <Radio className="h-4 w-4 text-blue-600 mt-1 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-black">{ev.title}</p>
-                              <p className="text-xs text-gray-600 mt-1">{ev.description}</p>
+                              {(() => {
+                                const titleText = (ev.title || '').trim();
+                                const descText = (ev.description || '').trim();
+                                const isDuplicate = titleText.toLowerCase() === descText.toLowerCase();
+                                return !descText || isDuplicate ? null : (
+                                  <p className="text-xs text-gray-600 mt-1">{ev.description}</p>
+                                );
+                              })()}
                               <div className="mt-2 flex flex-wrap items-center gap-2">
                                 <span className={`rounded px-1.5 py-0.5 text-xs ${typeColor}`}>
                                   {typeLabel}
@@ -1421,9 +1701,20 @@ export default function CertificationJourneyPage() {
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-lg bg-white border border-dashed border-gray-300 p-4 text-center">
-                    <p className="text-sm text-black">No evidence requirements defined</p>
-                  </div>
+                  control.evidence_recommendations?.length ? (
+                    <div className="rounded-lg bg-white border border-gray-200 p-4">
+                      <p className="mb-2 text-sm font-medium text-black">Recommended Evidence</p>
+                      <div className="flex flex-wrap gap-2">
+                        {control.evidence_recommendations.map((rec: string, idx: number) => (
+                          <span key={idx} className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">{rec}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg bg-white border border-dashed border-gray-300 p-4 text-center">
+                      <p className="text-sm text-black">No evidence requirements defined</p>
+                    </div>
+                  )
                 )}
               </div>
             </div>
@@ -1437,12 +1728,12 @@ export default function CertificationJourneyPage() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-slate-700 p-2">
-            <Layers className="h-5 w-5 text-slate-400" />
+          <div className="rounded-lg bg-blue-50 p-2">
+            <Layers className="h-5 w-5 text-blue-600" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">{controlStats.total}</p>
-            <p className="text-xs text-slate-400">Total Controls</p>
+            <p className="text-2xl font-bold text-black">{controlStats.total}</p>
+            <p className="text-xs text-gray-600">Total Controls</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
@@ -1451,16 +1742,16 @@ export default function CertificationJourneyPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-green-400">{controlStats.applicable}</p>
-            <p className="text-xs text-slate-400">Applicable</p>
+            <p className="text-xs text-gray-600">Applicable</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-slate-700 p-2">
-            <XCircle className="h-5 w-5 text-slate-400" />
+          <div className="rounded-lg bg-gray-100 p-2">
+            <XCircle className="h-5 w-5 text-gray-600" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-400">{controlStats.notApplicable}</p>
-            <p className="text-xs text-slate-400">Not Applicable</p>
+            <p className="text-2xl font-bold text-gray-700">{controlStats.notApplicable}</p>
+            <p className="text-xs text-gray-600">Not Applicable</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
@@ -1469,7 +1760,7 @@ export default function CertificationJourneyPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-blue-400">{controlStats.implemented}</p>
-            <p className="text-xs text-slate-400">Implemented</p>
+            <p className="text-xs text-gray-600">Implemented</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
@@ -1478,7 +1769,7 @@ export default function CertificationJourneyPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-yellow-400">{controlStats.partial}</p>
-            <p className="text-xs text-slate-400">Partial</p>
+            <p className="text-xs text-gray-600">Partial</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
@@ -1487,13 +1778,13 @@ export default function CertificationJourneyPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-red-400">{controlStats.notImplemented}</p>
-            <p className="text-xs text-slate-400">Not Implemented</p>
+            <p className="text-xs text-gray-600">Not Implemented</p>
           </div>
         </div>
       </div>
 
       <div className="card">
-        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-700 pb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-gray-200 pb-4">
           {([
             { key: 'all', label: 'All', count: controlStats.total },
             { key: 'organizational', label: 'Organizational', count: controlStats.byCategory.organizational },
@@ -1507,7 +1798,7 @@ export default function CertificationJourneyPage() {
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 categoryFilter === cat.key
                   ? 'bg-primary-500 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-black'
               }`}
             >
               {cat.label} ({cat.count})
@@ -1515,17 +1806,7 @@ export default function CertificationJourneyPage() {
           ))}
         </div>
 
-        <div className="mb-4 flex gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search controls..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input w-full pl-10"
-            />
-          </div>
+        <div className="mb-4 flex gap-4 items-center justify-end">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
@@ -1543,9 +1824,9 @@ export default function CertificationJourneyPage() {
             filteredControls.map((control: CertificationControl) => renderControlAccordion(control))
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Shield className="mb-4 h-12 w-12 text-slate-600" />
-              <p className="text-slate-400">No controls found</p>
-              <p className="text-sm text-slate-500 mt-1">Try adjusting your filters</p>
+              <Shield className="mb-4 h-12 w-12 text-gray-400" />
+              <p className="text-gray-600">No {entityLabelPlural.toLowerCase()} found</p>
+              <p className="mt-1 text-sm text-gray-500">Try adjusting your filters</p>
             </div>
           )}
         </div>
@@ -1562,7 +1843,7 @@ export default function CertificationJourneyPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-black">{controlStats.total}</p>
-            <p className="text-xs text-gray-600">Total Controls</p>
+            <p className="text-xs text-gray-600">Total {entityLabelPlural}</p>
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center gap-3 p-4">
@@ -1596,13 +1877,13 @@ export default function CertificationJourneyPage() {
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
         <div className="mb-2 flex items-center justify-between text-sm">
-          <span className="text-gray-600">Implementation Progress</span>
-          <span className="font-medium text-black">{completionPercentage}%</span>
+          <span className="text-gray-600">Evidence Readiness</span>
+          <span className="font-medium text-black">{readinessPercentage}%</span>
         </div>
         <div className="h-3 overflow-hidden rounded-full bg-gray-100">
           <div
             className="h-full rounded-full bg-blue-600 transition-all"
-            style={{ width: `${completionPercentage}%` }}
+            style={{ width: `${readinessPercentage}%` }}
           />
         </div>
       </div>
@@ -1620,7 +1901,7 @@ export default function CertificationJourneyPage() {
                     : 'text-gray-600 hover:text-black'
                 }`}
               >
-                {tab === 'library' ? 'Control Library' : tab === 'policies' ? 'Policies & Procedures' : 'Evidence Management'}
+                {tab === 'library' ? `${entityLabel} Library` : tab === 'policies' ? 'Policies & Procedures' : 'Evidence Management'}
               </button>
             ))}
           </div>
@@ -1637,7 +1918,7 @@ export default function CertificationJourneyPage() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search controls..."
+                  placeholder={`Search ${entityLabelPlural.toLowerCase()}...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="input w-full pl-10"
@@ -1681,7 +1962,7 @@ export default function CertificationJourneyPage() {
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Shield className="mb-4 h-12 w-12 text-gray-400" />
-                  <p className="text-gray-600">No controls found</p>
+                  <p className="text-gray-600">No {entityLabelPlural.toLowerCase()} found</p>
                   <p className="text-sm text-gray-500 mt-1">Try adjusting your filters</p>
                 </div>
               )}
@@ -2049,7 +2330,7 @@ export default function CertificationJourneyPage() {
                 {filteredApplicabilityControls.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
-                      No controls found matching the selected filter.
+                      No {entityLabelPlural.toLowerCase()} found matching the selected filter.
                     </td>
                   </tr>
                 )}
@@ -2082,31 +2363,33 @@ export default function CertificationJourneyPage() {
 
         {showApplicabilityModal && applicabilityModalControl && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
-              <h3 className="text-lg font-semibold text-black mb-1">
-                {applicabilityIsApplicable ? 'Mark as Applicable' : 'Mark as Not Applicable'}
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Control: <span className="text-blue-600 font-mono">{applicabilityModalControl.control_code || applicabilityModalControl.original_reference || applicabilityModalControl.control_id}</span>
-                {' — '}
-                {applicabilityModalControl.control_name || applicabilityModalControl.title}
-              </p>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Justification {!applicabilityIsApplicable && <span className="text-rose-600">*</span>}
-                </label>
-                <textarea
-                  value={applicabilityJustification}
-                  onChange={(e) => setApplicabilityJustification(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
-                  rows={4}
-                  placeholder={applicabilityIsApplicable ? 'Provide justification for re-applying this control...' : 'Explain why this clause is not applicable to your organization...'}
-                />
-                {!applicabilityIsApplicable && !applicabilityJustification.trim() && (
-                  <p className="mt-1 text-xs text-rose-600">Justification is required when marking a clause as Not Applicable</p>
-                )}
+            <div className="flex h-[70vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+              <div className="flex-1 overflow-y-auto p-6">
+                <h3 className="mb-1 text-lg font-semibold text-black">
+                  {applicabilityIsApplicable ? 'Mark as Applicable' : 'Mark as Not Applicable'}
+                </h3>
+                <p className="mb-4 text-sm text-gray-600">
+                  Control: <span className="font-mono text-blue-600">{applicabilityModalControl.control_code || applicabilityModalControl.original_reference || applicabilityModalControl.control_id}</span>
+                  {' — '}
+                  {applicabilityModalControl.control_name || applicabilityModalControl.title}
+                </p>
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Justification {!applicabilityIsApplicable && <span className="text-rose-600">*</span>}
+                  </label>
+                  <textarea
+                    value={applicabilityJustification}
+                    onChange={(e) => setApplicabilityJustification(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                    rows={4}
+                    placeholder={applicabilityIsApplicable ? 'Provide justification for re-applying this control...' : 'Explain why this clause is not applicable to your organization...'}
+                  />
+                  {!applicabilityIsApplicable && !applicabilityJustification.trim() && (
+                    <p className="mt-1 text-xs text-rose-600">Justification is required when marking a clause as Not Applicable</p>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center justify-end gap-3">
+              <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-6 pt-4">
                 <button
                   onClick={() => { setShowApplicabilityModal(false); setApplicabilityModalControl(null); }}
                   className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -2129,32 +2412,34 @@ export default function CertificationJourneyPage() {
 
         {showReviewModal && reviewingRecord && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
-              <h3 className="text-lg font-semibold text-black mb-1">Review Applicability Decision</h3>
-              <p className="text-sm text-gray-600 mb-2">
-                Control: <span className="text-blue-600 font-mono">{reviewingRecord.control_reference}</span>
-                {' — '}
-                {reviewingRecord.control_title}
-              </p>
-              <div className="mb-3 rounded-lg bg-gray-50 p-3 border border-gray-200">
-                <p className="text-xs text-gray-600 mb-1">Decision</p>
-                <p className="text-sm text-black">{reviewingRecord.is_applicable ? 'Applicable' : 'Not Applicable'}</p>
-                <p className="text-xs text-gray-600 mt-2 mb-1">Justification</p>
-                <p className="text-sm text-gray-700">{reviewingRecord.justification}</p>
-                <p className="text-xs text-gray-600 mt-2 mb-1">Requested By</p>
-                <p className="text-sm text-gray-700">{reviewingRecord.requested_by_name} on {reviewingRecord.requested_at ? new Date(reviewingRecord.requested_at).toLocaleDateString() : ''}</p>
+            <div className="flex h-[70vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+              <div className="flex-1 overflow-y-auto p-6">
+                <h3 className="mb-1 text-lg font-semibold text-black">Review Applicability Decision</h3>
+                <p className="mb-2 text-sm text-gray-600">
+                  Control: <span className="font-mono text-blue-600">{reviewingRecord.control_reference}</span>
+                  {' — '}
+                  {reviewingRecord.control_title}
+                </p>
+                <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="mb-1 text-xs text-gray-600">Decision</p>
+                  <p className="text-sm text-black">{reviewingRecord.is_applicable ? 'Applicable' : 'Not Applicable'}</p>
+                  <p className="mb-1 mt-2 text-xs text-gray-600">Justification</p>
+                  <p className="text-sm text-gray-700">{reviewingRecord.justification}</p>
+                  <p className="mb-1 mt-2 text-xs text-gray-600">Requested By</p>
+                  <p className="text-sm text-gray-700">{reviewingRecord.requested_by_name} on {reviewingRecord.requested_at ? new Date(reviewingRecord.requested_at).toLocaleDateString() : ''}</p>
+                </div>
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-gray-700">Review Comment</label>
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                    rows={3}
+                    placeholder="Add a review comment (optional)..."
+                  />
+                </div>
               </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Review Comment</label>
-                <textarea
-                  value={reviewComment}
-                  onChange={(e) => setReviewComment(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
-                  rows={3}
-                  placeholder="Add a review comment (optional)..."
-                />
-              </div>
-              <div className="flex items-center justify-end gap-3">
+              <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-6 pt-4">
                 <button
                   onClick={() => { setShowReviewModal(false); setReviewingRecord(null); }}
                   className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -2254,8 +2539,8 @@ export default function CertificationJourneyPage() {
               <ArrowLeft className="h-5 w-5" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-black">{journey.name}</h1>
-              <p className="text-gray-600">Framework certification lifecycle</p>
+              <h1 className="text-2xl font-bold text-black">{stripCertificationPostfix(journey.name)}</h1>
+              <p className="text-gray-600">{isCertificationFramework ? 'Framework certification lifecycle' : 'Framework compliance lifecycle'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -2297,12 +2582,20 @@ export default function CertificationJourneyPage() {
                 </button>
               )}
             </div>
-            <button className="flex items-center gap-2 rounded-lg bg-white border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-              <FileText className="h-4 w-4" />
-              Generate Report
+            <button
+              onClick={() => generateReportMutation.mutate()}
+              disabled={generateReportMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-white border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {generateReportMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              {generateReportMutation.isPending ? 'Generating...' : 'Generate Report'}
             </button>
             <button 
-              onClick={() => router.push(`/auditor-portal/${frameworkId}`)}
+              onClick={() => router.push(`/auditor-portal/${journey.id}`)}
               className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
             >
               <ExternalLink className="h-4 w-4" />
@@ -2331,10 +2624,10 @@ export default function CertificationJourneyPage() {
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center justify-center p-6">
-            <CircularProgress percentage={completionPercentage} />
+            <CircularProgress percentage={readinessPercentage} />
             <div className="ml-4">
-              <p className="text-lg font-semibold text-black">Certification Readiness</p>
-              <p className="text-sm text-gray-600">Overall progress</p>
+              <p className="text-lg font-semibold text-black">{isCertificationFramework ? 'Certification Readiness' : 'Compliance Readiness'}</p>
+              <p className="text-sm text-gray-600">Approved evidence readiness</p>
             </div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
@@ -2343,9 +2636,9 @@ export default function CertificationJourneyPage() {
                 <Target className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Current Phase</p>
-                <p className="text-lg font-semibold text-black">Phase {journey.current_phase}</p>
-                <p className="text-sm text-blue-600">{phasesLoading ? 'Loading...' : (phases[journey.current_phase - 1]?.name || 'Phase ' + journey.current_phase)}</p>
+                <p className="text-sm text-gray-600">{isCertificationFramework ? 'Current Phase' : 'Framework Type'}</p>
+                <p className="text-lg font-semibold text-black">{isCertificationFramework ? `Phase ${journey.current_phase}` : 'Compliance'}</p>
+                <p className="text-sm text-blue-600">{isCertificationFramework ? (phasesLoading ? 'Loading...' : (phases[journey.current_phase - 1]?.name || 'Phase ' + journey.current_phase)) : ((journey as any)?.framework_overview?.regulatory_authority || 'Regulatory / Standard Requirements')}</p>
               </div>
             </div>
           </div>
@@ -2355,12 +2648,12 @@ export default function CertificationJourneyPage() {
                 <Shield className="h-5 w-5 text-blue-600" />
               </div>
               <div className="flex-1">
-                <p className="text-sm text-gray-600">Control Coverage</p>
-                <p className="text-lg font-semibold text-black">{progress?.implemented || 0}/{progress?.total_controls || 0}</p>
+                  <p className="text-sm text-gray-600">{entityLabel} Coverage</p>
+                  <p className="text-lg font-semibold text-black">{fullyEvidencedControls}/{totalControlsProgress}</p>
                 <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100">
                   <div
                     className="h-full rounded-full bg-blue-600"
-                    style={{ width: `${progress?.total_controls ? (progress.implemented / progress.total_controls) * 100 : 0}%` }}
+                      style={{ width: `${evidenceCoveragePercentage}%` }}
                   />
                 </div>
               </div>
@@ -2376,7 +2669,7 @@ export default function CertificationJourneyPage() {
                 <p className="text-lg font-semibold text-black">
                   {journey.target_date ? new Date(journey.target_date).toLocaleDateString() : 'Not set'}
                 </p>
-                <p className="text-sm text-gray-500">Stage 2 audit scheduled</p>
+                <p className="text-sm text-gray-500">{isCertificationFramework ? 'Stage 2 audit scheduled' : 'Compliance review target'}</p>
               </div>
             </div>
           </div>

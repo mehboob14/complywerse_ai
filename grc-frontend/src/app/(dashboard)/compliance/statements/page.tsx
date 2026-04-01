@@ -210,9 +210,18 @@ export default function PolicyStatementsPage() {
     mutationFn: async ({ id, evidenceIds }: { id: number; evidenceIds: number[] }) => {
       return complianceApi.statements.linkEvidence(id, evidenceIds);
     },
-    onSuccess: () => {
+    onSuccess: async (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['compliance-statements'] });
-      setEvidenceToLink([]);
+      if (selectedStatement?.id === id) {
+        try {
+          const refreshed = await complianceApi.statements.getById(id);
+          const detail = refreshed.data as StatementDetail;
+          setSelectedStatement(detail);
+          setEvidenceToLink(detail.compliance?.evidence_ids || []);
+        } catch (error) {
+          console.error('Failed to refresh statement details', error);
+        }
+      }
     },
   });
 

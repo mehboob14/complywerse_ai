@@ -214,22 +214,22 @@ export default function CreateFrameworkModal({
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
-      
-      <div className="absolute inset-4 md:inset-8 lg:inset-16 overflow-hidden rounded-xl bg-slate-50 shadow-2xl">
-        <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+
+      <div className="absolute inset-0 flex items-center justify-center p-4 md:p-6">
+        <div className="flex h-[70vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-primary-50 p-2">
                 <FileStack className="h-5 w-5 text-primary-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">Create Custom Framework</h2>
-                <p className="text-sm text-slate-600">Define your institutional compliance framework</p>
+                <h2 className="text-lg font-semibold text-black">Create Custom Framework</h2>
+                <p className="text-sm text-gray-600">Define your institutional compliance framework</p>
               </div>
             </div>
             <button
               onClick={handleClose}
-              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-700"
+              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
             >
               <X className="h-5 w-5" />
             </button>
@@ -248,7 +248,7 @@ export default function CreateFrameworkModal({
               </div>
 
               {showImport && (
-                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                   <label className="label">Paste JSON Framework Definition</label>
                   <textarea
                     value={importJson}
@@ -327,7 +327,7 @@ export default function CreateFrameworkModal({
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="label flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-slate-600" />
+                    <Building2 className="h-4 w-4 text-gray-600" />
                     Regulator / Authority
                   </label>
                   <input
@@ -340,7 +340,7 @@ export default function CreateFrameworkModal({
                 </div>
                 <div>
                   <label className="label flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-slate-600" />
+                    <Globe className="h-4 w-4 text-gray-600" />
                     Jurisdiction
                   </label>
                   <input
@@ -353,9 +353,9 @@ export default function CreateFrameworkModal({
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 pt-6">
+              <div className="border-t border-gray-200 pt-6">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-medium text-white">Domains & Control Objectives</h3>
+                  <h3 className="text-lg font-medium text-black">Domains & Control Objectives</h3>
                   <button onClick={addDomain} className="btn-primary flex items-center gap-2">
                     <Plus className="h-4 w-4" />
                     Add Domain
@@ -363,10 +363,10 @@ export default function CreateFrameworkModal({
                 </div>
 
                 {domains.length === 0 ? (
-                  <div className="rounded-lg border-2 border-dashed border-slate-200 p-8 text-center">
-                    <FileStack className="mx-auto h-12 w-12 text-slate-600" />
-                    <p className="mt-2 text-slate-600">No domains defined yet</p>
-                    <p className="text-sm text-slate-500">
+                  <div className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+                    <FileStack className="mx-auto h-12 w-12 text-gray-500" />
+                    <p className="mt-2 text-gray-700">No domains defined yet</p>
+                    <p className="text-sm text-gray-500">
                       Add domains to organize your control objectives
                     </p>
                     <button
@@ -381,18 +381,18 @@ export default function CreateFrameworkModal({
                     {domains.map((domain, index) => (
                       <div
                         key={domain.id}
-                        className="rounded-lg border border-slate-200 bg-white"
+                        className="rounded-lg border border-gray-200 bg-white"
                       >
                         <div
                           className="flex cursor-pointer items-center gap-3 p-4"
                           onClick={() => updateDomain(domain.id, 'isExpanded', !domain.isExpanded)}
                         >
                           {domain.isExpanded ? (
-                            <ChevronDown className="h-5 w-5 text-slate-600" />
+                            <ChevronDown className="h-5 w-5 text-gray-600" />
                           ) : (
-                            <ChevronRight className="h-5 w-5 text-slate-600" />
+                            <ChevronRight className="h-5 w-5 text-gray-600" />
                           )}
-                          <span className="flex h-6 w-6 items-center justify-center rounded bg-slate-700 text-xs font-bold text-slate-300">
+                          <span className="flex h-6 w-6 items-center justify-center rounded bg-blue-50 text-xs font-bold text-blue-700">
                             {index + 1}
                           </span>
                           <div className="flex-1">
@@ -404,11 +404,11 @@ export default function CreateFrameworkModal({
                                 updateDomain(domain.id, 'name', e.target.value);
                               }}
                               onClick={(e) => e.stopPropagation()}
-                              className="input !bg-transparent !border-0 !p-0 text-white font-medium"
+                              className="input !border-0 !bg-transparent !p-0 font-medium !text-black"
                               placeholder="Domain name..."
                             />
                           </div>
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-gray-500">
                             {domain.objectives.length} objectives
                           </span>
                           <button
@@ -416,14 +416,14 @@ export default function CreateFrameworkModal({
                               e.stopPropagation();
                               removeDomain(domain.id);
                             }}
-                            className="rounded p-1 text-slate-500 hover:bg-slate-700 hover:text-red-600"
+                            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-red-600"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
 
                         {domain.isExpanded && (
-                          <div className="border-t border-slate-200 p-4">
+                          <div className="border-t border-gray-200 p-4">
                             <div className="mb-4">
                               <label className="label text-xs">Domain Description</label>
                               <input
@@ -438,7 +438,7 @@ export default function CreateFrameworkModal({
                             </div>
 
                             <div className="mb-3 flex items-center justify-between">
-                              <label className="text-sm font-medium text-slate-300">
+                              <label className="text-sm font-medium text-gray-700">
                                 Control Objectives
                               </label>
                               <button
@@ -451,7 +451,7 @@ export default function CreateFrameworkModal({
                             </div>
 
                             {domain.objectives.length === 0 ? (
-                              <p className="text-center text-sm text-slate-500 py-4">
+                              <p className="py-4 text-center text-sm text-gray-500">
                                 No control objectives yet
                               </p>
                             ) : (
@@ -459,7 +459,7 @@ export default function CreateFrameworkModal({
                                 {domain.objectives.map((objective) => (
                                   <div
                                     key={objective.id}
-                                    className="flex items-start gap-2 rounded-lg bg-slate-50 p-3"
+                                    className="grid items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 md:grid-cols-[120px_minmax(0,1fr)_auto]"
                                   >
                                     <input
                                       type="text"
@@ -472,7 +472,7 @@ export default function CreateFrameworkModal({
                                           e.target.value
                                         )
                                       }
-                                      className="input !w-24 text-center font-mono text-sm"
+                                      className="input w-full text-center font-mono text-sm"
                                       placeholder="Code"
                                     />
                                     <div className="flex-1">
@@ -507,7 +507,7 @@ export default function CreateFrameworkModal({
                                     </div>
                                     <button
                                       onClick={() => removeObjective(domain.id, objective.id)}
-                                      className="rounded p-1 text-slate-500 hover:text-red-600"
+                                      className="rounded p-1 text-gray-500 hover:bg-white hover:text-red-600"
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </button>
@@ -525,7 +525,7 @@ export default function CreateFrameworkModal({
             </div>
           </div>
 
-          <div className="border-t border-slate-200 px-6 py-4">
+          <div className="border-t border-gray-200 px-6 py-4">
             <div className="mx-auto flex max-w-4xl items-center justify-end gap-4">
               <button onClick={handleClose} className="btn-secondary">
                 Cancel

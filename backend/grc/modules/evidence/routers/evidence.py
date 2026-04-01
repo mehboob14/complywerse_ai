@@ -25,9 +25,22 @@ ALLOWED_FILE_TYPES = {
     'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'xls': 'application/vnd.ms-excel',
     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'txt': 'text/plain',
+    'md': 'text/markdown',
+    'csv': 'text/csv',
+    'json': 'application/json',
+    'xml': 'application/xml',
+    'html': 'text/html',
+    'htm': 'text/html',
+    'rtf': 'application/rtf',
     'png': 'image/png',
     'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg'
+    'jpeg': 'image/jpeg',
+    'gif': 'image/gif',
+    'bmp': 'image/bmp',
+    'tif': 'image/tiff',
+    'tiff': 'image/tiff',
+    'webp': 'image/webp'
 }
 
 EVIDENCE_TYPES = [
@@ -50,7 +63,13 @@ EVIDENCE_TYPES = [
     "other"
 ]
 
-OCR_PROCESSABLE_TYPES = {'pdf', 'png', 'jpg', 'jpeg'}
+OCR_PROCESSABLE_TYPES = {
+    'pdf',
+    'docx',
+    'xls', 'xlsx',
+    'txt', 'text', 'log', 'md', 'csv', 'json', 'xml', 'html', 'htm', 'rtf',
+    'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff', 'webp'
+}
 
 
 def process_evidence_background(evidence_id: int):
@@ -69,7 +88,27 @@ def process_evidence_background(evidence_id: int):
         if evidence.file_name:
             file_ext = os.path.splitext(evidence.file_name)[1].lower().strip(".")
         elif evidence.file_type:
-            file_ext = evidence.file_type.split("/")[-1].lower()
+            mime = evidence.file_type.lower().strip()
+            mime_to_ext = {
+                'application/pdf': 'pdf',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+                'text/plain': 'txt',
+                'text/markdown': 'md',
+                'text/csv': 'csv',
+                'application/json': 'json',
+                'application/xml': 'xml',
+                'text/xml': 'xml',
+                'text/html': 'html',
+                'application/rtf': 'rtf',
+                'text/rtf': 'rtf',
+                'image/jpeg': 'jpg',
+                'image/png': 'png',
+                'image/gif': 'gif',
+                'image/bmp': 'bmp',
+                'image/tiff': 'tiff',
+                'image/webp': 'webp',
+            }
+            file_ext = mime_to_ext.get(mime, mime.split("/")[-1] if "/" in mime else "")
         
         if file_ext in OCR_PROCESSABLE_TYPES:
             try:
@@ -509,8 +548,7 @@ async def upload_evidence(
     if parsed_collection_date and validity_period_days:
         expiry_date = parsed_collection_date + timedelta(days=validity_period_days)
     
-    ocr_processable_types = ['pdf', 'png', 'jpg', 'jpeg']
-    ocr_status_val = "pending" if file_ext and file_ext[1:] in ocr_processable_types else "not_applicable"
+    ocr_status_val = "pending" if file_ext and file_ext[1:] in OCR_PROCESSABLE_TYPES else "not_applicable"
     
     db_evidence = Evidence(
         tenant_id=tenant_id,

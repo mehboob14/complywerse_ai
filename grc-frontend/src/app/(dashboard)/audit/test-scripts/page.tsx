@@ -198,13 +198,18 @@ export default function TestScriptsPage() {
 
   const openEdit = (script: TestScript) => {
     setEditingScript(script);
+    const normalizedSteps =
+      script.procedure_steps?.length > 0
+        ? script.procedure_steps.map((s) => ({
+            step: s.step || '',
+            description: s.description || '',
+          }))
+        : [{ step: '', description: '' }];
+
     setForm({
       title: script.title,
       objective: script.objective || '',
-      procedure_steps:
-        script.procedure_steps?.length > 0
-          ? script.procedure_steps
-          : [{ step: '', description: '' }],
+      procedure_steps: normalizedSteps,
       control_area: script.control_area || '',
       entity_type: script.entity_type || '',
       test_type: script.test_type || 'control_test',

@@ -7,7 +7,15 @@ import {
   ACTION_KEYS,
   APPROVAL_KEYS,
   CONDITION_KEYS,
+  formatWorkflowContextLabel,
   FlowNodeData,
+  getNodeCatalogContext,
+  getRelevantActionOptions,
+  getRelevantConditionKeys,
+  getRelevantTriggerKeys,
+  NODE_TYPE_LABELS,
+  NodeConfigOptions,
+  NodeOptionItem,
   TIMER_KEYS,
   TRIGGER_KEYS,
 } from './types';
@@ -15,8 +23,9 @@ import {
 type Props = {
   actorUsers: Array<{ id: number; display_name: string; email: string; username?: string }>;
   actorRoles: Array<{ id: number; name: string; description?: string }>;
-  actionOptions: Array<{ key: string; label: string; module?: string; submodule?: string }>;
+  actionOptions: NodeOptionItem[];
   conditionPathOptions: Array<{ value: string; label: string }>;
+  nodeConfigOptions: NodeConfigOptions;
   selectedNode: Node<FlowNodeData> | undefined;
   selectedEdge: Edge | undefined;
   nodeConfigText: string;
@@ -167,6 +176,7 @@ export function ConfigPanel({
   actorRoles,
   actionOptions,
   conditionPathOptions,
+  nodeConfigOptions,
   selectedNode,
   selectedEdge,
   nodeConfigText,
@@ -230,6 +240,7 @@ export function ConfigPanel({
             actorRoles={actorRoles}
             actionOptions={actionOptions}
             conditionPathOptions={conditionPathOptions}
+            nodeConfigOptions={nodeConfigOptions}
             onUpdateNodeConfig={onUpdateNodeConfig}
             onSetNodeConfigText={onSetNodeConfigText}
           />
@@ -582,6 +593,1871 @@ function EscalationLevelsConfig({
   );
 }
 
+// ─── Shared helper ────────────────────────────────────────────────────────────
+function toLabel(s: string) {
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ─── Trigger Sub-Config ───────────────────────────────────────────────────────
+function TriggerSubConfig({
+  config,
+  nodeConfigOptions,
+  onUpdate,
+  inputCls,
+  selectCls,
+}: {
+  config: Record<string, unknown>;
+  nodeConfigOptions: NodeConfigOptions;
+  onUpdate: (field: string, value: unknown) => void;
+  inputCls: string;
+  selectCls: string;
+}) {
+  const tt = (config?.trigger_type as string) || '';
+  const {
+    frameworks,
+    risk_categories,
+    risk_statuses,
+    risk_levels,
+    compliance_statuses,
+    vulnerability_severities,
+    policy_categories,
+    audit_types,
+    finding_severities,
+    kri_categories,
+    evidence_categories,
+  } = nodeConfigOptions;
+
+  const FwSelect = ({
+    field = 'framework_id',
+    label = 'Framework',
+    anyLabel = '-- Any framework --',
+  }: {
+    field?: string;
+    label?: string;
+    anyLabel?: string;
+  }) => (
+    <Field label={label}>
+      <select
+        className={selectCls}
+        value={String((config?.[field] as number) || '')}
+        onChange={(e) => onUpdate(field, e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">{anyLabel}</option>
+        {frameworks.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.name}
+            {f.version ? ` (${f.version})` : ''}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+
+  const DaysInput = ({
+    field,
+    label,
+    placeholder = '30',
+  }: {
+    field: string;
+    label: string;
+    placeholder?: string;
+  }) => (
+    <Field label={label}>
+      <input
+        type="number"
+        className={inputCls}
+        min={1}
+        value={(config?.[field] as number) || ''}
+        onChange={(e) => onUpdate(field, e.target.value ? Number(e.target.value) : null)}
+        placeholder={placeholder}
+      />
+    </Field>
+  );
+
+  if (['framework_deadline_approaching', 'evidence_expires', 'certification_expiry_approaching'].includes(tt)) {
+    return (
+      <>
+        <FwSelect />
+        <DaysInput field="days_before" label="Days before deadline" placeholder="30" />
+      </>
+    );
+  }
+  if (tt === 'control_review_due') {
+    return (
+      <>
+        <FwSelect label="Framework (optional)" />
+        <DaysInput field="days_before" label="Days before review due" placeholder="14" />
+      </>
+    );
+  }
+  if (tt === 'framework_evidence_complete') {
+    return (
+      <>
+        <FwSelect />
+        <Field label="Minimum coverage threshold (%)">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            max={100}
+            value={(config?.coverage_threshold as number) || 100}
+            onChange={(e) => onUpdate('coverage_threshold', Number(e.target.value) || 100)}
+            placeholder="100"
+          />
+        </Field>
+      </>
+    );
+  }
+  if (tt === 'assessment_status_change') {
+    return (
+      <>
+        <FwSelect />
+        <Field label="From status (optional)">
+          <select
+            className={selectCls}
+            value={(config?.from_status as string) || ''}
+            onChange={(e) => onUpdate('from_status', e.target.value)}
+          >
+            <option value="">-- Any --</option>
+            {compliance_statuses.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="To status">
+          <select
+            className={selectCls}
+            value={(config?.to_status as string) || ''}
+            onChange={(e) => onUpdate('to_status', e.target.value)}
+          >
+            <option value="">-- Any --</option>
+            {compliance_statuses.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </>
+    );
+  }
+  if (tt === 'compliance_gap_detected') {
+    return <FwSelect anyLabel="-- Any framework --" />;
+  }
+  if (['evidence_uploaded', 'evidence_approved'].includes(tt)) {
+    return (
+      <>
+        <FwSelect label="Framework (optional filter)" anyLabel="-- Any framework --" />
+        <Field label="Evidence category (optional)">
+          <select
+            className={selectCls}
+            value={(config?.evidence_category as string) || ''}
+            onChange={(e) => onUpdate('evidence_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {evidence_categories.map((c) => (
+              <option key={c} value={c}>
+                {toLabel(c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </>
+    );
+  }
+  if (['risk_created', 'risk_status_changed', 'risk_score_exceeds_threshold'].includes(tt)) {
+    return (
+      <>
+        <Field label="Risk category (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.risk_category as string) || ''}
+            onChange={(e) => onUpdate('risk_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {risk_categories.map((c) => (
+              <option key={c} value={c}>
+                {toLabel(c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Minimum risk level">
+          <select
+            className={selectCls}
+            value={(config?.min_risk_level as string) || ''}
+            onChange={(e) => onUpdate('min_risk_level', e.target.value)}
+          >
+            <option value="">-- Any level --</option>
+            {risk_levels.map((l) => (
+              <option key={l} value={l}>
+                {toLabel(l)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {tt === 'risk_score_exceeds_threshold' && (
+          <Field label="Score threshold (0–100)">
+            <input
+              type="number"
+              className={inputCls}
+              min={0}
+              max={100}
+              value={(config?.threshold as number) ?? 70}
+              onChange={(e) => onUpdate('threshold', Number(e.target.value))}
+            />
+          </Field>
+        )}
+        {tt === 'risk_status_changed' && (
+          <>
+            <Field label="From status">
+              <select
+                className={selectCls}
+                value={(config?.from_status as string) || ''}
+                onChange={(e) => onUpdate('from_status', e.target.value)}
+              >
+                <option value="">-- Any --</option>
+                {risk_statuses.map((s) => (
+                  <option key={s} value={s}>
+                    {toLabel(s)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="To status">
+              <select
+                className={selectCls}
+                value={(config?.to_status as string) || ''}
+                onChange={(e) => onUpdate('to_status', e.target.value)}
+              >
+                <option value="">-- Any --</option>
+                {risk_statuses.map((s) => (
+                  <option key={s} value={s}>
+                    {toLabel(s)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </>
+        )}
+      </>
+    );
+  }
+  if (['new_vulnerability_detected', 'vulnerability_sla_breach', 'vulnerability_sla_warning'].includes(tt)) {
+    return (
+      <>
+        <Field label="Minimum severity">
+          <select
+            className={selectCls}
+            value={(config?.min_severity as string) || ''}
+            onChange={(e) => onUpdate('min_severity', e.target.value)}
+          >
+            <option value="">-- Any severity --</option>
+            {vulnerability_severities.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {tt === 'vulnerability_sla_warning' && (
+          <DaysInput field="warn_days_before" label="Warn when SLA within (days)" placeholder="7" />
+        )}
+      </>
+    );
+  }
+  if (['policy_review_due', 'policy_approved'].includes(tt)) {
+    return (
+      <>
+        <Field label="Policy category (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.policy_category as string) || ''}
+            onChange={(e) => onUpdate('policy_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {policy_categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {tt === 'policy_review_due' && (
+          <DaysInput field="days_before" label="Warn days before review due" placeholder="14" />
+        )}
+      </>
+    );
+  }
+  if (tt === 'audit_finding_created') {
+    return (
+      <>
+        <Field label="Finding severity (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.min_severity as string) || ''}
+            onChange={(e) => onUpdate('min_severity', e.target.value)}
+          >
+            <option value="">-- Any severity --</option>
+            {finding_severities.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Audit type (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.audit_type as string) || ''}
+            onChange={(e) => onUpdate('audit_type', e.target.value)}
+          >
+            <option value="">-- Any type --</option>
+            {audit_types.map((a) => (
+              <option key={a} value={a}>
+                {toLabel(a)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </>
+    );
+  }
+  if (tt === 'kri_breach') {
+    return (
+      <>
+        <Field label="KRI category (optional)">
+          <select
+            className={selectCls}
+            value={(config?.kri_category as string) || ''}
+            onChange={(e) => onUpdate('kri_category', e.target.value)}
+          >
+            <option value="">-- Any --</option>
+            {kri_categories.map((c) => (
+              <option key={c} value={c}>
+                {toLabel(c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Breach threshold">
+          <input
+            type="number"
+            className={inputCls}
+            value={(config?.threshold as number) || ''}
+            onChange={(e) => onUpdate('threshold', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g., 100"
+          />
+        </Field>
+      </>
+    );
+  }
+  if (tt === 'incident_reported') {
+    return (
+      <Field label="Minimum severity">
+        <select
+          className={selectCls}
+          value={(config?.min_severity as string) || ''}
+          onChange={(e) => onUpdate('min_severity', e.target.value)}
+        >
+          <option value="">-- Any severity --</option>
+          {['critical', 'high', 'medium', 'low'].map((s) => (
+            <option key={s} value={s}>
+              {toLabel(s)}
+            </option>
+          ))}
+        </select>
+      </Field>
+    );
+  }
+  if (tt === 'attestation_overdue') {
+    return (
+      <DaysInput field="overdue_threshold_days" label="Overdue threshold (days)" placeholder="1" />
+    );
+  }
+  if (tt === 'schedule_recurring') {
+    return (
+      <>
+        <Field label="Cron expression">
+          <input
+            className={inputCls}
+            value={(config?.cron as string) || ''}
+            onChange={(e) => onUpdate('cron', e.target.value)}
+            placeholder="0 9 * * 1"
+          />
+        </Field>
+        <div className="text-[9px] text-gray-400 -mt-1 mb-1.5 leading-relaxed">
+          Examples:{' '}
+          <span className="font-mono">0 9 * * 1</span> = Mon 9am &nbsp;|&nbsp;{' '}
+          <span className="font-mono">0 0 1 * *</span> = 1st of month
+        </div>
+      </>
+    );
+  }
+  if (tt === 'webhook') {
+    return (
+      <Field label="Webhook secret (HMAC, optional)">
+        <input
+          className={inputCls}
+          value={(config?.webhook_secret as string) || ''}
+          onChange={(e) => onUpdate('webhook_secret', e.target.value)}
+          placeholder="HMAC signing secret"
+        />
+      </Field>
+    );
+  }
+  return null;
+}
+
+// ─── Action Sub-Config ────────────────────────────────────────────────────────
+function ActionSubConfig({
+  config,
+  nodeConfigOptions,
+  actorUsers,
+  actorRoles,
+  conditionPathOptions,
+  selectedEscalateLevels,
+  selectedRecipientUserIds,
+  selectedRecipientRoleIds,
+  onUpdate,
+  inputCls,
+  selectCls,
+}: {
+  config: Record<string, unknown>;
+  nodeConfigOptions: NodeConfigOptions;
+  actorUsers: Array<{ id: number; display_name: string; email: string }>;
+  actorRoles: Array<{ id: number; name: string }>;
+  conditionPathOptions: Array<{ value: string; label: string }>;
+  selectedEscalateLevels: EscalationLevel[];
+  selectedRecipientUserIds: string[];
+  selectedRecipientRoleIds: string[];
+  onUpdate: (field: string, value: unknown) => void;
+  inputCls: string;
+  selectCls: string;
+}) {
+  const actionName = (config?.action_name as string) || '';
+  const {
+    frameworks,
+    risk_categories,
+    risk_statuses,
+    risk_treatment_types,
+    compliance_statuses,
+    vulnerability_severities,
+    vulnerability_statuses,
+    policy_categories,
+    audit_types,
+    finding_severities,
+    control_effectiveness_levels,
+    evidence_categories,
+    report_types,
+    remediation_priorities,
+  } = nodeConfigOptions;
+
+  const FwSelect = ({
+    field = 'framework_id',
+    label = 'Framework',
+    anyLabel = '-- Select framework --',
+  }: {
+    field?: string;
+    label?: string;
+    anyLabel?: string;
+  }) => (
+    <Field label={label}>
+      <select
+        className={selectCls}
+        value={String((config?.[field] as number) || '')}
+        onChange={(e) => onUpdate(field, e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">{anyLabel}</option>
+        {frameworks.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.name}
+            {f.version ? ` (${f.version})` : ''}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+
+  const UserMulti = ({
+    field,
+    label,
+    placeholder = 'Select users',
+  }: {
+    field: string;
+    label: string;
+    placeholder?: string;
+  }) => (
+    <Field label={label}>
+      <CheckboxMultiSelect
+        options={actorUsers.map((u) => ({ value: u.id, label: u.display_name, subtitle: u.email }))}
+        selectedValues={Array.isArray(config?.[field]) ? (config[field] as number[]) : []}
+        onChange={(vals) => onUpdate(field, vals)}
+        placeholder={placeholder}
+        emptyMessage="No tenant users found"
+      />
+    </Field>
+  );
+
+  const RoleMulti = ({
+    field,
+    label,
+    placeholder = 'Select roles',
+  }: {
+    field: string;
+    label: string;
+    placeholder?: string;
+  }) => (
+    <Field label={label}>
+      <CheckboxMultiSelect
+        options={actorRoles.map((r) => ({ value: r.id, label: r.name }))}
+        selectedValues={Array.isArray(config?.[field]) ? (config[field] as number[]) : []}
+        onChange={(vals) => onUpdate(field, vals)}
+        placeholder={placeholder}
+        emptyMessage="No tenant roles found"
+      />
+    </Field>
+  );
+
+  if (actionName === 'send_notification_email') {
+    return (
+      <>
+        <Field label="To (direct email, optional)">
+          <input
+            className={inputCls}
+            value={(config?.to as string) || ''}
+            onChange={(e) => onUpdate('to', e.target.value)}
+            placeholder="user@example.com"
+          />
+        </Field>
+        <Field label="Recipient Users">
+          <CheckboxMultiSelect
+            options={actorUsers.map((u) => ({ value: u.id, label: u.display_name, subtitle: u.email }))}
+            selectedValues={selectedRecipientUserIds.map(Number)}
+            onChange={(vals) => onUpdate('recipient_user_ids', vals)}
+            placeholder="Select users"
+            emptyMessage="No tenant users found"
+          />
+        </Field>
+        <Field label="Recipient Roles">
+          <CheckboxMultiSelect
+            options={actorRoles.map((r) => ({ value: r.id, label: r.name }))}
+            selectedValues={selectedRecipientRoleIds.map(Number)}
+            onChange={(vals) => onUpdate('recipient_role_ids', vals)}
+            placeholder="Select roles"
+            emptyMessage="No tenant roles found"
+          />
+        </Field>
+        <Field label="Subject">
+          <input
+            className={inputCls}
+            value={(config?.subject as string) || ''}
+            onChange={(e) => onUpdate('subject', e.target.value)}
+            placeholder="Workflow notification"
+          />
+        </Field>
+        <Field label="Message Body">
+          <textarea
+            className={`${inputCls} h-16 resize-none`}
+            value={(config?.body as string) || ''}
+            onChange={(e) => onUpdate('body', e.target.value)}
+            placeholder="Email body text..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'escalate_to_management') {
+    return (
+      <>
+        <SectionLabel label="Escalation Levels" />
+        <div className="text-[9px] text-gray-500 mb-1">
+          Configure who gets notified at each level and how long to wait before escalating further.
+        </div>
+        <EscalationLevelsConfig
+          levels={selectedEscalateLevels}
+          actorUsers={actorUsers}
+          actorRoles={actorRoles}
+          conditionPathOptions={conditionPathOptions}
+          onChange={(levels) => onUpdate('escalation_levels', levels)}
+        />
+      </>
+    );
+  }
+
+  if (actionName === 'request_evidence_upload') {
+    return (
+      <>
+        <Field label="Frameworks">
+          <CheckboxMultiSelect
+            options={frameworks.map((f) => ({
+              value: f.id,
+              label: `${f.name}${f.version ? ` (${f.version})` : ''}`,
+            }))}
+            selectedValues={Array.isArray(config?.framework_ids) ? (config.framework_ids as number[]) : []}
+            onChange={(vals) => onUpdate('framework_ids', vals)}
+            placeholder="Select frameworks"
+            emptyMessage="No frameworks found"
+          />
+        </Field>
+        <Field label="Evidence category (optional)">
+          <select
+            className={selectCls}
+            value={(config?.evidence_category as string) || ''}
+            onChange={(e) => onUpdate('evidence_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {evidence_categories.map((c) => (
+              <option key={c} value={c}>
+                {toLabel(c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Request message">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.message as string) || ''}
+            onChange={(e) => onUpdate('message', e.target.value)}
+            placeholder="Please upload evidence for the listed requirements..."
+          />
+        </Field>
+        <UserMulti field="notify_user_ids" label="Notify users" />
+        <RoleMulti field="notify_role_ids" label="Notify roles" />
+      </>
+    );
+  }
+
+  if (actionName === 'request_evidence_review') {
+    return (
+      <>
+        <FwSelect label="Framework (optional filter)" anyLabel="-- Any framework --" />
+        <UserMulti field="reviewer_user_ids" label="Reviewer users" />
+        <RoleMulti field="reviewer_role_ids" label="Reviewer roles" />
+        <Field label="Review deadline (days from now)">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.review_deadline_days as number) || ''}
+            onChange={(e) =>
+              onUpdate('review_deadline_days', e.target.value ? Number(e.target.value) : null)
+            }
+            placeholder="7"
+          />
+        </Field>
+        <Field label="Review instructions (optional)">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.instructions as string) || ''}
+            onChange={(e) => onUpdate('instructions', e.target.value)}
+            placeholder="Please verify the attached evidence against..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'approve_evidence' || actionName === 'reject_evidence') {
+    const isReject = actionName === 'reject_evidence';
+    return (
+      <>
+        <FwSelect label="Framework (optional filter)" anyLabel="-- Any framework --" />
+        <Field label="Evidence category (optional)">
+          <select
+            className={selectCls}
+            value={(config?.evidence_category as string) || ''}
+            onChange={(e) => onUpdate('evidence_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {evidence_categories.map((category) => (
+              <option key={category} value={category}>
+                {toLabel(category)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={isReject ? 'Reviewer notes' : 'Approval notes'}>
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder={isReject ? 'Return reason and required revisions...' : 'Approved by automated workflow...'}
+          />
+        </Field>
+        <UserMulti field="notify_user_ids" label="Notify users" />
+        <RoleMulti field="notify_role_ids" label="Notify roles" />
+      </>
+    );
+  }
+
+  if (actionName === 'generate_report') {
+    return (
+      <>
+        <Field label="Report type">
+          <select
+            className={selectCls}
+            value={(config?.report_type as string) || ''}
+            onChange={(e) => onUpdate('report_type', e.target.value)}
+          >
+            <option value="">-- Select report type --</option>
+            {report_types.map((r) => (
+              <option key={r} value={r}>
+                {toLabel(r)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <FwSelect label="Framework (optional filter)" anyLabel="-- All frameworks --" />
+        <UserMulti field="recipient_user_ids" label="Send report to (users)" />
+        <RoleMulti field="recipient_role_ids" label="Send report to (roles)" />
+      </>
+    );
+  }
+
+  if (actionName === 'update_compliance_status') {
+    return (
+      <>
+        <FwSelect />
+        <Field label="New status">
+          <select
+            className={selectCls}
+            value={(config?.new_status as string) || ''}
+            onChange={(e) => onUpdate('new_status', e.target.value)}
+          >
+            <option value="">-- Select status --</option>
+            {compliance_statuses.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Notes / reason (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder="Status updated by automated workflow..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'start_compliance_assessment') {
+    return (
+      <>
+        <FwSelect />
+        <Field label="Assessment type">
+          <select
+            className={selectCls}
+            value={(config?.assessment_type as string) || 'full'}
+            onChange={(e) => onUpdate('assessment_type', e.target.value)}
+          >
+            <option value="full">Full assessment</option>
+            <option value="delta">Delta review</option>
+            <option value="evidence_refresh">Evidence refresh</option>
+          </select>
+        </Field>
+        <UserMulti field="assignee_user_ids" label="Assign to users" />
+        <RoleMulti field="assignee_role_ids" label="Assign to roles" />
+      </>
+    );
+  }
+
+  if (actionName === 'close_compliance_gap') {
+    return (
+      <>
+        <FwSelect label="Framework (optional filter)" anyLabel="-- Any framework --" />
+        <Field label="Closure type">
+          <select
+            className={selectCls}
+            value={(config?.closure_type as string) || ''}
+            onChange={(e) => onUpdate('closure_type', e.target.value)}
+          >
+            <option value="">-- Select type --</option>
+            <option value="remediated">Remediated</option>
+            <option value="accepted_risk">Accepted Risk</option>
+            <option value="compensating_control">Compensating Control</option>
+          </select>
+        </Field>
+        <Field label="Closure notes template">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.notes_template as string) || ''}
+            onChange={(e) => onUpdate('notes_template', e.target.value)}
+            placeholder="Gap closed via automated remediation workflow..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'link_evidence_to_control') {
+    return (
+      <>
+        <FwSelect label="Framework" anyLabel="-- Select framework --" />
+        <Field label="Evidence category (optional)">
+          <select
+            className={selectCls}
+            value={(config?.evidence_category as string) || ''}
+            onChange={(e) => onUpdate('evidence_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {evidence_categories.map((category) => (
+              <option key={category} value={category}>
+                {toLabel(category)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Linking notes (optional)">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder="Link matched evidence to the relevant controls..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'assign_control_owner') {
+    return (
+      <>
+        <FwSelect label="Framework (optional filter)" anyLabel="-- Any framework --" />
+        <Field label="Assign to user">
+          <select
+            className={selectCls}
+            value={String((config?.assignee_user_id as number) || '')}
+            onChange={(e) =>
+              onUpdate('assignee_user_id', e.target.value ? Number(e.target.value) : null)
+            }
+          >
+            <option value="">-- Select user --</option>
+            {actorUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.display_name} ({u.email})
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Assign to role (optional)">
+          <select
+            className={selectCls}
+            value={String((config?.assignee_role_id as number) || '')}
+            onChange={(e) =>
+              onUpdate('assignee_role_id', e.target.value ? Number(e.target.value) : null)
+            }
+          >
+            <option value="">-- Select role --</option>
+            {actorRoles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'create_risk_entry') {
+    return (
+      <>
+        <Field label="Risk category">
+          <select
+            className={selectCls}
+            value={(config?.risk_category as string) || 'operational'}
+            onChange={(e) => onUpdate('risk_category', e.target.value)}
+          >
+            {risk_categories.map((c) => (
+              <option key={c} value={c}>
+                {toLabel(c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Initial likelihood (1–5)">
+            <input
+              type="number"
+              className={inputCls}
+              min={1}
+              max={5}
+              value={(config?.likelihood as number) || 3}
+              onChange={(e) => onUpdate('likelihood', Number(e.target.value))}
+            />
+          </Field>
+          <Field label="Initial impact (1–5)">
+            <input
+              type="number"
+              className={inputCls}
+              min={1}
+              max={5}
+              value={(config?.impact as number) || 3}
+              onChange={(e) => onUpdate('impact', Number(e.target.value))}
+            />
+          </Field>
+        </div>
+        <Field label="Risk title template">
+          <input
+            className={inputCls}
+            value={(config?.title_template as string) || ''}
+            onChange={(e) => onUpdate('title_template', e.target.value)}
+            placeholder="Risk identified: {{trigger.title}}"
+          />
+        </Field>
+        <UserMulti field="owner_user_ids" label="Assign risk owner" />
+      </>
+    );
+  }
+
+  if (actionName === 'update_risk_status') {
+    return (
+      <>
+        <Field label="New risk status">
+          <select
+            className={selectCls}
+            value={(config?.new_status as string) || ''}
+            onChange={(e) => onUpdate('new_status', e.target.value)}
+          >
+            <option value="">-- Select status --</option>
+            {risk_statuses.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Treatment type">
+          <select
+            className={selectCls}
+            value={(config?.treatment_type as string) || ''}
+            onChange={(e) => onUpdate('treatment_type', e.target.value)}
+          >
+            <option value="">-- Select treatment --</option>
+            {risk_treatment_types.map((t) => (
+              <option key={t} value={t}>
+                {toLabel(t)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Status update notes">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder="Status updated by automated workflow..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'assign_risk_owner') {
+    return (
+      <>
+        <Field label="Assign to user">
+          <select
+            className={selectCls}
+            value={String((config?.assignee_user_id as number) || '')}
+            onChange={(e) => onUpdate('assignee_user_id', e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">-- Select user --</option>
+            {actorUsers.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.display_name} ({user.email})
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Assign to role (optional)">
+          <select
+            className={selectCls}
+            value={String((config?.assignee_role_id as number) || '')}
+            onChange={(e) => onUpdate('assignee_role_id', e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">-- Select role --</option>
+            {actorRoles.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <label className="flex items-center gap-2 text-xs text-gray-700">
+          <input
+            type="checkbox"
+            checked={Boolean(config?.notify_assignee)}
+            onChange={(e) => onUpdate('notify_assignee', e.target.checked)}
+          />
+          Notify assignee
+        </label>
+      </>
+    );
+  }
+
+  if (actionName === 'trigger_risk_review') {
+    return (
+      <>
+        <FwSelect label="Framework (optional scope)" anyLabel="-- Any framework --" />
+        <Field label="Review due in (days)">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.due_days as number) || ''}
+            onChange={(e) => onUpdate('due_days', e.target.value ? Number(e.target.value) : null)}
+            placeholder="14"
+          />
+        </Field>
+        <UserMulti field="reviewer_user_ids" label="Reviewer users" />
+        <RoleMulti field="reviewer_role_ids" label="Reviewer roles" />
+      </>
+    );
+  }
+
+  if (actionName === 'create_remediation_task') {
+    return (
+      <>
+        <Field label="Task title template">
+          <input
+            className={inputCls}
+            value={(config?.title_template as string) || ''}
+            onChange={(e) => onUpdate('title_template', e.target.value)}
+            placeholder="Remediate: {{trigger.title}}"
+          />
+        </Field>
+        <Field label="Priority">
+          <select
+            className={selectCls}
+            value={(config?.priority as string) || 'high'}
+            onChange={(e) => onUpdate('priority', e.target.value)}
+          >
+            {remediation_priorities.map((p) => (
+              <option key={p} value={p}>
+                {toLabel(p)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Due in (days from trigger)">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.due_days as number) || ''}
+            onChange={(e) => onUpdate('due_days', e.target.value ? Number(e.target.value) : null)}
+            placeholder="30"
+          />
+        </Field>
+        <UserMulti field="assignee_user_ids" label="Assign to users" />
+        <RoleMulti field="assignee_role_ids" label="Assign to roles" />
+      </>
+    );
+  }
+
+  if (actionName === 'assign_vulnerability_owner') {
+    return (
+      <>
+        <Field label="Target severity (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.target_severity as string) || ''}
+            onChange={(e) => onUpdate('target_severity', e.target.value)}
+          >
+            <option value="">-- Any severity --</option>
+            {vulnerability_severities.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <UserMulti field="assignee_user_ids" label="Assign to users" />
+        <RoleMulti field="assignee_role_ids" label="Assign to roles" />
+        <Field label="Assignment notes (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder="Assigned via automated workflow..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'update_vulnerability_status') {
+    return (
+      <>
+        <Field label="Target severity (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.target_severity as string) || ''}
+            onChange={(e) => onUpdate('target_severity', e.target.value)}
+          >
+            <option value="">-- Any severity --</option>
+            {vulnerability_severities.map((severity) => (
+              <option key={severity} value={severity}>
+                {toLabel(severity)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="New status">
+          <select
+            className={selectCls}
+            value={(config?.new_status as string) || ''}
+            onChange={(e) => onUpdate('new_status', e.target.value)}
+          >
+            <option value="">-- Select status --</option>
+            {vulnerability_statuses.map((status) => (
+              <option key={status} value={status}>
+                {toLabel(status)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Update notes">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder="Status updated by automated workflow..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'create_vulnerability_entry') {
+    return (
+      <>
+        <Field label="Title template">
+          <input
+            className={inputCls}
+            value={(config?.title_template as string) || ''}
+            onChange={(e) => onUpdate('title_template', e.target.value)}
+            placeholder="Vulnerability detected: {{trigger.title}}"
+          />
+        </Field>
+        <Field label="Severity">
+          <select
+            className={selectCls}
+            value={(config?.severity as string) || 'medium'}
+            onChange={(e) => onUpdate('severity', e.target.value)}
+          >
+            {vulnerability_severities.map((severity) => (
+              <option key={severity} value={severity}>
+                {toLabel(severity)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <UserMulti field="assignee_user_ids" label="Assign to users" />
+      </>
+    );
+  }
+
+  if (actionName === 'create_policy_review_task') {
+    return (
+      <>
+        <Field label="Policy category (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.policy_category as string) || ''}
+            onChange={(e) => onUpdate('policy_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {policy_categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <UserMulti field="reviewer_user_ids" label="Reviewer users" />
+        <RoleMulti field="reviewer_role_ids" label="Reviewer roles" />
+        <Field label="Review due in (days from trigger)">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.due_days as number) || ''}
+            onChange={(e) => onUpdate('due_days', e.target.value ? Number(e.target.value) : null)}
+            placeholder="14"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'publish_policy') {
+    return (
+      <>
+        <Field label="Policy category (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.policy_category as string) || ''}
+            onChange={(e) => onUpdate('policy_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {policy_categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <UserMulti field="distribution_user_ids" label="Notify users" />
+        <RoleMulti field="distribution_role_ids" label="Notify roles" />
+        <Field label="Notification message">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.message as string) || ''}
+            onChange={(e) => onUpdate('message', e.target.value)}
+            placeholder="The policy has been published and is available for review."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'submit_policy_exception' || actionName === 'approve_policy_exception') {
+    const isApproval = actionName === 'approve_policy_exception';
+    return (
+      <>
+        <Field label="Policy category (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.policy_category as string) || ''}
+            onChange={(e) => onUpdate('policy_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {policy_categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={isApproval ? 'Approval notes' : 'Justification'}>
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.justification as string) || ''}
+            onChange={(e) => onUpdate('justification', e.target.value)}
+            placeholder={isApproval ? 'Approved with noted business exception...' : 'Business reason for this exception...'}
+          />
+        </Field>
+        <UserMulti field={isApproval ? 'notify_user_ids' : 'approver_user_ids'} label={isApproval ? 'Notify users' : 'Approver users'} />
+        <RoleMulti field={isApproval ? 'notify_role_ids' : 'approver_role_ids'} label={isApproval ? 'Notify roles' : 'Approver roles'} />
+      </>
+    );
+  }
+
+  if (actionName === 'request_attestation') {
+    return (
+      <>
+        <Field label="Policy category (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.policy_category as string) || ''}
+            onChange={(e) => onUpdate('policy_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {policy_categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <FwSelect label="Framework (optional scope)" anyLabel="-- Any framework --" />
+        <Field label="Attestation due in (days)">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.deadline_days as number) || ''}
+            onChange={(e) => onUpdate('deadline_days', e.target.value ? Number(e.target.value) : null)}
+            placeholder="10"
+          />
+        </Field>
+        <UserMulti field="assignee_user_ids" label="Attesting users" />
+        <RoleMulti field="assignee_role_ids" label="Attesting roles" />
+      </>
+    );
+  }
+
+  if (actionName === 'create_audit_finding') {
+    return (
+      <>
+        <Field label="Audit type">
+          <select
+            className={selectCls}
+            value={(config?.audit_type as string) || ''}
+            onChange={(e) => onUpdate('audit_type', e.target.value)}
+          >
+            <option value="">-- Select type --</option>
+            {audit_types.map((a) => (
+              <option key={a} value={a}>
+                {toLabel(a)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Finding severity">
+          <select
+            className={selectCls}
+            value={(config?.severity as string) || 'medium'}
+            onChange={(e) => onUpdate('severity', e.target.value)}
+          >
+            {finding_severities.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Finding description template">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.description_template as string) || ''}
+            onChange={(e) => onUpdate('description_template', e.target.value)}
+            placeholder="Finding: {{trigger.title}}"
+          />
+        </Field>
+        <UserMulti field="assignee_user_ids" label="Assign to" />
+      </>
+    );
+  }
+
+  if (actionName === 'create_audit_plan') {
+    return (
+      <>
+        <Field label="Audit type">
+          <select
+            className={selectCls}
+            value={(config?.audit_type as string) || ''}
+            onChange={(e) => onUpdate('audit_type', e.target.value)}
+          >
+            <option value="">-- Select type --</option>
+            {audit_types.map((auditType) => (
+              <option key={auditType} value={auditType}>
+                {toLabel(auditType)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <FwSelect label="Framework (optional scope)" anyLabel="-- Any framework --" />
+        <Field label="Start in (days)">
+          <input
+            type="number"
+            className={inputCls}
+            min={0}
+            value={(config?.start_date_offset_days as number) || ''}
+            onChange={(e) => onUpdate('start_date_offset_days', e.target.value ? Number(e.target.value) : null)}
+            placeholder="7"
+          />
+        </Field>
+        <UserMulti field="assignee_user_ids" label="Assign auditors" />
+      </>
+    );
+  }
+
+  if (actionName === 'close_audit_finding') {
+    return (
+      <>
+        <Field label="Finding severity (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.severity as string) || ''}
+            onChange={(e) => onUpdate('severity', e.target.value)}
+          >
+            <option value="">-- Any severity --</option>
+            {finding_severities.map((severity) => (
+              <option key={severity} value={severity}>
+                {toLabel(severity)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Closure notes">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder="Finding closed by automated workflow..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'assign_auditor') {
+    return (
+      <>
+        <Field label="Audit type (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.audit_type as string) || ''}
+            onChange={(e) => onUpdate('audit_type', e.target.value)}
+          >
+            <option value="">-- Any audit type --</option>
+            {audit_types.map((auditType) => (
+              <option key={auditType} value={auditType}>
+                {toLabel(auditType)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <UserMulti field="assignee_user_ids" label="Assign auditor users" />
+        <RoleMulti field="assignee_role_ids" label="Assign auditor roles" />
+      </>
+    );
+  }
+
+  if (actionName === 'update_control_effectiveness') {
+    return (
+      <>
+        <FwSelect label="Framework (optional scope)" anyLabel="-- Any framework --" />
+        <Field label="Effectiveness rating">
+          <select
+            className={selectCls}
+            value={(config?.effectiveness_level as string) || ''}
+            onChange={(e) => onUpdate('effectiveness_level', e.target.value)}
+          >
+            <option value="">-- Select rating --</option>
+            {control_effectiveness_levels.map((level) => (
+              <option key={level} value={level}>
+                {toLabel(level)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Evidence notes">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.evidence_notes as string) || ''}
+            onChange={(e) => onUpdate('evidence_notes', e.target.value)}
+            placeholder="Why this control rating changed..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'set_control_not_applicable') {
+    return (
+      <>
+        <FwSelect label="Framework (optional scope)" anyLabel="-- Any framework --" />
+        <Field label="Justification">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.justification as string) || ''}
+            onChange={(e) => onUpdate('justification', e.target.value)}
+            placeholder="Explain why this control is not applicable..."
+          />
+        </Field>
+        <UserMulti field="approval_user_ids" label="Approval users" />
+        <RoleMulti field="approval_role_ids" label="Approval roles" />
+      </>
+    );
+  }
+
+  if (actionName === 'call_webhook_api') {
+    return (
+      <>
+        <Field label="URL">
+          <input
+            className={inputCls}
+            value={(config?.url as string) || ''}
+            onChange={(e) => onUpdate('url', e.target.value)}
+            placeholder="https://api.example.com/webhook"
+          />
+        </Field>
+        <Field label="HTTP method">
+          <select
+            className={selectCls}
+            value={(config?.method as string) || 'POST'}
+            onChange={(e) => onUpdate('method', e.target.value)}
+          >
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="PATCH">PATCH</option>
+          </select>
+        </Field>
+        <Field label="Headers (JSON)">
+          <textarea
+            className={`${inputCls} h-14 font-mono text-[10px] resize-none`}
+            value={(config?.headers as string) || ''}
+            onChange={(e) => onUpdate('headers', e.target.value)}
+            placeholder={'{"Authorization": "Bearer TOKEN"}'}
+          />
+        </Field>
+        <Field label="Body template (JSON)">
+          <textarea
+            className={`${inputCls} h-14 font-mono text-[10px] resize-none`}
+            value={(config?.body_template as string) || ''}
+            onChange={(e) => onUpdate('body_template', e.target.value)}
+            placeholder={'{"event": "{{trigger.type}}", "id": "{{trigger.id}}"}'}
+          />
+        </Field>
+      </>
+    );
+  }
+
+  return null;
+}
+
+// ─── Condition Sub-Config ─────────────────────────────────────────────────────
+function ConditionSubConfig({
+  config,
+  nodeConfigOptions,
+  actorRoles,
+  nodeConfigText,
+  onUpdate,
+  onSetNodeConfigText,
+  inputCls,
+  selectCls,
+}: {
+  config: Record<string, unknown>;
+  nodeConfigOptions: NodeConfigOptions;
+  actorRoles: Array<{ id: number; name: string }>;
+  nodeConfigText: string;
+  onUpdate: (field: string, value: unknown) => void;
+  onSetNodeConfigText: (v: string) => void;
+  inputCls: string;
+  selectCls: string;
+}) {
+  const kind = (config?.condition_kind as string) || '';
+  const {
+    frameworks,
+    risk_levels,
+    compliance_statuses,
+    vulnerability_severities,
+    policy_categories,
+    policy_statuses,
+  } = nodeConfigOptions;
+
+  const FwSelect = ({
+    field = 'framework_id',
+    label = 'Framework',
+    anyLabel = '-- Any framework --',
+  }: {
+    field?: string;
+    label?: string;
+    anyLabel?: string;
+  }) => (
+    <Field label={label}>
+      <select
+        className={selectCls}
+        value={String((config?.[field] as number) || '')}
+        onChange={(e) => onUpdate(field, e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">{anyLabel}</option>
+        {frameworks.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.name}
+            {f.version ? ` (${f.version})` : ''}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+
+  const OpSelect = ({
+    field = 'operator',
+    label = 'Comparison',
+    options,
+  }: {
+    field?: string;
+    label?: string;
+    options: Array<{ value: string; label: string }>;
+  }) => (
+    <Field label={label}>
+      <select
+        className={selectCls}
+        value={(config?.[field] as string) || options[0]?.value || ''}
+        onChange={(e) => onUpdate(field, e.target.value)}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+
+  if (kind === 'check_risk_level') {
+    return (
+      <>
+        <Field label="Risk level to check">
+          <select
+            className={selectCls}
+            value={(config?.risk_level as string) || 'high'}
+            onChange={(e) => onUpdate('risk_level', e.target.value)}
+          >
+            {risk_levels.map((l) => (
+              <option key={l} value={l}>
+                {toLabel(l)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <OpSelect
+          field="operator"
+          label="Match rule"
+          options={[
+            { value: 'at_least', label: 'At least this level (≥)' },
+            { value: 'exact', label: 'Exactly this level (=)' },
+          ]}
+        />
+        <div className="text-[9px] text-gray-400 -mt-1">
+          Level order: Critical &gt; High &gt; Medium &gt; Low
+        </div>
+      </>
+    );
+  }
+
+  if (kind === 'check_compliance_status') {
+    return (
+      <>
+        <FwSelect />
+        <Field label="Expected status">
+          <select
+            className={selectCls}
+            value={(config?.expected_status as string) || ''}
+            onChange={(e) => onUpdate('expected_status', e.target.value)}
+          >
+            <option value="">-- Select status --</option>
+            {compliance_statuses.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <OpSelect
+          field="operator"
+          label="Match when status is"
+          options={[
+            { value: 'eq', label: 'Exactly this status' },
+            { value: 'neq', label: 'Not this status' },
+          ]}
+        />
+      </>
+    );
+  }
+
+  if (kind === 'check_evidence_age') {
+    return (
+      <>
+        <FwSelect label="Framework (optional)" anyLabel="-- Any framework --" />
+        <Field label="Age threshold (days)">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.age_days as number) || ''}
+            onChange={(e) => onUpdate('age_days', e.target.value ? Number(e.target.value) : null)}
+            placeholder="90"
+          />
+        </Field>
+        <OpSelect
+          field="operator"
+          label="Condition"
+          options={[
+            { value: 'older_than', label: 'Older than threshold' },
+            { value: 'newer_than', label: 'Newer than threshold' },
+          ]}
+        />
+      </>
+    );
+  }
+
+  if (kind === 'check_evidence_completeness') {
+    return (
+      <>
+        <FwSelect />
+        <Field label="Minimum coverage (%)">
+          <input
+            type="number"
+            className={inputCls}
+            min={0}
+            max={100}
+            value={(config?.min_coverage_pct as number) ?? 80}
+            onChange={(e) => onUpdate('min_coverage_pct', Number(e.target.value))}
+            placeholder="80"
+          />
+        </Field>
+        <div className="text-[9px] text-gray-400 -mt-1">
+          Branches True if coverage ≥ threshold, False otherwise
+        </div>
+      </>
+    );
+  }
+
+  if (kind === 'check_framework_coverage') {
+    return (
+      <>
+        <FwSelect />
+        <Field label="Minimum coverage (%)">
+          <input
+            type="number"
+            className={inputCls}
+            min={0}
+            max={100}
+            value={(config?.min_coverage_pct as number) ?? 90}
+            onChange={(e) => onUpdate('min_coverage_pct', Number(e.target.value))}
+            placeholder="90"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (kind === 'check_vulnerability_severity') {
+    return (
+      <>
+        <Field label="Severity to check">
+          <select
+            className={selectCls}
+            value={(config?.severity as string) || 'high'}
+            onChange={(e) => onUpdate('severity', e.target.value)}
+          >
+            {vulnerability_severities.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <OpSelect
+          field="operator"
+          label="Match rule"
+          options={[
+            { value: 'at_least', label: 'At least this severity (≥)' },
+            { value: 'exact', label: 'Exactly this severity (=)' },
+          ]}
+        />
+      </>
+    );
+  }
+
+  if (kind === 'check_policy_status') {
+    return (
+      <>
+        <Field label="Policy category (optional)">
+          <select
+            className={selectCls}
+            value={(config?.policy_category as string) || ''}
+            onChange={(e) => onUpdate('policy_category', e.target.value)}
+          >
+            <option value="">-- Any category --</option>
+            {policy_categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Expected policy status">
+          <select
+            className={selectCls}
+            value={(config?.expected_status as string) || ''}
+            onChange={(e) => onUpdate('expected_status', e.target.value)}
+          >
+            <option value="">-- Select status --</option>
+            {policy_statuses.map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </>
+    );
+  }
+
+  if (kind === 'check_approval_status') {
+    return (
+      <Field label="Expected approval status">
+        <select
+          className={selectCls}
+          value={(config?.expected_status as string) || 'approved'}
+          onChange={(e) => onUpdate('expected_status', e.target.value)}
+        >
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="pending">Pending</option>
+          <option value="escalated">Escalated</option>
+        </select>
+      </Field>
+    );
+  }
+
+  if (kind === 'check_user_role') {
+    return (
+      <Field label="Required role">
+        <select
+          className={selectCls}
+          value={String((config?.required_role_id as number) || '')}
+          onChange={(e) =>
+            onUpdate('required_role_id', e.target.value ? Number(e.target.value) : null)
+          }
+        >
+          <option value="">-- Select role --</option>
+          {actorRoles.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+    );
+  }
+
+  if (kind === 'evaluate_business_unit') {
+    return (
+      <Field label="Business unit name">
+        <input
+          className={inputCls}
+          value={(config?.business_unit as string) || ''}
+          onChange={(e) => onUpdate('business_unit', e.target.value)}
+          placeholder="Enter exact business unit name"
+        />
+      </Field>
+    );
+  }
+
+  // expression_builder or unknown: show JSON expression editor
+  return (
+    <>
+      <Field label="Condition expression (JSON)">
+        <textarea
+          className={`${inputCls} h-20 font-mono text-[10px] resize-none`}
+          value={nodeConfigText}
+          onChange={(e) => onSetNodeConfigText(e.target.value)}
+          placeholder='{"path": "trigger.severity", "operator": "eq", "value": "high"}'
+        />
+      </Field>
+      <div className="text-[9px] text-gray-400 -mt-1">
+        Paths: trigger.*, context.*, step.output.*
+      </div>
+    </>
+  );
+}
+
 // ─── Node Config Body ─────────────────────────────────────────────────────────
 
 function NodeConfigBody({
@@ -591,6 +2467,7 @@ function NodeConfigBody({
   actorRoles,
   actionOptions,
   conditionPathOptions,
+  nodeConfigOptions,
   onUpdateNodeConfig,
   onSetNodeConfigText,
 }: {
@@ -598,12 +2475,18 @@ function NodeConfigBody({
   nodeConfigText: string;
   actorUsers: Array<{ id: number; display_name: string; email: string; username?: string }>;
   actorRoles: Array<{ id: number; name: string; description?: string }>;
-  actionOptions: Array<{ key: string; label: string; module?: string; submodule?: string }>;
+  actionOptions: NodeOptionItem[];
   conditionPathOptions: Array<{ value: string; label: string }>;
+  nodeConfigOptions: NodeConfigOptions;
   onUpdateNodeConfig: (field: string, value: unknown) => void;
   onSetNodeConfigText: (v: string) => void;
 }) {
-  const { nodeType, label, config } = node.data;
+  const { nodeKey, nodeType, label, config } = node.data;
+  const nodeContext = getNodeCatalogContext(nodeType, config, nodeKey);
+  const contextLabel = formatWorkflowContextLabel(nodeContext);
+  const relevantTriggerKeys = getRelevantTriggerKeys(nodeContext);
+  const relevantConditionKeys = getRelevantConditionKeys(nodeContext);
+  const relevantActionOptions = getRelevantActionOptions(actionOptions, nodeContext);
   const selectedUserIds = Array.isArray(config?.approver_user_ids)
     ? (config.approver_user_ids as Array<string | number>).map(String)
     : [];
@@ -636,6 +2519,9 @@ function NodeConfigBody({
       <Field label="Node Type">
         <div className="text-xs text-gray-700 font-medium capitalize">{nodeType}</div>
       </Field>
+      <Field label="Business Context">
+        <div className="text-xs text-gray-600">{contextLabel}</div>
+      </Field>
       <Field label="Label">
         <input
           className={inputCls}
@@ -655,59 +2541,22 @@ function NodeConfigBody({
               onChange={(e) => onUpdateNodeConfig('trigger_type', e.target.value)}
             >
               <option value="">-- Select Trigger --</option>
-              {Array.from(TRIGGER_KEYS).map((k) => (
+              {relevantTriggerKeys.map((k) => (
                 <option key={k} value={k}>
-                  {k.replace(/_/g, ' ')}
+                  {NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}
                 </option>
               ))}
             </select>
           </Field>
-          {(config?.trigger_type === 'risk_score_exceeds_threshold') && (
-            <Field label="Threshold Value">
-              <input
-                type="number"
-                className={inputCls}
-                value={(config?.threshold as number) || 70}
-                onChange={(e) => onUpdateNodeConfig('threshold', Number(e.target.value))}
-              />
-            </Field>
-          )}
-          {(config?.trigger_type === 'framework_deadline_approaching') && (
-            <Field label="Framework Name / ID">
-              <input
-                className={inputCls}
-                value={(config?.framework as string) || ''}
-                onChange={(e) => onUpdateNodeConfig('framework', e.target.value)}
-                placeholder="e.g., ISO 27001"
-              />
-            </Field>
-          )}
-          {(config?.trigger_type === 'schedule_recurring') && (
-            <Field label="Cron Expression">
-              <input
-                className={inputCls}
-                value={(config?.cron as string) || ''}
-                onChange={(e) => onUpdateNodeConfig('cron', e.target.value)}
-                placeholder="0 9 * * 1 (every Monday 9am)"
-              />
-            </Field>
-          )}
-          {(config?.trigger_type === 'webhook') && (
-            <Field label="Webhook Secret (optional)">
-              <input
-                className={inputCls}
-                value={(config?.webhook_secret as string) || ''}
-                onChange={(e) => onUpdateNodeConfig('webhook_secret', e.target.value)}
-                placeholder="HMAC secret for signature verification"
-              />
-            </Field>
-          )}
-          <Field label="Event Filter (optional)">
+          {/* ─── Dynamic trigger sub-config ─────────────────────────────── */}
+          {TriggerSubConfig({ config, nodeConfigOptions, onUpdate: onUpdateNodeConfig, inputCls, selectCls })}
+
+          <Field label="Scope / description (optional)">
             <input
               className={inputCls}
               value={(config?.filter as string) || ''}
               onChange={(e) => onUpdateNodeConfig('filter', e.target.value)}
-              placeholder="e.g., severity=critical"
+              placeholder="e.g., scope=production, team=security"
             />
           </Field>
         </>
@@ -724,23 +2573,11 @@ function NodeConfigBody({
               onChange={(e) => onUpdateNodeConfig('action_name', e.target.value)}
             >
               <option value="">-- Select Action --</option>
-              {Array.from(ACTION_KEYS).map((k) => (
-                <option key={k} value={k}>
-                  {k.replace(/_/g, ' ')}
+              {relevantActionOptions.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.module ? `${option.module}: ${option.label}` : option.label}
                 </option>
               ))}
-              {actionOptions
-                .filter((a) => !ACTION_KEYS.has(a.key))
-                .map((a) => (
-                  <option key={a.key} value={a.key}>
-                    {a.module ? `${a.module}: ${a.label}` : a.label}
-                  </option>
-                ))}
-              {!!(config?.action_name as string) && !ACTION_KEYS.has(config.action_name as string) && (
-                <option value={config.action_name as string}>
-                  {String(config.action_name)}
-                </option>
-              )}
             </select>
           </Field>
           {config?.action_name === 'send_notification_email' && (
@@ -793,31 +2630,20 @@ function NodeConfigBody({
               </Field>
             </>
           )}
-          {config?.action_name === 'assign_control_owner' && (
-            <Field label="Control ID">
-              <input
-                className={inputCls}
-                value={(config?.control_id as string) || ''}
-                onChange={(e) => onUpdateNodeConfig('control_id', e.target.value)}
-                placeholder="Control ID to assign"
-              />
-            </Field>
-          )}
-          {config?.action_name === 'escalate_to_management' && (
-            <>
-              <SectionLabel label="Escalation Levels" />
-              <div className="text-[9px] text-gray-500 mb-1">
-                Configure who gets notified at each level and how long to wait before escalating to the next.
-              </div>
-              <EscalationLevelsConfig
-                levels={selectedEscalateLevels}
-                actorUsers={actorUsers}
-                actorRoles={actorRoles}
-                conditionPathOptions={conditionPathOptions}
-                onChange={(levels) => onUpdateNodeConfig('escalation_levels', levels)}
-              />
-            </>
-          )}
+          {/* ─── Dynamic action sub-config ──────────────────────────────── */}
+          {ActionSubConfig({
+            config,
+            nodeConfigOptions,
+            actorUsers,
+            actorRoles,
+            conditionPathOptions,
+            selectedEscalateLevels,
+            selectedRecipientUserIds,
+            selectedRecipientRoleIds,
+            onUpdate: onUpdateNodeConfig,
+            inputCls,
+            selectCls,
+          })}
         </>
       )}
 
@@ -832,21 +2658,24 @@ function NodeConfigBody({
               onChange={(e) => onUpdateNodeConfig('condition_kind', e.target.value)}
             >
               <option value="">-- Select Condition --</option>
-              {Array.from(CONDITION_KEYS).map((k) => (
+              {relevantConditionKeys.map((k) => (
                 <option key={k} value={k}>
-                  {k.replace(/_/g, ' ')}
+                  {NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}
                 </option>
               ))}
             </select>
           </Field>
-          <Field label="Condition Expression (JSON)">
-            <textarea
-              className={`${inputCls} h-20 font-mono text-[10px] resize-none`}
-              value={nodeConfigText}
-              onChange={(e) => onSetNodeConfigText(e.target.value)}
-              placeholder='{"path": "trigger.severity", "operator": "eq", "value": "high"}'
-            />
-          </Field>
+          {/* ─── Dynamic condition sub-config ────────────────────────── */}
+          {ConditionSubConfig({
+            config,
+            nodeConfigOptions,
+            actorRoles,
+            nodeConfigText,
+            onUpdate: onUpdateNodeConfig,
+            onSetNodeConfigText,
+            inputCls,
+            selectCls,
+          })}
         </>
       )}
 

@@ -170,7 +170,7 @@ export default function RolesManagementPage() {
     setFormData((prev) => ({
       ...prev,
       permission_names: checked
-        ? [...new Set([...prev.permission_names, ...modulePerms])]
+        ? Array.from(new Set([...prev.permission_names, ...modulePerms]))
         : prev.permission_names.filter((p) => !modulePerms.includes(p)),
     }));
   };
@@ -198,6 +198,7 @@ export default function RolesManagementPage() {
 
   const columns = [
     {
+      id: 'role',
       header: 'Role',
       accessor: (role: AdminRole) => (
         <div>
@@ -216,18 +217,21 @@ export default function RolesManagementPage() {
       ),
     },
     {
+      id: 'users',
       header: 'Users',
       accessor: (role: AdminRole) => (
         <span className="text-slate-600">{role.user_count}</span>
       ),
     },
     {
+      id: 'permissions',
       header: 'Permissions',
       accessor: (role: AdminRole) => (
         <span className="text-slate-600">{role.permissions.length}</span>
       ),
     },
     {
+      id: 'actions',
       header: 'Actions',
       accessor: (role: AdminRole) => (
         <div className="flex space-x-2">

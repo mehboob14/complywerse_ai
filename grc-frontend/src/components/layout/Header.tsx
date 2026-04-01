@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, ChevronDown, LogOut, Search, User, UserCircle, Users } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, User, UserCircle, Users } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
 const navIconProps = {
@@ -52,17 +52,7 @@ export default function Header() {
 
   return (
     <header className="top-nav flex h-14 items-center justify-between px-6">
-      <div className="relative w-full max-w-md">
-        <Search
-          {...navIconProps}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
-        />
-        <input
-          type="text"
-          placeholder="Search..."
-          className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] py-2 pl-10 pr-3 text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)]"
-        />
-      </div>
+      <div className="flex-1" />
 
       <div className="ml-4 flex items-center gap-3">
         <button

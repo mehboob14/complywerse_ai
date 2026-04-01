@@ -917,6 +917,91 @@ export const ermApi = {
 // Alias for backward compatibility
 export const riskAssessmentApi = ermApi.riskAssessments;
 
+export const tenantApi = {
+  getTenantUsers: async (tenantId?: number) => {
+    try {
+      return await apiClient.get('/assets/tenant-users');
+    } catch {
+      if (tenantId) {
+        return apiClient.get(`/tenants/${tenantId}/users`);
+      }
+      throw new Error('Unable to load tenant users');
+    }
+  },
+};
+
+export const vendorRiskApi = {
+  getModuleInfo: () => apiClient.get('/vendor-risk'),
+
+  getDashboard: async () => {
+    try {
+      return await apiClient.get('/vendor-risk/vendors/dashboard');
+    } catch {
+      try {
+        return await apiClient.get('/vendor-risk/dashboard');
+      } catch {
+        return await apiClient.get('/vendor-risk');
+      }
+    }
+  },
+  getVendors: (params?: {
+    tier?: string;
+    status?: string;
+    search?: string;
+    vendor_type?: string;
+    data_access_level?: string;
+    skip?: number;
+    limit?: number;
+  }) => apiClient.get('/vendor-risk/vendors', { params }),
+  createVendor: (data: Record<string, unknown>) => apiClient.post('/vendor-risk/vendors', data),
+  getVendor: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}`),
+  updateVendor: (vendorId: number, data: Record<string, unknown>) => apiClient.put(`/vendor-risk/vendors/${vendorId}`, data),
+  deleteVendor: (vendorId: number) => apiClient.delete(`/vendor-risk/vendors/${vendorId}`),
+
+  // Assessments
+  getAssessments: (params?: {
+    vendor_id?: number;
+    status?: string;
+    type?: string;
+    skip?: number;
+    limit?: number;
+  }) => apiClient.get('/vendor-risk/assessments', { params }),
+  createAssessment: (data: Record<string, unknown>) => apiClient.post('/vendor-risk/assessments', data),
+  getAssessment: (assessmentId: number) => apiClient.get(`/vendor-risk/assessments/${assessmentId}`),
+  updateAssessment: (assessmentId: number, data: Record<string, unknown>) => apiClient.put(`/vendor-risk/assessments/${assessmentId}`, data),
+  scoreAssessment: (assessmentId: number, responseId?: number) =>
+    apiClient.post(`/vendor-risk/assessments/${assessmentId}/score`, responseId ? { response_id: responseId } : {}),
+  approveAssessment: (assessmentId: number, data?: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/assessments/${assessmentId}/approve`, data || {}),
+
+  // Monitoring
+  getVendorSLA: (vendorId: number, params?: { measurement_period?: string; is_compliant?: boolean; skip?: number; limit?: number }) =>
+    apiClient.get(`/vendor-risk/vendors/${vendorId}/sla`, { params }),
+  createVendorSLA: (vendorId: number, data: Record<string, unknown>) => apiClient.post(`/vendor-risk/vendors/${vendorId}/sla`, data),
+  getVendorIncidents: (vendorId: number, params?: { severity?: string; status?: string; skip?: number; limit?: number }) =>
+    apiClient.get(`/vendor-risk/vendors/${vendorId}/incidents`, { params }),
+  createVendorIncident: (vendorId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/incidents`, data),
+  updateVendorIncident: (vendorId: number, incidentId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/vendors/${vendorId}/incidents/${incidentId}`, data),
+
+  // Questionnaires
+  getTemplates: (params?: { category?: string; search?: string; skip?: number; limit?: number }) =>
+    apiClient.get('/vendor-risk/questionnaire-templates', { params }),
+  createTemplate: (data: Record<string, unknown>) => apiClient.post('/vendor-risk/questionnaire-templates', data),
+  updateTemplate: (templateId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/questionnaire-templates/${templateId}`, data),
+  deleteTemplate: (templateId: number) => apiClient.delete(`/vendor-risk/questionnaire-templates/${templateId}`),
+  sendQuestionnaire: (data: {
+    vendor_id: number;
+    assessment_id?: number;
+    template_id?: number | null;
+    respondent_name?: string;
+    respondent_email?: string;
+    expires_in_days?: number;
+  }) => apiClient.post('/vendor-risk/questionnaires/send', data),
+};
+
 export const frameworkUploadApi = {
   uploadFramework: (formData: FormData) => 
     apiClient.post('/framework-upload/upload', formData, {
@@ -1702,11 +1787,19 @@ export const adminApi = {
     email: string; 
     password: string; 
     display_name?: string; 
+    department?: string;
+    group?: string;
+    division?: string;
+    designation?: string;
     role_ids?: number[] 
   }) => apiClient.post('/admin/users', data),
   updateUser: (id: number, data: { 
     display_name?: string; 
     email?: string; 
+    department?: string;
+    group?: string;
+    division?: string;
+    designation?: string;
     is_active?: boolean; 
     role_ids?: number[] 
   }) => apiClient.put(`/admin/users/${id}`, data),
@@ -1935,6 +2028,7 @@ export const workflowEngineApi = {
   },
   catalog: {
     nodeTypes: () => apiClient.get('/workflow-engine/catalog/node-types'),
+    nodeConfigOptions: () => apiClient.get('/workflow-engine/catalog/node-config-options'),
     templatesLibrary: () => apiClient.get('/workflow-engine/catalog/templates/library'),
     integrationPoints: () => apiClient.get('/workflow-engine/catalog/integrations'),
     users: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/catalog/actors/users', { params }),

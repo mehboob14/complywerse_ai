@@ -410,6 +410,8 @@ class EvidenceVersionResponse(BaseModel):
 class EvidenceControlMappingCreate(BaseModel):
     normalized_control_id: Optional[int] = None
     framework_control_id: Optional[int] = None
+    parsed_control_id: Optional[int] = None
+    uploaded_framework_id: Optional[int] = None
 
 
 class EvidenceControlMappingResponse(BaseModel):
@@ -417,6 +419,8 @@ class EvidenceControlMappingResponse(BaseModel):
     evidence_id: int
     normalized_control_id: Optional[int]
     framework_control_id: Optional[int]
+    parsed_control_id: Optional[int]
+    uploaded_framework_id: Optional[int]
 
     class Config:
         from_attributes = True
@@ -977,6 +981,23 @@ class CertificationJourneyUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class ProgressSummary(BaseModel):
+    total_controls: int
+    implemented_count: int
+    verified_count: int
+    in_progress_count: int
+    not_started_count: int
+    not_applicable_count: int
+    completion_percentage: float
+    with_evidence_count: int
+    fully_evidenced_count: int
+    approved_evidence_controls: int
+    evidence_coverage_percentage: float
+    readiness_percentage: float
+    by_status: Dict[str, int]
+    by_domain: List[Dict[str, Any]]
+
+
 class CertificationJourneyResponse(BaseModel):
     id: int
     tenant_id: int
@@ -989,6 +1010,7 @@ class CertificationJourneyResponse(BaseModel):
     status: str
     current_phase: int
     notes: Optional[str]
+    progress: Optional[ProgressSummary] = None
 
     class Config:
         from_attributes = True
@@ -1042,18 +1064,6 @@ class ImplementationEvidenceResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class ProgressSummary(BaseModel):
-    total_controls: int
-    implemented_count: int
-    verified_count: int
-    in_progress_count: int
-    not_started_count: int
-    not_applicable_count: int
-    completion_percentage: float
-    by_status: Dict[str, int]
-    by_domain: List[Dict[str, Any]]
 
 
 class GapAnalysis(BaseModel):

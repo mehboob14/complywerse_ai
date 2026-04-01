@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import apiClient from '@/lib/api';
+import { certificationsApi } from '@/lib/api';
 import { 
   Loader2, 
   ArrowLeft,
@@ -70,6 +71,7 @@ export default function AuditorPortalPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const frameworkId = params.frameworkId as string;
+  const [selectedFrameworkId, setSelectedFrameworkId] = useState<string>(frameworkId);
 
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [searchQuery, setSearchQuery] = useState('');
@@ -78,20 +80,28 @@ export default function AuditorPortalPage() {
 
   // Fetch auditor evidence
   const { data, isLoading, error } = useQuery<AuditorPortalData>({
-    queryKey: ['auditor-evidence', frameworkId, statusFilter],
+    queryKey: ['auditor-evidence', selectedFrameworkId, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter && statusFilter !== 'all') {
         params.append('status_filter', statusFilter);
       }
-      const response = await apiClient.get(`/certifications/frameworks/${frameworkId}/auditor-evidence?${params}`);
+      const response = await apiClient.get(`/certifications/frameworks/${selectedFrameworkId}/auditor-evidence?${params}`);
       return response.data;
+    }
+  });
+
+  const { data: frameworksList } = useQuery({
+    queryKey: ['auditor-frameworks'],
+    queryFn: async () => {
+      const response = await certificationsApi.getAll();
+      return response.data as Array<{ id: number; name: string; uploaded_framework_id?: number; framework_id?: number; status?: string }>;
     }
   });
 
   // Review mutation
   const reviewMutation = useMutation({
-    mutationFn: async ({ evidenceId, action, notes }: { evidenceId: number; action: 'approve' | 'reject'; notes: string }) => {
+    mutationFn: async ({ evidenceId, action, notes }: { evidenceId: number; action: 'approved' | 'rejected'; notes: string }) => {
       const response = await apiClient.post(`/certifications/evidence/${evidenceId}/review`, {
         action,
         notes
@@ -99,13 +109,13 @@ export default function AuditorPortalPage() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['auditor-evidence', frameworkId] });
+      queryClient.invalidateQueries({ queryKey: ['auditor-evidence'] });
       setSelectedEvidence(null);
       setReviewNotes('');
     }
   });
 
-  const handleReview = (action: 'approve' | 'reject') => {
+  const handleReview = (action: 'approved' | 'rejected') => {
     if (!selectedEvidence) return;
     reviewMutation.mutate({
       evidenceId: selectedEvidence.id,
@@ -179,6 +189,28 @@ export default function AuditorPortalPage() {
 
   return (
     <div className="space-y-6">
+      {/* Framework filter */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700">Framework</label>
+          <select
+            value={selectedFrameworkId}
+            onChange={(e) => {
+              const newId = e.target.value;
+              setSelectedFrameworkId(newId);
+              router.push(`/auditor-portal/${newId}`);
+            }}
+            className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+          >
+            {frameworksList?.map((fw) => (
+              <option key={fw.id} value={fw.id}>
+                {fw.name || `Framework ${fw.id}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -282,16 +314,7 @@ export default function AuditorPortalPage() {
             Rejected
           </button>
         </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search evidence..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
+        {/* Search bar intentionally removed per request */}
       </div>
 
       {/* Evidence List */}

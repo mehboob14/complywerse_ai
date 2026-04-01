@@ -167,6 +167,7 @@ export default function UsersManagementPage() {
 
   const columns = [
     {
+      id: 'user',
       header: 'User',
       accessor: (user: AdminUser) => (
         <div>
@@ -176,10 +177,12 @@ export default function UsersManagementPage() {
       ),
     },
     {
+      id: 'email',
       header: 'Email',
       accessor: (user: AdminUser) => <span className="text-slate-600">{user.email}</span>,
     },
     {
+      id: 'roles',
       header: 'Roles',
       accessor: (user: AdminUser) => (
         <div className="flex flex-wrap gap-1">
@@ -195,6 +198,7 @@ export default function UsersManagementPage() {
       ),
     },
     {
+      id: 'status',
       header: 'Status',
       accessor: (user: AdminUser) => (
         <span
@@ -209,6 +213,7 @@ export default function UsersManagementPage() {
       ),
     },
     {
+      id: 'last-login',
       header: 'Last Login',
       accessor: (user: AdminUser) => (
         <span className="text-slate-600 text-sm">
@@ -219,6 +224,7 @@ export default function UsersManagementPage() {
       ),
     },
     {
+      id: 'actions',
       header: 'Actions',
       accessor: (user: AdminUser) => (
         <div className="flex space-x-2">
