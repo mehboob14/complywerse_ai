@@ -1246,18 +1246,33 @@ function AddControlsModal({
   const [selectedNormalized, setSelectedNormalized] = useState<number[]>([]);
   const [selectedFramework, setSelectedFramework] = useState<number[]>([]);
 
-  const { data: normalizedControls } = useQuery({
+  const { data: normalizedControls } = useQuery<Array<{ id: number; code: string; name: string }>>({
     queryKey: ['all-normalized-controls'],
     queryFn: async () => {
       const response = await controlsApi.getNormalized();
-      return response.data;
+      const controls = (response.data || []) as Array<{
+        id: number | string;
+        code?: string;
+        internal_id?: string;
+        name?: string;
+      }>;
+      return controls
+        .map((control) => {
+          const numericId = typeof control.id === 'number' ? control.id : Number(control.id);
+          return {
+            id: numericId,
+            code: control.code || control.internal_id || `CTRL-${control.id}`,
+            name: control.name || 'Untitled Control',
+          };
+        })
+        .filter((control) => Number.isFinite(control.id));
     },
   });
 
   const { data: frameworks } = useQuery({
-    queryKey: ['frameworks'],
+    queryKey: ['frameworks-available'],
     queryFn: async () => {
-      const response = await frameworksApi.getAll();
+      const response = await frameworksApi.getAvailable();
       return response.data;
     },
   });
@@ -1294,7 +1309,7 @@ function AddControlsModal({
     },
   });
 
-  const filteredNormalized = (normalizedControls || []).filter((c: { id: number; code: string; name: string }) =>
+  const filteredNormalized = (normalizedControls || []).filter((c) =>
     !existingNormalizedIds.includes(c.id) &&
     (searchTerm === '' || c.code.toLowerCase().includes(searchTerm.toLowerCase()) || c.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -1354,7 +1369,7 @@ function AddControlsModal({
                 <div className="sticky top-0 bg-gray-100 px-4 py-2 text-sm font-medium text-green-400">
                   Normalized Controls
                 </div>
-                {filteredNormalized.map((control: { id: number; code: string; name: string }) => (
+                {filteredNormalized.map((control) => (
                   <label
                     key={`normalized-${control.id}`}
                     className="flex cursor-pointer items-center gap-3 border-b border-gray-200 px-4 py-3 hover:bg-gray-100"

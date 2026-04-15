@@ -259,6 +259,13 @@ export default function RiskAssessmentsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/erm/risk-assessments/framework"
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <ClipboardCheck size={18} />
+            Framework Risk Assessment
+          </Link>
           <button
             onClick={() => {
               resetUploadForm();
@@ -362,15 +369,13 @@ export default function RiskAssessmentsPage() {
                       </p>
                     )}
                   </div>
-                  {assessment.status === 'draft' && (
-                    <button
+                  <button
                       onClick={(e) => handleDelete(e, assessment.id)}
-                      className="ml-2 rounded p-1 text-slate-500 opacity-0 transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
+                      className="ml-2 rounded p-1 text-slate-500 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                       title="Delete assessment"
                     >
                       <Trash2 size={16} />
                     </button>
-                  )}
                 </div>
 
                 <div className="mb-3 flex flex-wrap gap-2">

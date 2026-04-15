@@ -32,7 +32,8 @@ def _get_openai_client() -> OpenAI:
 
 
 class AISuggestMitigationsRequest(BaseModel):
-    risk_id: int
+    risk_id: Optional[int] = None
+    title: Optional[str] = None
 
 
 class SuggestedMitigation(BaseModel):
@@ -53,16 +54,21 @@ def ai_suggest_mitigations(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    if not request.risk_id and not request.title:
+        raise HTTPException(status_code=400, detail="Either risk_id or title must be provided")
+
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
-        raise HTTPException(status_code=404, detail="Risk not found")
+        raise HTTPException(status_code=404, detail="Tenant not found")
 
-    risk = db.query(Risk).filter(
-        Risk.id == request.risk_id,
-        Risk.tenant_id.in_(user_tenants)
-    ).first()
-    if not risk:
-        raise HTTPException(status_code=404, detail="Risk not found")
+    risk = None
+    if request.risk_id:
+        risk = db.query(Risk).filter(
+            Risk.id == request.risk_id,
+            Risk.tenant_id.in_(user_tenants)
+        ).first()
+        if not risk:
+            raise HTTPException(status_code=404, detail="Risk not found")
 
     existing_controls = []
     try:
@@ -73,17 +79,20 @@ def ai_suggest_mitigations(
     except Exception:
         pass
 
-    existing_actions = db.query(RiskMitigationAction).filter(
-        RiskMitigationAction.risk_id == risk.id
-    ).all()
-    existing_action_titles = [a.title for a in existing_actions]
+    existing_action_titles: list = []
+    if risk:
+        existing_actions = db.query(RiskMitigationAction).filter(
+            RiskMitigationAction.risk_id == risk.id
+        ).all()
+        existing_action_titles = [a.title for a in existing_actions]
 
-    prompt = f"""You are an enterprise risk management expert. Given the following risk details, suggest 3-5 concrete mitigation actions.
+    if risk:
+        prompt = f"""You are an enterprise risk management expert. Given the following risk details, suggest 3-5 concrete mitigation actions.
 
 Risk Title: {risk.title}
 Risk Description: {risk.description or 'N/A'}
 Risk Category: {risk.category or 'N/A'}
-Risk Sub-Category: {risk.sub_category or 'N/A'}
+Risk Sub-Category: {risk.risk_sub_category or 'N/A'}
 Inherent Likelihood: {risk.inherent_likelihood or 'N/A'}
 Inherent Impact: {risk.inherent_impact or 'N/A'}
 Residual Likelihood: {risk.residual_likelihood or 'N/A'}
@@ -100,6 +109,21 @@ Return a JSON object with a "suggestions" array containing 3-5 mitigation action
 - "expected_residual_reduction": estimated percentage reduction in residual risk (number 5-50)
 
 Do NOT duplicate existing mitigation actions. Focus on practical, actionable items.
+Return ONLY valid JSON, no markdown."""
+    else:
+        prompt = f"""You are an enterprise risk management expert. Given the following mitigation action title, suggest 3-5 related concrete mitigation actions.
+
+Action Title: {request.title}
+Existing Controls: {', '.join(existing_controls[:10]) if existing_controls else 'None identified'}
+
+Return a JSON object with a "suggestions" array containing 3-5 mitigation actions. Each suggestion must have:
+- "title": concise action title (max 100 chars)
+- "description": detailed description of what to do (2-3 sentences)
+- "action_type": one of "mitigate", "transfer", "avoid", "accept"
+- "priority": one of "critical", "high", "medium", "low"
+- "expected_residual_reduction": estimated percentage reduction in residual risk (number 5-50)
+
+Focus on practical, actionable items related to the given title.
 Return ONLY valid JSON, no markdown."""
 
     try:

@@ -6,8 +6,8 @@ from sqlalchemy import func
 from pydantic import BaseModel
 
 from ....models import (
-    GovernanceDocument, DocumentControlLink, DocumentRiskLink,
-    DocumentRegulatoryLink, DocumentAssetLink, NormalizedControl,
+    GovernanceDocument, DocumentRiskLink,
+    DocumentRegulatoryLink, DocumentAssetLink, InternalControl,
     Risk, ITAsset, Framework, FrameworkControl, GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
@@ -17,9 +17,23 @@ router = APIRouter(prefix="/mappings", tags=["Governance - Mappings"])
 
 class ControlLinkCreate(BaseModel):
     document_id: int
-    normalized_control_id: int
+    internal_control_id: int
     link_type: str = "implements"
     notes: Optional[str] = None
+    force_relink: bool = False
+
+
+def serialize_internal_control_link(control: InternalControl) -> dict:
+    return {
+        "id": control.id,
+        "internal_control_id": control.id,
+        "normalized_control_id": control.id,
+        "control_code": control.control_id,
+        "control_name": control.name,
+        "link_type": "linked",
+        "notes": None,
+        "created_at": control.updated_at.isoformat() if control.updated_at else control.created_at.isoformat() if control.created_at else None
+    }
 
 
 class RiskLinkCreate(BaseModel):
@@ -76,9 +90,10 @@ def get_document_mappings(
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(document_id, user_tenants, db)
     
-    control_links = db.query(DocumentControlLink).options(
-        joinedload(DocumentControlLink.normalized_control)
-    ).filter(DocumentControlLink.document_id == document_id).all()
+    control_links = db.query(InternalControl).filter(
+        InternalControl.tenant_id.in_(user_tenants),
+        InternalControl.source_document_id == document_id
+    ).order_by(InternalControl.control_id.asc()).all()
     
     risk_links = db.query(DocumentRiskLink).options(
         joinedload(DocumentRiskLink.risk)
@@ -97,15 +112,7 @@ def get_document_mappings(
         "document_id": document_id,
         "document_title": document.title,
         "control_links": [
-            {
-                "id": link.id,
-                "normalized_control_id": link.normalized_control_id,
-                "control_code": link.normalized_control.code if link.normalized_control else None,
-                "control_name": link.normalized_control.name if link.normalized_control else None,
-                "link_type": link.link_type,
-                "notes": link.notes,
-                "created_at": link.created_at.isoformat() if link.created_at else None
-            }
+            serialize_internal_control_link(link)
             for link in control_links
         ],
         "risk_links": [
@@ -162,47 +169,50 @@ def link_document_to_control(
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(link_data.document_id, user_tenants, db)
     
-    control = db.query(NormalizedControl).filter(
-        NormalizedControl.id == link_data.normalized_control_id
+    control = db.query(InternalControl).filter(
+        InternalControl.id == link_data.internal_control_id,
+        InternalControl.tenant_id.in_(user_tenants)
     ).first()
     if not control:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Normalized control not found"
+            detail="Internal control not found"
         )
     
-    existing_link = db.query(DocumentControlLink).filter(
-        DocumentControlLink.document_id == link_data.document_id,
-        DocumentControlLink.normalized_control_id == link_data.normalized_control_id
-    ).first()
-    if existing_link:
+    if control.source_document_id == link_data.document_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Link already exists between this document and control"
         )
-    
-    link = DocumentControlLink(
-        document_id=link_data.document_id,
-        normalized_control_id=link_data.normalized_control_id,
-        link_type=link_data.link_type,
-        notes=link_data.notes,
-        created_by=current_user.id,
-        created_at=datetime.utcnow()
-    )
-    db.add(link)
+
+    if control.source_document_id and control.source_document_id != link_data.document_id:
+        existing_document = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == control.source_document_id,
+            GovernanceDocument.tenant_id.in_(user_tenants)
+        ).first()
+        existing_title = existing_document.title if existing_document else "another document"
+        if not link_data.force_relink:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Control is already linked to '{existing_title}'"
+            )
+
+    relinked_from_document_id = None
+    if control.source_document_id and control.source_document_id != link_data.document_id:
+        relinked_from_document_id = control.source_document_id
+        if control.source_statement_id:
+            control.source_statement_id = None
+
+    control.source_document_id = link_data.document_id
+    control.updated_at = datetime.utcnow()
     db.commit()
-    db.refresh(link)
+    db.refresh(control)
     
-    return {
-        "id": link.id,
-        "document_id": link.document_id,
-        "normalized_control_id": link.normalized_control_id,
-        "control_code": control.code,
-        "control_name": control.name,
-        "link_type": link.link_type,
-        "notes": link.notes,
-        "created_at": link.created_at.isoformat() if link.created_at else None
-    }
+    result = serialize_internal_control_link(control)
+    result["document_id"] = document.id
+    if relinked_from_document_id:
+        result["relinked_from_document_id"] = relinked_from_document_id
+    return result
 
 
 @router.delete("/control/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -213,23 +223,28 @@ def unlink_document_from_control(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
-    link = db.query(DocumentControlLink).options(
-        joinedload(DocumentControlLink.document)
-    ).filter(DocumentControlLink.id == link_id).first()
-    
-    if not link:
+    control = db.query(InternalControl).filter(
+        InternalControl.id == link_id,
+        InternalControl.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not control or not control.source_document_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Control link not found"
         )
-    
-    if link.document.tenant_id not in user_tenants:
+
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == control.source_document_id
+    ).first()
+    if not document or document.tenant_id not in user_tenants:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this document"
         )
-    
-    db.delete(link)
+
+    control.source_document_id = None
+    control.updated_at = datetime.utcnow()
     db.commit()
     return None
 
@@ -506,44 +521,40 @@ def get_documents_by_control(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
-    control = db.query(NormalizedControl).filter(
-        NormalizedControl.id == control_id
+    control = db.query(InternalControl).filter(
+        InternalControl.id == control_id,
+        InternalControl.tenant_id.in_(user_tenants)
     ).first()
     if not control:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Control not found"
         )
-    
-    links = db.query(DocumentControlLink).options(
-        joinedload(DocumentControlLink.document)
-    ).join(GovernanceDocument).filter(
-        DocumentControlLink.normalized_control_id == control_id,
+
+    documents_query = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == control.source_document_id,
         GovernanceDocument.tenant_id.in_(user_tenants)
-    ).offset(skip).limit(limit).all()
-    
-    total = db.query(func.count(DocumentControlLink.id)).join(GovernanceDocument).filter(
-        DocumentControlLink.normalized_control_id == control_id,
-        GovernanceDocument.tenant_id.in_(user_tenants)
-    ).scalar()
+    )
+    total = 1 if control.source_document_id else 0
+    documents = documents_query.offset(skip).limit(limit).all() if control.source_document_id else []
     
     return {
         "control_id": control_id,
-        "control_code": control.code,
+        "control_code": control.control_id,
         "control_name": control.name,
         "total": total,
         "documents": [
             {
-                "link_id": link.id,
-                "document_id": link.document.id,
-                "document_title": link.document.title,
-                "doc_type": link.document.doc_type,
-                "status": link.document.status,
-                "link_type": link.link_type,
-                "notes": link.notes,
-                "created_at": link.created_at.isoformat() if link.created_at else None
+                "link_id": control.id,
+                "document_id": document.id,
+                "document_title": document.title,
+                "doc_type": document.doc_type,
+                "status": document.status,
+                "link_type": "linked",
+                "notes": None,
+                "created_at": control.updated_at.isoformat() if control.updated_at else control.created_at.isoformat() if control.created_at else None
             }
-            for link in links
+            for document in documents
         ]
     }
 
@@ -742,9 +753,10 @@ def get_mapping_statistics(
         GovernanceDocument.tenant_id.in_(tenant_filter)
     ).scalar()
     
-    docs_with_control_links = db.query(func.count(func.distinct(DocumentControlLink.document_id))).join(
-        GovernanceDocument
-    ).filter(GovernanceDocument.tenant_id.in_(tenant_filter)).scalar()
+    docs_with_control_links = db.query(func.count(func.distinct(InternalControl.source_document_id))).filter(
+        InternalControl.tenant_id.in_(tenant_filter),
+        InternalControl.source_document_id.isnot(None)
+    ).scalar()
     
     docs_with_risk_links = db.query(func.count(func.distinct(DocumentRiskLink.document_id))).join(
         GovernanceDocument
@@ -758,9 +770,10 @@ def get_mapping_statistics(
         GovernanceDocument
     ).filter(GovernanceDocument.tenant_id.in_(tenant_filter)).scalar()
     
-    total_control_links = db.query(func.count(DocumentControlLink.id)).join(
-        GovernanceDocument
-    ).filter(GovernanceDocument.tenant_id.in_(tenant_filter)).scalar()
+    total_control_links = db.query(func.count(InternalControl.id)).filter(
+        InternalControl.tenant_id.in_(tenant_filter),
+        InternalControl.source_document_id.isnot(None)
+    ).scalar()
     
     total_risk_links = db.query(func.count(DocumentRiskLink.id)).join(
         GovernanceDocument
@@ -774,12 +787,7 @@ def get_mapping_statistics(
         GovernanceDocument
     ).filter(GovernanceDocument.tenant_id.in_(tenant_filter)).scalar()
     
-    control_link_types = db.query(
-        DocumentControlLink.link_type,
-        func.count(DocumentControlLink.id)
-    ).join(GovernanceDocument).filter(
-        GovernanceDocument.tenant_id.in_(tenant_filter)
-    ).group_by(DocumentControlLink.link_type).all()
+    control_link_types = [("linked", total_control_links or 0)] if total_control_links else []
     
     risk_link_types = db.query(
         DocumentRiskLink.link_type,
@@ -821,10 +829,13 @@ def get_mapping_statistics(
         docs_linked = db.query(func.count(func.distinct(GovernanceDocument.id))).filter(
             GovernanceDocument.tenant_id.in_(tenant_filter),
             GovernanceDocument.doc_type == doc_type
-        ).outerjoin(DocumentControlLink).outerjoin(DocumentRiskLink).outerjoin(
+        ).outerjoin(
+            InternalControl,
+            InternalControl.source_document_id == GovernanceDocument.id
+        ).outerjoin(DocumentRiskLink).outerjoin(
             DocumentRegulatoryLink
         ).outerjoin(DocumentAssetLink).filter(
-            (DocumentControlLink.id.isnot(None)) |
+            (InternalControl.id.isnot(None)) |
             (DocumentRiskLink.id.isnot(None)) |
             (DocumentRegulatoryLink.id.isnot(None)) |
             (DocumentAssetLink.id.isnot(None))

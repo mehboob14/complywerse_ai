@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { certificationsApi, governanceApi, assetsApi } from '@/lib/api';
@@ -1724,64 +1725,90 @@ export default function CertificationJourneyPage() {
     );
   };
 
-  const renderSoaTab = () => (
+  const renderSoaTab = () => {
+    const soaChartData = [
+      { name: 'Implemented', value: controlStats.implemented, fill: '#22c55e' },
+      { name: 'In Progress',  value: controlStats.partial,      fill: '#f59e0b' },
+      { name: 'Not Impl.',    value: controlStats.notImplemented, fill: '#ef4444' },
+      { name: 'Not Applic.',  value: controlStats.notApplicable,  fill: '#94a3b8' },
+    ].filter((d) => d.value > 0);
+    const soaTotal = controlStats.total;
+    return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-blue-50 p-2">
-            <Layers className="h-5 w-5 text-blue-600" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {/* Donut: implementation status */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Implementation Status</p>
+            <div className="flex items-center gap-4">
+              <div className="relative h-[110px] w-[110px] flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={soaChartData.length ? soaChartData : [{ name: 'None', value: 1, fill: '#e2e8f0' }]}
+                      cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2} stroke="none">
+                      {(soaChartData.length ? soaChartData : [{ name: 'None', value: 1, fill: '#e2e8f0' }]).map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-lg font-bold text-slate-900">{soaTotal}</span>
+                  <span className="text-[10px] text-slate-400">controls</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {soaChartData.map((d) => (
+                  <div key={d.name} className="flex items-center gap-2 text-xs">
+                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.fill }} />
+                    <span className="text-slate-500">{d.name}</span>
+                    <span className="font-semibold text-slate-800 ml-auto">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-          <div>
-            <p className="text-2xl font-bold text-black">{controlStats.total}</p>
-            <p className="text-xs text-gray-600">Total Controls</p>
+
+          {/* Coverage progress bar */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Coverage</p>
+            {[{ label: 'Applicable', value: controlStats.applicable, total: soaTotal, color: '#3b82f6' },
+              { label: 'Implemented', value: controlStats.implemented, total: Math.max(controlStats.applicable, 1), color: '#22c55e' },
+            ].map(({ label, value, total: t, color }) => {
+              const pct = t > 0 ? Math.round((value / t) * 100) : 0;
+              return (
+                <div key={label} className="mb-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-slate-500">{label}</span>
+                    <span className="font-semibold text-slate-800">{value} / {t} <span className="text-slate-400">({pct}%)</span></span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Stats summary */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Breakdown</p>
+            <div className="space-y-2">
+              {[{ label: 'Total Controls', value: controlStats.total, color: '' },
+                { label: 'Applicable',     value: controlStats.applicable, color: 'text-blue-600' },
+                { label: 'Not Applicable', value: controlStats.notApplicable, color: 'text-slate-500' },
+                { label: 'Implemented',    value: controlStats.implemented,   color: 'text-green-600' },
+                { label: 'In Progress',    value: controlStats.partial,       color: 'text-amber-600' },
+                { label: 'Not Impl.',      value: controlStats.notImplemented, color: 'text-red-500' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="flex justify-between text-xs">
+                  <span className="text-slate-500">{label}</span>
+                  <span className={`font-semibold ${color || 'text-slate-800'}`}>{value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-        <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-green-500/20 p-2">
-            <CheckCircle2 className="h-5 w-5 text-green-400" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-green-400">{controlStats.applicable}</p>
-            <p className="text-xs text-gray-600">Applicable</p>
-          </div>
-        </div>
-        <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-gray-100 p-2">
-            <XCircle className="h-5 w-5 text-gray-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-700">{controlStats.notApplicable}</p>
-            <p className="text-xs text-gray-600">Not Applicable</p>
-          </div>
-        </div>
-        <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-blue-500/20 p-2">
-            <Check className="h-5 w-5 text-blue-400" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-blue-400">{controlStats.implemented}</p>
-            <p className="text-xs text-gray-600">Implemented</p>
-          </div>
-        </div>
-        <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-yellow-500/20 p-2">
-            <Clock className="h-5 w-5 text-yellow-400" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-yellow-400">{controlStats.partial}</p>
-            <p className="text-xs text-gray-600">Partial</p>
-          </div>
-        </div>
-        <div className="card flex items-center gap-3 !p-4">
-          <div className="rounded-lg bg-red-500/20 p-2">
-            <AlertCircle className="h-5 w-5 text-red-400" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-red-400">{controlStats.notImplemented}</p>
-            <p className="text-xs text-gray-600">Not Implemented</p>
-          </div>
-        </div>
-      </div>
 
       <div className="card">
         <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-gray-200 pb-4">
@@ -1833,6 +1860,7 @@ export default function CertificationJourneyPage() {
       </div>
     </div>
   );
+  };
 
   const renderControlsTab = () => (
     <div className="space-y-6">
@@ -2173,27 +2201,61 @@ export default function CertificationJourneyPage() {
 
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-sm text-gray-600">Total Controls</p>
-            <p className="text-2xl font-bold text-black">{totalControls}</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-sm text-gray-600">Not Applicable</p>
-            <p className="text-2xl font-bold text-orange-600">{naCount}</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-sm text-gray-600">Pending Review</p>
-            <p className="text-2xl font-bold text-amber-600">{pendingCount}</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-sm text-gray-600">Approved</p>
-            <p className="text-2xl font-bold text-emerald-600">{approvedCount}</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-sm text-gray-600">Rejected</p>
-            <p className="text-2xl font-bold text-rose-600">{rejectedCount}</p>
-          </div>
+        {/* Applicability summary donut */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          {(() => {
+            const appChartData = [
+              { name: 'Approved', value: approvedCount, fill: '#22c55e' },
+              { name: 'Pending',  value: pendingCount,  fill: '#f59e0b' },
+              { name: 'N/A',     value: naCount,       fill: '#94a3b8' },
+              { name: 'Rejected', value: rejectedCount, fill: '#ef4444' },
+            ].filter((d) => d.value > 0);
+            return (
+              <div className="flex items-center gap-6">
+                <div className="relative h-[100px] w-[100px] flex-shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={appChartData.length ? appChartData : [{ name: 'None', value: 1, fill: '#e2e8f0' }]}
+                        cx="50%" cy="50%" innerRadius={28} outerRadius={46} dataKey="value" paddingAngle={2} stroke="none"
+                      >
+                        {(appChartData.length ? appChartData : [{ name: 'None', value: 1, fill: '#e2e8f0' }]).map((entry, i) => (
+                          <Cell key={i} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ fontSize: 11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-base font-bold text-slate-900">{totalControls}</span>
+                    <span className="text-[9px] text-slate-400">total</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-slate-500">Approved</span>
+                    <span className="font-semibold text-slate-800">{approvedCount}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                    <span className="text-slate-500">Pending Review</span>
+                    <span className="font-semibold text-slate-800">{pendingCount}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+                    <span className="text-slate-500">Not Applicable</span>
+                    <span className="font-semibold text-slate-800">{naCount}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+                    <span className="text-slate-500">Rejected</span>
+                    <span className="font-semibold text-slate-800">{rejectedCount}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         <div className="flex items-center gap-2">

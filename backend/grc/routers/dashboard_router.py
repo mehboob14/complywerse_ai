@@ -105,13 +105,30 @@ def get_dashboard_stats(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
-    frameworks_count = db.query(func.count(Framework.id)).filter(Framework.is_active == True).scalar()
-    controls_count = db.query(func.count(NormalizedControl.id)).scalar()
-    
+    # Tenant-specific framework count: deduped by (name, version) matching Frameworks page source of truth
+    _available_statuses = ['published', 'completed', 'parsed', 'classified']
     if user_tenants:
         tenant_filter = user_tenants
         if tenant_id and tenant_id in user_tenants:
             tenant_filter = [tenant_id]
+        _fw_rows = db.query(
+            UploadedFramework.name,
+            UploadedFramework.version
+        ).filter(
+            UploadedFramework.upload_status.in_(_available_statuses),
+            UploadedFramework.is_active == True,
+            or_(
+                UploadedFramework.tenant_id.in_(tenant_filter),
+                UploadedFramework.is_shared == True
+            )
+        ).distinct().all()
+        frameworks_count = len(_fw_rows)
+    else:
+        tenant_filter = []
+        frameworks_count = 0
+    controls_count = db.query(func.count(NormalizedControl.id)).scalar()
+
+    if user_tenants:
         
         evidence_count = db.query(func.count(Evidence.id)).filter(
             Evidence.tenant_id.in_(tenant_filter)
@@ -134,11 +151,27 @@ def get_dashboard_stats(
         open_risks = 0
         documents_count = 0
         assets_count = 0
-    
-    frameworks = db.query(Framework).filter(Framework.is_active == True).all()
+
+    # Compliance overview: use tenant-specific uploaded frameworks (published ones have FrameworkControl data)
     compliance_overview = []
-    
-    for fw in frameworks[:5]:
+    if user_tenants:
+        _pub_fw_ids = db.query(UploadedFramework.published_framework_id).filter(
+            UploadedFramework.upload_status == 'published',
+            UploadedFramework.published_framework_id.isnot(None),
+            UploadedFramework.is_active == True,
+            or_(
+                UploadedFramework.tenant_id.in_(tenant_filter),
+                UploadedFramework.is_shared == True
+            )
+        ).all()
+        _fw_ids = list({row[0] for row in _pub_fw_ids})
+        tenant_frameworks = db.query(Framework).filter(
+            Framework.id.in_(_fw_ids),
+            Framework.is_active == True
+        ).all() if _fw_ids else []
+    else:
+        tenant_frameworks = []
+    for fw in tenant_frameworks[:5]:
         compliance_data = calculate_framework_compliance(fw.id, user_tenants, db)
         compliance_overview.append({
             "framework": fw.name,
@@ -337,16 +370,30 @@ def get_unified_dashboard(
         tenant_filter = [tenant_id]
     
     # ===== EXECUTIVE SUMMARY =====
-    # Calculate overall compliance from uploaded frameworks
-    uploaded_frameworks = db.query(UploadedFramework).filter(
+    # Calculate overall compliance from uploaded frameworks (tenant-specific, deduped)
+    _available_statuses_unified = ['published', 'completed', 'parsed', 'classified']
+    uploaded_frameworks_raw = db.query(UploadedFramework).filter(
         or_(
             UploadedFramework.tenant_id.in_(tenant_filter),
             UploadedFramework.is_shared == True,
             UploadedFramework.tenant_id.is_(None)
         ),
-        UploadedFramework.upload_status.in_(['parsed', 'published', 'completed']),
+        UploadedFramework.upload_status.in_(_available_statuses_unified),
         UploadedFramework.is_active == True
     ).all()
+
+    # Deduplicate by (name, version) keeping highest-status entry
+    _status_priority = {
+        'classified': 7, 'published': 6, 'completed': 5,
+        'parsed': 4, 'classifying': 3, 'text_extracted': 2, 'draft': 1,
+    }
+    _seen_fw: dict = {}
+    for _fw in uploaded_frameworks_raw:
+        _key = (_fw.name.lower().strip(), (_fw.version or '').lower().strip())
+        _pri = _status_priority.get(_fw.upload_status or '', 0)
+        if _key not in _seen_fw or _pri > _seen_fw[_key][1]:
+            _seen_fw[_key] = (_fw, _pri)
+    uploaded_frameworks = [v[0] for v in _seen_fw.values()]
     
     framework_scores = []
     framework_coverage = []
@@ -379,9 +426,22 @@ def get_unified_dashboard(
         })
 
     if not framework_coverage:
-        published_frameworks = db.query(Framework).filter(
-            Framework.is_active == True
+        # Fallback: use tenant's published Framework records (from their uploads only)
+        _pub_fw_ids_unified = db.query(UploadedFramework.published_framework_id).filter(
+            UploadedFramework.upload_status == 'published',
+            UploadedFramework.published_framework_id.isnot(None),
+            UploadedFramework.is_active == True,
+            or_(
+                UploadedFramework.tenant_id.in_(tenant_filter),
+                UploadedFramework.is_shared == True,
+                UploadedFramework.tenant_id.is_(None)
+            )
         ).all()
+        _pub_fw_ids_list = list({row[0] for row in _pub_fw_ids_unified})
+        published_frameworks = db.query(Framework).filter(
+            Framework.id.in_(_pub_fw_ids_list),
+            Framework.is_active == True
+        ).all() if _pub_fw_ids_list else []
 
         for fw in published_frameworks:
             compliance_data = calculate_framework_compliance(fw.id, tenant_filter, db)

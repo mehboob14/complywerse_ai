@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
 import {
@@ -30,6 +31,7 @@ import {
 const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-slate-500/20 text-slate-600',
   pending_review: 'bg-blue-500/20 text-blue-400',
+  under_review: 'bg-blue-500/20 text-blue-400',
   approved: 'bg-emerald-500/20 text-emerald-400',
   rejected: 'bg-red-500/20 text-red-400',
   in_progress: 'bg-amber-500/20 text-amber-400',
@@ -40,6 +42,7 @@ const STATUS_COLORS: Record<string, string> = {
 const APPROVAL_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/20 text-yellow-400',
   submitted: 'bg-blue-500/20 text-blue-400',
+  pending_review: 'bg-blue-500/20 text-blue-400',
   approved: 'bg-emerald-500/20 text-emerald-400',
   rejected: 'bg-red-500/20 text-red-400',
   not_submitted: 'bg-slate-500/20 text-slate-600',
@@ -61,6 +64,7 @@ const ITEM_STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AuditPlansPage() {
+  const router = useRouter();
   const [expandedPlan, setExpandedPlan] = useState<number | null>(null);
   const [filterYear, setFilterYear] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -333,7 +337,7 @@ export default function AuditPlansPage() {
                       </div>
                       <div>
                         <div className="flex items-center gap-3">
-                          <h3 className="text-lg font-semibold text-slate-900">{plan.name}</h3>
+                          <h3 className="text-lg font-semibold text-slate-900 cursor-pointer hover:text-blue-600" onClick={(e) => { e.stopPropagation(); router.push(`/audit/plans/${plan.id}`); }}>{plan.name}</h3>
                           {plan.ai_generated && (
                             <span className="px-2 py-0.5 text-xs rounded-full bg-purple-500/20 text-purple-400">
                               AI Generated
@@ -375,7 +379,7 @@ export default function AuditPlansPage() {
                           Submit for Review
                         </button>
                       )}
-                      {(plan.status === 'pending_review' || plan.approval_status === 'submitted') && (
+                      {(plan.status === 'pending_review' || plan.status === 'under_review' || plan.approval_status === 'submitted' || plan.approval_status === 'pending_review') && (
                         <>
                           <button
                             onClick={(e) => { e.stopPropagation(); approveMutation.mutate({ id: plan.id, data: { action: 'approve' } }); }}

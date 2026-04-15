@@ -17,6 +17,7 @@ import {
   Clock,
   AlertCircle,
   XCircle,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -134,6 +135,12 @@ export default function InternalControlsPage() {
   const [editingControl, setEditingControl] = useState<InternalControl | null>(null);
   const [selectedModalCategory, setSelectedModalCategory] = useState('');
   const [selectedModalSubCategory, setSelectedModalSubCategory] = useState('');
+  const [modalName, setModalName] = useState('');
+  const [modalDescription, setModalDescription] = useState('');
+  const [modalControlType, setModalControlType] = useState('');
+  const [modalControlNature, setModalControlNature] = useState('');
+  const [modalFrequency, setModalFrequency] = useState('');
+  const [modalPriority, setModalPriority] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -194,6 +201,22 @@ export default function InternalControlsPage() {
       queryClient.invalidateQueries({ queryKey: ['internal-controls'] });
       queryClient.invalidateQueries({ queryKey: ['internal-controls-dashboard'] });
       setDeleteConfirm(null);
+    },
+  });
+
+  const aiSuggestControlMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string }) => {
+      const response = await ermApi.internalControls.getAISuggestions(data);
+      return response.data;
+    },
+    onSuccess: (result) => {
+      setSelectedModalCategory(result.suggested_category);
+      setSelectedModalSubCategory(result.suggested_subcategory);
+      if (result.suggested_description) setModalDescription(result.suggested_description);
+      if (result.suggested_control_type) setModalControlType(result.suggested_control_type);
+      if (result.suggested_control_nature) setModalControlNature(result.suggested_control_nature);
+      if (result.suggested_frequency) setModalFrequency(result.suggested_frequency);
+      if (result.suggested_priority) setModalPriority(result.suggested_priority);
     },
   });
 
@@ -285,7 +308,7 @@ export default function InternalControlsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
@@ -293,8 +316,8 @@ export default function InternalControlsPage() {
               <Shield className="h-5 w-5 text-blue-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{dashboard?.total_controls || 0}</p>
-              <p className="text-sm text-slate-600">Total Controls</p>
+              <p className="text-xl font-semibold text-slate-900">{dashboard?.total_controls || 0}</p>
+              <p className="text-[13px] text-slate-600">Total Controls</p>
             </div>
           </div>
         </div>
@@ -304,8 +327,8 @@ export default function InternalControlsPage() {
               <Key className="h-5 w-5 text-purple-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{dashboard?.key_controls || 0}</p>
-              <p className="text-sm text-slate-600">Key Controls</p>
+              <p className="text-xl font-semibold text-slate-900">{dashboard?.key_controls || 0}</p>
+              <p className="text-[13px] text-slate-600">Key Controls</p>
             </div>
           </div>
         </div>
@@ -315,8 +338,8 @@ export default function InternalControlsPage() {
               <CheckCircle className="h-5 w-5 text-green-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{dashboard?.effective_controls || 0}</p>
-              <p className="text-sm text-slate-600">Effective</p>
+              <p className="text-xl font-semibold text-slate-900">{dashboard?.effective_controls || 0}</p>
+              <p className="text-[13px] text-slate-600">Effective</p>
             </div>
           </div>
         </div>
@@ -326,14 +349,14 @@ export default function InternalControlsPage() {
               <Clock className="h-5 w-5 text-yellow-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-yellow-400">{dashboard?.pending_approval || 0}</p>
-              <p className="text-sm text-slate-600">Pending Approval</p>
+              <p className="text-xl font-semibold text-yellow-500">{dashboard?.pending_approval || 0}</p>
+              <p className="text-[13px] text-slate-600">Pending Approval</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
@@ -342,7 +365,7 @@ export default function InternalControlsPage() {
               placeholder="Search controls..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-100 py-2 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-slate-100 py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
             />
           </div>
           <select
@@ -386,7 +409,7 @@ export default function InternalControlsPage() {
               setUploadFile(null);
               setAutoCreateUpload(true);
             }}
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-200 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3.5 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-200"
           >
             <Upload className="h-4 w-4" />
             Upload Manual + AI
@@ -396,9 +419,15 @@ export default function InternalControlsPage() {
               setEditingControl(null);
               setSelectedModalCategory('');
               setSelectedModalSubCategory('');
+              setModalName('');
+              setModalDescription('');
+              setModalControlType('');
+              setModalControlNature('');
+              setModalFrequency('');
+              setModalPriority('');
               setIsModalOpen(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-500"
           >
             <Plus className="h-4 w-4" />
             Add New Control
@@ -407,7 +436,7 @@ export default function InternalControlsPage() {
       </div>
 
       {filteredControls.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
+        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
           <Shield className="mx-auto h-12 w-12 text-slate-500" />
           <p className="mt-4 text-lg font-medium text-slate-900">No controls found</p>
           <p className="mt-1 text-sm text-slate-600">
@@ -418,16 +447,16 @@ export default function InternalControlsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full">
+          <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Control ID</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Name</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Category</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Department</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Effectiveness</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Control ID</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Name</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Category</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Department</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Effectiveness</th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
@@ -438,7 +467,7 @@ export default function InternalControlsPage() {
                 );
                 return (
                   <tr key={control.id} className="hover:bg-slate-100/50 transition-colors">
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <Link
                         href={`/erm/internal-controls/${control.id}`}
                         className="font-mono text-sm text-primary-400 hover:text-primary-300"
@@ -446,11 +475,11 @@ export default function InternalControlsPage() {
                         {control.control_id}
                       </Link>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/erm/internal-controls/${control.id}`}
-                          className="text-sm font-medium text-slate-900 hover:text-primary-400"
+                          className="font-medium text-slate-900 hover:text-primary-400"
                         >
                           {control.name}
                         </Link>
@@ -462,31 +491,37 @@ export default function InternalControlsPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-700">{control.category || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-slate-700">
+                    <td className="px-3 py-2.5 text-slate-700">{control.category || '-'}</td>
+                    <td className="px-3 py-2.5 text-slate-700">
                       {control.department?.name || '-'}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <span
                         className={`inline-flex rounded-full whitespace-nowrap px-2 py-1 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}
                       >
                         {statusStyle.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <span
                         className={`inline-flex rounded-full whitespace-nowrap px-2 py-1 text-xs font-medium ${effectivenessStyle.bg} ${effectivenessStyle.text}`}
                       >
                         {effectivenessStyle.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => {
                             setEditingControl(control);
                             setSelectedModalCategory(control.category || '');
                             setSelectedModalSubCategory(control.sub_category || '');
+                            setModalName(control.name || '');
+                            setModalDescription(control.description || '');
+                            setModalControlType(control.control_type || '');
+                            setModalControlNature(control.control_nature || '');
+                            setModalFrequency(control.frequency || '');
+                            setModalPriority(control.priority || '');
                             setIsModalOpen(true);
                           }}
                           className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
@@ -513,29 +548,48 @@ export default function InternalControlsPage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">
+          <div className="max-h-[84vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">
                 {editingControl ? 'Edit Control' : 'Add New Control'}
               </h2>
-              <button
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setEditingControl(null);
-                  setSelectedModalCategory('');
-                  setSelectedModalSubCategory('');
-                }}
-                className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              >
+              <div className="flex items-center gap-2">
+                {!editingControl && (
+                  <button
+                    type="button"
+                    onClick={() => aiSuggestControlMutation.mutate({ name: modalName, description: modalDescription || undefined })}
+                    disabled={aiSuggestControlMutation.isPending || !modalName}
+                    className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 disabled:opacity-50"
+                  >
+                    {aiSuggestControlMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    AI Suggest
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setEditingControl(null);
+                    setSelectedModalCategory('');
+                    setSelectedModalSubCategory('');
+                    setModalName('');
+                    setModalDescription('');
+                    setModalControlType('');
+                    setModalControlNature('');
+                    setModalFrequency('');
+                    setModalPriority('');
+                  }}
+                  className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                >
                 <X className="h-5 w-5" />
-              </button>
+                </button>
+              </div>
             </div>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSubmit(new FormData(e.currentTarget));
               }}
-              className="space-y-4"
+              className="space-y-3.5"
             >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
@@ -560,6 +614,7 @@ export default function InternalControlsPage() {
                     type="text"
                     required
                     defaultValue={editingControl?.name || ''}
+                    onChange={(e) => setModalName(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                     placeholder="Control name"
                   />
@@ -570,7 +625,8 @@ export default function InternalControlsPage() {
                 <textarea
                   name="description"
                   rows={3}
-                  defaultValue={editingControl?.description || ''}
+                  value={modalDescription}
+                  onChange={(e) => setModalDescription(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
                   placeholder="Describe the control..."
                 />
@@ -624,7 +680,8 @@ export default function InternalControlsPage() {
                   <label className="mb-1 block text-sm font-medium text-slate-700">Control Type</label>
                   <select
                     name="control_type"
-                    defaultValue={editingControl?.control_type || ''}
+                    value={modalControlType}
+                    onChange={(e) => setModalControlType(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select type</option>
@@ -639,7 +696,8 @@ export default function InternalControlsPage() {
                   <label className="mb-1 block text-sm font-medium text-slate-700">Control Nature</label>
                   <select
                     name="control_nature"
-                    defaultValue={editingControl?.control_nature || ''}
+                    value={modalControlNature}
+                    onChange={(e) => setModalControlNature(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select nature</option>
@@ -656,7 +714,8 @@ export default function InternalControlsPage() {
                   <label className="mb-1 block text-sm font-medium text-slate-700">Frequency</label>
                   <select
                     name="frequency"
-                    defaultValue={editingControl?.frequency || ''}
+                    value={modalFrequency}
+                    onChange={(e) => setModalFrequency(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select frequency</option>
@@ -671,7 +730,8 @@ export default function InternalControlsPage() {
                   <label className="mb-1 block text-sm font-medium text-slate-700">Priority</label>
                   <select
                     name="priority"
-                    defaultValue={editingControl?.priority || ''}
+                    value={modalPriority}
+                    onChange={(e) => setModalPriority(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
                   >
                     <option value="">Select priority</option>
@@ -725,7 +785,7 @@ export default function InternalControlsPage() {
                 />
                 <label className="text-sm font-medium text-slate-700">Key Control</label>
               </div>
-              <div className="flex justify-end gap-3 pt-4">
+              <div className="flex justify-end gap-2.5 pt-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -754,8 +814,8 @@ export default function InternalControlsPage() {
 
       {showUploadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 max-h-[90vh] overflow-y-auto">
-            <div className="mb-4 flex items-center justify-between">
+          <div className="max-h-[84vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-5">
+            <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-slate-900">Upload Internal Controls (Manual + AI)</h3>
               <button onClick={() => setShowUploadModal(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="h-5 w-5" />
@@ -763,7 +823,7 @@ export default function InternalControlsPage() {
             </div>
 
             {uploadResult ? (
-              <div className="space-y-4">
+              <div className="space-y-3.5">
                 <div className={`rounded-lg p-4 ${uploadResult.created > 0 ? 'bg-green-500/10 border border-green-500/30' : 'bg-blue-500/10 border border-blue-500/30'}`}>
                   <p className={`text-sm font-medium ${uploadResult.created > 0 ? 'text-green-400' : 'text-blue-400'}`}>
                     {uploadResult.message}
@@ -825,7 +885,7 @@ export default function InternalControlsPage() {
                   Upload a manual control file (`.csv`, `.xlsx`, `.xls`, `.txt`). AI will normalize and suggest control fields.
                 </p>
 
-                <div className="rounded-lg border-2 border-dashed border-slate-300 p-6 text-center">
+                <div className="rounded-lg border-2 border-dashed border-slate-300 p-5 text-center">
                   <input
                     type="file"
                     accept=".csv,.xlsx,.xls,.txt"
@@ -884,7 +944,7 @@ export default function InternalControlsPage() {
 
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5">
             <div className="mb-4 flex items-center gap-3">
               <div className="rounded-full bg-red-500/20 p-2">
                 <XCircle className="h-6 w-6 text-red-400" />

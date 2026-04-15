@@ -25,11 +25,11 @@ export interface DataCardProps {
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-3 animate-pulse">
-      <div className="h-4 w-3/4 rounded bg-slate-200" />
-      <div className="h-4 w-1/2 rounded bg-slate-200" />
-      <div className="h-4 w-2/3 rounded bg-slate-200" />
-      <div className="h-4 w-1/3 rounded bg-slate-200" />
+    <div className="space-y-2.5 animate-pulse">
+      <div className="h-3.5 w-3/4 rounded bg-slate-200" />
+      <div className="h-3.5 w-1/2 rounded bg-slate-200" />
+      <div className="h-3.5 w-2/3 rounded bg-slate-200" />
+      <div className="h-3.5 w-1/3 rounded bg-slate-200" />
     </div>
   );
 }
@@ -61,11 +61,11 @@ export function DataCard({
         className
       )}
     >
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex items-center justify-between border-b border-slate-200 px-3.5 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
           {Icon && (
             <div className="text-primary-600 shrink-0" aria-hidden="true">
-              <Icon size={16} />
+              <Icon size={15} />
             </div>
           )}
           <div className="min-w-0">
@@ -78,7 +78,7 @@ export function DataCard({
         {onAction && (
           <button
             onClick={onAction}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-black transition-colors shrink-0"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-black"
             aria-label={actionLabel}
           >
             {ActionIcon && <ActionIcon size={14} aria-hidden="true" />}
@@ -87,11 +87,11 @@ export function DataCard({
         )}
       </div>
 
-      <div className={clsx(!noPadding && 'p-4', bodyClassName)}>
+      <div className={clsx(!noPadding && 'p-3.5', bodyClassName)}>
         {loading && <LoadingSkeleton />}
 
         {error && (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
+          <div className="flex flex-col items-center justify-center py-6 text-center">
             <AlertCircle size={24} className="text-rose-600 mb-3" aria-hidden="true" />
             <p className="text-sm font-medium text-rose-600">{errorMessage}</p>
             <p className="text-xs text-slate-500 mt-1">Please try again later</p>
@@ -99,7 +99,7 @@ export function DataCard({
         )}
 
         {empty && !loading && !error && (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
+          <div className="flex flex-col items-center justify-center py-6 text-center">
             <EmptyIcon size={24} className="text-slate-500 mb-3" aria-hidden="true" />
             <p className="text-sm font-medium text-slate-500">{emptyMessage}</p>
           </div>

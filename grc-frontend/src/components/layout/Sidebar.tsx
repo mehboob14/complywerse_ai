@@ -30,13 +30,17 @@ import {
   Calendar,
   CheckCircle,
   Bot,
+  Wifi,
+  FolderKanban,
+  ListTodo,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { clsx } from "clsx";
+import { apiClient } from "@/lib/api";
 
 const navIconProps = {
-  size: 18,
+  size: 16,
   strokeWidth: 1.5,
 };
 
@@ -123,25 +127,18 @@ const navigation: NavEntry[] = [
       { name: 'Dashboard', href: '/vulnerabilities/dashboard', icon: BarChart3, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
       { name: 'Vulnerabilities', href: '/vulnerabilities', icon: Bug, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
       { name: 'Departments', href: '/vulnerabilities/departments', icon: Users, requiredPermissions: ['vulnerabilities:remediation:*'] },
-      { name: 'Reports', href: '/vulnerabilities/reports', icon: FileText, requiredPermissions: ['vulnerabilities:reports:*'] },
+      // { name: 'Reports', href: '/vulnerabilities/reports', icon: FileText, requiredPermissions: ['vulnerabilities:reports:*'] },
       { name: 'SLA Config', href: '/vulnerabilities/sla', icon: Clock, requiredPermissions: ['vulnerabilities:sla_management:*'] },
     ],
   },
   {
-    name: 'Audit Management',
-    icon: ClipboardCheck,
+    name: 'Scanner Integration',
+    icon: Wifi,
+    requiredModules: ['integrations'],
     items: [
-      { name: 'Overview', href: '/audit', icon: LayoutDashboard },
-      { name: 'Universe', href: '/audit/universe', icon: Globe },
-      { name: 'Engagements', href: '/audit/engagements', icon: ClipboardList },
-      { name: 'Plans', href: '/audit/plans', icon: Calendar },
-      { name: 'Findings', href: '/audit/findings', icon: AlertTriangle },
-      { name: 'CCM', href: '/audit/ccm', icon: Activity },
-      { name: 'Reporting', href: '/audit/reporting', icon: FileText },
-      { name: 'QAIP', href: '/audit/qaip', icon: CheckCircle },
-      { name: 'Test Scripts', href: '/audit/test-scripts', icon: ClipboardList },
-      { name: 'Skill Matrix', href: '/audit/skill-matrix', icon: Users },
-      { name: 'Capacity', href: '/audit/capacity', icon: Clock },
+      { name: 'Connections', href: '/integrations/connections', icon: Wifi, requiredPermissions: ['integrations:connections:*'] },
+      { name: 'Exceptions', href: '/integrations/exceptions', icon: AlertTriangle, requiredPermissions: ['integrations:exceptions:*'] },
+      { name: 'Analytics', href: '/integrations', icon: BarChart3, requiredPermissions: ['integrations:analytics:*'] },
     ],
   },
   {
@@ -150,6 +147,26 @@ const navigation: NavEntry[] = [
     requiredModules: ['assets'],
     items: [
       { name: 'IT Assets', href: '/assets', icon: Server, requiredPermissions: ['assets:asset_inventory:*'] },
+    ],
+  },
+  {
+    name: 'IS Projects',
+    icon: FolderKanban,
+    requiredModules: ['is_projects'],
+    items: [
+      { name: 'Projects', href: '/is-projects', icon: FolderKanban, requiredPermissions: ['is_projects:projects:*'] },
+      { name: 'Portfolio Dashboard', href: '/is-projects/dashboard', icon: BarChart3, requiredPermissions: ['is_projects:dashboard:view'] },
+      { name: 'My Projects', href: '/is-projects/my-projects', icon: Users, requiredPermissions: ['is_projects:projects:view'] },
+    ],
+  },
+  {
+    name: 'Critical Tasks',
+    icon: ListTodo,
+    requiredModules: ['critical_tasks'],
+    items: [
+      { name: 'Task Board', href: '/tasks', icon: ListTodo, requiredPermissions: ['critical_tasks:tasks:*'] },
+      { name: 'My Tasks', href: '/tasks/my-tasks', icon: Target, requiredPermissions: ['critical_tasks:tasks:view'] },
+      { name: 'Reports', href: '/tasks/reports', icon: BarChart3, requiredPermissions: ['critical_tasks:reports:view'] },
     ],
   },
   {
@@ -187,10 +204,10 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
     <Link
       href={item.href}
       className={clsx(
-        'group flex items-center gap-3 rounded-[var(--radius-md)] border-l-[3px] px-3 py-2 text-[13px] font-normal transition-all duration-150',
+        'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[12px] font-normal transition-all duration-150',
         isActive 
-          ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-text-inverse)] font-medium' 
-          : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text-inverse)]',
+          ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] font-medium' 
+          : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
         collapsed && 'justify-center px-2'
       )}
       title={collapsed ? item.name : undefined}
@@ -199,7 +216,7 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
         {...navIconProps}
         className={clsx(
           'flex-shrink-0 transition-colors duration-150',
-          isActive ? 'text-[var(--color-text-inverse)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text-inverse)]'
+          isActive ? 'text-[var(--color-on-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
         )} 
       />
       {!collapsed && <span className="truncate">{item.name}</span>}
@@ -226,17 +243,17 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
       <div className="relative group/nav">
         <button
           className={clsx(
-            'flex items-center justify-center w-full rounded-[var(--radius-md)] border-l-[3px] p-2.5 transition-all duration-150',
+            'flex items-center justify-center w-full rounded-[var(--radius-md)] border-l-[3px] p-2 transition-all duration-150',
             isAnyChildActive 
-              ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-text-inverse)]'
-              : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text-inverse)]'
+              ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)]'
+              : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
           )}
         >
-          <group.icon {...navIconProps} className="text-[var(--sidebar-icon)] group-hover:text-[var(--color-text-inverse)]" />
+          <group.icon {...navIconProps} className="text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]" />
         </button>
         <div className="absolute left-full top-0 ml-2 hidden group-hover/nav:block z-50">
-          <div className="min-w-[200px] rounded-[var(--radius-lg)] border border-[var(--sidebar-hover-bg)] bg-[var(--color-base)] py-2">
-            <div className="px-3 py-1.5 text-[10px] font-normal uppercase tracking-[0.12em] text-[var(--sidebar-text-section)]">
+          <div className="min-w-[200px] rounded-[var(--radius-lg)] border border-slate-200 bg-white shadow-elevated py-1.5">
+            <div className="px-3 py-1 text-[9px] font-normal uppercase tracking-[0.12em] text-[var(--sidebar-text-section)]">
               {group.name}
             </div>
             {group.items.map(item => (
@@ -244,10 +261,10 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                 key={item.href}
                 href={item.href}
                 className={clsx(
-                  'flex items-center gap-2 border-l-[3px] px-3 py-2 text-[13px] transition-colors',
+                  'flex items-center gap-2 border-l-[3px] px-3 py-1.5 text-[12px] transition-colors',
                   pathname === item.href || pathname.startsWith(item.href + '/')
-                    ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-text-inverse)]'
-                    : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text-inverse)]'
+                    ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)]'
+                    : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
                 )}
               >
                 <item.icon {...navIconProps} className="text-[var(--sidebar-icon)]" />
@@ -265,17 +282,17 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={clsx(
-          'group flex w-full items-center gap-3 rounded-[var(--radius-md)] border-l-[3px] px-3 py-2 text-[10px] font-normal uppercase tracking-[0.12em] transition-all duration-150',
+          'group flex w-full items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[9px] font-normal uppercase tracking-[0.12em] transition-all duration-150',
           isAnyChildActive
-            ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-text-inverse)]'
-            : 'border-transparent text-[var(--sidebar-text-section)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text-inverse)]'
+            ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)]'
+            : 'border-transparent text-[var(--sidebar-text-section)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
         )}
       >
         <group.icon
           {...navIconProps}
           className={clsx(
             'flex-shrink-0 transition-colors duration-150',
-            isAnyChildActive ? 'text-[var(--color-text-inverse)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text-inverse)]'
+            isAnyChildActive ? 'text-[var(--color-on-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
           )} 
         />
         <span className="flex-1 text-left truncate">{group.name}</span>
@@ -288,16 +305,16 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
         />
       </button>
       {isOpen && (
-        <div className="ml-4 space-y-0.5 border-l border-[var(--sidebar-hover-bg)] pl-4">
+        <div className="ml-3 space-y-0.5 border-l border-[var(--sidebar-hover-bg)] pl-3">
           {group.items.map(item => (
             <Link
               key={item.href}
               href={item.href}
               className={clsx(
-                'group flex items-center gap-3 rounded-[var(--radius-md)] border-l-[3px] px-3 py-1.5 text-[12px] transition-all duration-150',
+                'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[11px] transition-all duration-150',
                 (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')))
-                  ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-text-inverse)] font-medium'
-                  : 'border-transparent text-[var(--sidebar-text-subitem)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text-inverse)]'
+                  ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] font-medium'
+                  : 'border-transparent text-[var(--sidebar-text-subitem)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
               )}
             >
               <item.icon
@@ -305,8 +322,8 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                 className={clsx(
                   'flex-shrink-0',
                   (pathname === item.href || pathname.startsWith(item.href + '/'))
-                    ? 'text-[var(--color-text-inverse)]' 
-                    : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text-inverse)]'
+                    ? 'text-[var(--color-on-base)]' 
+                    : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
                 )} 
               />
               <span className="truncate">{item.name}</span>
@@ -325,24 +342,78 @@ export default function Sidebar() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
+  const adminDefaultModules = [
+    'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
+    'vulnerabilities', 'assets', 'frameworks', 'reports', 'admin', 'workflow_engine', 'integrations',
+    'is_projects', 'critical_tasks'
+  ];
+
+  const authenticatedDefaultModules = [
+    'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
+    'vulnerabilities', 'assets', 'frameworks', 'reports', 'workflow_engine', 'integrations',
+    'is_projects', 'critical_tasks'
+  ];
+
+  const normalizePerm = (perm: string): string => {
+    const cleaned = perm.trim();
+    if (!cleaned) return '';
+    return cleaned.includes('.') ? cleaned.replace(/\./g, ':') : cleaned;
+  };
+
+  const extractModuleFromPerm = (perm: string): string => {
+    const normalized = normalizePerm(perm);
+    return normalized.split(':')[0] || '';
+  };
+
   useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => {
-        if (data.authenticated && data.user) {
-          setAllowedModules(data.user.allowed_modules || []);
-          setAllowedPermissions(data.user.permissions || []);
-          const adminStatus = data.user.is_admin || false;
-          setIsAdmin(adminStatus);
-          
-          // If admin but no modules/permissions set, initialize with all modules
-          if (adminStatus && (!data.user.allowed_modules || data.user.allowed_modules.length === 0)) {
-            setAllowedModules(['dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance', 'vulnerabilities', 'assets', 'frameworks', 'reports', 'admin']);
-            setAllowedPermissions(['*:*:*']);
-          }
+    const loadMe = async () => {
+      let data: any = null;
+      try {
+        const res = await apiClient.get('/auth/me');
+        data = res.data;
+      } catch {
+        // Fallback to raw fetch in case axios interceptors/session state cause an edge-case redirect
+        try {
+          const res = await fetch('/api/auth/me', { credentials: 'include' });
+          data = await res.json();
+        } catch {
+          data = null;
         }
-        setLoaded(true);
-      })
+      }
+
+      if (data?.authenticated && data.user) {
+        const rawPermissions: string[] = data.user.permissions || [];
+        const permissions: string[] = rawPermissions
+          .filter((perm) => typeof perm === 'string')
+          .map((perm) => normalizePerm(perm));
+        const explicitModules: string[] = data.user.allowed_modules || [];
+        const modulesFromPermissions = permissions
+          .map((perm) => extractModuleFromPerm(perm))
+          .filter((m) => !!m);
+        const resolvedModules = Array.from(new Set([
+          ...explicitModules,
+          ...modulesFromPermissions,
+        ]));
+
+        // Defensive fallback: some tenants can return authenticated user with empty role payload.
+        // In that case, avoid collapsing sidebar to a near-empty state.
+        const hasNoAccessPayload = resolvedModules.length === 0 && permissions.length === 0;
+
+        setAllowedModules(hasNoAccessPayload ? authenticatedDefaultModules : resolvedModules);
+        setAllowedPermissions(permissions);
+        const adminStatus = data.user.is_admin || false;
+        setIsAdmin(adminStatus);
+        
+        // If admin but no modules/permissions set, initialize with all modules
+        if (adminStatus && resolvedModules.length === 0) {
+          setAllowedModules(adminDefaultModules);
+          setAllowedPermissions(['*:*:*']);
+        }
+      }
+      setLoaded(true);
+    };
+
+    loadMe()
       .catch((error) => {
         console.error('Failed to fetch user data:', error);
         setLoaded(true);
@@ -350,22 +421,24 @@ export default function Sidebar() {
   }, []);
 
   const matchesPermission = (requiredPerm: string) => {
+    const required = normalizePerm(requiredPerm);
+
     // Admin bypass
     if (allowedPermissions.includes('*:*:*')) return true;
     
     // Exact match
-    if (allowedPermissions.includes(requiredPerm)) return true;
+    if (allowedPermissions.includes(required)) return true;
     
     // If required permission is a wildcard like "risks:risk_register:*"
-    if (requiredPerm.endsWith(':*')) {
-      const prefix = requiredPerm.slice(0, -2); // "risks:risk_register"
+    if (required.endsWith(':*')) {
+      const prefix = required.slice(0, -2); // "risks:risk_register"
       // Check if user has ANY permission starting with this prefix
       return allowedPermissions.some((perm) => perm.startsWith(prefix + ':'));
     }
     
     // If required permission is specific like "risks:risk_register:view"
     // Check if user has a wildcard that covers it
-    const parts = requiredPerm.split(':');
+    const parts = required.split(':');
     if (parts.length === 3) {
       const wildcardPerm = `${parts[0]}:${parts[1]}:*`;
       if (allowedPermissions.includes(wildcardPerm)) return true;
@@ -393,6 +466,12 @@ export default function Sidebar() {
   const canAccessItem = (item: NavItem & { requiredModules?: string[]; adminOnly?: boolean }) => {
     if (item.adminOnly && !isAdmin) return false;
     if (!hasModuleAccess(item.requiredModules)) return false;
+
+    // Fallback for tenants where module access is populated but fine-grained permissions are empty/migrating
+    if (!isAdmin && allowedModules.length > 0 && allowedPermissions.length === 0) {
+      return true;
+    }
+
     return hasPermission(item.requiredPermissions);
   };
 
@@ -419,23 +498,23 @@ export default function Sidebar() {
   return (
     <aside
       className={clsx(
-        'flex flex-col bg-[var(--color-base)] transition-all duration-300 ease-out',
-        collapsed ? 'w-[68px]' : 'w-60'
+        'flex flex-col bg-[var(--sidebar-bg)] border-r border-slate-200 shadow-sidebar transition-all duration-300 ease-out',
+        collapsed ? 'w-[60px]' : 'w-56'
       )}
     >
       <div className={clsx(
-        'h-14 flex items-center border-b border-[var(--sidebar-hover-bg)] transition-all duration-300',
+        'h-12 flex items-center border-b border-[var(--sidebar-hover-bg)] transition-all duration-300',
         collapsed ? 'px-3 justify-center' : 'px-4'
       )}>
-        <div className="flex items-center gap-2.5">
-          <Shield {...navIconProps} className="text-[var(--color-text-inverse)] flex-shrink-0" />
+        <div className="flex items-center gap-2">
+          <Shield {...navIconProps} className="text-[var(--color-base)] flex-shrink-0" />
           {!collapsed && (
-            <span className="whitespace-nowrap text-lg font-semibold text-[var(--color-text-inverse)]">Compliverse AI</span>
+            <span className="whitespace-nowrap text-base font-semibold text-[var(--color-text)]">Compliverse AI</span>
           )}
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto scrollbar-thin p-2.5 space-y-0.5">
         {filteredNavigation.map((item) => {
           if (isGroup(item)) {
             return (
@@ -456,12 +535,12 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-[var(--sidebar-hover-bg)] p-3">
+      <div className="border-t border-[var(--sidebar-hover-bg)] p-2.5">
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={clsx(
-            'flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-[12px] transition-all duration-150',
-            'text-[var(--sidebar-text-collapse)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text-inverse)]',
+            'flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2.5 py-1.5 text-[11px] transition-all duration-150',
+            'text-[var(--sidebar-text-collapse)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
             collapsed && 'justify-center px-2'
           )}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -473,7 +552,7 @@ export default function Sidebar() {
               !collapsed && 'rotate-180'
             )}
           />
-          {!collapsed && <span className="text-sm">Collapse</span>}
+          {!collapsed && <span className="text-xs">Collapse</span>}
         </button>
       </div>
     </aside>

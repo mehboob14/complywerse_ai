@@ -13,6 +13,7 @@ from .routers.test_scripts import router as test_scripts_router
 from .routers.skill_matrix import router as skill_matrix_router
 from .routers.capacity import router as capacity_router
 from .routers.audit_tools import router as audit_tools_router
+from .routers.notifications import router as notifications_router
 
 router = APIRouter(prefix="/audit", tags=["Audit Management"])
 
@@ -29,3 +30,4 @@ router.include_router(test_scripts_router)
 router.include_router(capacity_router)
 router.include_router(skill_matrix_router)
 router.include_router(audit_tools_router)
+router.include_router(notifications_router)

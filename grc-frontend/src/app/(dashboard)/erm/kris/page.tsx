@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
 import {
@@ -407,6 +407,7 @@ function KRIModal({
     frequency: kri?.frequency || 'monthly',
   });
   const [aiSuggestionNote, setAiSuggestionNote] = useState<string | null>(null);
+  const isFirstMount = useRef(true);
 
   const createMutation = useMutation({
     mutationFn: (data: RiskKRICreate) => ermApi.kris.create(data),
@@ -430,13 +431,14 @@ function KRIModal({
       const suggestion = response.data.suggestion;
       setFormData((prev) => ({
         ...prev,
-        description: prev.description || suggestion.description || '',
+        name: suggestion.suggested_name || prev.name || '',
+        description: suggestion.description || prev.description || '',
         metric_type: (suggestion.metric_type as KRIMetricType) || prev.metric_type,
-        unit: prev.unit || suggestion.unit || '',
+        unit: suggestion.unit || prev.unit || '',
         threshold_direction: (suggestion.threshold_direction as KRIThresholdDirection) || prev.threshold_direction,
         frequency: (suggestion.frequency as KRIFrequency) || prev.frequency,
-        green_threshold: prev.green_threshold ?? suggestion.green_threshold,
-        amber_threshold: prev.amber_threshold ?? suggestion.amber_threshold,
+        green_threshold: suggestion.green_threshold ?? prev.green_threshold,
+        amber_threshold: suggestion.amber_threshold ?? prev.amber_threshold,
       }));
       setAiSuggestionNote(suggestion.rationale || 'AI suggestions applied');
     },
@@ -444,6 +446,18 @@ function KRIModal({
       setAiSuggestionNote('AI suggestion failed. Please try again.');
     },
   });
+
+  // Auto-suggest when risk changes (skip initial mount)
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    if (formData.risk_id) {
+      aiSuggestMutation.mutate();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.risk_id]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

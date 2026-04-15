@@ -1,6 +1,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..models import Tenant, TenantUser, BusinessUnit, GRCUser, get_db
 from ..schemas import (
@@ -129,7 +129,9 @@ def list_tenant_users(
             detail="Tenant not found"
         )
     
-    tenant_users = db.query(TenantUser).filter(
+    tenant_users = db.query(TenantUser).options(
+        joinedload(TenantUser.user)
+    ).filter(
         TenantUser.tenant_id == tenant_id
     ).all()
     return tenant_users

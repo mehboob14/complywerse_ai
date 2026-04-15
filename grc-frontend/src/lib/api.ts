@@ -111,6 +111,7 @@ apiClient.interceptors.response.use(
 
 export const frameworksApi = {
   getAll: () => apiClient.get<Framework[]>('/frameworks'),
+  getAvailable: () => apiClient.get('/frameworks/available'),
   getById: (id: string) => apiClient.get<Framework>(`/frameworks/${id}`),
   create: (data: Partial<Framework>) => apiClient.post<Framework>('/frameworks', data),
   update: (id: string, data: Partial<Framework>) => apiClient.put<Framework>(`/frameworks/${id}`, data),
@@ -331,7 +332,7 @@ export const governanceApi = {
     apiClient.post('/governance/applicability', data),
   reviewApplicability: (applicabilityId: number, data: { status: string; review_comment?: string }) =>
     apiClient.put(`/governance/applicability/${applicabilityId}/review`, data),
-  linkControl: (data: { document_id: number; normalized_control_id: number; link_type?: string; notes?: string }) =>
+  linkControl: (data: { document_id: number; internal_control_id: number; link_type?: string; notes?: string; force_relink?: boolean }) =>
     apiClient.post('/governance/mappings/control', data),
   unlinkControl: (linkId: number) =>
     apiClient.delete(`/governance/mappings/control/${linkId}`),
@@ -463,6 +464,10 @@ export const assetsApi = {
   }) => apiClient.post<ITAsset>('/assets', data),
   update: (id: number, data: Partial<ITAsset>) => apiClient.put<ITAsset>(`/assets/${id}`, data),
   delete: (id: number) => apiClient.delete(`/assets/${id}`),
+  linkControl: (id: number, data: { normalized_control_id: number; coverage_status?: string }) =>
+    apiClient.post(`/assets/${id}/controls`, data),
+  unlinkControl: (id: number, linkId: number) =>
+    apiClient.delete(`/assets/${id}/controls/${linkId}`),
   linkFrameworkControl: (id: number, data: {framework_control_id: number, coverage_status?: string}) => 
     apiClient.post(`/assets/${id}/link-framework-control`, data),
   unlinkFrameworkControl: (id: number, linkId: number) => 
@@ -501,6 +506,128 @@ export const assetsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+};
+
+export const isProjectsApi = {
+  getAll: (params?: Record<string, string>) => apiClient.get('/is-projects', { params }),
+  getById: (id: number) => apiClient.get(`/is-projects/${id}`),
+  create: (data: Record<string, unknown>) => apiClient.post('/is-projects', data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/is-projects/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/is-projects/${id}`),
+  getMyProjects: () => apiClient.get('/is-projects/my-projects'),
+  getDashboard: () => apiClient.get('/is-projects/dashboard'),
+  getEnhancedAnalytics: () => apiClient.get('/is-projects/dashboard/enhanced-analytics'),
+  getHealthTrend: () => apiClient.get('/is-projects/dashboard/health-trend'),
+  createMilestone: (projectId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/is-projects/${projectId}/milestones`, data),
+  updateMilestone: (projectId: number, milestoneId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/is-projects/${projectId}/milestones/${milestoneId}`, data),
+  deleteMilestone: (projectId: number, milestoneId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/milestones/${milestoneId}`),
+  getMilestoneEvidence: (projectId: number, milestoneId: number) =>
+    apiClient.get(`/is-projects/${projectId}/milestones/${milestoneId}/evidence`),
+  uploadMilestoneEvidence: (projectId: number, milestoneId: number, formData: FormData) =>
+    apiClient.post(`/is-projects/${projectId}/milestones/${milestoneId}/evidence`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  deleteMilestoneEvidence: (projectId: number, milestoneId: number, linkId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/milestones/${milestoneId}/evidence/${linkId}`),
+  createTask: (projectId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/is-projects/${projectId}/tasks`, data),
+  updateTask: (projectId: number, taskId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/is-projects/${projectId}/tasks/${taskId}`, data),
+  deleteTask: (projectId: number, taskId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/tasks/${taskId}`),
+  addTeamMember: (projectId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/is-projects/${projectId}/team`, data),
+  updateTeamMember: (projectId: number, memberId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/is-projects/${projectId}/team/${memberId}`, data),
+  removeTeamMember: (projectId: number, memberId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/team/${memberId}`),
+  createUpdate: (projectId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/is-projects/${projectId}/updates`, data),
+  updateUpdate: (projectId: number, updateId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/is-projects/${projectId}/updates/${updateId}`, data),
+  deleteUpdate: (projectId: number, updateId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/updates/${updateId}`),
+  createRisk: (projectId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/is-projects/${projectId}/risks`, data),
+  updateRisk: (projectId: number, riskId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/is-projects/${projectId}/risks/${riskId}`, data),
+  deleteRisk: (projectId: number, riskId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/risks/${riskId}`),
+  addDocument: (projectId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/is-projects/${projectId}/documents`, data),
+  updateDocument: (projectId: number, documentId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/is-projects/${projectId}/documents/${documentId}`, data),
+  removeDocument: (projectId: number, documentId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/documents/${documentId}`),
+  getBudgetItems: (projectId: number) => apiClient.get(`/is-projects/${projectId}/budget-items`),
+  createBudgetItem: (projectId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/is-projects/${projectId}/budget-items`, data),
+  updateBudgetItem: (projectId: number, itemId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/is-projects/${projectId}/budget-items/${itemId}`, data),
+  deleteBudgetItem: (projectId: number, itemId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/budget-items/${itemId}`),
+  getComplianceMappings: (projectId: number) => apiClient.get(`/is-projects/${projectId}/compliance-mappings`),
+  createComplianceMapping: (projectId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/is-projects/${projectId}/compliance-mappings`, data),
+  updateComplianceMapping: (projectId: number, mappingId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/is-projects/${projectId}/compliance-mappings/${mappingId}`, data),
+  deleteComplianceMapping: (projectId: number, mappingId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/compliance-mappings/${mappingId}`),
+  getLessonsLearned: (projectId: number) => apiClient.get(`/is-projects/${projectId}/lessons-learned`),
+  createLessonLearned: (projectId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/is-projects/${projectId}/lessons-learned`, data),
+  updateLessonLearned: (projectId: number, lessonId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/is-projects/${projectId}/lessons-learned/${lessonId}`, data),
+  deleteLessonLearned: (projectId: number, lessonId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/lessons-learned/${lessonId}`),
+  getDependencies: (projectId: number) => apiClient.get(`/is-projects/${projectId}/dependencies`),
+  createDependency: (projectId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/is-projects/${projectId}/dependencies`, data),
+  updateDependency: (projectId: number, depId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/is-projects/${projectId}/dependencies/${depId}`, data),
+  deleteDependency: (projectId: number, depId: number) =>
+    apiClient.delete(`/is-projects/${projectId}/dependencies/${depId}`),
+  aiGeneratePlan: (projectId: number) =>
+    apiClient.post(`/is-projects/${projectId}/ai/generate-plan`),
+  aiAssessRisks: (projectId: number) =>
+    apiClient.post(`/is-projects/${projectId}/ai/assess-risks`),
+  aiDraftStatusReport: (projectId: number) =>
+    apiClient.post(`/is-projects/${projectId}/ai/draft-status-report`),
+  aiSuggestTeam: (projectId: number) =>
+    apiClient.post(`/is-projects/${projectId}/ai/suggest-team`),
+  aiEstimateBudget: (projectId: number) =>
+    apiClient.post(`/is-projects/${projectId}/ai/estimate-budget`),
+};
+
+export const criticalTasksApi = {
+  list: (params?: Record<string, unknown>) => apiClient.get('/critical-tasks', { params }),
+  myTasks: () => apiClient.get('/critical-tasks/my-tasks'),
+  get: (id: number) => apiClient.get(`/critical-tasks/${id}`),
+  create: (data: Record<string, unknown>) => apiClient.post('/critical-tasks', data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/critical-tasks/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/critical-tasks/${id}`),
+  transition: (id: number, data: Record<string, unknown>) => apiClient.post(`/critical-tasks/${id}/transition`, data),
+  addComment: (id: number, data: Record<string, unknown>) => apiClient.post(`/critical-tasks/${id}/comments`, data),
+  getHistory: (id: number) => apiClient.get(`/critical-tasks/${id}/history`),
+  createSubTask: (id: number, data: Record<string, unknown>) => apiClient.post(`/critical-tasks/${id}/sub-tasks`, data),
+  updateSubTask: (id: number, subId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/critical-tasks/${id}/sub-tasks/${subId}`, data),
+  deleteSubTask: (id: number, subId: number) => apiClient.delete(`/critical-tasks/${id}/sub-tasks/${subId}`),
+  reportsSummary: () => apiClient.get('/critical-tasks/reports/summary'),
+  bulkAction: (data: Record<string, unknown>) => apiClient.post('/critical-tasks/bulk-action', data),
+  listTemplates: () => apiClient.get('/critical-tasks/templates/list'),
+  createFromTemplate: (data: Record<string, unknown>) => apiClient.post('/critical-tasks/create-from-template', data),
+  requestApproval: (id: number, data: Record<string, unknown>) => apiClient.post(`/critical-tasks/${id}/request-approval`, data),
+  approveTask: (id: number, data: Record<string, unknown>) => apiClient.post(`/critical-tasks/${id}/approve`, data),
+  rejectTask: (id: number, data: Record<string, unknown>) => apiClient.post(`/critical-tasks/${id}/reject`, data),
+  aiPrioritize: () => apiClient.post('/critical-tasks/ai/prioritize-tasks', {}),
+  aiRootCause: (id: number) => apiClient.post(`/critical-tasks/${id}/ai/analyze-root-cause`, {}),
+  aiGenerateDescription: (data: Record<string, unknown>) => apiClient.post('/critical-tasks/ai/generate-description', data),
+  aiPredictEscalations: () => apiClient.post('/critical-tasks/ai/predict-escalations', {}),
+  aiBalanceWorkload: () => apiClient.post('/critical-tasks/ai/balance-workload', {}),
 };
 
 export const certificationsApi = {
@@ -611,7 +738,7 @@ export const ermApi = {
       apiClient.post<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}/complete`, { actual_residual_reduction: actualReduction }),
     getOverdue: () => 
       apiClient.get<RiskMitigationAction[]>('/erm/mitigation-actions/overdue'),
-    aiSuggest: (riskId: number) =>
+    aiSuggest: (data: { risk_id?: number; title?: string }) =>
       apiClient.post<{
         suggestions: Array<{
           title: string;
@@ -620,7 +747,7 @@ export const ermApi = {
           priority: string;
           expected_residual_reduction: number;
         }>;
-      }>('/erm/mitigation-actions/ai-suggest', { risk_id: riskId }),
+      }>('/erm/mitigation-actions/ai-suggest', data),
   },
   auditFindings: {
     link: (riskId: number, issueId: number, notes?: string) => 
@@ -779,6 +906,8 @@ export const ermApi = {
       apiClient.put(`/erm/appetite/${id}`, data),
     create: (tenantId: number, data: Record<string, unknown>) => 
       apiClient.post(`/erm/appetite?tenant_id=${tenantId}`, data),
+    delete: (id: number) =>
+      apiClient.delete(`/erm/appetite/${id}`),
     seedDefaults: (tenantId?: number) => 
       apiClient.post(`/erm/appetite/seed-defaults${tenantId ? `?tenant_id=${tenantId}` : ''}`),
     aiSuggest: (data: { category: string; description?: string }) =>
@@ -817,7 +946,16 @@ export const ermApi = {
     createFrameworkLink: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/internal-controls/${id}/framework-links`, data),
     deleteFrameworkLink: (id: number, linkId: number) => apiClient.delete(`/erm/internal-controls/${id}/framework-links/${linkId}`),
     getAISuggestions: (data: { name: string; description?: string }) =>
-      apiClient.post<{ suggested_category: string; suggested_subcategory: string; suggestion_confidence: number }>(
+      apiClient.post<{
+        suggested_category: string;
+        suggested_subcategory: string;
+        suggested_description?: string;
+        suggested_control_type?: string;
+        suggested_control_nature?: string;
+        suggested_frequency?: string;
+        suggested_priority?: string;
+        suggestion_confidence: number;
+      }>(
         '/erm/internal-controls/ai-suggest-category',
         data
       ),
@@ -912,6 +1050,31 @@ export const ermApi = {
         headers: { 'Content-Type': 'multipart/form-data' },
       }),
   },
+  frameworkRiskAssessments: {
+    getAll: () => apiClient.get('/erm/framework-risk-assessments'),
+    getMyAssignedQuestions: () => apiClient.get('/erm/framework-risk-assessments/my-assigned-questions'),
+    getAvailableFrameworks: () => apiClient.get('/erm/framework-risk-assessments/available-frameworks'),
+    getById: (id: number) => apiClient.get(`/erm/framework-risk-assessments/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/erm/framework-risk-assessments', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/framework-risk-assessments/${id}`, data),
+    delete: (id: number) => apiClient.delete(`/erm/framework-risk-assessments/${id}`),
+    generateQuestions: (id: number, data?: { count?: number; replace_existing?: boolean }) =>
+      apiClient.post(`/erm/framework-risk-assessments/${id}/generate-questions`, data || {}),
+    addQuestion: (id: number, data: Record<string, unknown>) =>
+      apiClient.post(`/erm/framework-risk-assessments/${id}/questions`, data),
+    updateQuestion: (assessmentId: number, questionId: number, data: Record<string, unknown>) =>
+      apiClient.put(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}`, data),
+    deleteQuestion: (assessmentId: number, questionId: number) =>
+      apiClient.delete(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}`),
+    uploadEvidence: (assessmentId: number, questionId: number, formData: FormData) =>
+      apiClient.post(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}/evidence`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    listEvidence: (assessmentId: number, questionId: number) =>
+      apiClient.get(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}/evidence`),
+    deleteEvidence: (assessmentId: number, evidenceId: number) =>
+      apiClient.delete(`/erm/framework-risk-assessments/${assessmentId}/evidence/${evidenceId}`),
+  },
 };
 
 // Alias for backward compatibility
@@ -919,12 +1082,12 @@ export const riskAssessmentApi = ermApi.riskAssessments;
 
 export const tenantApi = {
   getTenantUsers: async (tenantId?: number) => {
+    if (tenantId) {
+      return apiClient.get(`/tenants/${tenantId}/users`);
+    }
     try {
       return await apiClient.get('/assets/tenant-users');
     } catch {
-      if (tenantId) {
-        return apiClient.get(`/tenants/${tenantId}/users`);
-      }
       throw new Error('Unable to load tenant users');
     }
   },
@@ -1210,6 +1373,14 @@ export const vulnManagementApi = {
     getById: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}`),
     create: (data: Record<string, unknown>) => 
       apiClient.post('/vuln-management/vulnerabilities', data),
+    bulkUpload: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiClient.post<{ message: string; created: number; skipped: number; errors: string[] }>(
+        '/vuln-management/vulnerabilities/bulk-upload', formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+    },
     update: (id: number, data: Record<string, unknown>) => 
       apiClient.put(`/vuln-management/vulnerabilities/${id}`, data),
     delete: (id: number) => apiClient.delete(`/vuln-management/vulnerabilities/${id}`),
@@ -1266,12 +1437,12 @@ export const vulnManagementApi = {
       apiClient.put(`/vuln-management/sla/${id}`, data),
   },
   exceptions: {
-    list: (vulnId: number) => 
-      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/exceptions`),
+    list: () => 
+      apiClient.get(`/vuln-management/exceptions`),
     create: (vulnId: number, data: Record<string, unknown>) => 
-      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/exceptions`, data),
-    update: (vulnId: number, exceptionId: number, data: Record<string, unknown>) => 
-      apiClient.put(`/vuln-management/vulnerabilities/${vulnId}/exceptions/${exceptionId}`, data),
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/exception`, data),
+    update: (vulnId: number, data: Record<string, unknown>) => 
+      apiClient.put(`/vuln-management/vulnerabilities/${vulnId}/exception`, data),
   },
   departments: {
     getAll: () => apiClient.get('/vuln-management/departments'),
@@ -1856,6 +2027,7 @@ export const auditApi = {
     getRiskEnrichment: () => apiClient.get('/audit/universe/risk-enrichment'),
     syncFromRisks: () => apiClient.post('/audit/universe/sync-from-risks'),
     refreshRiskScores: () => apiClient.post('/audit/universe/refresh-risk-scores'),
+    generateDescription: (data: Record<string, unknown>) => apiClient.post('/audit/universe/generate-description', data),
   },
   plans: {
     getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/plans', { params }),
@@ -1881,6 +2053,14 @@ export const auditApi = {
     createFromPlanItem: (data: Record<string, unknown>) => apiClient.post('/audit/engagements/from-plan-item', data),
     createFromPlan: (planId: number) => apiClient.post('/audit/engagements/from-plan', undefined, { params: { plan_id: planId } }),
     getResourceCalendar: (params?: Record<string, unknown>) => apiClient.get('/audit/engagements/resource-calendar', { params }),
+    getPriorAudits: (id: number) => apiClient.get(`/audit/engagements/${id}/prior-audits`),
+    getSamplingRecords: (id: number) => apiClient.get(`/audit/engagements/${id}/sampling-records`),
+    saveSamplingRecord: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/engagements/${id}/sampling-records`, data),
+    deleteSamplingRecord: (id: number, recordId: number) => apiClient.delete(`/audit/engagements/${id}/sampling-records/${recordId}`),
+    addTeamMember: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/engagements/${id}/team`, data),
+    removeTeamMember: (id: number, memberId: number) => apiClient.delete(`/audit/engagements/${id}/team/${memberId}`),
+    addTimeEntry: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/engagements/${id}/time-entries`, data),
+    deleteTimeEntry: (id: number, entryId: number) => apiClient.delete(`/audit/engagements/${id}/time-entries/${entryId}`),
   },
   workpapers: {
     getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/workpapers', { params }),
@@ -1913,6 +2093,7 @@ export const auditApi = {
     delete: (id: number) => apiClient.delete(`/audit/findings/${id}`),
     getOverdue: () => apiClient.get('/audit/findings/overdue'),
     getThemes: () => apiClient.get('/audit/findings/themes'),
+    suggestRootCause: (id: number) => apiClient.post(`/audit/findings/${id}/ai-root-cause`),
     addManagementResponse: (findingId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/management-response`, data),
     addRecommendation: (findingId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/recommendations`, data),
     addActionPlan: (findingId: number, recId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/recommendations/${recId}/action-plans`, data),
@@ -1987,6 +2168,13 @@ export const auditApi = {
     getUtilization: (params?: Record<string, unknown>) => apiClient.get('/audit/capacity/utilization', { params }),
     getConflicts: (params?: Record<string, unknown>) => apiClient.get('/audit/capacity/conflicts', { params }),
   },
+  notifications: {
+    getTemplates: () => apiClient.get('/audit/notifications/templates'),
+    createTemplate: (data: Record<string, unknown>) => apiClient.post('/audit/notifications/templates', data),
+    updateTemplate: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/notifications/templates/${id}`, data),
+    deleteTemplate: (id: number) => apiClient.delete(`/audit/notifications/templates/${id}`),
+    seedDefaults: () => apiClient.post('/audit/notifications/templates/seed-defaults'),
+  },
   tools: {
     samplingCalculator: (data: Record<string, unknown>) => apiClient.post('/audit/tools/sampling-calculator', data),
     getRegulatoryChanges: () => apiClient.get('/audit/tools/regulatory-changes'),
@@ -1999,13 +2187,88 @@ export const auditApi = {
     generateBoardPackNarrative: (data: Record<string, unknown>) => apiClient.post('/audit/ai/board-pack-narrative', data),
     getBoardPackNarrative: (data: Record<string, unknown>) => apiClient.post('/audit/ai/board-pack-narrative', data),
     generateEngagementDetails: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-engagement-details', data),
+    generateScope: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-scope', data),
+    generateEngagementLetter: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-engagement-letter', data),
     getRiskSuggestions: (data: Record<string, unknown>) => apiClient.post('/audit/ai/risk-assessment-suggestions', data),
     findingSimilarity: (data: Record<string, unknown>) => apiClient.post('/audit/ai/finding-similarity', data),
     getFieldworkGuidance: (data: Record<string, unknown>) => apiClient.post('/audit/ai/fieldwork-guidance', data),
     regulatoryImpact: (data: Record<string, unknown>) => apiClient.post('/audit/ai/regulatory-impact-assessment', data),
     generateTestScript: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-test-script', data),
     suggestEngagementSkills: (data: Record<string, unknown>) => apiClient.post('/audit/ai/suggest-engagement-skills', data),
+    calibrateSeverity: (data: Record<string, unknown>) => apiClient.post('/audit/ai/calibrate-severity', data),
+    detectRecurringIssues: (data: Record<string, unknown>) => apiClient.post('/audit/ai/detect-recurring-issues', data),
+    evaluateResponse: (data: Record<string, unknown>) => apiClient.post('/audit/ai/evaluate-response', data),
+    suggestOpinion: (data: Record<string, unknown>) => apiClient.post('/audit/ai/suggest-opinion', data),
+    aggregateThemes: (data: Record<string, unknown>) => apiClient.post('/audit/ai/aggregate-themes', data),
   },
+};
+
+export const integrationsApi = {
+  listConnections: (params?: Record<string, unknown>) =>
+    apiClient.get('/integrations/connections', { params }),
+  getConnection: (id: number) =>
+    apiClient.get(`/integrations/connections/${id}`),
+  createConnection: (data: Record<string, unknown>) =>
+    apiClient.post('/integrations/connections', data),
+  updateConnection: (id: number, data: Record<string, unknown>) =>
+    apiClient.put(`/integrations/connections/${id}`, data),
+  deleteConnection: (id: number) =>
+    apiClient.delete(`/integrations/connections/${id}`),
+  testConnection: (id: number) =>
+    apiClient.post(`/integrations/connections/${id}/test`),
+  triggerSync: (id: number) =>
+    apiClient.post(`/integrations/connections/${id}/sync`),
+  getSyncHistory: (id: number, params?: Record<string, unknown>) =>
+    apiClient.get(`/integrations/connections/${id}/history`, { params }),
+  getAuditLog: (id: number, params?: Record<string, unknown>) =>
+    apiClient.get(`/integrations/connections/${id}/audit-log`, { params }),
+
+  listExceptions: (params?: Record<string, unknown>) =>
+    apiClient.get('/integrations/exceptions', { params }),
+  getException: (id: number) =>
+    apiClient.get(`/integrations/exceptions/${id}`),
+  createException: (data: Record<string, unknown>) =>
+    apiClient.post('/integrations/exceptions', data),
+  approveException: (id: number, data: Record<string, unknown>) =>
+    apiClient.post(`/integrations/exceptions/${id}/approve`, data),
+  rejectException: (id: number, data: Record<string, unknown>) =>
+    apiClient.post(`/integrations/exceptions/${id}/reject`, data),
+  revokeException: (id: number, data: Record<string, unknown>) =>
+    apiClient.post(`/integrations/exceptions/${id}/revoke`, data),
+  withdrawException: (id: number) =>
+    apiClient.post(`/integrations/exceptions/${id}/withdraw`),
+
+  recalculateVulnScore: (vulnId: number) =>
+    apiClient.post(`/integrations/scoring/recalculate/${vulnId}`),
+  batchRecalculateScores: (params?: Record<string, unknown>) =>
+    apiClient.post('/integrations/scoring/batch-recalculate', {}, { params }),
+
+  assignSLADeadlines: (params?: Record<string, unknown>) =>
+    apiClient.post('/integrations/sla/assign-deadlines', {}, { params }),
+  getSLABreaches: () =>
+    apiClient.get('/integrations/sla/breaches'),
+  sendSLANotifications: () =>
+    apiClient.post('/integrations/sla/send-notifications'),
+
+  autoMapControls: (vulnId: number, params?: Record<string, unknown>) =>
+    apiClient.post(`/integrations/control-mapping/auto-map/${vulnId}`, {}, { params }),
+  batchMapControls: (params?: Record<string, unknown>) =>
+    apiClient.post('/integrations/control-mapping/batch-map', {}, { params }),
+
+  analyticsOverview: (params?: Record<string, unknown>) =>
+    apiClient.get('/integrations/analytics/overview', { params }),
+  analyticsTrends: (params?: Record<string, unknown>) =>
+    apiClient.get('/integrations/analytics/trends', { params }),
+  analyticsMTTR: (params?: Record<string, unknown>) =>
+    apiClient.get('/integrations/analytics/mttr', { params }),
+  analyticsSLACompliance: (params?: Record<string, unknown>) =>
+    apiClient.get('/integrations/analytics/sla-compliance', { params }),
+  analyticsTopAssets: (params?: Record<string, unknown>) =>
+    apiClient.get('/integrations/analytics/top-assets', { params }),
+  analyticsScannerCoverage: (params?: Record<string, unknown>) =>
+    apiClient.get('/integrations/analytics/scanner-coverage', { params }),
+  analyticsConnectionStats: (params?: Record<string, unknown>) =>
+    apiClient.get('/integrations/analytics/connection-stats', { params }),
 };
 
 export const workflowEngineApi = {

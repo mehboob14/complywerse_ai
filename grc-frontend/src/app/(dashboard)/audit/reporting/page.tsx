@@ -84,6 +84,14 @@ export default function AuditReportingPage() {
     period: '',
     engagement_ids: [] as number[],
   });
+  const [themeLoading, setThemeLoading] = useState(false);
+  const [themeResult, setThemeResult] = useState<any>(null);
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [themeEngIds, setThemeEngIds] = useState<number[]>([]);
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const [opinionLoading, setOpinionLoading] = useState(false);
+  const [bpThemeLoading, setBpThemeLoading] = useState(false);
+  const [bpThemeResult, setBpThemeResult] = useState<any>(null);
 
   const { data: kpis } = useQuery({ queryKey: ['audit-kpis'], queryFn: () => auditApi.reporting.getKPIs().then(r => r.data) });
   const { data: trends } = useQuery({ queryKey: ['trend-analysis'], queryFn: () => auditApi.reporting.getTrendAnalysis().then(r => r.data) });
@@ -221,6 +229,60 @@ export default function AuditReportingPage() {
     }));
   };
 
+  const toggleThemeEngId = (id: number) => {
+    setThemeEngIds(prev => prev.includes(id) ? prev.filter(eid => eid !== id) : [...prev, id]);
+  };
+
+  const handleBpGenerateThemes = async () => {
+    if (newBoardPack.engagement_ids.length === 0) return;
+    setBpThemeLoading(true);
+    setBpThemeResult(null);
+    try {
+      const res = await auditApi.ai.aggregateThemes({ engagement_ids: newBoardPack.engagement_ids });
+      setBpThemeResult(res.data?.theme_analysis || res.data);
+    } catch (err) {
+      console.error('Board pack theme generation failed:', err);
+      alert('Failed to generate themes. Please try again.');
+    } finally {
+      setBpThemeLoading(false);
+    }
+  };
+
+  const handleSuggestOpinion = async () => {
+    const engId = parseInt(newReport.engagement_id);
+    if (!engId) return;
+    setOpinionLoading(true);
+    try {
+      const res = await auditApi.ai.suggestOpinion({ engagement_id: engId });
+      const d = res.data?.opinion;
+      if (d) {
+        setNewReport(prev => ({
+          ...prev,
+          opinion: d.recommended_opinion || prev.opinion,
+          executive_summary: d.opinion_narrative || d.narrative || prev.executive_summary,
+        }));
+      }
+    } catch (err) {
+      console.error('AI opinion suggestion failed:', err);
+      alert('Failed to suggest opinion. Please try again.');
+    } finally {
+      setOpinionLoading(false);
+    }
+  };
+
+  const handleAggregateThemes = async () => {
+    if (themeEngIds.length === 0) return;
+    setThemeLoading(true);
+    setThemeResult(null);
+    try {
+      const res = await auditApi.ai.aggregateThemes({ engagement_ids: themeEngIds });
+      setThemeResult(res.data?.theme_analysis || res.data);
+      setShowThemePicker(false);
+      setShowThemeModal(true);
+    } catch (err) { console.error('Theme aggregation failed:', err); alert('Failed to aggregate themes. Please try again.'); }
+    finally { setThemeLoading(false); }
+  };
+
   const kpiCards = kpis ? [
     { label: 'Findings Closure Rate', value: `${kpis.findings_closure_rate ?? 0}%`, icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
     { label: 'Overdue Findings', value: kpis.overdue_findings ?? 0, icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-500/10' },
@@ -252,13 +314,22 @@ export default function AuditReportingPage() {
           <h1 className="text-2xl font-bold text-slate-900">Audit Reporting</h1>
           <p className="text-slate-600 mt-1">KPIs, reports, and board packs</p>
         </div>
-        <button
-          onClick={() => setShowCreateReportModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Create Report
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setThemeEngIds([]); setShowThemePicker(true); }}
+            className="flex items-center gap-2 px-3 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded-lg text-sm transition-colors"
+          >
+            <Sparkles className="w-4 h-4" />
+            Theme Analysis
+          </button>
+          <button
+            onClick={() => setShowCreateReportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Create Report
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 w-fit">
@@ -588,6 +659,15 @@ export default function AuditReportingPage() {
                   ))}
                 </select>
               </div>
+              <button
+                type="button"
+                onClick={handleSuggestOpinion}
+                disabled={opinionLoading || !newReport.engagement_id}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                {opinionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Suggest Opinion & Summary with AI
+              </button>
               <div>
                 <label className="block text-sm text-slate-600 mb-1">Executive Summary</label>
                 <textarea
@@ -1012,10 +1092,42 @@ export default function AuditReportingPage() {
                   )}
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={handleBpGenerateThemes}
+                disabled={bpThemeLoading || newBoardPack.engagement_ids.length === 0}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                {bpThemeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Generate Themes with AI
+              </button>
+              {bpThemeResult && (
+                <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 space-y-2">
+                  <h4 className="text-xs font-semibold text-violet-700 flex items-center gap-1"><Sparkles className="h-3 w-3" /> Generated Themes</h4>
+                  {bpThemeResult.executive_narrative && (
+                    <p className="text-xs text-slate-700">{bpThemeResult.executive_narrative}</p>
+                  )}
+                  {bpThemeResult.themes && bpThemeResult.themes.length > 0 && (
+                    <ul className="text-xs text-slate-600 space-y-1">
+                      {bpThemeResult.themes.map((t: any, i: number) => (
+                        <li key={i} className="flex items-center gap-1">
+                          <span className={`inline-block w-2 h-2 rounded-full ${
+                            t.overall_risk_level === 'critical' ? 'bg-red-500' :
+                            t.overall_risk_level === 'high' ? 'bg-orange-500' :
+                            t.overall_risk_level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`} />
+                          <span className="font-medium">{t.theme_name}</span>
+                          <span className="text-slate-400">({t.overall_risk_level})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-3 p-5 border-t border-slate-200">
               <button
-                onClick={() => setShowCreateBoardPackModal(false)}
+                onClick={() => { setShowCreateBoardPackModal(false); setBpThemeResult(null); }}
                 className="px-4 py-2 text-slate-600 hover:text-slate-900 text-sm transition-colors"
               >
                 Cancel
@@ -1027,6 +1139,111 @@ export default function AuditReportingPage() {
               >
                 {createBoardPackMutation.isPending ? 'Creating...' : 'Create Board Pack'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showThemePicker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Sparkles className="h-5 w-5 text-violet-500" /> Theme Analysis</h3>
+              <button onClick={() => setShowThemePicker(false)} className="text-slate-500 hover:text-slate-700"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="text-sm text-slate-600 mb-3">Select engagements to analyze for cross-cutting themes:</p>
+            <div className="max-h-64 overflow-y-auto space-y-1 mb-4">
+              {(Array.isArray(engagements) ? engagements : []).map((eng: any) => (
+                <label key={eng.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded p-2">
+                  <input
+                    type="checkbox"
+                    checked={themeEngIds.includes(eng.id)}
+                    onChange={() => toggleThemeEngId(eng.id)}
+                    className="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                  />
+                  <span className="text-sm text-slate-700">{eng.title}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowThemePicker(false)} className="px-4 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Cancel</button>
+              <button
+                onClick={handleAggregateThemes}
+                disabled={themeEngIds.length === 0 || themeLoading}
+                className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
+              >
+                {themeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Analyze Themes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showThemeModal && themeResult && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[85vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Sparkles className="h-5 w-5 text-violet-500" /> Cross-Engagement Theme Analysis</h3>
+              <button onClick={() => setShowThemeModal(false)} className="text-slate-500 hover:text-slate-700"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-4">
+              {themeResult.executive_narrative && (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-2">Executive Summary</h4>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{themeResult.executive_narrative}</p>
+                </div>
+              )}
+              {themeResult.themes && themeResult.themes.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Identified Themes</h4>
+                  <div className="space-y-3">
+                    {themeResult.themes.map((t: any, i: number) => (
+                      <div key={i} className={`border rounded-lg p-4 ${
+                        t.overall_risk_level === 'critical' ? 'bg-red-50 border-red-200' :
+                        t.overall_risk_level === 'high' ? 'bg-orange-50 border-orange-200' :
+                        t.overall_risk_level === 'medium' ? 'bg-amber-50 border-amber-200' :
+                        'bg-emerald-50 border-emerald-200'
+                      }`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <h5 className="text-sm font-semibold text-slate-800">{t.theme_name}</h5>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              t.overall_risk_level === 'critical' ? 'bg-red-200 text-red-800' :
+                              t.overall_risk_level === 'high' ? 'bg-orange-200 text-orange-800' :
+                              t.overall_risk_level === 'medium' ? 'bg-amber-200 text-amber-800' :
+                              'bg-emerald-200 text-emerald-800'
+                            }`}>{t.overall_risk_level}</span>
+                            {t.trend && <span className={`text-xs ${t.trend === 'escalating' ? 'text-red-600' : t.trend === 'improving' ? 'text-emerald-600' : 'text-slate-500'}`}>{t.trend}</span>}
+                            {t.finding_count && <span className="text-xs text-slate-500">{t.finding_count} findings</span>}
+                          </div>
+                        </div>
+                        <p className="text-sm text-slate-700">{t.narrative}</p>
+                        {t.recommended_board_action && <p className="text-xs text-slate-600 mt-2 italic">Board action: {t.recommended_board_action}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {themeResult.positive_themes && themeResult.positive_themes.length > 0 && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-emerald-700 mb-2">Positive Themes</h4>
+                  <ul className="text-sm text-emerald-800 list-disc pl-5 space-y-1">
+                    {themeResult.positive_themes.map((t: string, i: number) => <li key={i}>{t}</li>)}
+                  </ul>
+                </div>
+              )}
+              {themeResult.areas_requiring_attention && themeResult.areas_requiring_attention.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-red-700 mb-2">Areas Requiring Attention</h4>
+                  <ul className="text-sm text-red-800 list-disc pl-5 space-y-1">
+                    {themeResult.areas_requiring_attention.map((a: string, i: number) => <li key={i}>{a}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end mt-4 pt-4 border-t border-slate-200">
+              <button onClick={() => setShowThemeModal(false)} className="px-4 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
             </div>
           </div>
         </div>

@@ -1,0 +1,96 @@
+**Document Title:** Procedure Testing & Validation Record
+**Document ID:** IT-TEST-001
+**Version:** 1.0
+**Date:** [Insert Date]
+**Prepared By:** Mehboob
+**Reviewed By:** Shahnwaz
+**Approved By:** Asif Malik
+
+---
+
+### 1. Objective
+
+To validate the effectiveness and operational readiness of the defined procedure under controlled conditions and ensure compliance with SBP ETGRMF requirements.
+
+---
+
+### 2. Procedure Details
+
+* **Procedure Name:** Change Management SOP
+* **Document Reference:** IT-OPS-002_Change_Management_SOP
+* **Process Owner:** IT Operations Manager
+
+---
+
+### 3. Test Scenario Description
+
+Simulated a production change request involving deployment of a backend API update to assess approval workflow, rollback capability, and communication effectiveness.
+
+---
+
+### 4. Test Environment
+
+* Environment Type: Staging / UAT
+* Systems Involved: Application Server, Database Server
+* Tools Used: [e.g., Jira, Git, CI/CD Pipeline]
+
+---
+
+### 5. Test Execution Details
+
+| Step No | Test Step Description | Expected Result                    | Actual Result          | Status (Pass/Fail) |
+| ------- | --------------------- | ---------------------------------- | ---------------------- | ------------------ |
+| 1       | Raise Change Request  | CR logged with complete details    | Successfully logged    | Pass               |
+| 2       | Risk Assessment       | Risk categorized correctly         | Categorized as Medium  | Pass               |
+| 3       | Approval Process      | Approval from authorized personnel | Approved by IT Manager | Pass               |
+| 4       | Implementation        | Change deployed successfully       | Deployment completed   | Pass               |
+| 5       | Rollback Test         | System restores previous version   | Rollback successful    | Pass               |
+| 6       | Communication         | Stakeholders notified              | Notification sent      | Pass               |
+
+---
+
+### 6. Issues Identified
+
+* Delay observed in approval workflow (approx. 2 hours)
+* Minor documentation gaps in rollback procedure
+
+---
+
+### 7. Risk Impact Assessment
+
+* No critical impact observed
+* Moderate risk due to delay in approval process
+
+---
+
+### 8. Corrective Actions
+
+* Streamline approval workflow via automation
+* Update SOP to include detailed rollback steps
+
+---
+
+### 9. Conclusion
+
+The Change Management procedure is **effective and operational**, with minor improvements required in approval efficiency and documentation clarity.
+
+---
+
+### 10. Evidence Attachments
+
+* Change Request ID: CR-2026-045
+* Deployment Logs
+* Approval Email Screenshots
+* System Logs
+
+---
+
+### 11. Sign-Off
+
+| Role        | Name | Signature | Date |
+| ----------- | ---- | --------- | ---- |
+| Prepared By |      |           |      |
+| Reviewed By |      |           |      |
+| Approved By |      |           |      |
+
+---

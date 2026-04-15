@@ -320,13 +320,20 @@ def get_frameworks_for_comparison(
     frameworks = db.query(UploadedFramework).filter(
         or_(
             UploadedFramework.tenant_id.in_(user_tenants),
-            UploadedFramework.tenant_id.is_(None)
+            UploadedFramework.tenant_id.is_(None),
+            UploadedFramework.is_shared == True
         ),
+        UploadedFramework.upload_status.in_(['published', 'completed', 'parsed', 'classified']),
         UploadedFramework.is_active == True
     ).all()
     
+    seen_keys: set = set()
     result = []
     for fw in frameworks:
+        key = (fw.name.lower().strip(), (fw.version or '').lower().strip())
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
         control_count = db.query(ParsedFrameworkControl).filter(
             ParsedFrameworkControl.uploaded_framework_id == fw.id
         ).count()

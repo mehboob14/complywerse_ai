@@ -98,7 +98,8 @@ export default function ComplianceOverviewPage() {
 
   const aiPrioritizeMutation = useMutation({
     mutationFn: async () => {
-      return await controlLibraryApi.gapAnalysis.prioritizeWithAI({ max_gaps: 20 });
+      const response = await controlLibraryApi.gapAnalysis.prioritizeWithAI({ max_gaps: 20 });
+      return response.data as AIPrioritizationResult;
     },
     onSuccess: (data) => {
       setAiResult(data);
@@ -131,18 +132,18 @@ export default function ComplianceOverviewPage() {
 
   if (summaryLoading) {
     return (
-      <div className="space-y-8">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
               <div className="bg-gray-200 h-12 w-12 rounded-xl mb-4 animate-pulse" />
               <div className="bg-gray-200 h-8 w-20 mb-2 rounded animate-pulse" />
               <div className="bg-gray-200 h-4 w-32 rounded animate-pulse" />
             </div>
           ))}
         </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
             <div className="bg-gray-200 h-6 w-32 mb-4 rounded animate-pulse" />
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -150,7 +151,7 @@ export default function ComplianceOverviewPage() {
               ))}
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
             <div className="bg-gray-200 h-6 w-32 mb-4 rounded animate-pulse" />
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -211,33 +212,33 @@ export default function ComplianceOverviewPage() {
   const recentStatements = statements?.statements || [];
 
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat) => (
           <div
             key={stat.name}
-            className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200"
+            className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md"
           >
-            <div className="flex items-start justify-between mb-4">
-              <div className={`rounded-xl ${stat.bgColor} p-3`}>
-                <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
+            <div className="mb-3 flex items-start justify-between">
+              <div className={`rounded-xl ${stat.bgColor} p-2`}>
+                <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
               </div>
             </div>
-            <p className="text-3xl font-bold text-black">{stat.value}</p>
-            <p className="text-sm text-gray-600 mt-1">{stat.name}</p>
+            <p className="text-[1.85rem] font-semibold leading-none text-black">{stat.value}</p>
+            <p className="mt-1 text-[13px] text-gray-600">{stat.name}</p>
           </div>
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <div className="mb-6">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <div className="mb-4">
             <div>
               <h2 className="text-lg font-semibold text-black">Compliance Status Breakdown</h2>
               <p className="text-sm text-gray-600 mt-1">Distribution by status</p>
             </div>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {[
               { key: 'compliant', label: 'Compliant', count: compliantCount },
               { key: 'partially_compliant', label: 'Partially Compliant', count: partiallyCompliantCount },
@@ -265,8 +266,8 @@ export default function ComplianceOverviewPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <div className="mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <div className="mb-4">
             <div>
               <h2 className="text-lg font-semibold text-black">By Category</h2>
               <p className="text-sm text-gray-600 mt-1">Statement distribution</p>
@@ -288,9 +289,9 @@ export default function ComplianceOverviewPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-black flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
@@ -302,12 +303,12 @@ export default function ComplianceOverviewPage() {
               View All
             </Link>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {overdueItems.length > 0 ? (
               overdueItems.map((item: any) => (
                 <div
                   key={item.compliance_id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                  className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-2.5 transition-colors hover:bg-gray-100"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-black truncate">
@@ -337,8 +338,8 @@ export default function ComplianceOverviewPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-black">Recent Statements</h2>
               <p className="text-sm text-gray-600 mt-1">Latest policy statements</p>
@@ -348,14 +349,14 @@ export default function ComplianceOverviewPage() {
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {recentStatements.length > 0 ? (
               recentStatements.map((stmt: any) => {
                 const statusStyle = STATUS_COLORS[stmt.compliance_status] || STATUS_COLORS.not_assessed;
                 return (
                   <div
                     key={stmt.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-2.5 transition-colors hover:bg-gray-100"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-black truncate">
@@ -381,8 +382,8 @@ export default function ComplianceOverviewPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <div className="mb-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="mb-4">
           <div>
             <h2 className="text-lg font-semibold text-black flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-blue-600" />
@@ -391,8 +392,8 @@ export default function ComplianceOverviewPage() {
             <p className="text-sm text-gray-600 mt-1">Overall compliance health</p>
           </div>
         </div>
-        <div className="flex items-center gap-8">
-          <div className="relative w-32 h-32">
+        <div className="flex items-center gap-6">
+          <div className="relative h-28 w-28">
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
               <path
                 d="M18 2.0845
@@ -413,26 +414,26 @@ export default function ComplianceOverviewPage() {
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl font-bold text-black">{summary?.compliance_score?.toFixed(0) || compliantPercent}%</span>
+              <span className="text-xl font-bold text-black">{summary?.compliance_score?.toFixed(0) || compliantPercent}%</span>
             </div>
           </div>
           <div className="flex-1">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-gray-50 p-2.5">
                 <p className="text-sm text-gray-600">Assessed</p>
-                <p className="text-xl font-semibold text-black">{summary?.statistics?.assessed_count || 0}</p>
+                <p className="text-lg font-semibold text-black">{summary?.statistics?.assessed_count || 0}</p>
               </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="rounded-lg bg-gray-50 p-2.5">
                 <p className="text-sm text-gray-600">Mandatory</p>
-                <p className="text-xl font-semibold text-black">{summary?.statistics?.mandatory_count || 0}</p>
+                <p className="text-lg font-semibold text-black">{summary?.statistics?.mandatory_count || 0}</p>
               </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="rounded-lg bg-gray-50 p-2.5">
                 <p className="text-sm text-gray-600">Active</p>
-                <p className="text-xl font-semibold text-black">{summary?.statistics?.active_count || 0}</p>
+                <p className="text-lg font-semibold text-black">{summary?.statistics?.active_count || 0}</p>
               </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="rounded-lg bg-gray-50 p-2.5">
                 <p className="text-sm text-gray-600">Compliance Rate</p>
-                <p className="text-xl font-semibold text-emerald-600">{summary?.compliance_rate?.toFixed(1) || 0}%</p>
+                <p className="text-lg font-semibold text-emerald-600">{summary?.compliance_rate?.toFixed(1) || 0}%</p>
               </div>
             </div>
           </div>
@@ -440,8 +441,8 @@ export default function ComplianceOverviewPage() {
       </div>
 
       {/* AI Gap Prioritization Section */}
-      <div className="bg-white rounded-xl border border-blue-200 p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-white rounded-xl border border-blue-200 p-5 shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-black flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-blue-600" />
@@ -454,7 +455,7 @@ export default function ComplianceOverviewPage() {
           <button
             onClick={() => aiPrioritizeMutation.mutate()}
             disabled={aiPrioritizeMutation.isPending}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
           >
             {aiPrioritizeMutation.isPending ? (
               <>
@@ -479,7 +480,7 @@ export default function ComplianceOverviewPage() {
         )}
 
         {showAIPrioritization && aiResult && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             {aiResult.message && aiResult.total_gaps_analyzed === 0 && (
               <div className="text-center py-8">
                 <CheckCircle className="h-12 w-12 text-emerald-600 mx-auto mb-3" />

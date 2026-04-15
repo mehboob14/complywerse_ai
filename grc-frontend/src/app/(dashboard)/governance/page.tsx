@@ -22,6 +22,19 @@ import {
   BarChart3,
   PieChart,
 } from 'lucide-react';
+import {
+  PieChart as RPieChart,
+  Pie,
+  Cell,
+  Tooltip as RTooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+} from 'recharts';
 import Link from 'next/link';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -62,48 +75,34 @@ const DONUT_COLORS = [
 ];
 
 function DonutChart({ data, total }: { data: { label: string; value: number; color: string }[]; total: number }) {
-  let cumulativePercent = 0;
-  
-  const segments = data.map((item, index) => {
-    const percent = total > 0 ? (item.value / total) * 100 : 0;
-    const startPercent = cumulativePercent;
-    cumulativePercent += percent;
-    
-    return {
-      ...item,
-      percent,
-      startPercent,
-      endPercent: cumulativePercent,
-    };
-  });
-
-  const getConicGradient = () => {
-    if (total === 0) return 'conic-gradient(var(--color-muted) 0% 100%)';
-    
-    const stops = segments.map((seg) => 
-      `${seg.color} ${seg.startPercent}% ${seg.endPercent}%`
-    ).join(', ');
-    
-    return `conic-gradient(${stops})`;
-  };
-
+  const filtered = data.filter((d) => d.value > 0);
+  const chartData = filtered.length
+    ? filtered.map((d) => ({ name: d.label, value: d.value, color: d.color }))
+    : [{ name: 'None', value: 1, color: '#e2e8f0' }];
   return (
     <div className="flex items-center gap-6">
-      <div 
-        className="relative h-36 w-36 rounded-full"
-        style={{ background: getConicGradient() }}
-      >
-        <div className="absolute inset-4 rounded-full bg-[var(--color-surface)] flex items-center justify-center">
-          <div className="text-center">
-            <p className="cw-text-default text-2xl font-bold">{total}</p>
-            <p className="cw-text-muted text-xs">Total</p>
-          </div>
+      <div className="relative h-40 w-40 flex-shrink-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <RPieChart>
+            <Pie data={chartData} cx="50%" cy="50%" innerRadius={46} outerRadius={64} dataKey="value" paddingAngle={filtered.length ? 2 : 0}>
+              {chartData.map((entry, i) => (
+                <Cell key={i} fill={entry.color} />
+              ))}
+            </Pie>
+            <RTooltip
+              contentStyle={{ fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', color: '#1e293b' }}
+            />
+          </RPieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-2xl font-bold cw-text-default">{total}</span>
+          <span className="text-xs cw-text-muted">Total</span>
         </div>
       </div>
       <div className="flex-1 space-y-2">
-        {segments.filter(s => s.value > 0).map((seg, idx) => (
+        {filtered.map((seg, idx) => (
           <div key={idx} className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: seg.color }}></div>
+            <div className="h-3 w-3 rounded-full flex-shrink-0" style={{ backgroundColor: seg.color }} />
             <span className="cw-text-default text-sm flex-1">{seg.label}</span>
             <span className="cw-text-default text-sm font-medium">{seg.value}</span>
           </div>
@@ -114,49 +113,30 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
 }
 
 function TrendBarChart({ data }: { data: { month: string; created: number; published: number }[] }) {
-  const maxValue = Math.max(...data.flatMap(d => [d.created, d.published]), 1);
-  
+  const chartData = data.slice(-6).map((item) => ({
+    month: new Date(item.month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+    Created: item.created,
+    Published: item.published,
+  }));
+  if (!chartData.length) {
+    return (
+      <div className="flex h-[160px] items-center justify-center text-xs cw-text-muted">No trend data yet</div>
+    );
+  }
   return (
-    <div className="space-y-3">
-      <div className="cw-text-muted flex items-center gap-4 text-xs mb-4">
-        <div className="flex items-center gap-1.5">
-          <div className="h-2.5 w-2.5 rounded bg-[var(--color-base)]"></div>
-          <span>Created</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="h-2.5 w-2.5 rounded bg-[var(--color-success)]"></div>
-          <span>Published</span>
-        </div>
-      </div>
-      <div className="space-y-2">
-        {data.slice(-6).map((item, idx) => {
-          const monthLabel = new Date(item.month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-          const createdWidth = (item.created / maxValue) * 100;
-          const publishedWidth = (item.published / maxValue) * 100;
-          
-          return (
-            <div key={idx} className="space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="cw-text-muted w-16">{monthLabel}</span>
-                <span className="cw-text-default">{item.created + item.published} docs</span>
-              </div>
-              <div className="flex gap-1 h-4">
-                <div 
-                  className="bg-[var(--color-base)] rounded-sm transition-all duration-300"
-                  style={{ width: `${createdWidth}%`, minWidth: item.created > 0 ? '4px' : '0' }}
-                  title={`Created: ${item.created}`}
-                ></div>
-                <div 
-                  className="bg-[var(--color-success)] rounded-sm transition-all duration-300"
-                  style={{ width: `${publishedWidth}%`, minWidth: item.published > 0 ? '4px' : '0' }}
-                  title={`Published: ${item.published}`}
-                ></div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <ResponsiveContainer width="100%" height={160}>
+      <BarChart data={chartData} barSize={10} barGap={2}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+        <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={28} allowDecimals={false} />
+        <RTooltip
+          contentStyle={{ fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', color: '#1e293b' }}
+        />
+        <Legend iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+        <Bar dataKey="Created" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+        <Bar dataKey="Published" fill="#10b981" radius={[3, 3, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 

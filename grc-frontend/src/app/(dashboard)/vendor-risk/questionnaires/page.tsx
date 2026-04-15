@@ -708,11 +708,11 @@ export default function VendorQuestionnairesPage() {
                     <input
                       type="text"
                       readOnly
-                      value={`${window.location.origin}/questionnaire/${sendSuccess.token}`}
+                      value={`${window.location.origin}/vendor-risk/questionnaires/${sendSuccess.token}`}
                       className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-700"
                     />
                     <button
-                      onClick={() => navigator.clipboard.writeText(`${window.location.origin}/questionnaire/${sendSuccess.token}`)}
+                      onClick={() => navigator.clipboard.writeText(`${window.location.origin}/vendor-risk/questionnaires/${sendSuccess.token}`)}
                       className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center gap-1"
                     >
                       <Copy className="h-4 w-4" /> Copy

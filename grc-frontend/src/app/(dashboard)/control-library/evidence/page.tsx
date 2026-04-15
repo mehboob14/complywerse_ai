@@ -157,9 +157,9 @@ export default function EvidenceSuggestionsPage() {
   });
 
   const { data: frameworks } = useQuery({
-    queryKey: ['frameworks'],
+    queryKey: ['frameworks-available'],
     queryFn: async () => {
-      const response = await frameworksApi.getAll();
+      const response = await frameworksApi.getAvailable();
       return response.data;
     },
   });
@@ -257,7 +257,8 @@ export default function EvidenceSuggestionsPage() {
     );
   };
 
-  const totalPages = Math.ceil((recommendations?.total || 0) / pageSize);
+  const totalRecommendations = recommendations?.total ?? 0;
+  const totalPages = Math.ceil(totalRecommendations / pageSize);
 
   const reuseRate = reuseStats?.total_evidence
     ? Math.round((reuseStats.multi_framework_evidence / reuseStats.total_evidence) * 100)
@@ -685,7 +686,7 @@ export default function EvidenceSuggestionsPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
                 <p className="text-sm text-gray-600">
-                  Showing {page * pageSize + 1} - {Math.min((page + 1) * pageSize, recommendations.total)} of {recommendations.total}
+                  Showing {page * pageSize + 1} - {Math.min((page + 1) * pageSize, totalRecommendations)} of {totalRecommendations}
                 </p>
                 <div className="flex items-center gap-2">
                   <button

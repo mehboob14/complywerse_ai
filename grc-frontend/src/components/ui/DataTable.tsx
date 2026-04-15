@@ -92,7 +92,7 @@ export function DataTable<T extends { id: string | number }>({
   onRowClick,
   exportable = false,
   exportFilename = 'export',
-  pageSize: initialPageSize = 10,
+  pageSize: initialPageSize = 15,
   pageSizeOptions = [10, 25, 50, 100],
   className,
   stickyHeader = false,
@@ -234,11 +234,11 @@ export function DataTable<T extends { id: string | number }>({
 
   if (loading) {
     return (
-      <div className={clsx('rounded-xl border border-slate-200 bg-white overflow-hidden', className)}>
-        <div className="p-4 border-b border-slate-200">
-          <div className="flex items-center gap-4">
-            <div className="h-10 w-64 rounded-lg bg-slate-200 animate-pulse" />
-            <div className="h-10 w-32 rounded-lg bg-slate-200 animate-pulse" />
+      <div className={clsx('overflow-hidden rounded-xl border border-slate-200 bg-white', className)}>
+        <div className="border-b border-slate-200 p-3">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-64 rounded-lg bg-slate-200 animate-pulse" />
+            <div className="h-9 w-32 rounded-lg bg-slate-200 animate-pulse" />
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -246,7 +246,7 @@ export function DataTable<T extends { id: string | number }>({
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 {initialColumns.slice(0, 5).map((_, i) => (
-                  <th key={i} className="px-4 py-3">
+                  <th key={i} className="px-3 py-2.5">
                     <div className="h-4 w-24 rounded bg-slate-200 animate-pulse" />
                   </th>
                 ))}
@@ -256,7 +256,7 @@ export function DataTable<T extends { id: string | number }>({
               {Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b border-slate-200">
                   {initialColumns.slice(0, 5).map((_, j) => (
-                    <td key={j} className="px-4 py-3">
+                    <td key={j} className="px-3 py-2.5">
                       <div className="h-4 w-full max-w-32 rounded bg-slate-200 animate-pulse" />
                     </td>
                   ))}
@@ -270,10 +270,10 @@ export function DataTable<T extends { id: string | number }>({
   }
 
   return (
-    <div className={clsx('rounded-xl border border-slate-200 bg-white overflow-hidden', className)}>
+    <div className={clsx('overflow-hidden rounded-xl border border-slate-200 bg-white', className)}>
       {(searchable || exportable || initialColumns.some((c) => !c.hidden)) && (
-        <div className="p-4 border-b border-slate-200">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="border-b border-slate-200 p-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             {searchable && (
               <div className="relative flex-1 min-w-64">
                 <Search
@@ -289,7 +289,7 @@ export function DataTable<T extends { id: string | number }>({
                     setCurrentPage(1);
                   }}
                   placeholder={searchPlaceholder}
-                  className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-black placeholder-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors"
+                  className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-9 pr-3 text-sm text-black placeholder-slate-500 transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   aria-label={searchPlaceholder}
                 />
                 {searchValue && (
@@ -307,11 +307,11 @@ export function DataTable<T extends { id: string | number }>({
               </div>
             )}
 
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="ml-auto flex items-center gap-2">
               <div className="relative">
                 <button
                   onClick={() => setShowColumnMenu(!showColumnMenu)}
-                  className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-600 hover:text-slate-900 hover:border-slate-400 transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900"
                   aria-label="Toggle column visibility"
                 >
                   <Columns size={16} />
@@ -328,7 +328,7 @@ export function DataTable<T extends { id: string | number }>({
                         <button
                           key={col.id}
                           onClick={() => toggleColumnVisibility(col.id)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
                         >
                           <div className={clsx(
                             'flex h-4 w-4 items-center justify-center rounded border',
@@ -349,7 +349,7 @@ export function DataTable<T extends { id: string | number }>({
               {exportable && (
                 <button
                   onClick={handleExportCSV}
-                  className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-600 hover:text-slate-900 hover:border-slate-400 transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900"
                   aria-label="Export to CSV"
                 >
                   <Download size={16} />
@@ -362,7 +362,7 @@ export function DataTable<T extends { id: string | number }>({
       )}
 
       {selectable && selectedRows.size > 0 && (
-        <div className="flex items-center gap-4 px-4 py-3 bg-primary-50 border-b border-primary-200">
+        <div className="flex items-center gap-3 border-b border-primary-200 bg-primary-50 px-3 py-2.5">
           <span className="text-sm text-primary-600">
             {selectedRows.size} row{selectedRows.size !== 1 ? 's' : ''} selected
           </span>
@@ -374,7 +374,7 @@ export function DataTable<T extends { id: string | number }>({
                   key={action.id}
                   onClick={() => action.onClick(selectedRowsData)}
                   className={clsx(
-                    'flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                    'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm font-medium transition-colors',
                     action.variant === 'danger'
                       ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
                       : 'bg-primary-50 text-primary-600 hover:bg-primary-100'
@@ -400,7 +400,7 @@ export function DataTable<T extends { id: string | number }>({
           <thead className={clsx(stickyHeader && 'sticky top-0 z-10')}>
             <tr className="border-b border-slate-200 bg-slate-50">
               {selectable && (
-                <th className="w-12 px-4 py-3">
+                <th className="w-10 px-3 py-2.5">
                   <input
                     type="checkbox"
                     checked={paginatedData.length > 0 && selectedRows.size === paginatedData.length}
@@ -414,8 +414,8 @@ export function DataTable<T extends { id: string | number }>({
                 <th
                   key={column.id}
                   className={clsx(
-                    'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500',
-                    column.sortable && 'cursor-pointer select-none hover:text-slate-900 transition-colors'
+                    'px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500',
+                    column.sortable && 'cursor-pointer select-none transition-colors hover:text-slate-900'
                   )}
                   style={{ width: column.width, minWidth: column.minWidth }}
                   onClick={column.sortable ? () => handleSort(column.id) : undefined}
@@ -445,11 +445,11 @@ export function DataTable<T extends { id: string | number }>({
               <tr>
                 <td
                   colSpan={visibleColumns.length + (selectable ? 1 : 0)}
-                  className="px-4 py-12 text-center"
+                  className="px-3 py-10 text-center"
                 >
                   <div className="flex flex-col items-center gap-3">
                     {EmptyIcon && (
-                      <EmptyIcon size={48} className="text-slate-600" />
+                      <EmptyIcon size={40} className="text-slate-600" />
                     )}
                     <p className="text-slate-500">{emptyMessage}</p>
                   </div>
@@ -467,7 +467,7 @@ export function DataTable<T extends { id: string | number }>({
                   )}
                 >
                   {selectable && (
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedRows.has(row.id)}
@@ -480,7 +480,7 @@ export function DataTable<T extends { id: string | number }>({
                   {visibleColumns.map((column) => (
                     <td
                       key={column.id}
-                      className="px-4 py-3 text-sm text-slate-600"
+                      className="px-3 py-2.5 text-sm text-slate-600"
                       style={{ width: column.width, minWidth: column.minWidth }}
                     >
                       {column.render
@@ -498,7 +498,7 @@ export function DataTable<T extends { id: string | number }>({
       </div>
 
       {sortedData.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-slate-200">
+        <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-200 px-3 py-2.5 sm:flex-row">
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <span>Show</span>
             <select
@@ -524,7 +524,7 @@ export function DataTable<T extends { id: string | number }>({
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:border-slate-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Previous page"
             >
               <ChevronLeft size={16} />
@@ -536,7 +536,7 @@ export function DataTable<T extends { id: string | number }>({
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
-              className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:border-slate-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Next page"
             >
               <span className="hidden sm:inline">Next</span>

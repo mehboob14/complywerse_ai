@@ -302,7 +302,9 @@ export default function PolicyStatementsPage() {
     const selectedStmts = filteredStatements.filter((s: Statement) => selectedStatementIds.includes(s.id));
     if (selectedStmts.length === 0) return;
     
-    const uniqueDocumentIds = [...new Set(selectedStmts.map((s: Statement) => s.document_id))];
+    const uniqueDocumentIds: number[] = Array.from(
+      new Set<number>(selectedStmts.map((s: Statement) => Number(s.document_id)))
+    );
     
     if (uniqueDocumentIds.length > 1) {
       alert('Please select statements from a single policy document only. The selected statements belong to ' + uniqueDocumentIds.length + ' different documents.');

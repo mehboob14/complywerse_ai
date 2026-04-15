@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -14,6 +15,12 @@ from ....routers.auth_router import require_auth, get_user_tenants, get_user_pri
 router = APIRouter(prefix="/universe", tags=["Audit - Universe"])
 
 
+INDUSTRIES = [
+    "Banking", "Healthcare", "Insurance", "Technology", "Energy",
+    "Government", "Manufacturing", "Retail", "Telecom", "Other",
+]
+
+
 class AuditableEntityCreate(BaseModel):
     name: str
     entity_type: str
@@ -23,6 +30,11 @@ class AuditableEntityCreate(BaseModel):
     risk_rating: Optional[str] = "low"
     audit_cycle_months: Optional[int] = 12
     owner_id: Optional[int] = None
+    industry: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_designation: Optional[str] = None
     metadata_json: Optional[dict] = {}
 
 
@@ -36,7 +48,18 @@ class AuditableEntityUpdate(BaseModel):
     audit_cycle_months: Optional[int] = None
     owner_id: Optional[int] = None
     status: Optional[str] = None
+    industry: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_designation: Optional[str] = None
     metadata_json: Optional[dict] = None
+
+
+class AIDescriptionRequest(BaseModel):
+    entity_name: str
+    entity_type: str
+    industry: Optional[str] = None
 
 
 def score_to_rating(score: float) -> str:
@@ -78,6 +101,11 @@ def serialize_entity(e: AuditableEntity) -> dict:
         "owner_id": e.owner_id,
         "owner_name": (e.owner.display_name or e.owner.username) if e.owner else None,
         "status": e.status,
+        "industry": getattr(e, "industry", None),
+        "contact_name": getattr(e, "contact_name", None),
+        "contact_email": getattr(e, "contact_email", None),
+        "contact_phone": getattr(e, "contact_phone", None),
+        "contact_designation": getattr(e, "contact_designation", None),
         "linked_risk_ids": risk_ids,
         "linked_risk_count": len(risk_ids),
         "metadata_json": e.metadata_json,
@@ -123,6 +151,9 @@ def create_auditable_entity(
     
     next_due = datetime.utcnow() + timedelta(days=data.audit_cycle_months * 30)
     
+    if data.industry and data.industry not in INDUSTRIES:
+        raise HTTPException(status_code=422, detail=f"Invalid industry. Must be one of: {', '.join(INDUSTRIES)}")
+
     entity = AuditableEntity(
         tenant_id=tenant_id,
         name=data.name,
@@ -134,12 +165,67 @@ def create_auditable_entity(
         audit_cycle_months=data.audit_cycle_months,
         next_audit_due=next_due,
         owner_id=data.owner_id,
+        industry=data.industry,
+        contact_name=data.contact_name,
+        contact_email=data.contact_email,
+        contact_phone=data.contact_phone,
+        contact_designation=data.contact_designation,
         metadata_json=data.metadata_json or {},
     )
     db.add(entity)
     db.commit()
     db.refresh(entity)
     return serialize_entity(entity)
+
+
+def _get_openai_client():
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+    from openai import OpenAI
+    kwargs = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+    return OpenAI(**kwargs)
+
+
+@router.post("/generate-description")
+def generate_entity_description(
+    data: AIDescriptionRequest,
+    current_user: GRCUser = Depends(require_auth),
+):
+    if data.industry and data.industry not in INDUSTRIES:
+        raise HTTPException(status_code=422, detail=f"Invalid industry. Must be one of: {', '.join(INDUSTRIES)}")
+
+    client = _get_openai_client()
+    industry_ctx = f" in the {data.industry} industry" if data.industry else ""
+    prompt = (
+        f"You are an enterprise GRC (Governance, Risk & Compliance) expert. "
+        f"Generate a concise professional description for an auditable entity named "
+        f"\"{data.entity_name}\" of type \"{data.entity_type}\"{industry_ctx}.\n\n"
+        f"Cover the following in 3-5 sentences:\n"
+        f"1. What this entity does and its role in the organization\n"
+        f"2. Key business processes it supports\n"
+        f"3. Regulatory relevance and compliance considerations\n"
+        f"4. Inherent risk factors\n"
+        f"5. Typical audit focus areas\n\n"
+        f"Write in a professional tone suitable for an audit universe record. "
+        f"Do not use bullet points or numbered lists — use flowing prose."
+    )
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500,
+            temperature=0.7,
+        )
+        description = resp.choices[0].message.content.strip()
+        return {"description": description}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI service error: {str(e)}")
 
 
 @router.get("/coverage-gaps")
@@ -450,7 +536,10 @@ def update_auditable_entity(
     ).first()
     if not entity:
         raise HTTPException(status_code=404, detail="Entity not found")
-    
+
+    if data.industry is not None and data.industry and data.industry not in INDUSTRIES:
+        raise HTTPException(status_code=422, detail=f"Invalid industry. Must be one of: {', '.join(INDUSTRIES)}")
+
     for field, value in data.dict(exclude_unset=True).items():
         setattr(entity, field, value)
     

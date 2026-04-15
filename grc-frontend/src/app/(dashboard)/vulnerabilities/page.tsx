@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
+  Upload,
   Bug,
   Loader2,
   Search,
@@ -22,6 +23,48 @@ import {
   Target,
 } from 'lucide-react';
 import Link from 'next/link';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Legend,
+} from 'recharts';
+
+const SEVERITY_CHART_COLORS: Record<string, string> = {
+  critical: '#ef4444',
+  high:     '#f97316',
+  medium:   '#eab308',
+  low:      '#3b82f6',
+  info:     '#94a3b8',
+};
+
+const STATUS_CHART_COLORS: Record<string, string> = {
+  open:           '#ef4444',
+  in_progress:    '#f97316',
+  remediated:     '#3b82f6',
+  verified:       '#10b981',
+  closed:         '#6b7280',
+  accepted:       '#8b5cf6',
+  false_positive: '#94a3b8',
+};
+
+const VulnPieTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) => {
+  if (active && payload?.length) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-md text-xs">
+        <p className="font-medium text-gray-800 capitalize">{payload[0].name}</p>
+        <p className="text-gray-500">{payload[0].value} vulns</p>
+      </div>
+    );
+  }
+  return null;
+};
 
 interface Department {
   id: number;
@@ -40,6 +83,7 @@ interface Vulnerability {
   cvss_score?: number;
   affected_component?: string;
   affected_host?: string;
+  linked_assets?: string[];
   due_date?: string;
   assigned_to?: number;
   assignee_name?: string;  // Changed from assigned_user_name to match backend
@@ -49,17 +93,17 @@ interface Vulnerability {
 }
 
 interface DashboardData {
-  total: number;
+  total_vulnerabilities: number;
   by_severity: Record<string, number>;
   by_status: Record<string, number>;
-  sla_compliance_percent: number;
+  sla_compliance: Record<string, { total: number; resolved: number; on_time: number; compliance_rate: number }>;
+  overdue_count?: number;
   mttr_days?: number;
-  aging_buckets?: {
-    '0-7': number;
-    '8-30': number;
-    '31-90': number;
-    '90+': number;
-  };
+  aging_buckets?: Record<string, number>;
+  top_affected_assets?: Array<{ asset_id: number; asset_name: string; vulnerability_count: number }>;
+  by_assignee?: Record<string, number>;
+  mitigation_coverage?: { with_mitigations: number; without_mitigations: number };
+  by_department?: Record<string, number>;
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -94,6 +138,9 @@ export default function VulnerabilitiesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [bulkUploadState, setBulkUploadState] = useState<'idle'|'uploading'|'done'|'error'>('idle');
+  const [bulkUploadMsg, setBulkUploadMsg] = useState<string|null>(null);
+  const bulkFileRef = useRef<HTMLInputElement>(null);
   const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
   const [selectedVulnIds, setSelectedVulnIds] = useState<Set<number>>(new Set());
   const queryClient = useQueryClient();
@@ -190,6 +237,63 @@ export default function VulnerabilitiesPage() {
     createMutation.mutate(data);
   };
 
+  const severityChartData = useMemo(() => {
+    const bySev = dashboard?.by_severity || {};
+    return Object.entries(bySev)
+      .filter(([, v]) => (v as number) > 0)
+      .map(([key, value]) => ({
+        name: key.charAt(0).toUpperCase() + key.slice(1),
+        value: value as number,
+        fill: SEVERITY_CHART_COLORS[key] || '#94a3b8',
+      }));
+  }, [dashboard?.by_severity]);
+
+  const statusChartData = useMemo(() => {
+    const bySt = dashboard?.by_status || {};
+    return Object.entries(bySt)
+      .filter(([, v]) => (v as number) > 0)
+      .map(([key, value]) => ({
+        name: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        value: value as number,
+        fill: STATUS_CHART_COLORS[key] || '#94a3b8',
+      }));
+  }, [dashboard?.by_status]);
+
+  const slaPercent = useMemo(() => {
+    const compliance = dashboard?.sla_compliance || {};
+    const entries = Object.values(compliance);
+    if (!entries.length) return 0;
+    const totalVulnsInSla = entries.reduce((s, e) => s + e.total, 0);
+    const onTime = entries.reduce((s, e) => s + e.on_time, 0);
+    return totalVulnsInSla > 0 ? Math.round((onTime / totalVulnsInSla) * 100) : 0;
+  }, [dashboard?.sla_compliance]);
+  const totalVulns = dashboard?.total_vulnerabilities || 0;
+
+  const assigneeChartData = useMemo(() => {
+    const byAssignee = dashboard?.by_assignee || {};
+    return Object.entries(byAssignee)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
+      .slice(0, 8)
+      .map(([name, count]) => ({ name, count: count as number }));
+  }, [dashboard?.by_assignee]);
+
+  const mitigationChartData = useMemo(() => {
+    const cov = dashboard?.mitigation_coverage;
+    if (!cov) return [];
+    return [
+      { name: 'With Mitigations', value: cov.with_mitigations, fill: '#10b981' },
+      { name: 'Without Mitigations', value: cov.without_mitigations, fill: '#f97316' },
+    ].filter(d => d.value > 0);
+  }, [dashboard?.mitigation_coverage]);
+
+  const deptChartData = useMemo(() => {
+    const byDept = dashboard?.by_department || {};
+    return Object.entries(byDept)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
+      .slice(0, 8)
+      .map(([name, count]) => ({ name, count: count as number }));
+  }, [dashboard?.by_department]);
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -208,160 +312,271 @@ export default function VulnerabilitiesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)]">
-      {/* Header Section */}
-      <div className="border-b border-[var(--color-border)]">
-        <div className="px-8 py-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-3xl font-bold cw-text tracking-tight">Vulnerability Register</h1>
-              <p className="cw-text-muted mt-2">Track, manage, and remediate security vulnerabilities across your organization</p>
-            </div>
-            <div className="flex items-center gap-3">
-              {hasPermission('vulnerabilities:vulnerability_register:edit') && selectedVulnIds.size > 0 && (
-                <button
-                  onClick={() => setShowBulkAssignModal(true)}
-                  className="cw-btn-secondary inline-flex items-center gap-2"
-                >
-                  <Building2 size={16} />
-                  Assign ({selectedVulnIds.size})
-                </button>
-              )}
-              {hasPermission('vulnerabilities:vulnerability_register:create') && (
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="cw-btn-primary inline-flex items-center gap-2"
-                >
-                  <Plus size={18} />
-                  Add Vulnerability
-                </button>
+    <div className="-m-4 lg:-m-5">
+      {/* KPI Charts */}
+      <div className="border-b border-[var(--color-border)] px-6 py-3">
+        {/* Visual overview strip — three chart panels */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+
+          {/* 1 — Severity donut */}
+          <div className="cw-card rounded-xl p-4">
+            <p className="text-xs font-semibold cw-text-muted uppercase tracking-wide mb-3">By Severity</p>
+            {severityChartData.length === 0 ? (
+              <div className="flex h-[120px] items-center justify-center text-xs cw-text-muted">No data</div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="relative h-[110px] w-[110px] flex-shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={severityChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2}>
+                        {severityChartData.map((entry, i) => (
+                          <Cell key={i} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<VulnPieTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-lg font-bold cw-text">{totalVulns}</span>
+                    <span className="text-[10px] cw-text-muted">total</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  {severityChartData.map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-2 text-xs">
+                      <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.fill }} />
+                      <span className="cw-text-muted truncate">{entry.name}</span>
+                      <span className="font-semibold cw-text ml-auto">{entry.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 2 — Status bar chart */}
+          <div className="cw-card rounded-xl p-4">
+            <p className="text-xs font-semibold cw-text-muted uppercase tracking-wide mb-3">Remediation Status</p>
+            {statusChartData.length === 0 ? (
+              <div className="flex h-[110px] items-center justify-center text-xs cw-text-muted">No data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={110}>
+                <BarChart data={statusChartData} layout="vertical" margin={{ left: 0, right: 8, top: 2, bottom: 2 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" width={88} tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} />
+                  <Tooltip content={<VulnPieTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    {statusChartData.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* 3 — SLA gauge + MTTR */}
+          <div className="cw-card rounded-xl p-4 flex flex-col justify-between">
+            <p className="text-xs font-semibold cw-text-muted uppercase tracking-wide mb-3">SLA Compliance</p>
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative w-full">
+                <div className="mb-1 flex items-center justify-between text-xs cw-text-muted">
+                  <span>0%</span>
+                  <span className="text-base font-bold" style={{ color: slaPercent >= 80 ? '#10b981' : slaPercent >= 50 ? '#f59e0b' : '#ef4444' }}>
+                    {slaPercent}%
+                  </span>
+                  <span>100%</span>
+                </div>
+                <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${slaPercent}%`,
+                      background: slaPercent >= 80 ? '#10b981' : slaPercent >= 50 ? '#f59e0b' : '#ef4444',
+                    }}
+                  />
+                </div>
+                <p className="mt-1 text-center text-[10px] cw-text-muted">On-time remediation rate</p>
+              </div>
+              {dashboard?.mttr_days != null && (
+                <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 w-full justify-center">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>MTTR: <strong>{dashboard.mttr_days} days</strong></span>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Statistics Cards */}
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-            {/* Total Vulnerabilities */}
-            <div className="group cw-card rounded-lg p-5 hover:shadow-md transition-all">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm cw-text-muted font-medium">Total Vulnerabilities</p>
-                  <p className="text-3xl font-bold cw-text mt-2">{dashboard?.total || 0}</p>
-                </div>
-                <div className="p-2.5 bg-blue-50 rounded-lg">
-                  <Bug className="h-5 w-5 text-blue-600" />
-                </div>
-              </div>
-            </div>
+        </div>
 
-            {/* Critical */}
-            <div className="group cw-card rounded-lg p-5 hover:shadow-md transition-all hover:border-red-200">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm cw-text-muted font-medium">Critical</p>
-                  <p className="text-3xl font-bold text-red-600 mt-2">{dashboard?.by_severity?.critical || 0}</p>
-                </div>
-                <div className="p-2.5 bg-red-50 rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                </div>
-              </div>
-            </div>
+        {/* Second row — Assignee / Mitigation Coverage / Department */}
+        <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-3">
 
-            {/* High */}
-            <div className="group cw-card rounded-lg p-5 hover:shadow-md transition-all hover:border-orange-200">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm cw-text-muted font-medium">High</p>
-                  <p className="text-3xl font-bold text-orange-600 mt-2">{dashboard?.by_severity?.high || 0}</p>
-                </div>
-                <div className="p-2.5 bg-orange-50 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-orange-600" />
-                </div>
-              </div>
-            </div>
-
-            {/* Medium */}
-            <div className="group cw-card rounded-lg p-5 hover:shadow-md transition-all hover:border-yellow-200">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm cw-text-muted font-medium">Medium</p>
-                  <p className="text-3xl font-bold text-yellow-600 mt-2">{dashboard?.by_severity?.medium || 0}</p>
-                </div>
-                <div className="p-2.5 bg-yellow-50 rounded-lg">
-                  <Shield className="h-5 w-5 text-yellow-600" />
-                </div>
-              </div>
-            </div>
-
-            {/* SLA Compliance */}
-            <div className="group cw-card rounded-lg p-5 hover:shadow-md transition-all hover:border-green-200">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm cw-text-muted font-medium">SLA Compliance</p>
-                  <p className="text-3xl font-bold text-green-600 mt-2">{dashboard?.sla_compliance_percent || 0}%</p>
-                </div>
-                <div className="p-2.5 bg-green-50 rounded-lg">
-                  <CheckSquare className="h-5 w-5 text-green-600" />
-                </div>
-              </div>
-            </div>
+          {/* Assignee breakdown */}
+          <div className="cw-card rounded-xl p-4">
+            <p className="text-xs font-semibold cw-text-muted uppercase tracking-wide mb-3">By Assignee</p>
+            {assigneeChartData.length === 0 ? (
+              <div className="flex h-[120px] items-center justify-center text-xs cw-text-muted">No data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(80, assigneeChartData.length * 22)}>
+                <BarChart data={assigneeChartData} layout="vertical" margin={{ left: 4, right: 24, top: 2, bottom: 2 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" width={96} tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} />
+                  <Tooltip formatter={(v) => [v, 'Vulnerabilities']} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                  <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
+
+          {/* Mitigation coverage donut */}
+          <div className="cw-card rounded-xl p-4">
+            <p className="text-xs font-semibold cw-text-muted uppercase tracking-wide mb-3">Mitigation Coverage</p>
+            {mitigationChartData.length === 0 ? (
+              <div className="flex h-[120px] items-center justify-center text-xs cw-text-muted">No data</div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="relative h-[110px] w-[110px] flex-shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={mitigationChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2}>
+                        {mitigationChartData.map((entry, i) => (
+                          <Cell key={i} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<VulnPieTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-lg font-bold cw-text">
+                      {mitigationChartData.reduce((s, d) => s + d.value, 0)}
+                    </span>
+                    <span className="text-[10px] cw-text-muted">total</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 min-w-0">
+                  {mitigationChartData.map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-2 text-xs">
+                      <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.fill }} />
+                      <span className="cw-text-muted truncate">{entry.name}</span>
+                      <span className="font-semibold cw-text ml-auto">{entry.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Department breakdown */}
+          <div className="cw-card rounded-xl p-4">
+            <p className="text-xs font-semibold cw-text-muted uppercase tracking-wide mb-3">By Department</p>
+            {deptChartData.length === 0 ? (
+              <div className="flex h-[120px] items-center justify-center text-xs cw-text-muted">No data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(80, deptChartData.length * 22)}>
+                <BarChart data={deptChartData} layout="vertical" margin={{ left: 4, right: 24, top: 2, bottom: 2 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" width={96} tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} />
+                  <Tooltip formatter={(v) => [v, 'Vulnerabilities']} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                  <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
         </div>
       </div>
 
       {/* Content Section */}
-      <div className="p-8 space-y-6">
-        {/* Filters Section */}
-        <div className="cw-card rounded-lg p-6">
-          <div className="space-y-4">
-            {/* Search Bar */}
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 cw-text-muted" />
-              <input
-                type="text"
-                placeholder="Search vulnerabilities by title, CVE ID, CWE ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full cw-field pl-12 pr-4 py-3"
-              />
-            </div>
-
-            {/* Filter Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium cw-text-muted mb-2">Status</label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full cw-field px-4 py-2"
-                >
-                  <option value="all">All Status</option>
-                  <option value="open">Open</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="remediated">Remediated</option>
-                  <option value="verified">Verified</option>
-                  <option value="closed">Closed</option>
-                  <option value="accepted">Risk Accepted</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium cw-text-muted mb-2">Severity</label>
-                <select
-                  value={severityFilter}
-                  onChange={(e) => setSeverityFilter(e.target.value)}
-                  className="w-full cw-field px-4 py-2"
-                >
-                  <option value="all">All Severity</option>
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                  <option value="info">Info</option>
-                </select>
-              </div>
-            </div>
+      <div className="px-6 py-3 space-y-2  bg-[var(--color-subtle)]">
+        {/* Toolbar: search + filters + add button on one row */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 cw-text-muted" />
+            <input
+              type="text"
+              placeholder="Search by title, CVE ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full cw-field !bg-white rounded-md pl-8 pr-3 py-1.5 text-sm"
+            />
           </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="cw-field !bg-white rounded-md px-2 py-1.5 text-sm w-36"
+          >
+            <option value="all">All Status</option>
+            <option value="open">Open</option>
+            <option value="in_progress">In Progress</option>
+            <option value="remediated">Remediated</option>
+            <option value="verified">Verified</option>
+            <option value="closed">Closed</option>
+            <option value="accepted">Risk Accepted</option>
+          </select>
+          <select
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value)}
+            className="cw-field !bg-white rounded-md px-2 py-1.5 text-sm w-36"
+          >
+            <option value="all">All Severity</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="info">Info</option>
+          </select>
+          {hasPermission('vulnerabilities:vulnerability_register:create') && (
+            <>
+              <input
+                ref={bulkFileRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setBulkUploadState('uploading');
+                  setBulkUploadMsg(null);
+                  try {
+                    const res = await vulnManagementApi.vulnerabilities.bulkUpload(file);
+                    const d = res.data;
+                    queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+                    queryClient.invalidateQueries({ queryKey: ['vuln-dashboard'] });
+                    setBulkUploadState('done');
+                    setBulkUploadMsg(`Imported ${d.created} vulnerabilities${d.skipped ? `, ${d.skipped} skipped` : ''}${d.errors?.length ? `. Errors: ${d.errors.slice(0,2).join('; ')}` : ''}`);
+                  } catch {
+                    setBulkUploadState('error');
+                    setBulkUploadMsg('Upload failed. Check file format.');
+                  } finally {
+                    if (bulkFileRef.current) bulkFileRef.current.value = '';
+                    setTimeout(() => { setBulkUploadState('idle'); setBulkUploadMsg(null); }, 5000);
+                  }
+                }}
+              />
+              <button
+                onClick={() => bulkFileRef.current?.click()}
+                disabled={bulkUploadState === 'uploading'}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60"
+              >
+                {bulkUploadState === 'uploading' ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                Bulk Upload
+              </button>
+              <button onClick={() => setIsModalOpen(true)} className="cw-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity">
+                <Plus size={14} />
+                Add Vulnerability
+              </button>
+            </>
+          )}
         </div>
+
+        {/* Bulk upload result toast */}
+        {bulkUploadMsg && (
+          <div className={`rounded-lg px-4 py-2.5 text-sm font-medium flex items-center gap-2 ${bulkUploadState === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+            {bulkUploadState === 'error' ? <AlertCircle size={15} /> : <CheckSquare size={15} />}
+            {bulkUploadMsg}
+          </div>
+        )}
 
         {/* Data Table */}
         {isLoading ? (
@@ -388,22 +603,14 @@ export default function VulnerabilitiesPage() {
               <table className="w-full">
                 <thead className="bg-[var(--color-subtle)] border-b border-[var(--color-border)]">
                   <tr>
-                    <th className="px-6 py-4 text-left">
-                      <input
-                        type="checkbox"
-                        checked={filteredVulnerabilities.length > 0 && selectedVulnIds.size === filteredVulnerabilities.length}
-                        onChange={handleSelectAll}
-                        className="rounded border-[var(--color-border)] text-[var(--color-base)] focus:ring-[var(--color-base)] cursor-pointer"
-                      />
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">ID</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Title</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Severity</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">CVE/CWE</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Due Date</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Assigned To</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Action</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">ID</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Title</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Severity</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Status</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">CVE</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Due Date</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Assigned To</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
@@ -411,83 +618,48 @@ export default function VulnerabilitiesPage() {
                     const severityStyle = getSeverityStyle(vuln.severity);
                     const statusStyle = getStatusStyle(vuln.status);
                     return (
-                      <tr 
-                        key={vuln.id} 
-                        className={`transition-all ${
-                          selectedVulnIds.has(vuln.id) 
-                            ? 'bg-blue-50 hover:bg-blue-100' 
-                            : 'hover:bg-[var(--color-hover)]'
-                        }`}
+                      <tr
+                        key={vuln.id}
+                        className="bg-white hover:bg-[var(--color-hover)] transition-colors"
                       >
-                        <td className="px-6 py-4">
-                          <input
-                            type="checkbox"
-                            checked={selectedVulnIds.has(vuln.id)}
-                            onChange={() => handleSelectVuln(vuln.id)}
-                            className="rounded border-[var(--color-border)] text-[var(--color-base)] focus:ring-[var(--color-base)] cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono cw-text-muted">VULN-{vuln.id}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <Link 
-                              href={`/vulnerabilities/${vuln.id}`} 
-                              className="cw-text font-medium hover:text-[var(--color-base)] transition-colors"
-                            >
-                              {vuln.title}
-                            </Link>
-                          </div>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs font-mono cw-text-muted">VULN-{vuln.id}</td>
+                        <td className="px-3 py-2">
+                          <Link
+                            href={`/vulnerabilities/${vuln.id}`}
+                            className="text-sm cw-text font-medium hover:text-[var(--color-base)] transition-colors"
+                          >
+                            {vuln.title}
+                          </Link>
                           {vuln.affected_component && (
-                            <p className="text-xs cw-text-muted mt-1">Component: {vuln.affected_component}</p>
+                            <p className="text-xs cw-text-muted">{vuln.affected_component}</p>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold gap-1 border ${severityStyle.bg} ${severityStyle.text} border-current/20`}>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${severityStyle.bg} ${severityStyle.text}`}>
                             {severityStyle.label}
-                            {vuln.cvss_score && <span className="text-opacity-75">({vuln.cvss_score})</span>}
+                            {vuln.cvss_score && <span className="ml-1 opacity-75">({vuln.cvss_score})</span>}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border ${statusStyle.bg} ${statusStyle.text} border-current/20`}>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
                             {statusStyle.label}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm cw-text-muted">
-                          {(vuln.cve_id || vuln.cwe_id) ? (
-                            <div className="space-y-1">
-                              {vuln.cve_id && <div className="font-mono">{vuln.cve_id}</div>}
-                              {vuln.cwe_id && <div className="font-mono cw-text-muted">{vuln.cwe_id}</div>}
-                            </div>
-                          ) : (
-                            <span className="cw-text-muted">-</span>
-                          )}
+                        <td className="px-3 py-2 whitespace-nowrap text-xs font-mono cw-text-muted">
+                          {vuln.cve_id ?? <span className="not-italic">—</span>}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {vuln.due_date ? (
-                            <div className="flex items-center gap-2 cw-text-muted">
-                              <Clock size={14} className="cw-text-muted" />
-                              <span>{new Date(vuln.due_date).toLocaleDateString()}</span>
-                            </div>
-                          ) : (
-                            <span className="cw-text-muted">-</span>
-                          )}
+                        <td className="px-3 py-2 whitespace-nowrap text-xs cw-text-muted">
+                          {vuln.due_date ? new Date(vuln.due_date).toLocaleDateString() : '—'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {vuln.assignee_name ? (
-                            <div className="flex items-center gap-2 cw-text-muted">
-                              <User size={14} className="cw-text-muted" />
-                              <span>{vuln.assignee_name}</span>
-                            </div>
-                          ) : (
-                            <span className="cw-text-muted italic">Unassigned</span>
-                          )}
+                        <td className="px-3 py-2 whitespace-nowrap text-xs cw-text-muted">
+                          {vuln.assignee_name ?? <span className="italic">—</span>}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <Link 
+                        <td className="px-3 py-2 whitespace-nowrap text-xs">
+                          <Link
                             href={`/vulnerabilities/${vuln.id}`}
                             className="text-[var(--color-base)] hover:text-[var(--color-base-hover)] transition-colors inline-flex items-center gap-1"
                           >
-                            <ExternalLink size={14} />
+                            <ExternalLink size={12} />
                             View
                           </Link>
                         </td>
@@ -501,31 +673,33 @@ export default function VulnerabilitiesPage() {
         )}
       </div>
 
-      {/* Add Vulnerability Modal */}
+      {/* Add Vulnerability Slide-over */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-2xl mx-4 cw-card rounded-lg shadow-lg overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
-              <h2 className="text-xl font-bold cw-text">Add New Vulnerability</h2>
-              <button 
-                onClick={() => setIsModalOpen(false)} 
-                className="cw-text-muted hover:cw-text transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
+        <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setIsModalOpen(false)} />
+      )}
+      <div className={`fixed inset-y-0 right-0 z-50 flex w-[540px] flex-col bg-white shadow-2xl transform transition-transform duration-300 ${isModalOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-slate-900">Add New Vulnerability</h2>
+          <button
+            onClick={() => setIsModalOpen(false)}
+            className="text-slate-500 hover:text-slate-900 transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSubmit(new FormData(e.currentTarget));
-              }}
-              className="p-6 space-y-5"
-            >
-              {/* Title */}
-              <div>
-                <label className="block text-sm font-semibold cw-text mb-2">Title <span className="text-red-600">*</span></label>
-                <input 
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit(new FormData(e.currentTarget));
+          }}
+          className="flex flex-col flex-1 min-h-0"
+        >
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            {/* Title */}
+            <div>
+              <label className="block text-sm font-semibold cw-text mb-2">Title <span className="text-red-600">*</span></label>
+              <input 
                   type="text" 
                   name="title" 
                   required 
@@ -629,29 +803,27 @@ export default function VulnerabilitiesPage() {
                   className="w-full cw-field px-4 py-2" 
                 />
               </div>
+            </div>
 
-              {/* Forms Actions */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
-                <button 
-                  type="button" 
-                  onClick={() => setIsModalOpen(false)} 
-                  className="cw-btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={createMutation.isPending} 
-                  className="cw-btn-primary disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
-                >
-                  {createMutation.isPending && <Loader2 size={16} className="animate-spin" />}
-                  {createMutation.isPending ? 'Creating...' : 'Create'}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="flex-shrink-0 flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+              <button 
+                type="button" 
+                onClick={() => setIsModalOpen(false)} 
+                className="cw-btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                disabled={createMutation.isPending} 
+                className="cw-btn-primary disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              >
+                {createMutation.isPending && <Loader2 size={16} className="animate-spin" />}
+                {createMutation.isPending ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </form>
         </div>
-      )}
 
       {/* Bulk Assign Modal */}
       {showBulkAssignModal && (

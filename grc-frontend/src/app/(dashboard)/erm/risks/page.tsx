@@ -1190,7 +1190,7 @@ function RiskModal({
                         <button
                           type="button"
                           onClick={applyDescription}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-purple-400 hover:bg-purple-500/20"
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50 font-medium"
                         >
                           <Check className="h-3 w-3" />
                           Use this
@@ -1210,7 +1210,7 @@ function RiskModal({
                               key={idx}
                               type="button"
                               onClick={() => appendCauseToDescription(cause)}
-                              className="rounded-full bg-red-500/20 px-2.5 py-1 text-xs text-red-300 hover:bg-red-500/30 transition-colors"
+                              className="rounded-full bg-red-100 px-2.5 py-1 text-xs text-red-700 hover:bg-red-200 transition-colors border border-red-200"
                             >
                               + {cause}
                             </button>
@@ -1225,7 +1225,7 @@ function RiskModal({
                               key={idx}
                               type="button"
                               onClick={() => appendConsequenceToDescription(consequence)}
-                              className="rounded-full bg-orange-500/20 px-2.5 py-1 text-xs text-orange-300 hover:bg-orange-500/30 transition-colors"
+                              className="rounded-full bg-orange-100 px-2.5 py-1 text-xs text-orange-700 hover:bg-orange-200 transition-colors border border-orange-200"
                             >
                               + {consequence}
                             </button>
@@ -1240,7 +1240,7 @@ function RiskModal({
                         <button
                           type="button"
                           onClick={applyLikelihoodImpact}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-purple-400 hover:bg-purple-500/20"
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50 font-medium"
                         >
                           <Check className="h-3 w-3" />
                           Apply
@@ -1249,13 +1249,13 @@ function RiskModal({
                       <div className="mt-2 flex items-center gap-4">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-600">Likelihood:</span>
-                          <span className="rounded bg-blue-500/20 px-2 py-0.5 text-sm font-medium text-blue-300">
+                          <span className="rounded bg-blue-100 px-2 py-0.5 text-sm font-medium text-blue-700">
                             {aiSuggestions.suggested_likelihood}/5
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-600">Impact:</span>
-                          <span className="rounded bg-amber-500/20 px-2 py-0.5 text-sm font-medium text-amber-300">
+                          <span className="rounded bg-amber-100 px-2 py-0.5 text-sm font-medium text-amber-700">
                             {aiSuggestions.suggested_impact}/5
                           </span>
                         </div>
@@ -1290,10 +1290,10 @@ function RiskModal({
                                   )}
                                   <span className={`rounded px-1.5 py-0.5 text-xs ${
                                     control.relevance === 'high' 
-                                      ? 'bg-green-500/20 text-green-300'
+                                      ? 'bg-green-100 text-green-700'
                                       : control.relevance === 'medium'
-                                      ? 'bg-yellow-500/20 text-yellow-300'
-                                      : 'bg-slate-500/20 text-slate-700'
+                                      ? 'bg-yellow-100 text-yellow-700'
+                                      : 'bg-slate-100 text-slate-600'
                                   }`}>
                                     {control.relevance}
                                   </span>
@@ -1312,7 +1312,7 @@ function RiskModal({
                         {aiSuggestions.risk_treatment_options.map((option, idx) => (
                           <span
                             key={idx}
-                            className="rounded-full bg-purple-500/20 px-3 py-1 text-xs text-purple-300"
+                            className="rounded-full bg-primary-100 px-3 py-1 text-xs text-primary-700"
                           >
                             {option}
                           </span>

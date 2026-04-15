@@ -1,6 +1,35 @@
-'use client';
+﻿'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis,
+} from 'recharts';
+
+const ASSET_TYPE_COLORS: Record<string, string> = {
+  application:   '#3b82f6',
+  infrastructure:'#8b5cf6',
+  data:          '#10b981',
+  cloud:         '#f59e0b',
+  third_party:   '#ec4899',
+};
+const CRITICALITY_COLORS: Record<string, string> = {
+  critical: '#ef4444',
+  high:     '#f97316',
+  medium:   '#eab308',
+  low:      '#22c55e',
+};
+const AssetTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) => {
+  if (active && payload?.length) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-md text-xs">
+        <p className="font-medium text-gray-800 capitalize">{payload[0].name.replace(/_/g, ' ')}</p>
+        <p className="text-gray-500">{payload[0].value} assets</p>
+      </div>
+    );
+  }
+  return null;
+};
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { assetsApi } from '@/lib/api';
@@ -41,6 +70,66 @@ const ASSET_TYPES = [
   { value: 'cloud', label: 'Cloud Resource', icon: Cloud, description: 'Cloud services, SaaS, PaaS, and IaaS resources' },
   { value: 'third_party', label: 'Third-Party System', icon: Building2, description: 'External vendor systems and services' },
 ];
+
+const ASSET_COMPONENT_SUGGESTIONS: Record<AssetType, string[]> = {
+  infrastructure: ['Server', 'Router', 'Switch', 'Firewall', 'Desktop', 'Laptop', 'Storage', 'Access Point', 'Rack', 'Load Balancer'],
+  application: ['Web Application', 'Mobile Application', 'API Service', 'Authentication Service', 'ERP', 'CRM', 'Middleware', 'Microservice'],
+  data: ['Database', 'Data Warehouse', 'Data Lake', 'File Repository', 'Backup Store', 'ETL Pipeline', 'Analytics Store'],
+  cloud: ['Virtual Machine', 'Container Service', 'Serverless Function', 'Managed Database', 'Object Storage', 'Kubernetes Cluster', 'CDN'],
+  third_party: ['Payment Gateway', 'Identity Provider', 'Security Service', 'Managed SOC', 'External API', 'SaaS Platform', 'Managed Hosting'],
+};
+
+const ASSET_SUB_COMPONENT_SUGGESTIONS: Record<AssetType, Record<string, string[]>> = {
+  infrastructure: {
+    Server: ['CPU', 'RAM', 'ROM', 'NIC', 'Power Supply', 'RAID Controller'],
+    Router: ['Routing Engine', 'WAN Interface', 'LAN Interface', 'Power Module', 'Management Port'],
+    Switch: ['Line Card', 'Power Module', 'SFP Module', 'Backplane'],
+    Firewall: ['Policy Engine', 'VPN Module', 'Inspection Engine', 'HA Pairing'],
+    Desktop: ['CPU', 'RAM', 'Storage Disk', 'Network Adapter'],
+    Laptop: ['CPU', 'RAM', 'SSD', 'WiFi Adapter', 'Battery'],
+    Storage: ['Disk Array', 'Controller', 'Cache Module', 'Replication Module'],
+    'Access Point': ['Radio Module', 'Antenna', 'PoE Module', 'Controller Link'],
+    Rack: ['Power Distribution Unit', 'Cable Manager', 'Cooling Unit', 'UPS'],
+    'Load Balancer': ['Virtual Server', 'Pool Member', 'Health Monitor', 'SSL Profile'],
+  },
+  application: {
+    'Web Application': ['Frontend', 'Backend', 'Session Store', 'Admin Console'],
+    'Mobile Application': ['Mobile Client', 'Push Service', 'API Backend', 'Auth Module'],
+    'API Service': ['API Gateway', 'Rate Limiter', 'API Version', 'Authentication Layer'],
+    'Authentication Service': ['MFA Module', 'Token Service', 'User Directory Sync', 'Session Manager'],
+    ERP: ['Finance Module', 'HR Module', 'Inventory Module', 'Reporting Module'],
+    CRM: ['Customer Data Module', 'Workflow Engine', 'Email Integration', 'Analytics'],
+    Middleware: ['Message Broker', 'Transformer', 'Queue Worker', 'Connector'],
+    Microservice: ['Service Endpoint', 'Worker Process', 'Cache Layer', 'Service Config'],
+  },
+  data: {
+    Database: ['Schema', 'Table', 'Stored Procedure', 'Replication'],
+    'Data Warehouse': ['Fact Table', 'Dimension Table', 'ETL Job', 'Aggregation Layer'],
+    'Data Lake': ['Raw Zone', 'Curated Zone', 'Metadata Catalog', 'Access Policy'],
+    'File Repository': ['Folder Structure', 'Retention Policy', 'Access Control', 'Versioning'],
+    'Backup Store': ['Backup Set', 'Recovery Point', 'Encryption Key', 'Restore Job'],
+    'ETL Pipeline': ['Extractor', 'Transformer', 'Loader', 'Scheduler'],
+    'Analytics Store': ['Data Mart', 'Query Engine', 'Index', 'Dashboard Feed'],
+  },
+  cloud: {
+    'Virtual Machine': ['Instance', 'Disk Volume', 'Security Group', 'IAM Role'],
+    'Container Service': ['Container Image', 'Task Definition', 'Service Mesh', 'Secrets'],
+    'Serverless Function': ['Runtime', 'Trigger', 'Environment Variable', 'Execution Role'],
+    'Managed Database': ['Instance', 'Read Replica', 'Backup Policy', 'Parameter Group'],
+    'Object Storage': ['Bucket', 'Lifecycle Policy', 'Access Policy', 'Encryption Config'],
+    'Kubernetes Cluster': ['Node Pool', 'Ingress Controller', 'Namespace', 'RBAC Policy'],
+    CDN: ['Distribution', 'Origin', 'WAF Rule', 'TLS Certificate'],
+  },
+  third_party: {
+    'Payment Gateway': ['Merchant Account', 'API Credential', 'Webhook', 'Settlement Config'],
+    'Identity Provider': ['Directory Sync', 'SSO Config', 'MFA Policy', 'Provisioning Connector'],
+    'Security Service': ['Agent', 'Detection Policy', 'Alert Integration', 'Reporting Console'],
+    'Managed SOC': ['Log Ingestion', 'Use Case', 'Escalation Channel', 'Ticket Integration'],
+    'External API': ['API Key', 'OAuth App', 'Rate Plan', 'Webhook Endpoint'],
+    'SaaS Platform': ['Tenant Config', 'Role Mapping', 'Audit Log', 'Data Export'],
+    'Managed Hosting': ['Compute Plan', 'Support SLA', 'Backup Service', 'Network Segment'],
+  },
+};
 
 export default function AssetsPage() {
   const router = useRouter();
@@ -108,12 +197,12 @@ export default function AssetsPage() {
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      active: 'bg-green-900/50 text-green-400',
-      inactive: 'bg-yellow-900/50 text-yellow-400',
-      decommissioned: 'bg-slate-700 text-slate-400',
+      active: 'bg-green-100',
+      inactive: 'bg-yellow-100',
+      decommissioned: 'bg-slate-100',
     };
     return (
-      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[status] || 'bg-slate-700 text-slate-400'}`}>
+      <span className={`rounded-full px-2 py-0.5 text-xs font-medium text-slate-900 ${colors[status] || 'bg-slate-100'}`}>
         {status}
       </span>
     );
@@ -121,13 +210,13 @@ export default function AssetsPage() {
 
   const getCriticalityBadge = (criticality: string) => {
     const colors: Record<string, string> = {
-      critical: 'bg-red-900/50 text-red-400',
-      high: 'bg-orange-900/50 text-orange-400',
-      medium: 'bg-yellow-900/50 text-yellow-400',
-      low: 'bg-green-900/50 text-green-400',
+      critical: 'bg-red-100',
+      high: 'bg-orange-100',
+      medium: 'bg-yellow-100',
+      low: 'bg-green-100',
     };
     return (
-      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[criticality] || 'bg-slate-700 text-slate-400'}`}>
+      <span className={`rounded-full px-2 py-0.5 text-xs font-medium text-slate-900 ${colors[criticality] || 'bg-slate-100'}`}>
         {criticality}
       </span>
     );
@@ -135,8 +224,12 @@ export default function AssetsPage() {
 
   const getTypeBadge = (type: string) => {
     const assetType = ASSET_TYPES.find(t => t.value === type);
+    const color = ASSET_TYPE_COLORS[type] ?? '#6b7280';
     return (
-      <span className="rounded-full bg-primary-900/50 px-2 py-0.5 text-xs text-primary-400">
+      <span
+        className="rounded-full px-2 py-0.5 text-xs font-medium text-slate-900"
+        style={{ backgroundColor: color + '22' }}
+      >
         {assetType?.label || type}
       </span>
     );
@@ -151,7 +244,7 @@ export default function AssetsPage() {
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className={`h-2 w-1.5 rounded-sm ${i <= value ? color : 'bg-slate-700'}`}
+              className={`h-2 w-1.5 rounded-sm ${i <= value ? color : 'bg-slate-200'}`}
             />
           ))}
         </div>
@@ -193,6 +286,47 @@ export default function AssetsPage() {
     router.push(`/assets/${id}`);
   };
 
+  const assetTypeChartData = useMemo(() => {
+    const byType = dashboard?.by_type || {};
+    return Object.entries(byType)
+      .filter(([, v]) => (v as number) > 0)
+      .map(([key, value]) => ({
+        name: key.replace(/_/g, ' '),
+        value: value as number,
+        fill: ASSET_TYPE_COLORS[key] || '#6b7280',
+      }));
+  }, [dashboard?.by_type]);
+
+  const criticalityChartData = useMemo(() => {
+    const byCrit = dashboard?.by_criticality || {};
+    return ['critical', 'high', 'medium', 'low']
+      .filter((k) => (byCrit[k] ?? 0) > 0)
+      .map((key) => ({
+        name: key.charAt(0).toUpperCase() + key.slice(1),
+        value: byCrit[key] as number,
+        fill: CRITICALITY_COLORS[key],
+      }));
+  }, [dashboard?.by_criticality]);
+
+  const ciaRadarData = useMemo(() => {
+    const assetList = (assets as ITAsset[]) || [];
+    const types = ['application', 'infrastructure', 'data', 'cloud', 'third_party'];
+    return types.map((type) => {
+      const group = assetList.filter((a) => a.asset_type === type);
+      if (!group.length) return null;
+      const avg = (field: keyof ITAsset) =>
+        Math.round((group.reduce((s, a) => s + ((a[field] as number) || 0), 0) / group.length) * 10) / 10;
+      return {
+        type: type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        C: avg('confidentiality_rating'),
+        I: avg('integrity_rating'),
+        A: avg('availability_rating'),
+      };
+    }).filter(Boolean) as Array<{ type: string; C: number; I: number; A: number }>;
+  }, [assets]);
+
+  const totalAssets = dashboard?.total_assets || 0;
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -211,125 +345,122 @@ export default function AssetsPage() {
   }
 
   return (
-    <div className="assets-light space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">IT Asset Inventory & Valuation</h1>
-          <p className="text-slate-400">Manage and track IT assets with CIA ratings and valuations</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => assetsApi.downloadTemplate()}
-            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700"
-            title="Download CSV template for bulk import"
-          >
-            <Download size={16} />
-            Template
-          </button>
-          <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-primary-600 bg-primary-600/20 px-3 py-2 text-sm font-medium text-primary-400 hover:bg-primary-600/30"
-          >
-            <Upload size={16} />
-            Import
-          </button>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
-          >
-            <Plus size={18} />
-            Add Asset
-          </button>
-        </div>
-      </div>
+    <div className="assets-light space-y-5">
+      {/* Visual overview — 3 chart panels */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary-500/20 p-2">
-              <Server className="h-5 w-5 text-primary-400" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-400">Total Assets</p>
-              <p className="text-2xl font-semibold text-white">{dashboard?.total_assets || 0}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
-          <p className="text-sm text-slate-400 mb-2">By Type</p>
-          <div className="space-y-1">
-            {Object.entries(dashboard?.by_type || {}).map(([type, count]) => (
-              <div key={type} className="flex justify-between text-xs">
-                <span className="text-slate-300 capitalize">{type.replace('_', ' ')}</span>
-                <span className="text-white font-medium">{count as number}</span>
+        {/* Panel 1 — Asset type donut */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">By Asset Type</p>
+          {assetTypeChartData.length === 0 ? (
+            <div className="flex h-[120px] items-center justify-center text-xs text-slate-400">No data</div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="relative h-[110px] w-[110px] flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={assetTypeChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2}>
+                      {assetTypeChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<AssetTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-lg font-bold text-slate-900">{totalAssets}</span>
+                  <span className="text-[10px] text-slate-400">total</span>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
-          <p className="text-sm text-slate-400 mb-2">By Criticality</p>
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs">
-              <span className="text-red-400">Critical</span>
-              <span className="text-white font-medium">{dashboard?.by_criticality?.critical || 0}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-orange-400">High</span>
-              <span className="text-white font-medium">{dashboard?.by_criticality?.high || 0}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-yellow-400">Medium</span>
-              <span className="text-white font-medium">{dashboard?.by_criticality?.medium || 0}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-green-400">Low</span>
-              <span className="text-white font-medium">{dashboard?.by_criticality?.low || 0}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-2">
-              <DollarSign className="h-5 w-5 text-green-400" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-400">High Value</p>
-              <p className="text-2xl font-semibold text-white">{dashboard?.high_value_assets || 0}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-yellow-500/20 p-2">
-              <AlertCircle className="h-5 w-5 text-yellow-400" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-400">Need Assessment</p>
-              <p className="text-2xl font-semibold text-white">{dashboard?.assets_needing_assessment || 0}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-500/20 p-2">
-              <Shield className="h-5 w-5 text-blue-400" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-400">Status</p>
-              <div className="flex gap-2 text-sm">
-                <span className="text-green-400">{dashboard?.by_status?.active || 0} active</span>
+              <div className="flex flex-1 flex-col gap-1.5 min-w-0">
+                {assetTypeChartData.map((entry) => (
+                  <div key={entry.name} className="flex items-center gap-2 text-xs">
+                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.fill }} />
+                    <span className="text-slate-500 capitalize truncate">{entry.name}</span>
+                    <span className="font-semibold text-slate-800 ml-auto">{entry.value}</span>
+                  </div>
+                ))}
+                <div className="mt-1 border-t border-slate-100 pt-1 flex justify-between text-[10px] text-slate-400">
+                  <span>High Value</span>
+                  <span className="font-semibold text-green-600">{dashboard?.high_value_assets || 0}</span>
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-400">
+                  <span>Need CIA</span>
+                  <span className="font-semibold text-amber-500">{dashboard?.assets_needing_assessment || 0}</span>
+                </div>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Panel 2 — Criticality ring */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">By Criticality</p>
+          {criticalityChartData.length === 0 ? (
+            <div className="flex h-[120px] items-center justify-center text-xs text-slate-400">No data</div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="relative h-[110px] w-[110px] flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={criticalityChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2}>
+                      {criticalityChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<AssetTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-lg font-bold text-slate-900">{criticalityChartData.reduce((s, e) => s + e.value, 0)}</span>
+                  <span className="text-[10px] text-slate-400">assets</span>
+                </div>
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5 min-w-0">
+                {criticalityChartData.map((entry) => (
+                  <div key={entry.name} className="flex items-center gap-2 text-xs">
+                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.fill }} />
+                    <span className="text-slate-500">{entry.name}</span>
+                    <span className="font-semibold text-slate-800 ml-auto">{entry.value}</span>
+                  </div>
+                ))}
+                <div className="mt-1 border-t border-slate-100 pt-1 flex justify-between text-[10px] text-slate-400">
+                  <span>Active</span>
+                  <span className="font-semibold text-green-600">{dashboard?.by_status?.active || 0}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Panel 3 — CIA radar by asset type */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">CIA Profile by Type</p>
+          <p className="text-[10px] text-slate-400 mb-2">Avg Confidentiality / Integrity / Availability (1–5)</p>
+          {ciaRadarData.length === 0 ? (
+            <div className="flex h-[110px] items-center justify-center text-xs text-slate-400">Rate your assets to see CIA profile</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={120}>
+              <RadarChart data={ciaRadarData} cx="50%" cy="50%" outerRadius={46}>
+                <PolarGrid stroke="#e2e8f0" />
+                <PolarAngleAxis dataKey="type" tick={{ fontSize: 9, fill: '#64748b' }} />
+                <Radar name="C" dataKey="C" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} />
+                <Radar name="I" dataKey="I" stroke="#10b981" fill="#10b981" fillOpacity={0.15} />
+                <Radar name="A" dataKey="A" stroke="#eab308" fill="#eab308" fillOpacity={0.15} />
+                <Tooltip formatter={(value, name) => [value, name === 'C' ? 'Confidentiality' : name === 'I' ? 'Integrity' : 'Availability']} />
+              </RadarChart>
+            </ResponsiveContainer>
+          )}
+          <div className="flex items-center justify-center gap-4 mt-1">
+            <div className="flex items-center gap-1 text-[10px] text-slate-500"><span className="h-2 w-2 rounded-full bg-blue-500" />C</div>
+            <div className="flex items-center gap-1 text-[10px] text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500" />I</div>
+            <div className="flex items-center gap-1 text-[10px] text-slate-500"><span className="h-2 w-2 rounded-full bg-yellow-400" />A</div>
           </div>
         </div>
+
       </div>
 
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -337,7 +468,7 @@ export default function AssetsPage() {
             placeholder="Search assets..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
 
@@ -346,7 +477,7 @@ export default function AssetsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
@@ -358,7 +489,7 @@ export default function AssetsPage() {
         <select
           value={criticalityFilter}
           onChange={(e) => setCriticalityFilter(e.target.value as CriticalityFilter)}
-          className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
         >
           <option value="all">All Criticality</option>
           <option value="critical">Critical</option>
@@ -366,112 +497,159 @@ export default function AssetsPage() {
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => assetsApi.downloadTemplate()}
+            className="btn-secondary"
+            title="Download CSV template for bulk import"
+          >
+            <Download size={16} />
+            Template
+          </button>
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="btn-secondary border-primary-200 text-primary-600"
+          >
+            <Upload size={16} />
+            Import
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="btn-primary"
+          >
+            <Plus size={18} />
+            Add Asset
+          </button>
+        </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-700">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full">
-          <thead className="bg-slate-800">
+          <thead className="bg-slate-50">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Asset</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 md:table-cell">Type</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 lg:table-cell">CIA Ratings</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-300 lg:table-cell">Valuation</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Criticality</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">Status</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-slate-300">Actions</th>
+              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Asset</th>
+              <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:table-cell">Type</th>
+              <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">CIA Ratings</th>
+              <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">Valuation</th>
+              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Criticality</th>
+              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700">
+          <tbody className="divide-y divide-slate-200">
             {filteredAssets?.map((asset: ITAsset) => {
               const isExpanded = expandedAsset === asset.id;
+              const displayName = (() => {
+                const isAutoName = asset.name === asset.ip_address || asset.name?.startsWith('Nessus-Host-');
+                if (isAutoName) {
+                  const locationName = asset.location
+                    ? asset.location.split(',')[0].trim()
+                    : '';
+                  return asset.host_name || locationName || asset.name;
+                }
+                return asset.name;
+              })();
               return (
                 <React.Fragment key={asset.id}>
                   <tr 
-                    className="bg-slate-800/50 hover:bg-slate-700/50 cursor-pointer"
+                    className="cursor-pointer bg-white transition-colors hover:bg-slate-50"
                     onClick={() => setExpandedAsset(isExpanded ? null : asset.id)}
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <div className="flex items-center gap-3">
                         {getAssetIcon(asset.asset_type)}
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="font-medium text-white">{asset.name}</p>
+                            <p className="font-medium text-slate-900">{displayName}</p>
                             {asset.cde_environment && (
-                              <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">CDE</span>
+                              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">CDE</span>
                             )}
                           </div>
-                          <p className="text-sm text-slate-400 line-clamp-1">{asset.description || 'No description'}</p>
+                          <p className="line-clamp-1 text-sm text-slate-500">{asset.description || 'No description'}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="hidden px-4 py-3 md:table-cell">
+                    <td className="hidden px-3 py-2.5 md:table-cell">
                       {getTypeBadge(asset.asset_type)}
                     </td>
-                    <td className="hidden px-4 py-3 lg:table-cell">
+                    <td className="hidden px-3 py-2.5 lg:table-cell">
                       <div className="flex flex-col gap-1">
                         {getCIARatingBar(asset.confidentiality_rating, 'Confidentiality', 'bg-blue-500')}
                         {getCIARatingBar(asset.integrity_rating, 'Integrity', 'bg-green-500')}
                         {getCIARatingBar(asset.availability_rating, 'Availability', 'bg-yellow-500')}
                       </div>
                     </td>
-                    <td className="hidden px-4 py-3 lg:table-cell">
+                    <td className="hidden px-3 py-2.5 lg:table-cell">
                       <div className="flex items-center gap-1 text-sm">
                         <DollarSign className="h-3 w-3 text-green-400" />
-                        <span className="text-slate-300">{formatCurrency(asset.valuation)}</span>
+                        <span className="text-slate-700">{formatCurrency(asset.valuation)}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3">{getCriticalityBadge(asset.criticality)}</td>
-                    <td className="px-4 py-3">{getStatusBadge(asset.status)}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">{getCriticalityBadge(asset.criticality)}</td>
+                    <td className="px-3 py-2.5">{getStatusBadge(asset.status)}</td>
+                    <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={(e) => handleView(e, asset.id)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                           title="View"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
                           onClick={(e) => handleEdit(e, asset)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                           title="Edit"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={(e) => handleDelete(e, asset.id)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-red-400"
+                          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-red-600"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                         {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-slate-400" />
+                          <ChevronDown className="h-4 w-4 text-slate-500" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-slate-400" />
+                          <ChevronRight className="h-4 w-4 text-slate-500" />
                         )}
                       </div>
                     </td>
                   </tr>
                   {isExpanded && (
                     <tr key={`${asset.id}-expanded`}>
-                      <td colSpan={7} className="bg-slate-900 px-4 py-4">
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                      <td colSpan={7} className="bg-slate-50 px-3 py-3">
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                           <div>
-                            <h4 className="text-sm font-medium text-slate-400">Description</h4>
-                            <p className="mt-1 text-sm text-white">{asset.description || 'No description'}</p>
+                            <h4 className="text-sm font-medium text-slate-500">Description</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.description || 'No description'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-400">Owner</h4>
-                            <p className="mt-1 text-sm text-white">{asset.owner_name || 'Not assigned'}</p>
+                            <h4 className="text-sm font-medium text-slate-500">Owner</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.owner_name || 'Not assigned'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-400">Vendor</h4>
-                            <p className="mt-1 text-sm text-white">{asset.vendor || 'N/A'}</p>
+                            <h4 className="text-sm font-medium text-slate-500">Vendor</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.vendor || 'N/A'}</p>
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-slate-400">Location</h4>
-                            <p className="mt-1 text-sm text-white">{asset.location || 'Unknown'}</p>
+                            <h4 className="text-sm font-medium text-slate-500">Location</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.location || 'Unknown'}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-500">Component</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.host_name || 'Not specified'}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-500">Sub-components</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.custodian || 'Not specified'}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-slate-500">IP Address</h4>
+                            <p className="mt-1 text-sm text-slate-900">{asset.ip_address || 'N/A'}</p>
                           </div>
                           <div>
                             <h4 className="text-sm font-medium text-slate-400">Linked Controls</h4>
@@ -495,10 +673,10 @@ export default function AssetsPage() {
       </div>
 
       {(!filteredAssets || filteredAssets.length === 0) && (
-        <div className="card flex flex-col items-center justify-center py-12 text-center">
+        <div className="card flex flex-col items-center justify-center py-10 text-center">
           <Server className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-white">No assets found</h3>
-          <p className="mt-1 text-slate-400">Add your first IT asset to get started</p>
+          <h3 className="text-lg font-medium text-slate-900">No assets found</h3>
+          <p className="mt-1 text-slate-500">Add your first IT asset to get started</p>
         </div>
       )}
 
@@ -543,6 +721,14 @@ function AssetModal({
   isLoading: boolean;
   initialData?: ITAsset | null;
 }) {
+  const parseSubComponents = (value?: string) =>
+    value
+      ? value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [];
+
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
     description: initialData?.description || '',
@@ -555,9 +741,13 @@ function AssetModal({
     integrity_rating: initialData?.integrity_rating || 3,
     availability_rating: initialData?.availability_rating || 3,
     valuation: initialData?.valuation || null as number | null,
+    component: initialData?.host_name || '',
+    sub_components: parseSubComponents(initialData?.custodian),
+    ip_address: initialData?.ip_address || '',
     status: (initialData?.status || 'active') as 'active' | 'inactive' | 'decommissioned',
     cde_environment: (initialData as any)?.cde_environment || false,
   });
+  const [customSubComponent, setCustomSubComponent] = useState('');
   
   const isEditMode = !!initialData;
 
@@ -575,12 +765,47 @@ function AssetModal({
       integrity_rating: formData.integrity_rating,
       availability_rating: formData.availability_rating,
       valuation: formData.valuation || undefined,
+      host_name: formData.component || undefined,
+      custodian: formData.sub_components.length > 0 ? formData.sub_components.join(', ') : undefined,
+      ip_address: formData.ip_address || undefined,
       cde_environment: formData.cde_environment,
     };
     if (isEditMode) {
       submitData.status = formData.status;
     }
     onSave(submitData);
+  };
+
+  const componentSuggestions = ASSET_COMPONENT_SUGGESTIONS[formData.asset_type] || [];
+  const subComponentSuggestions = formData.component
+    ? ASSET_SUB_COMPONENT_SUGGESTIONS[formData.asset_type]?.[formData.component] || []
+    : [];
+
+  const toggleSubComponent = (value: string) => {
+    const exists = formData.sub_components.includes(value);
+    if (exists) {
+      setFormData({
+        ...formData,
+        sub_components: formData.sub_components.filter((item) => item !== value),
+      });
+      return;
+    }
+    setFormData({
+      ...formData,
+      sub_components: [...formData.sub_components, value],
+    });
+  };
+
+  const addCustomSubComponent = () => {
+    const cleaned = customSubComponent.trim();
+    if (!cleaned || formData.sub_components.includes(cleaned)) {
+      return;
+    }
+    setFormData({
+      ...formData,
+      sub_components: [...formData.sub_components, cleaned],
+    });
+    setCustomSubComponent('');
   };
 
   const RatingSelector = ({ 
@@ -595,17 +820,17 @@ function AssetModal({
     color: string;
   }) => (
     <div>
-      <label className="block text-sm font-medium text-slate-300 mb-2">{label}</label>
-      <div className="flex gap-2">
+      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      <div className="flex gap-1">
         {[1, 2, 3, 4, 5].map((rating) => (
           <button
             key={rating}
             type="button"
             onClick={() => onChange(rating)}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm font-medium transition-colors ${
+            className={`flex h-6 w-6 items-center justify-center rounded border text-xs font-medium transition-colors ${
               rating <= value
                 ? `${color} border-transparent text-white`
-                : 'border-slate-600 bg-slate-700 text-slate-400 hover:border-slate-500'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
             }`}
           >
             {rating}
@@ -616,207 +841,294 @@ function AssetModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 md:p-6">
-      <div className="w-full max-w-5xl rounded-lg bg-slate-800 p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{isEditMode ? 'Edit Asset' : 'Add Asset'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+    <>
+      <div className="fixed inset-y-0 right-0 z-50 flex w-[780px] flex-col bg-white shadow-2xl border-l border-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-slate-900">{isEditMode ? 'Edit Asset' : 'Add Asset'}</h2>
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="border-b border-slate-700 pb-4">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">Basic Information</h3>
-            <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            {/* Row 1: Name + Description */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
               <div>
-                <label className="block text-sm font-medium text-slate-300">Name *</label>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Name *</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                   required
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-slate-300">Description</label>
-                <textarea
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Description</label>
+                <input
+                  type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
-                  rows={2}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  placeholder="Brief description..."
                 />
               </div>
+            </div>
 
+            {/* Asset Type */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Asset Type *</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {ASSET_TYPES.map((type) => {
+                  const Icon = type.icon;
+                  const isSelected = formData.asset_type === type.value;
+                  return (
+                    <button
+                      key={type.value}
+                      type="button"
+                      onClick={() => {
+                        const nextType = type.value as AssetType;
+                        const nextComponentSuggestions = ASSET_COMPONENT_SUGGESTIONS[nextType] || [];
+                        const keepCurrentComponent = nextComponentSuggestions.includes(formData.component);
+                        setFormData({
+                          ...formData,
+                          asset_type: nextType,
+                          component: keepCurrentComponent ? formData.component : '',
+                          sub_components: keepCurrentComponent ? formData.sub_components : [],
+                        });
+                      }}
+                      className={`flex items-center gap-2 rounded border px-2 py-1.5 text-left transition-colors ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Icon className={`h-4 w-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} />
+                      <span className={`text-xs font-medium truncate ${isSelected ? 'text-blue-700' : 'text-slate-700'}`}>
+                        {type.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Row: Primary Component + IP Address */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
               <div>
-                <label className="block text-sm font-medium text-slate-300">Asset Type *</label>
-                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {ASSET_TYPES.map((type) => {
-                    const Icon = type.icon;
-                    const isSelected = formData.asset_type === type.value;
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Primary Component</label>
+                <select
+                  value={formData.component}
+                  onChange={(e) => setFormData({ ...formData, component: e.target.value, sub_components: [] })}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">Select component</option>
+                  {componentSuggestions.map((component) => (
+                    <option key={component} value={component}>{component}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">IP Address</label>
+                <input
+                  type="text"
+                  value={formData.ip_address}
+                  onChange={(e) => setFormData({ ...formData, ip_address: e.target.value })}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g., 10.0.10.15"
+                />
+              </div>
+            </div>
+
+            {/* Sub-components */}
+            {subComponentSuggestions.length > 0 && (
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Sub-components</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {subComponentSuggestions.map((subComponent) => {
+                    const isSelected = formData.sub_components.includes(subComponent);
                     return (
                       <button
-                        key={type.value}
+                        key={subComponent}
                         type="button"
-                        onClick={() => setFormData({ ...formData, asset_type: type.value as AssetType })}
-                        className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                        onClick={() => toggleSubComponent(subComponent)}
+                        className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
                           isSelected
-                            ? 'border-primary-500 bg-primary-900/30'
-                            : 'border-slate-600 bg-slate-700 hover:border-slate-500'
+                            ? 'border-blue-400 bg-blue-50 text-blue-700'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                         }`}
                       >
-                        <Icon className={`h-5 w-5 ${isSelected ? 'text-primary-400' : 'text-slate-400'}`} />
-                        <div>
-                          <p className={`text-sm font-medium ${isSelected ? 'text-white' : 'text-slate-300'}`}>
-                            {type.label}
-                          </p>
-                          <p className="text-xs text-slate-500 line-clamp-1">{type.description}</p>
-                        </div>
+                        {subComponent}
                       </button>
                     );
                   })}
                 </div>
               </div>
-            </div>
-          </div>
+            )}
 
-          <div className="border-b border-slate-700 pb-4">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">Ownership & Location</h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-300">Vendor</label>
+            {/* Custom sub-component */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Custom Sub-component</label>
+              <div className="flex gap-2">
                 <input
                   type="text"
-                  value={formData.vendor}
-                  onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
-                  placeholder="e.g., Microsoft, AWS"
+                  value={customSubComponent}
+                  onChange={(e) => setCustomSubComponent(e.target.value)}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g., WiFi Controller"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomSubComponent(); } }}
                 />
+                <button type="button" onClick={addCustomSubComponent} className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+                  Add
+                </button>
               </div>
+              {formData.sub_components.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {formData.sub_components.map((subComponent) => (
+                    <span key={subComponent} className="inline-flex items-center gap-1 rounded-full border border-blue-400 bg-blue-50 px-2.5 py-0.5 text-xs text-blue-700">
+                      {subComponent}
+                      <button type="button" onClick={() => toggleSubComponent(subComponent)} className="text-blue-500 hover:text-blue-700" aria-label={`Remove ${subComponent}`}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-200 pt-3 mt-1">
+              {/* Row: Vendor + Location */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Vendor</label>
+                  <input
+                    type="text"
+                    value={formData.vendor}
+                    onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    placeholder="e.g., Microsoft, AWS"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Location</label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    placeholder="e.g., US-East, On-Premise"
+                  />
+                </div>
+              </div>
+
+              {/* Row: Criticality + Asset Value */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Criticality</label>
+                  <select
+                    value={formData.criticality}
+                    onChange={(e) => setFormData({ ...formData, criticality: e.target.value as typeof formData.criticality })}
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Asset Value (USD)</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      value={formData.valuation || ''}
+                      onChange={(e) => setFormData({ ...formData, valuation: e.target.value ? Number(e.target.value) : null })}
+                      className="w-full rounded border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row: PCI DSS + Status(edit) */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">PCI DSS Scope</label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, cde_environment: !formData.cde_environment })}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                        formData.cde_environment ? 'bg-emerald-500' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                          formData.cde_environment ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-xs text-slate-700">CDE Environment</span>
+                  </label>
+                </div>
+                {isEditMode && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Status</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
+                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="decommissioned">Decommissioned</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* CIA Ratings */}
               <div>
-                <label className="block text-sm font-medium text-slate-300">Location</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
-                  placeholder="e.g., US-East, On-Premise"
-                />
+                <label className="block text-xs font-medium text-slate-600 mb-1">CIA Ratings</label>
+                <div className="grid grid-cols-3 gap-3">
+                  <RatingSelector
+                    label="Confidentiality"
+                    value={formData.confidentiality_rating}
+                    onChange={(v) => setFormData({ ...formData, confidentiality_rating: v })}
+                    color="bg-blue-600"
+                  />
+                  <RatingSelector
+                    label="Integrity"
+                    value={formData.integrity_rating}
+                    onChange={(v) => setFormData({ ...formData, integrity_rating: v })}
+                    color="bg-green-600"
+                  />
+                  <RatingSelector
+                    label="Availability"
+                    value={formData.availability_rating}
+                    onChange={(v) => setFormData({ ...formData, availability_rating: v })}
+                    color="bg-yellow-600"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="border-b border-slate-700 pb-4">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">Classification</h3>
-            <div>
-              <label className="block text-sm font-medium text-slate-300">Criticality</label>
-              <select
-                value={formData.criticality}
-                onChange={(e) => setFormData({ ...formData, criticality: e.target.value as typeof formData.criticality })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
-              >
-                <option value="low">Low - Minimal business impact</option>
-                <option value="medium">Medium - Moderate business impact</option>
-                <option value="high">High - Significant business impact</option>
-                <option value="critical">Critical - Essential for operations</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="border-b border-slate-700 pb-4">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">PCI DSS Scope</h3>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, cde_environment: !formData.cde_environment })}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-                  formData.cde_environment ? 'bg-emerald-500' : 'bg-slate-600'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-                    formData.cde_environment ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-              <div>
-                <span className="text-sm font-medium text-slate-300">CDE Environment</span>
-                <p className="text-xs text-slate-500">Mark this asset as part of the Cardholder Data Environment (PCI DSS)</p>
-              </div>
-            </label>
-          </div>
-
-          <div className="border-b border-slate-700 pb-4">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">CIA Ratings</h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <RatingSelector
-                label="Confidentiality"
-                value={formData.confidentiality_rating}
-                onChange={(v) => setFormData({ ...formData, confidentiality_rating: v })}
-                color="bg-blue-600"
-              />
-              <RatingSelector
-                label="Integrity"
-                value={formData.integrity_rating}
-                onChange={(v) => setFormData({ ...formData, integrity_rating: v })}
-                color="bg-green-600"
-              />
-              <RatingSelector
-                label="Availability"
-                value={formData.availability_rating}
-                onChange={(v) => setFormData({ ...formData, availability_rating: v })}
-                color="bg-yellow-600"
-              />
-            </div>
-          </div>
-
-          <div className="pb-2">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">Valuation</h3>
-            <div>
-              <label className="block text-sm font-medium text-slate-300">Asset Value (USD)</label>
-              <div className="relative mt-1">
-                <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="number"
-                  value={formData.valuation || ''}
-                  onChange={(e) => setFormData({ ...formData, valuation: e.target.value ? Number(e.target.value) : null })}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 py-2 pl-10 pr-4 text-white focus:border-primary-500 focus:outline-none"
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
-            </div>
-          </div>
-
-          {isEditMode && (
-            <div className="border-t border-slate-700 pt-4">
-              <h3 className="text-sm font-medium text-slate-400 mb-3">Status</h3>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-white focus:border-primary-500 focus:outline-none"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="decommissioned">Decommissioned</option>
-              </select>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-2">
+                    <div className="flex-shrink-0 flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
+              className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEditMode ? 'Save Changes' : 'Add Asset'}
@@ -824,7 +1136,7 @@ function AssetModal({
           </div>
         </form>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -903,24 +1215,24 @@ function ImportAssetsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-lg bg-slate-800 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Import IT Assets</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-base font-semibold text-black">Import IT Assets</h2>
+          <button onClick={onClose} className="text-gray-400 transition-colors hover:text-gray-600">
             <X size={20} />
           </button>
         </div>
 
         {!result ? (
           <>
-            <div className="mb-4 rounded-lg border border-slate-600 bg-slate-700/50 p-4">
+            <div className="mb-4 rounded-lg border border-gray-200 bg-slate-50 p-4">
               <div className="flex items-start gap-3">
-                <FileSpreadsheet className="h-5 w-5 text-primary-400 mt-0.5" />
+                <FileSpreadsheet className="mt-0.5 h-5 w-5 text-blue-600" />
                 <div>
-                  <p className="text-sm text-white font-medium">How to import assets:</p>
-                  <ol className="mt-2 text-xs text-slate-400 space-y-1 list-decimal list-inside">
-                    <li>Click "Template" button to download the CSV template</li>
+                  <p className="text-sm font-medium text-black">How to import assets:</p>
+                  <ol className="mt-2 list-inside list-decimal space-y-1 text-xs text-gray-600">
+                    <li>Click the Template button to download the CSV template</li>
                     <li>Fill in your assets (keep the header row)</li>
                     <li>Upload the completed file here</li>
                   </ol>
@@ -931,10 +1243,10 @@ function ImportAssetsModal({
             <div
               className={`relative mb-4 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
                 dragActive
-                  ? 'border-primary-500 bg-primary-900/20'
+                  ? 'border-blue-500 bg-blue-50'
                   : file
-                  ? 'border-green-500 bg-green-900/20'
-                  : 'border-slate-600 hover:border-slate-500'
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-gray-300 hover:border-gray-400'
               }`}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
@@ -950,9 +1262,9 @@ function ImportAssetsModal({
               
               {file ? (
                 <div className="flex flex-col items-center">
-                  <CheckCircle2 className="h-10 w-10 text-green-400 mb-2" />
-                  <p className="text-white font-medium">{file.name}</p>
-                  <p className="text-sm text-slate-400 mt-1">
+                  <CheckCircle2 className="mb-2 h-10 w-10 text-green-600" />
+                  <p className="font-medium text-black">{file.name}</p>
+                  <p className="mt-1 text-sm text-gray-500">
                     {(file.size / 1024).toFixed(1)} KB
                   </p>
                   <button
@@ -961,17 +1273,17 @@ function ImportAssetsModal({
                       e.stopPropagation();
                       setFile(null);
                     }}
-                    className="mt-2 text-xs text-slate-400 hover:text-white"
+                    className="mt-2 text-xs text-gray-500 transition-colors hover:text-gray-700"
                   >
                     Choose different file
                   </button>
                 </div>
               ) : (
                 <div className="flex flex-col items-center">
-                  <Upload className="h-10 w-10 text-slate-500 mb-2" />
-                  <p className="text-white">Drag and drop your file here</p>
-                  <p className="text-sm text-slate-400 mt-1">or click to browse</p>
-                  <p className="text-xs text-slate-500 mt-2">Supports CSV, XLSX, XLS</p>
+                  <Upload className="mb-2 h-10 w-10 text-gray-400" />
+                  <p className="text-black">Drag and drop your file here</p>
+                  <p className="mt-1 text-sm text-gray-500">or click to browse</p>
+                  <p className="mt-2 text-xs text-gray-400">Supports CSV, XLSX, XLS</p>
                 </div>
               )}
             </div>
@@ -979,14 +1291,14 @@ function ImportAssetsModal({
             <div className="flex justify-end gap-3">
               <button
                 onClick={onClose}
-                className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleUpload}
                 disabled={!file || isUploading}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
                 {isUploading && <Loader2 className="h-4 w-4 animate-spin" />}
                 Import Assets
@@ -997,25 +1309,25 @@ function ImportAssetsModal({
           <>
             <div className={`mb-4 rounded-lg p-4 ${
               result.success && result.imported > 0
-                ? 'bg-green-900/30 border border-green-800'
-                : 'bg-red-900/30 border border-red-800'
+                ? 'border border-green-200 bg-green-50'
+                : 'border border-red-200 bg-red-50'
             }`}>
               <div className="flex items-start gap-3">
                 {result.success && result.imported > 0 ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-400 mt-0.5" />
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600" />
                 ) : (
-                  <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+                  <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
                 )}
                 <div>
                   <p className={`font-medium ${
-                    result.success && result.imported > 0 ? 'text-green-400' : 'text-red-400'
+                    result.success && result.imported > 0 ? 'text-green-700' : 'text-red-700'
                   }`}>
                     {result.message}
                   </p>
-                  <div className="mt-2 text-sm text-slate-300">
+                  <div className="mt-2 text-sm text-gray-600">
                     <p>Imported: {result.imported} of {result.total_rows} rows</p>
                     {result.total_errors > 0 && (
-                      <p className="text-red-400">Errors: {result.total_errors}</p>
+                      <p className="text-red-600">Errors: {result.total_errors}</p>
                     )}
                   </div>
                 </div>
@@ -1023,15 +1335,15 @@ function ImportAssetsModal({
             </div>
 
             {result.errors.length > 0 && (
-              <div className="mb-4 max-h-40 overflow-y-auto rounded-lg bg-slate-700/50 p-3">
-                <p className="text-xs font-medium text-slate-400 mb-2">Error Details:</p>
-                <ul className="text-xs text-red-400 space-y-1">
+              <div className="mb-4 max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-slate-50 p-3">
+                <p className="mb-2 text-xs font-medium text-gray-600">Error Details:</p>
+                <ul className="space-y-1 text-xs text-red-600">
                   {result.errors.map((error, idx) => (
                     <li key={idx}>{error}</li>
                   ))}
                 </ul>
                 {result.total_errors > result.errors.length && (
-                  <p className="text-xs text-slate-500 mt-2">
+                  <p className="mt-2 text-xs text-gray-500">
                     ... and {result.total_errors - result.errors.length} more errors
                   </p>
                 )}
@@ -1044,13 +1356,13 @@ function ImportAssetsModal({
                   setFile(null);
                   setResult(null);
                 }}
-                className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-700"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:bg-gray-50"
               >
                 Import More
               </button>
               <button
                 onClick={onClose}
-                className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
               >
                 Done
               </button>

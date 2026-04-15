@@ -296,11 +296,11 @@ export default function RegulatoryFeedsPage() {
   const processedCount = items?.filter(i => i.status === 'processed').length || 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Regulatory Feeds</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-xl font-semibold text-black">Regulatory Feeds</h1>
+          <p className="text-sm text-gray-600 mt-1">
             Manage regulatory update feeds and monitor compliance changes
           </p>
         </div>
@@ -339,11 +339,11 @@ export default function RegulatoryFeedsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <Rss className="h-6 w-6 text-primary-400" />
+            <div className="rounded-lg bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-2.5">
+              <Rss className="h-5 w-5 text-primary-400" />
             </div>
           </div>
           <p className="stat-value">{sources?.length || 0}</p>
@@ -352,8 +352,8 @@ export default function RegulatoryFeedsPage() {
 
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
-              <FileText className="h-6 w-6 text-blue-400" />
+            <div className="rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-2.5">
+              <FileText className="h-5 w-5 text-blue-400" />
             </div>
           </div>
           <p className="stat-value">{newCount}</p>
@@ -362,8 +362,8 @@ export default function RegulatoryFeedsPage() {
 
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 p-3">
-              <Brain className="h-6 w-6 text-amber-400" />
+            <div className="rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-600/10 p-2.5">
+              <Brain className="h-5 w-5 text-amber-400" />
             </div>
           </div>
           <p className="stat-value">{analyzedCount}</p>
@@ -372,8 +372,8 @@ export default function RegulatoryFeedsPage() {
 
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-3">
-              <CheckCircle className="h-6 w-6 text-emerald-400" />
+            <div className="rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-2.5">
+              <CheckCircle className="h-5 w-5 text-emerald-400" />
             </div>
           </div>
           <p className="stat-value">{processedCount}</p>
@@ -384,11 +384,11 @@ export default function RegulatoryFeedsPage() {
       <div className="card">
         <button
           onClick={() => setSourcesExpanded(!sourcesExpanded)}
-          className="w-full flex items-center justify-between p-4 hover:bg-white/50 transition-colors rounded-t-xl"
+          className="w-full flex items-center justify-between p-3.5 hover:bg-white/50 transition-colors rounded-t-xl"
         >
           <div className="flex items-center gap-3">
             <Rss className="h-5 w-5 text-primary-400" />
-            <h2 className="text-lg font-semibold text-black">Feed Sources</h2>
+            <h2 className="text-base font-semibold text-black">Feed Sources</h2>
             <span className="badge bg-gray-100/50 text-gray-800">
               {sources?.length || 0}
             </span>
@@ -429,7 +429,7 @@ export default function RegulatoryFeedsPage() {
                         <Rss className="h-12 w-12 text-gray-700 mx-auto mb-3" />
                         <p className="text-gray-600">No feed sources configured</p>
                         <p className="text-sm text-gray-700 mt-1">
-                          Click "Add Default Feeds" to add regulatory feeds from Federal Reserve and ECB
+                          Click &quot;Add Default Feeds&quot; to add regulatory feeds from Federal Reserve and ECB
                         </p>
                       </td>
                     </tr>
@@ -514,11 +514,11 @@ export default function RegulatoryFeedsPage() {
       </div>
 
       <div className="card">
-        <div className="p-4 border-b border-gray-300">
+        <div className="p-3.5 border-b border-gray-300">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <FileText className="h-5 w-5 text-primary-400" />
-              <h2 className="text-lg font-semibold text-black">Feed Items</h2>
+              <h2 className="text-base font-semibold text-black">Feed Items</h2>
             </div>
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-gray-600" />
@@ -658,7 +658,7 @@ export default function RegulatoryFeedsPage() {
                       {isExpanded && (
                         <tr key={`${item.id}-expanded`}>
                           <td colSpan={6} className="bg-white/30 p-0">
-                            <div className="p-4 space-y-4">
+                            <div className="p-3.5 space-y-3.5">
                               <div>
                                 <h4 className="text-sm font-medium text-gray-600 mb-2">Description</h4>
                                 <p className="text-gray-800 text-sm">{getItemDescription(item)}</p>
@@ -730,7 +730,7 @@ export default function RegulatoryFeedsPage() {
                                       <h5 className="text-xs font-medium text-gray-700 uppercase mb-2">Implementation Tasks</h5>
                                       <div className="space-y-2">
                                         {item.ai_analysis.implementation_tasks.map((task, idx) => (
-                                          <div key={idx} className="text-sm bg-white/50 p-2 rounded">
+                                          <div key={idx} className="text-sm bg-white/50 p-2 rounded-lg">
                                             <div className="flex items-center justify-between">
                                               <span className="text-gray-800 font-medium">{task.title}</span>
                                               <span className={`badge text-xs ${PRIORITY_STYLES[task.priority?.toLowerCase()]?.bg || 'bg-slate-500/20'} ${PRIORITY_STYLES[task.priority?.toLowerCase()]?.text || 'text-gray-600'}`}>
@@ -796,10 +796,10 @@ export default function RegulatoryFeedsPage() {
       </div>
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
-            <div className="flex items-center justify-between p-4 border-b border-gray-300">
-              <h2 className="text-lg font-semibold text-black">Add Custom Feed Source</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-lg mx-4 rounded-xl border border-gray-300 bg-white shadow-xl max-h-[82vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-300">
+              <h2 className="text-base font-semibold text-black">Add Custom Feed Source</h2>
               <button
                 onClick={() => setShowAddModal(false)}
                 className="text-gray-600 hover:text-black"
@@ -812,7 +812,7 @@ export default function RegulatoryFeedsPage() {
                 e.preventDefault();
                 createFeedMutation.mutate(newFeed);
               }}
-              className="p-4 space-y-4"
+              className="p-5 space-y-3.5"
             >
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">
@@ -840,7 +840,7 @@ export default function RegulatoryFeedsPage() {
                   placeholder="https://example.com/rss/feed.xml"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-800 mb-1">
                     Regulator
@@ -866,7 +866,7 @@ export default function RegulatoryFeedsPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-800 mb-1">
                     Category
@@ -899,7 +899,7 @@ export default function RegulatoryFeedsPage() {
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-300">
+              <div className="flex justify-end gap-2.5 pt-3.5 border-t border-gray-300">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}

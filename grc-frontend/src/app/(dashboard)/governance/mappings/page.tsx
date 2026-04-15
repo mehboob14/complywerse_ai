@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { governanceApi, controlsApi } from '@/lib/api';
+import { governanceApi, ermApi } from '@/lib/api';
 import {
   FileText,
   Search,
@@ -32,6 +32,7 @@ interface DocumentItem {
 
 interface ControlLink {
   id: number;
+  internal_control_id: number;
   normalized_control_id: number;
   control_code: string | null;
   control_name: string | null;
@@ -40,13 +41,14 @@ interface ControlLink {
   created_at: string | null;
 }
 
-interface NormalizedControl {
+interface InternalControl {
   id: number;
-  code: string;
+  control_id: string;
   name: string;
   description?: string;
-  domain?: string;
   category?: string;
+  sub_category?: string;
+  source_document_id?: number | null;
 }
 
 interface DocumentMappings {
@@ -106,6 +108,7 @@ export default function GovernanceMappingsPage() {
   const [controlSearchTerm, setControlSearchTerm] = useState('');
   const [selectedLinkType, setSelectedLinkType] = useState('implements');
   const [linkNotes, setLinkNotes] = useState('');
+  const [linkError, setLinkError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: documentsData, isLoading: documentsLoading } = useQuery({
@@ -130,21 +133,25 @@ export default function GovernanceMappingsPage() {
   });
 
   const { data: allControlsData, isLoading: controlsLoading } = useQuery({
-    queryKey: ['normalized-controls'],
+    queryKey: ['internal-controls-for-governance-mapping'],
     queryFn: async () => {
-      const response = await controlsApi.getNormalized();
-      return response.data as NormalizedControl[];
+      const response = await ermApi.internalControls.getAll();
+      return response.data as InternalControl[];
     },
   });
 
   const linkMutation = useMutation({
-    mutationFn: (data: { document_id: number; normalized_control_id: number; link_type: string; notes?: string }) =>
+    mutationFn: (data: { document_id: number; internal_control_id: number; link_type: string; notes?: string; force_relink?: boolean }) =>
       governanceApi.linkControl(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['document-mappings', selectedDocumentId] });
       setShowLinkModal(false);
       setControlSearchTerm('');
       setLinkNotes('');
+      setLinkError(null);
+    },
+    onError: (error: any) => {
+      setLinkError(error?.response?.data?.detail || 'Failed to link control to document.');
     },
   });
 
@@ -161,20 +168,29 @@ export default function GovernanceMappingsPage() {
   }, [documentsData]);
 
   const linkedControlIds = useMemo(() => {
-    return new Set(mappingsData?.control_links?.map(link => link.normalized_control_id) || []);
+    return new Set(mappingsData?.control_links?.map(link => link.internal_control_id || link.normalized_control_id) || []);
   }, [mappingsData]);
 
   const filteredControls = useMemo(() => {
     if (!allControlsData) return [];
     return allControlsData.filter(control => {
       const matchesSearch = !controlSearchTerm || 
-        control.code.toLowerCase().includes(controlSearchTerm.toLowerCase()) ||
+        control.control_id.toLowerCase().includes(controlSearchTerm.toLowerCase()) ||
         control.name.toLowerCase().includes(controlSearchTerm.toLowerCase()) ||
         control.description?.toLowerCase().includes(controlSearchTerm.toLowerCase());
-      const notLinked = !linkedControlIds.has(control.id);
-      return matchesSearch && notLinked;
+      const notAlreadyLinkedToSelectedDocument = !linkedControlIds.has(control.id);
+      return matchesSearch && notAlreadyLinkedToSelectedDocument;
+    }).sort((left, right) => {
+      const leftMapped = left.source_document_id ? 1 : 0;
+      const rightMapped = right.source_document_id ? 1 : 0;
+      if (leftMapped !== rightMapped) return leftMapped - rightMapped;
+      return left.control_id.localeCompare(right.control_id);
     });
   }, [allControlsData, controlSearchTerm, linkedControlIds]);
+
+  const documentTitleById = useMemo(() => {
+    return new Map(documents.map((document) => [document.id, document.title]));
+  }, [documents]);
 
   const coverageSummary = useMemo(() => {
     const totalDocs = documents.length;
@@ -197,13 +213,28 @@ export default function GovernanceMappingsPage() {
     return documents.find(d => d.id === selectedDocumentId);
   }, [documents, selectedDocumentId]);
 
-  const handleLinkControl = (controlId: number) => {
+  const handleLinkControl = (control: InternalControl) => {
     if (!selectedDocumentId) return;
+    setLinkError(null);
+
+    const existingDocumentId = control.source_document_id || null;
+    const isRelink = !!existingDocumentId && existingDocumentId !== selectedDocumentId;
+    if (isRelink) {
+      const existingDocumentTitle = documentTitleById.get(existingDocumentId) || 'another document';
+      const confirmed = window.confirm(
+        `This control is currently linked to "${existingDocumentTitle}". Re-link it to the selected document instead?`
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
     linkMutation.mutate({
       document_id: selectedDocumentId,
-      normalized_control_id: controlId,
+      internal_control_id: control.id,
       link_type: selectedLinkType,
       notes: linkNotes || undefined,
+      force_relink: isRelink,
     });
   };
 
@@ -222,10 +253,10 @@ export default function GovernanceMappingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-black">Policy-Control Mappings</h2>
+          <h2 className="text-lg font-semibold text-black">Policy-Control Mappings</h2>
           <p className="text-sm text-gray-600">Link governance documents to controls</p>
         </div>
         <div className="flex items-center gap-4">
@@ -242,21 +273,21 @@ export default function GovernanceMappingsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {Object.entries(coverageSummary.docsByType).map(([type, count]) => {
           const style = getTypeStyle(type);
           const Icon = style.icon || FileText;
           return (
             <div
               key={type}
-              className="rounded-lg border border-gray-300/50 bg-white/50 p-4 hover:bg-gray-100/50 transition-all"
+              className="rounded-lg border border-gray-300/50 bg-white/50 p-3.5 hover:bg-gray-100/50 transition-all"
             >
               <div className="flex items-center gap-3">
-                <div className={`rounded-lg ${style.bgColor} p-2.5`}>
+                <div className={`rounded-lg ${style.bgColor} p-2`}>
                   <Icon className={`h-5 w-5 ${style.color}`} />
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-black">{count}</p>
+                  <p className="text-lg font-semibold text-black">{count}</p>
                   <p className="text-xs text-gray-600 capitalize">{type}s</p>
                 </div>
               </div>
@@ -265,7 +296,7 @@ export default function GovernanceMappingsPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="card">
           <div className="card-header">
             <div>
@@ -274,7 +305,7 @@ export default function GovernanceMappingsPage() {
             </div>
           </div>
 
-          <div className="space-y-4 mb-4">
+          <div className="space-y-3 mb-3.5">
             <div className="flex gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
@@ -317,7 +348,7 @@ export default function GovernanceMappingsPage() {
                   <button
                     key={doc.id}
                     onClick={() => setSelectedDocumentId(doc.id)}
-                    className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
+                      className={`w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all ${
                       isSelected
                         ? 'border-primary-500 bg-primary-500/10'
                         : 'border-gray-300/50 bg-white/50 hover:bg-gray-100/50 hover:border-gray-300'
@@ -383,14 +414,14 @@ export default function GovernanceMappingsPage() {
             <div className="text-center py-12">
               <AlertCircle className="h-12 w-12 text-gray-700 mx-auto mb-3" />
               <p className="text-gray-600">No controls linked</p>
-              <p className="text-sm text-gray-700 mt-1">Click "Link Control" to add mappings</p>
+              <p className="text-sm text-gray-700 mt-1">Click &quot;Link Control&quot; to add mappings</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {mappingsData?.control_links?.map((link) => (
                 <div
                   key={link.id}
-                  className="flex items-center gap-3 rounded-lg border border-gray-300/50 bg-white/50 p-3 hover:bg-gray-100/50 transition-all"
+                  className="flex items-center gap-3 rounded-lg border border-gray-300/50 bg-white/50 px-3 py-2.5 hover:bg-gray-100/50 transition-all"
                 >
                   <div className="rounded-lg bg-emerald-500/20 p-2">
                     <Shield className="h-4 w-4 text-emerald-400" />
@@ -423,13 +454,13 @@ export default function GovernanceMappingsPage() {
       </div>
 
       {showLinkModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-gray-300 bg-white p-6 shadow-2xl mx-4">
-            <div className="flex items-center justify-between mb-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-sm p-4">
+          <div className="w-full max-w-2xl rounded-xl border border-gray-300 bg-white px-5 py-4 shadow-xl mx-4 max-h-[82vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-lg font-semibold text-black">Link Control</h3>
-                <p className="text-sm text-gray-600">
-                  Search and select a control to link to "{selectedDocument?.title}"
+                <h3 className="text-base font-semibold text-black">Link Control</h3>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Search and select an internal control to link to &quot;{selectedDocument?.title}&quot;
                 </p>
               </div>
               <button
@@ -444,12 +475,19 @@ export default function GovernanceMappingsPage() {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3.5">
+              {linkError && (
+                <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <span>{linkError}</span>
+                </div>
+              )}
+
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
                 <input
                   type="text"
-                  placeholder="Search controls by code or name..."
+                  placeholder="Search internal controls by ID or name..."
                   value={controlSearchTerm}
                   onChange={(e) => setControlSearchTerm(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2.5 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -457,7 +495,7 @@ export default function GovernanceMappingsPage() {
                 />
               </div>
 
-              <div className="flex gap-4">
+              <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-800 mb-1">Link Type</label>
                   <select
@@ -490,31 +528,52 @@ export default function GovernanceMappingsPage() {
                     <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
                   </div>
                 ) : filteredControls.length === 0 ? (
-                  <div className="text-center py-8">
+                  <div className="text-center py-6">
                     <p className="text-gray-600">
-                      {controlSearchTerm ? 'No matching controls found' : 'All controls are already linked'}
+                      {controlSearchTerm ? 'No matching internal controls found' : 'No internal controls available for this document'}
+                    </p>
+                    <p className="text-xs text-gray-700 mt-1">
+                      Controls already linked to the selected document are excluded from this list.
                     </p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-700">
+                  <div className="divide-y divide-gray-200">
                     {filteredControls.slice(0, 50).map((control) => (
                       <button
                         key={control.id}
-                        onClick={() => handleLinkControl(control.id)}
+                        onClick={() => handleLinkControl(control)}
                         disabled={linkMutation.isPending}
-                        className="w-full flex items-center gap-3 p-3 text-left hover:bg-white transition-all disabled:opacity-50"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-all disabled:opacity-50"
                       >
                         <div className="rounded-lg bg-primary-500/20 p-2">
                           <Shield className="h-4 w-4 text-primary-400" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-black">{control.code}</p>
+                          <p className="font-medium text-black">{control.control_id}</p>
                           <p className="text-sm text-gray-600 truncate">{control.name}</p>
-                          {control.domain && (
-                            <p className="text-xs text-gray-700 mt-0.5">{control.domain}</p>
+                          {control.category && (
+                            <p className="text-xs text-gray-700 mt-0.5">
+                              {control.category}{control.sub_category ? ` / ${control.sub_category}` : ''}
+                            </p>
+                          )}
+                          {control.source_document_id && control.source_document_id !== selectedDocumentId && (
+                            <p className="text-xs text-amber-700 mt-1">
+                              Currently linked to {documentTitleById.get(control.source_document_id) || 'another document'}
+                            </p>
                           )}
                         </div>
-                        <Plus className="h-4 w-4 text-primary-400" />
+                        <div className="flex items-center gap-2">
+                          {control.source_document_id && control.source_document_id !== selectedDocumentId ? (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                              Re-link
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                              Link
+                            </span>
+                          )}
+                          <Plus className="h-4 w-4 text-primary-400" />
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -528,7 +587,7 @@ export default function GovernanceMappingsPage() {
               )}
             </div>
 
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-300">
+              <div className="flex justify-end gap-2.5 mt-4 pt-3.5 border-t border-gray-300">
               <button
                 onClick={() => {
                   setShowLinkModal(false);

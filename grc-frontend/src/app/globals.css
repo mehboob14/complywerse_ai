@@ -21,18 +21,19 @@
   body {
     @apply min-h-screen bg-slate-50 text-slate-800 antialiased;
     font-family: 'Poppins';
+    line-height: 1.45;
   }
 
   h1 {
-    @apply text-2xl font-semibold text-slate-900 tracking-tight;
+    @apply text-xl font-semibold text-slate-900 tracking-tight;
   }
 
   h2 {
-    @apply text-xl font-semibold text-slate-800;
+    @apply text-lg font-semibold text-slate-800;
   }
 
   h3 {
-    @apply text-lg font-semibold text-slate-800;
+    @apply text-base font-semibold text-slate-800;
   }
 
   h4 {
@@ -42,9 +43,9 @@
 
 @layer components {
   .top-nav {
-    background: var(--color-base);
-    color: var(--color-text-inverse);
-    border-bottom: 1px solid var(--sidebar-hover-bg);
+    background: var(--color-surface);
+    color: var(--color-text);
+    border-bottom: 1px solid var(--color-border);
   }
 
   .top-nav input {
@@ -187,7 +188,7 @@
 
   .cw-btn-primary {
     background: var(--color-base);
-    color: var(--color-text-inverse);
+    color: var(--color-on-base);
   }
 
   .cw-btn-primary:hover {
@@ -241,7 +242,7 @@
 
   .cw-dashboard h1,
   .governance-light h1 {
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--color-text);
   }
@@ -250,7 +251,7 @@
   .cw-dashboard h3,
   .governance-light h2,
   .governance-light h3 {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--color-text);
   }
@@ -261,14 +262,14 @@
   .governance-light p,
   .governance-light td,
   .governance-light th {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 400;
     color: var(--color-text);
   }
 
   .cw-dashboard .helper-text,
   .governance-light .helper-text {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--color-muted);
   }
 
@@ -302,6 +303,119 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     padding: var(--space-5);
+  }
+
+  .platform-ui.compact-density main .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1.5rem !important;
+  }
+
+  .platform-ui.compact-density main .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1.125rem !important;
+  }
+
+  .platform-ui.compact-density main .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem !important;
+  }
+
+  .platform-ui.compact-density main .gap-6 {
+    gap: 1.125rem !important;
+  }
+
+  .platform-ui.compact-density main .gap-5 {
+    gap: 1rem !important;
+  }
+
+  .platform-ui.compact-density main .p-8 {
+    padding: 1.5rem !important;
+  }
+
+  .platform-ui.compact-density main .p-6 {
+    padding: 1.125rem !important;
+  }
+
+  .platform-ui.compact-density main .p-5 {
+    padding: 1rem !important;
+  }
+
+  .platform-ui.compact-density main .px-6 {
+    padding-left: 1.125rem !important;
+    padding-right: 1.125rem !important;
+  }
+
+  .platform-ui.compact-density main .px-5 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .platform-ui.compact-density main .py-6 {
+    padding-top: 1.125rem !important;
+    padding-bottom: 1.125rem !important;
+  }
+
+  .platform-ui.compact-density main .py-5 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .platform-ui.compact-density main .py-4 {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+  }
+
+  .platform-ui.compact-density main .rounded-2xl {
+    border-radius: 1rem !important;
+  }
+
+  .platform-ui.compact-density main .rounded-xl {
+    border-radius: 0.875rem !important;
+  }
+
+  .platform-ui.compact-density main .text-3xl {
+    font-size: 1.625rem !important;
+    line-height: 1.15 !important;
+  }
+
+  .platform-ui.compact-density main .text-2xl {
+    font-size: 1.375rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .platform-ui.compact-density main .text-xl {
+    font-size: 1.0625rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .platform-ui.compact-density main .text-lg {
+    font-size: 0.975rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .platform-ui.compact-density main .gap-2 {
+    gap: 0.5rem !important;
+  }
+
+  .platform-ui.compact-density main .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1.25rem !important;
+  }
+
+  .platform-ui.compact-density main .h-16.w-16 {
+    height: 3rem !important;
+    width: 3rem !important;
+  }
+
+  .platform-ui.compact-density main .h-12.w-12 {
+    height: 2.5rem !important;
+    width: 2.5rem !important;
+  }
+
+  .platform-ui.compact-density main .max-h-\[90vh\] {
+    max-height: 84vh !important;
+  }
+
+  .platform-ui.compact-density main table th,
+  .platform-ui.compact-density main table td {
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
   }
 
   .cw-dashboard table,
@@ -399,7 +513,7 @@
   .platform-ui .bg-blue-600,
   .platform-ui .bg-purple-600 {
     background-color: var(--color-base) !important;
-    color: var(--color-text-inverse) !important;
+    color: var(--color-on-base) !important;
   }
 
   .platform-ui .hover\:bg-primary-700:hover,
@@ -518,6 +632,100 @@
     border-bottom-color: var(--color-base);
   }
 
+  .platform-ui.compact-density .rounded-xl {
+    border-radius: 0.875rem !important;
+  }
+
+  .platform-ui.compact-density .p-6 {
+    padding: 1.25rem !important;
+  }
+
+  .platform-ui.compact-density .p-5 {
+    padding: 1rem !important;
+  }
+
+  .platform-ui.compact-density .p-4 {
+    padding: 0.875rem !important;
+  }
+
+  .platform-ui.compact-density .px-6 {
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+  }
+
+  .platform-ui.compact-density .px-4 {
+    padding-left: 0.875rem !important;
+    padding-right: 0.875rem !important;
+  }
+
+  .platform-ui.compact-density .py-6 {
+    padding-top: 1.25rem !important;
+    padding-bottom: 1.25rem !important;
+  }
+
+  .platform-ui.compact-density .py-4 {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+  }
+
+  .platform-ui.compact-density .gap-6 {
+    gap: 1rem !important;
+  }
+
+  .platform-ui.compact-density .gap-5 {
+    gap: 0.875rem !important;
+  }
+
+  .platform-ui.compact-density .gap-4 {
+    gap: 0.75rem !important;
+  }
+
+  .platform-ui.compact-density .gap-3 {
+    gap: 0.625rem !important;
+  }
+
+  .platform-ui.compact-density .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem !important;
+  }
+
+  .platform-ui.compact-density .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem !important;
+  }
+
+  .platform-ui.compact-density .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.625rem !important;
+  }
+
+  .platform-ui.compact-density .text-2xl {
+    font-size: 1.5rem !important;
+    line-height: 1.9rem !important;
+  }
+
+  .platform-ui.compact-density .text-xl {
+    font-size: 1.125rem !important;
+    line-height: 1.6rem !important;
+  }
+
+  .platform-ui.compact-density .text-lg {
+    font-size: 1rem !important;
+    line-height: 1.45rem !important;
+  }
+
+  .platform-ui.compact-density .text-base {
+    font-size: 0.9375rem !important;
+    line-height: 1.35rem !important;
+  }
+
+  .platform-ui.compact-density .text-sm {
+    font-size: 0.8125rem !important;
+    line-height: 1.2rem !important;
+  }
+
+  .platform-ui.compact-density .text-xs {
+    font-size: 0.75rem !important;
+    line-height: 1.05rem !important;
+  }
+
   .governance-light input,
   .governance-light select,
   .governance-light textarea {
@@ -570,6 +778,114 @@
     min-height: 6rem;
     line-height: 1.4;
   }
+
+  /* ── Governance information density ─────────────────────── */
+  .governance-light .stat-card {
+    padding: 0.75rem;
+  }
+
+  .governance-light .stat-value {
+    font-size: 1.5rem;
+    line-height: 1.1;
+  }
+
+  .governance-light .stat-label {
+    font-size: 0.6875rem;
+    margin-top: 0.125rem;
+  }
+
+  .governance-light .card {
+    padding: 0.875rem;
+  }
+
+  .governance-light .card-header {
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .governance-light .card-title {
+    font-size: 0.8125rem;
+  }
+
+  .governance-light .card-description {
+    font-size: 0.6875rem;
+  }
+
+  .governance-light .page-title {
+    font-size: 1.1875rem;
+    line-height: 1.25;
+  }
+
+  .governance-light .page-description {
+    font-size: 0.75rem;
+    margin-top: 0.125rem;
+  }
+
+  .governance-light .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem;
+  }
+
+  .governance-light .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.875rem;
+  }
+
+  .governance-light .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem;
+  }
+
+  .governance-light .gap-6 {
+    gap: 0.875rem;
+  }
+
+  .governance-light .gap-5 {
+    gap: 0.75rem;
+  }
+
+  .governance-light .gap-4 {
+    gap: 0.625rem;
+  }
+
+  .governance-light .p-6 {
+    padding: 0.875rem;
+  }
+
+  .governance-light .p-5 {
+    padding: 0.75rem;
+  }
+
+  .governance-light .p-4 {
+    padding: 0.625rem;
+  }
+
+  .governance-light .rounded-xl {
+    border-radius: 0.5rem;
+  }
+
+  .governance-light table th {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    font-size: 0.6875rem;
+  }
+
+  .governance-light table td {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    font-size: 0.8125rem;
+  }
+
+  .governance-light .badge {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    padding-top: 0.125rem;
+    padding-bottom: 0.125rem;
+    font-size: 0.6875rem;
+  }
+
+  .governance-light dialog,
+  .governance-light [role="dialog"] {
+    font-size: 0.875rem;
+  }
+  /* ─────────────────────────────────────────────────────────── */
 
   .governance-light .fixed.inset-0 .cw-card {
     box-shadow: var(--shadow-lg);
@@ -678,9 +994,9 @@
   .hover\:text-gray-900:hover { color: var(--color-text) !important; }
 
   .bg-blue-600,
-  .bg-primary-600 { background-color: var(--color-base) !important; }
+  .bg-primary-600 { background-color: var(--color-base) !important; color: var(--color-on-base) !important; }
   .hover\:bg-blue-700:hover,
-  .hover\:bg-primary-700:hover { background-color: var(--color-base-strong) !important; }
+  .hover\:bg-primary-700:hover { background-color: var(--color-base-strong) !important; color: var(--color-on-base) !important; }
 
   .text-blue-600,
   .text-blue-700,
@@ -1184,31 +1500,31 @@
   }
 
   .card {
-    @apply rounded-xl border border-slate-200 bg-white p-6 shadow-card;
-  }
-
-  .card-header {
-    @apply flex items-center justify-between pb-4 border-b border-slate-100 mb-4;
-  }
-
-  .card-title {
-    @apply text-lg font-semibold text-slate-800;
-  }
-
-  .card-description {
-    @apply text-sm text-slate-500;
-  }
-
-  .stat-card {
     @apply rounded-xl border border-slate-200 bg-white p-5 shadow-card;
   }
 
+  .card-header {
+    @apply mb-3 flex items-center justify-between border-b border-slate-100 pb-3;
+  }
+
+  .card-title {
+    @apply text-base font-semibold text-slate-800;
+  }
+
+  .card-description {
+    @apply text-xs text-slate-500;
+  }
+
+  .stat-card {
+    @apply rounded-xl border border-slate-200 bg-white p-4 shadow-card;
+  }
+
   .stat-value {
-    @apply text-3xl font-bold text-slate-900;
+    @apply text-[1.9rem] font-semibold leading-none text-slate-900;
   }
 
   .stat-label {
-    @apply text-sm font-medium text-slate-500 mt-1;
+    @apply mt-1 text-[13px] font-medium text-slate-500;
   }
 
   .stat-trend-up {
@@ -1224,27 +1540,28 @@
   }
 
   .btn-primary {
-    @apply btn bg-primary-600 px-4 py-2.5 text-sm text-white hover:bg-primary-700 focus:ring-primary-500;
+    @apply btn bg-primary-600 px-3.5 py-2 text-sm hover:bg-primary-700 focus:ring-primary-500;
+    color: var(--color-on-base);
   }
 
   .btn-secondary {
-    @apply btn border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:border-slate-400 focus:ring-slate-400;
+    @apply btn border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:border-slate-400 focus:ring-slate-400;
   }
 
   .btn-ghost {
-    @apply btn px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:ring-slate-400;
+    @apply btn px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:ring-slate-400;
   }
 
   .btn-danger {
-    @apply btn bg-rose-600 px-4 py-2.5 text-sm text-white hover:bg-rose-700 focus:ring-rose-500;
+    @apply btn bg-rose-600 px-3.5 py-2 text-sm text-white hover:bg-rose-700 focus:ring-rose-500;
   }
 
   .btn-success {
-    @apply btn bg-emerald-600 px-4 py-2.5 text-sm text-white hover:bg-emerald-700 focus:ring-emerald-500;
+    @apply btn bg-emerald-600 px-3.5 py-2 text-sm text-white hover:bg-emerald-700 focus:ring-emerald-500;
   }
 
   .btn-sm {
-    @apply px-3 py-1.5 text-xs;
+    @apply px-2.5 py-1.5 text-xs;
   }
 
   .btn-lg {
@@ -1252,15 +1569,19 @@
   }
 
   .input {
-    @apply block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-800 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20;
+    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20;
   }
 
   .input-error {
     @apply border-rose-400 focus:border-rose-500 focus:ring-rose-500/20;
   }
 
+  .input-field {
+    @apply block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/20;
+  }
+
   .label {
-    @apply block text-sm font-medium text-slate-700 mb-1.5;
+    @apply mb-1 block text-[13px] font-medium text-slate-700;
   }
 
   .select {
@@ -1272,7 +1593,7 @@
   }
 
   .table {
-    @apply w-full text-sm;
+    @apply w-full text-[13px];
   }
 
   .table thead {
@@ -1280,11 +1601,11 @@
   }
 
   .table th {
-    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500;
+    @apply px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500;
   }
 
   .table td {
-    @apply px-4 py-3 text-slate-700 border-b border-slate-100;
+    @apply border-b border-slate-100 px-3 py-2.5 text-slate-700;
   }
 
   .table tbody tr {
@@ -1328,7 +1649,7 @@
   }
 
   .tab {
-    @apply px-4 py-2 text-sm font-medium text-slate-500 rounded-md transition-all hover:text-slate-700 hover:bg-white;
+    @apply rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 transition-all hover:bg-white hover:text-slate-700;
   }
 
   .tab-active {
@@ -1336,15 +1657,15 @@
   }
 
   .page-header {
-    @apply mb-8;
+    @apply mb-5;
   }
 
   .page-title {
-    @apply text-2xl font-semibold text-slate-900;
+    @apply text-[1.75rem] font-semibold leading-tight text-slate-900;
   }
 
   .page-description {
-    @apply text-slate-500 mt-1;
+    @apply mt-1 text-sm text-slate-500;
   }
 
   .empty-state {

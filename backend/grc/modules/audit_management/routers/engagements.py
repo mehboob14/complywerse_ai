@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from ....models import (
     AuditEngagement, AuditTeamMember, AuditTimeEntry, AuditableEntity,
-    AuditFinding, AuditWorkpaper, AuditPlanItem, GRCUser, get_db
+    AuditFinding, AuditWorkpaper, AuditPlanItem, AuditSamplingRecord, GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -556,6 +556,250 @@ def add_time_entry(
     db.commit()
     db.refresh(entry)
     return {"id": entry.id, "hours": entry.hours, "message": "Time entry added"}
+
+
+@router.delete("/{engagement_id}/time-entries/{entry_id}")
+def delete_time_entry(
+    engagement_id: int,
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    eng = db.query(AuditEngagement).filter(
+        AuditEngagement.id == engagement_id,
+        AuditEngagement.tenant_id.in_(user_tenants)
+    ).first()
+    if not eng:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    entry = db.query(AuditTimeEntry).filter(
+        AuditTimeEntry.id == entry_id,
+        AuditTimeEntry.engagement_id == engagement_id
+    ).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Time entry not found")
+
+    is_owner = entry.user_id == current_user.id
+    is_lead = eng.lead_auditor_id == current_user.id
+    is_admin = getattr(current_user, 'role', '') in ('admin', 'super_admin')
+    if not (is_owner or is_lead or is_admin):
+        raise HTTPException(status_code=403, detail="Only the entry owner, lead auditor, or admin can delete time entries")
+
+    eng.actual_hours = max(0, (eng.actual_hours or 0) - entry.hours)
+    db.delete(entry)
+    db.commit()
+    return {"message": "Time entry deleted"}
+
+
+@router.get("/{engagement_id}/sampling-records")
+def list_sampling_records(
+    engagement_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    eng = db.query(AuditEngagement).filter(
+        AuditEngagement.id == engagement_id,
+        AuditEngagement.tenant_id.in_(user_tenants)
+    ).first()
+    if not eng:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    records = db.query(AuditSamplingRecord).filter(
+        AuditSamplingRecord.engagement_id == engagement_id
+    ).order_by(AuditSamplingRecord.created_at.desc()).all()
+
+    return {
+        "sampling_records": [
+            {
+                "id": r.id,
+                "sampling_type": r.sampling_type,
+                "population_size": r.population_size,
+                "sample_size": r.sample_size,
+                "confidence_level": r.confidence_level,
+                "expected_error_rate": r.expected_error_rate,
+                "tolerable_error_rate": r.tolerable_error_rate,
+                "methodology": r.methodology,
+                "interpretation": r.interpretation,
+                "sampling_interval": r.sampling_interval,
+                "parameters": r.parameters or {},
+                "workpaper_id": r.workpaper_id,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in records
+        ]
+    }
+
+
+class SamplingRecordCreate(BaseModel):
+    sampling_type: str
+    population_size: int
+    sample_size: int
+    confidence_level: float
+    expected_error_rate: Optional[float] = None
+    tolerable_error_rate: Optional[float] = None
+    methodology: Optional[str] = None
+    interpretation: Optional[str] = None
+    sampling_interval: Optional[float] = None
+    parameters: Optional[dict] = {}
+    workpaper_id: Optional[int] = None
+
+
+@router.post("/{engagement_id}/sampling-records", status_code=status.HTTP_201_CREATED)
+def save_sampling_record(
+    engagement_id: int,
+    data: SamplingRecordCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    eng = db.query(AuditEngagement).filter(
+        AuditEngagement.id == engagement_id,
+        AuditEngagement.tenant_id.in_(user_tenants)
+    ).first()
+    if not eng:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    record = AuditSamplingRecord(
+        tenant_id=eng.tenant_id,
+        engagement_id=engagement_id,
+        workpaper_id=data.workpaper_id,
+        sampling_type=data.sampling_type,
+        population_size=data.population_size,
+        sample_size=data.sample_size,
+        confidence_level=data.confidence_level,
+        expected_error_rate=data.expected_error_rate,
+        tolerable_error_rate=data.tolerable_error_rate,
+        methodology=data.methodology,
+        interpretation=data.interpretation,
+        sampling_interval=data.sampling_interval,
+        parameters=data.parameters or {},
+        created_by_id=current_user.id,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return {"id": record.id, "message": "Sampling record saved"}
+
+
+@router.delete("/{engagement_id}/sampling-records/{record_id}")
+def delete_sampling_record(
+    engagement_id: int,
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    eng = db.query(AuditEngagement).filter(
+        AuditEngagement.id == engagement_id,
+        AuditEngagement.tenant_id.in_(user_tenants)
+    ).first()
+    if not eng:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    record = db.query(AuditSamplingRecord).filter(
+        AuditSamplingRecord.id == record_id,
+        AuditSamplingRecord.engagement_id == engagement_id
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Sampling record not found")
+
+    db.delete(record)
+    db.commit()
+    return {"message": "Sampling record deleted"}
+
+
+@router.get("/{engagement_id}/prior-audits")
+def get_prior_audits(
+    engagement_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    eng = db.query(AuditEngagement).filter(
+        AuditEngagement.id == engagement_id,
+        AuditEngagement.tenant_id.in_(user_tenants)
+    ).first()
+    if not eng:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if not eng.auditable_entity_id:
+        return {"prior_engagements": [], "entity_name": None}
+
+    entity = db.query(AuditableEntity).filter(
+        AuditableEntity.id == eng.auditable_entity_id
+    ).first()
+
+    prior_engs = db.query(AuditEngagement).filter(
+        AuditEngagement.auditable_entity_id == eng.auditable_entity_id,
+        AuditEngagement.id != engagement_id,
+        AuditEngagement.tenant_id.in_(user_tenants)
+    ).order_by(AuditEngagement.created_at.desc()).limit(10).all()
+
+    current_findings = db.query(AuditFinding).filter(
+        AuditFinding.engagement_id == engagement_id
+    ).all()
+    current_titles = {f.title.lower().strip() for f in current_findings}
+
+    result = []
+    all_prior_findings = []
+    for pe in prior_engs:
+        findings = db.query(AuditFinding).filter(
+            AuditFinding.engagement_id == pe.id
+        ).all()
+        all_prior_findings.extend(findings)
+
+        severity_dist = {}
+        for f in findings:
+            sev = f.severity or "unrated"
+            severity_dist[sev] = severity_dist.get(sev, 0) + 1
+
+        result.append({
+            "id": pe.id,
+            "title": pe.title,
+            "engagement_number": pe.engagement_number,
+            "status": pe.status,
+            "opinion": pe.opinion,
+            "planned_start": pe.planned_start.isoformat() if pe.planned_start else None,
+            "planned_end": pe.planned_end.isoformat() if pe.planned_end else None,
+            "actual_start": pe.actual_start.isoformat() if pe.actual_start else None,
+            "actual_end": pe.actual_end.isoformat() if pe.actual_end else None,
+            "findings_count": len(findings),
+            "open_findings": sum(1 for f in findings if f.status in ("open", "in_progress", "pending")),
+            "severity_distribution": severity_dist,
+            "findings": [
+                {
+                    "id": f.id,
+                    "title": f.title,
+                    "severity": f.severity,
+                    "status": f.status,
+                    "root_cause_category": f.root_cause_category,
+                    "is_recurring": f.title.lower().strip() in current_titles,
+                }
+                for f in findings[:10]
+            ],
+        })
+
+    recurring_titles = {}
+    for f in all_prior_findings:
+        key = f.title.lower().strip()
+        if key in current_titles:
+            if key not in recurring_titles:
+                recurring_titles[key] = {"title": f.title, "severity": f.severity, "count": 0}
+            recurring_titles[key]["count"] += 1
+
+    overall_severity_dist = {}
+    for f in all_prior_findings:
+        sev = f.severity or "unrated"
+        overall_severity_dist[sev] = overall_severity_dist.get(sev, 0) + 1
+
+    return {
+        "prior_engagements": result,
+        "entity_name": entity.name if entity else None,
+        "recurring_issues": list(recurring_titles.values()),
+        "overall_severity_distribution": overall_severity_dist,
+    }
 
 
 @router.delete("/{engagement_id}")

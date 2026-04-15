@@ -9,8 +9,10 @@ from ....models import (
     VulnerabilityControlLink, ITAsset, GRCUser, get_db,
     GRCDepartment, GRCVulnerabilityDepartmentAssignment, GRCVulnWorkflowState,
     GRCVulnWorkflowHistory, GRCVulnEscalationLog, FrameworkControl,
-    NormalizedControl, InternalControl
+    NormalizedControl, InternalControl, VulnerabilityMitigation
 )
+
+RESOLVED_STATUSES = ["resolved", "remediated", "verified", "closed", "accepted", "false_positive"]
 from ....schemas import (
     VulnerabilityDashboard, OverdueVulnerabilityResponse, AssetExposureResponse
 )
@@ -45,7 +47,10 @@ def get_dashboard(
             mttr_days=None,
             aging_buckets={},
             top_affected_assets=[],
-            recent_activities=[]
+            recent_activities=[],
+            by_assignee={},
+            mitigation_coverage={},
+            by_department={}
         )
     
     query = db.query(Vulnerability).filter(Vulnerability.tenant_id.in_(user_tenants))
@@ -58,9 +63,11 @@ def get_dashboard(
         target_tenant = get_user_primary_tenant(current_user, db) or user_tenants[0]
     
     vulns = query.all()
+    vuln_ids = [v.id for v in vulns]
     
     by_severity = {}
     by_status = {}
+    by_assignee = {}
     overdue_count = 0
     resolved_times = []
     now = datetime.utcnow()
@@ -79,14 +86,17 @@ def get_dashboard(
         stat = v.status or "open"
         by_status[stat] = by_status.get(stat, 0) + 1
         
-        if v.due_date and v.due_date < now and v.status not in ["resolved", "accepted", "false_positive"]:
+        assignee_name = v.assignee.display_name if v.assignee else "Unassigned"
+        by_assignee[assignee_name] = by_assignee.get(assignee_name, 0) + 1
+        
+        if v.due_date and v.due_date < now and v.status not in RESOLVED_STATUSES:
             overdue_count += 1
         
         if v.resolved_at and v.discovered_at:
             resolution_time = (v.resolved_at - v.discovered_at).days
             resolved_times.append(resolution_time)
         
-        if v.status not in ["resolved", "accepted", "false_positive"]:
+        if v.status not in RESOLVED_STATUSES:
             age_days = (now - v.discovered_at).days if v.discovered_at else 0
             if age_days <= 7:
                 aging_buckets["0-7 days"] += 1
@@ -99,16 +109,45 @@ def get_dashboard(
     
     mttr_days = sum(resolved_times) / len(resolved_times) if resolved_times else None
     
+    # Mitigation coverage
+    if vuln_ids:
+        mit_vuln_ids = set(
+            row[0] for row in db.query(VulnerabilityMitigation.vulnerability_id)
+            .filter(VulnerabilityMitigation.vulnerability_id.in_(vuln_ids))
+            .distinct().all()
+        )
+    else:
+        mit_vuln_ids = set()
+    mitigation_coverage = {
+        "with_mitigations": len(mit_vuln_ids),
+        "without_mitigations": len(vuln_ids) - len(mit_vuln_ids)
+    }
+
+    # Department breakdown
+    by_department: Dict[str, int] = {}
+    if vuln_ids:
+        dept_rows = db.query(
+            GRCDepartment.name,
+            func.count(GRCVulnerabilityDepartmentAssignment.vulnerability_id).label("cnt")
+        ).join(
+            GRCVulnerabilityDepartmentAssignment,
+            GRCVulnerabilityDepartmentAssignment.department_id == GRCDepartment.id
+        ).filter(
+            GRCVulnerabilityDepartmentAssignment.vulnerability_id.in_(vuln_ids)
+        ).group_by(GRCDepartment.name).all()
+        for dept_name, cnt in dept_rows:
+            by_department[dept_name] = cnt
+
     sla_compliance = {}
     for severity in ["critical", "high", "medium", "low", "info"]:
         sev_vulns = [v for v in vulns if v.severity == severity]
         if sev_vulns:
             on_time = sum(1 for v in sev_vulns 
-                         if v.status in ["resolved", "accepted", "false_positive"] 
+                         if v.status in RESOLVED_STATUSES 
                          and v.resolved_at and v.due_date 
                          and v.resolved_at <= v.due_date)
             total_resolved = sum(1 for v in sev_vulns 
-                                if v.status in ["resolved", "accepted", "false_positive"])
+                                if v.status in RESOLVED_STATUSES)
             sla_compliance[severity] = {
                 "total": len(sev_vulns),
                 "resolved": total_resolved,
@@ -159,7 +198,10 @@ def get_dashboard(
         mttr_days=round(mttr_days, 1) if mttr_days else None,
         aging_buckets=aging_buckets,
         top_affected_assets=top_assets,
-        recent_activities=recent_activities
+        recent_activities=recent_activities,
+        by_assignee=by_assignee,
+        mitigation_coverage=mitigation_coverage,
+        by_department=by_department
     )
 
 

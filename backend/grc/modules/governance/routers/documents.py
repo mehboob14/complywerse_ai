@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import os
 import uuid
@@ -34,6 +34,54 @@ ALLOWED_FILE_TYPES = {
 }
 
 router = APIRouter(prefix="/documents", tags=["Governance - Documents"])
+
+
+GOVERNANCE_DOMAIN_KEYWORDS: Dict[str, List[str]] = {
+    "Governance and Oversight": [
+        "governance", "oversight", "board", "committee", "strategy", "leadership", "management review",
+        "policy management", "authority", "accountability"
+    ],
+    "Risk Management": [
+        "risk", "assessment", "treatment", "mitigation", "register", "appetite", "tolerance", "residual"
+    ],
+    "Asset Management": [
+        "asset", "inventory", "classification", "ownership", "lifecycle", "media", "disposal"
+    ],
+    "Identity and Access Management": [
+        "access", "identity", "authentication", "authorization", "privilege", "user account", "segregation of duties",
+        "joiner", "mover", "leaver", "password", "mfa", "remote access"
+    ],
+    "Security Operations and Monitoring": [
+        "monitoring", "logging", "alert", "soc", "security event", "anomaly", "detection", "use case", "telemetry"
+    ],
+    "Incident Response and Resilience": [
+        "incident", "response", "crisis", "breach", "resilience", "recovery", "continuity", "disaster", "forensic"
+    ],
+    "Vulnerability and Patch Management": [
+        "vulnerability", "patch", "remediation", "hardening", "baseline", "configuration", "exposure", "scan"
+    ],
+    "Change and Release Management": [
+        "change", "release", "deployment", "version", "promotion", "rollback", "cab", "testing"
+    ],
+    "Third-Party and Supplier Management": [
+        "third party", "vendor", "supplier", "outsourcing", "service provider", "due diligence", "contract"
+    ],
+    "Data Protection and Privacy": [
+        "data protection", "privacy", "personal data", "retention", "disposal", "encryption", "backup", "confidentiality"
+    ],
+    "Secure Development": [
+        "development", "sdlc", "secure coding", "code review", "testing", "application security", "devsecops"
+    ],
+    "Physical and Environmental Security": [
+        "physical", "environmental", "facility", "visitor", "perimeter", "surveillance"
+    ],
+    "Awareness and Competence": [
+        "awareness", "training", "competence", "education", "disciplinary", "culture"
+    ],
+    "Compliance and Assurance": [
+        "compliance", "audit", "assurance", "regulatory", "attestation", "evidence", "inspection"
+    ],
+}
 
 
 class GovernanceDocumentCreate(BaseModel):
@@ -1463,10 +1511,185 @@ class PolicySuggestRequest(BaseModel):
     framework_ids: List[int]
 
 
+def infer_governance_domain(control: ParsedFrameworkControl) -> str:
+    explicit_domain = (control.domain or control.category or "").strip()
+    if explicit_domain:
+        return explicit_domain
+
+    haystack = " ".join(
+        filter(
+            None,
+            [
+                control.title,
+                control.description,
+                control.full_text,
+                control.parent_section,
+            ],
+        )
+    ).lower()
+
+    best_domain = "General Governance"
+    best_score = 0
+    for domain, keywords in GOVERNANCE_DOMAIN_KEYWORDS.items():
+        score = sum(1 for keyword in keywords if keyword in haystack)
+        if score > best_score:
+            best_domain = domain
+            best_score = score
+
+    return best_domain
+
+
+def build_framework_control_context(
+    frameworks: List[UploadedFramework],
+    db: Session,
+    per_framework_limit: int = 80,
+    representative_controls_per_domain: int = 4,
+) -> Tuple[str, List[dict], List[str]]:
+    context_parts: List[str] = []
+    framework_alignment: List[dict] = []
+    all_domains: List[str] = []
+
+    for framework in frameworks:
+        controls = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework.id
+        ).order_by(
+            ParsedFrameworkControl.priority.desc(),
+            ParsedFrameworkControl.original_reference.asc(),
+            ParsedFrameworkControl.control_id.asc(),
+        ).limit(per_framework_limit).all()
+
+        if not controls:
+            continue
+
+        grouped_controls: Dict[str, dict] = {}
+        framework_refs: List[str] = []
+
+        for control in controls:
+            reference = control.original_reference or control.control_id
+            domain = infer_governance_domain(control)
+            bucket = grouped_controls.setdefault(domain, {"count": 0, "samples": []})
+            bucket["count"] += 1
+            if len(bucket["samples"]) < representative_controls_per_domain:
+                bucket["samples"].append({
+                    "reference": reference,
+                    "title": control.title,
+                    "description": (control.description or control.full_text or "")[:240],
+                })
+            if len(framework_refs) < 15:
+                framework_refs.append(reference)
+
+        sorted_domains = sorted(
+            grouped_controls.items(),
+            key=lambda item: (-item[1]["count"], item[0]),
+        )
+        top_domains = [domain for domain, _ in sorted_domains[:8]]
+        all_domains.extend(top_domains)
+
+        context_parts.append(f"Framework: {framework.name}")
+        context_parts.append(f"Total Controls Reviewed: {len(controls)}")
+        context_parts.append("Primary Governance Domains and Representative Controls:")
+        for domain, bucket in sorted_domains[:8]:
+            context_parts.append(f"- {domain} ({bucket['count']} controls)")
+            for sample in bucket["samples"]:
+                sample_line = f"  - {sample['reference']}: {sample['title']}"
+                if sample["description"]:
+                    sample_line += f" | {sample['description']}"
+                context_parts.append(sample_line)
+        context_parts.append("")
+
+        framework_alignment.append({
+            "framework": framework.name,
+            "controls": framework_refs,
+            "domains": top_domains,
+        })
+
+    ordered_domains = list(dict.fromkeys(all_domains))
+    return "\n".join(context_parts).strip(), framework_alignment, ordered_domains
+
+
+def get_document_depth_instruction(doc_type: str) -> dict:
+    if doc_type == "procedure":
+        return {
+            "minimum_words": 2200,
+            "template_name": "ISO-aligned procedure",
+            "section_outline": [
+                "1. Document Control",
+                "2. Purpose",
+                "3. Scope and Applicability",
+                "4. Normative References and Related Documents",
+                "5. Terms and Definitions",
+                "6. Roles and Responsibilities",
+                "7. Preconditions and Trigger Events",
+                "8. Procedure Steps",
+                "9. Records and Evidence Retention",
+                "10. Monitoring, Exceptions, and Escalation",
+                "11. Review and Revision History"
+            ],
+            "statement_style": "Break activities into ordered steps, sub-steps, decision points, required records, and escalation rules."
+        }
+
+    if doc_type == "standard":
+        return {
+            "minimum_words": 1800,
+            "template_name": "ISO-aligned standard",
+            "section_outline": [
+                "1. Document Control",
+                "2. Purpose",
+                "3. Scope and Applicability",
+                "4. Normative References",
+                "5. Control Objectives",
+                "6. Mandatory Standard Requirements",
+                "7. Roles and Responsibilities",
+                "8. Measurement and Exceptions",
+                "9. Enforcement",
+                "10. Review and Revision History"
+            ],
+            "statement_style": "Write mandatory requirements as precise atomic statements with numbered sub-clauses."
+        }
+
+    if doc_type == "guideline":
+        return {
+            "minimum_words": 1600,
+            "template_name": "ISO-aligned guideline",
+            "section_outline": [
+                "1. Document Control",
+                "2. Purpose",
+                "3. Scope and Intended Audience",
+                "4. Guidance Principles",
+                "5. Recommended Practices",
+                "6. Roles and Responsibilities",
+                "7. Examples and Implementation Notes",
+                "8. Related Standards and Procedures",
+                "9. Review and Revision History"
+            ],
+            "statement_style": "Provide practical guidance with clear recommendations, examples, and implementation notes."
+        }
+
+    return {
+        "minimum_words": 1800,
+        "template_name": "ISO-aligned policy",
+        "section_outline": [
+            "1. Document Control",
+            "2. Purpose",
+            "3. Scope and Applicability",
+            "4. Normative References",
+            "5. Terms and Definitions",
+            "6. Policy Objectives",
+            "7. Policy Statements",
+            "8. Roles and Responsibilities",
+            "9. Governance, Monitoring, and Exceptions",
+            "10. Compliance and Enforcement",
+            "11. Review and Revision History"
+        ],
+        "statement_style": "Write policy requirements as atomic statements, each addressing a single obligation, and decompose them into numbered clauses where needed."
+    }
+
+
 def generate_policy_with_openai(
     doc_type: str,
     title: str,
     controls_context: str,
+    domain_context: List[str],
     regulatory_scope: List[str],
     description: Optional[str],
     include_sections: Optional[List[str]]
@@ -1489,6 +1712,7 @@ def generate_policy_with_openai(
         "guideline": "Guideline"
     }
     doc_label = doc_type_labels.get(doc_type, "Policy")
+    depth_instruction = get_document_depth_instruction(doc_type)
     
     sections_instruction = ""
     if include_sections:
@@ -1497,28 +1721,61 @@ def generate_policy_with_openai(
     regulatory_context = ""
     if regulatory_scope:
         regulatory_context = f"\n\nThis document should align with the following regulatory frameworks: {', '.join(regulatory_scope)}"
+
+    domain_summary_context = ""
+    if domain_context:
+        domain_summary_context = (
+            "\n\nPrimary governance domains that must be covered in a structured way: "
+            + ", ".join(domain_context)
+        )
     
     description_context = ""
     if description:
         description_context = f"\n\nAdditional requirements: {description}"
     
-    prompt = f"""You are an expert governance and compliance consultant. Generate a professional {doc_label} document titled "{title}".
+    prompt = f"""You are an expert governance and compliance consultant. Generate a professional, mature, enterprise-grade {doc_label} document titled "{title}".
 
 {controls_context}
 {regulatory_context}
+{domain_summary_context}
 {description_context}
 {sections_instruction}
 
-Generate a comprehensive {doc_label.lower()} document with the following structure:
-1. Purpose - Why this {doc_label.lower()} exists and its objectives
-2. Scope - Who and what this {doc_label.lower()} applies to
-3. {doc_label} Statements - The key requirements and directives
-4. Roles and Responsibilities - Who is responsible for what
-5. Compliance - How compliance will be measured and enforced
-6. Review and Updates - How often the document will be reviewed
+Document authoring requirements:
+- Use an {depth_instruction['template_name']} structure.
+- Minimum length: {depth_instruction['minimum_words']} words. Do not produce a short summary.
+- The document must read like a real enterprise artifact, not generic guidance.
+- The document must be general and reusable. Refer only to "the organization", "management", "personnel", "functions", or specific roles. Do not invent company names or environment-specific facts.
+- Use numbered headings and numbered sub-clauses.
+- {depth_instruction['statement_style']}
+- Tie each major section back to the relevant framework obligations and control themes.
+- Include implementation depth, governance detail, review expectations, evidence expectations, and exception handling.
+- Avoid placeholders, vague statements, and one-line sections.
+- Every substantive section must contain enough depth to be operationally useful. Do not produce shallow sections.
+- Policy and standard sections should contain multiple atomic obligations, each expressed as one requirement per clause.
+- Procedure sections must be written as detailed operational steps with role ownership, triggers, prerequisites, inputs, outputs, records, evidence, escalation points, and exception handling.
+- Use clause hierarchy such as 7, 7.1, 7.1.1 when the topic requires decomposition.
+- Include document control elements such as owner, approver, effective date, review frequency, and version control guidance in a general ISO-style format.
+- Include monitoring, metrics, non-compliance handling, issue escalation, and periodic review expectations.
+- If multiple governance domains are implicated, create domain-specific sub-sections instead of collapsing them into a generic section.
+- Ensure the output is materially longer than two pages of text when rendered.
 
-For each section, provide detailed, professional content that would be suitable for an enterprise organization.
-Reference the specific control requirements from the frameworks where applicable.
+Minimum content expectations by document type:
+- Policy: at least 12 atomic policy clauses across the relevant domains, with clear governance and enforcement language.
+- Standard: at least 12 mandatory standard requirements with prescriptive wording and measurable expectations.
+- Procedure: at least 10 ordered procedural steps plus supporting roles, records, approvals, and escalation subsections.
+- Guideline: detailed practice guidance, examples, recommended methods, and implementation notes across the relevant domains.
+
+Required section outline:
+{chr(10).join(f'- {section}' for section in depth_instruction['section_outline'])}
+
+Document quality requirements:
+- Policy and standard clauses must be prescriptive and auditable.
+- Procedure content must include roles, step sequence, inputs, outputs, records, and escalation points.
+- When a topic requires hierarchy, break it into clauses, sub-clauses, and bullet lists.
+- If frameworks imply multiple domains, reflect that in the structure rather than collapsing everything into generic text.
+- Suggested section content must be substantial; avoid one-line summaries.
+- The generated content and suggested sections must be consistent with each other.
 
 Return a JSON object with:
 {{
@@ -1541,7 +1798,7 @@ Return a JSON object with:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an expert governance and compliance consultant that creates professional policy documents. Always respond with valid JSON."},
+                {"role": "system", "content": "You are an expert governance and compliance consultant that creates mature ISO-aligned governance documents for enterprise organizations. Always respond with valid JSON. Never return brief or generic output."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
@@ -1587,22 +1844,7 @@ def suggest_policies_for_framework(
     if not frameworks:
         raise HTTPException(status_code=404, detail="No frameworks found")
     
-    controls_summary = ""
-    for framework in frameworks:
-        controls = db.query(ParsedFrameworkControl).filter(
-            ParsedFrameworkControl.uploaded_framework_id == framework.id
-        ).all()
-        
-        controls_summary += f"\nFramework: {framework.name}\n"
-        controls_summary += f"Total Controls: {len(controls)}\n"
-        controls_summary += "Key Control Areas:\n"
-        
-        for control in controls[:50]:
-            ref = control.original_reference or control.control_id
-            controls_summary += f"- {ref}: {control.title}"
-            if control.description:
-                controls_summary += f" - {control.description[:150]}"
-            controls_summary += "\n"
+    controls_summary, framework_alignment, domain_context = build_framework_control_context(frameworks, db)
     
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
         raise HTTPException(
@@ -1617,15 +1859,29 @@ def suggest_policies_for_framework(
     
     framework_names = ", ".join([f.name for f in frameworks])
     
-    prompt = f"""You are an expert governance and compliance consultant. Based on the following regulatory framework controls, suggest comprehensive lists of policies, procedures, and standards that an organization should develop to achieve compliance.
+    prompt = f"""You are an expert governance and compliance consultant. Based on the following regulatory framework controls, suggest the governance documents an organization should create to achieve domain-specific compliance coverage.
 
 {controls_summary}
 
-Analyze ALL the control areas and requirements, then suggest documents organized by type. For each suggestion, provide:
+Analysis requirements:
+- Cluster the controls into governance domains before suggesting documents.
+- Suggest documents only when they are justified by the control themes.
+- Prefer specific domain-aware titles over generic titles.
+- Cover policy, standard, procedure, and guideline needs systematically.
+- Avoid duplicate or overlapping suggestions unless one is clearly a parent policy and another is a detailed procedure.
+- Keep the suggested document titles general and reusable. Do not make them company-specific.
+- Make procedures and standards domain-specific and operationally meaningful, not generic supporting documents.
+- Where applicable, distinguish parent policy documents from subordinate standards, procedures, or guidelines.
+- Cover these major inferred domains: {', '.join(domain_context) if domain_context else 'Use the control themes provided.'}
+
+For each suggestion, provide:
 - A clear, professional title
-- A brief description of what the document should cover
+- A detailed description of what the document should cover
+- The primary governance domain it belongs to
 - The priority level (high, medium, low) based on regulatory importance
 - Which specific control references from the framework it addresses
+- Why this document is needed for the cited control themes
+- The key sections the document should contain, reflecting ISO-style structure and the relevant domain obligations
 
 Return a JSON object with this structure:
 {{
@@ -1635,30 +1891,35 @@ Return a JSON object with this structure:
       "doc_type": "policy",
       "title": "Information Security Policy",
       "description": "Establishes the organization's approach to information security, defining objectives, principles, and responsibilities for protecting information assets.",
+            "domain": "Information Security Governance",
       "priority": "high",
       "relevant_controls": ["Control-1.1", "Control-1.2"],
+                        "coverage_rationale": "Addresses governance, ownership, and protection requirements in the cited controls.",
       "key_sections": ["Purpose", "Scope", "Policy Statements", "Roles and Responsibilities", "Compliance", "Review"]
     }}
   ],
   "total_suggestions": 0
 }}
 
-Provide at least 15-25 suggestions covering policies, procedures, standards, and guidelines. Order by priority (high first).
+Provide 18-30 suggestions covering policies, procedures, standards, and guidelines. Order by priority (high first) and ensure the list covers the major domains implied by the controls. The output must be domain-balanced rather than over-indexed on generic information security titles.
 """
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an expert governance and compliance consultant. Always respond with valid JSON."},
+                {"role": "system", "content": "You are an expert governance and compliance consultant. Always respond with valid JSON and prioritize domain accuracy, clause coverage, and non-generic titles."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            max_completion_tokens=8192
+            max_completion_tokens=12000
         )
         
         result_text = response.choices[0].message.content or "{}"
         result = json.loads(result_text)
+        if isinstance(result, dict) and isinstance(result.get("suggestions"), list):
+            result["framework_alignment"] = framework_alignment
+            result["domains_covered"] = domain_context
         return result
     
     except json.JSONDecodeError as e:
@@ -1688,6 +1949,7 @@ def generate_policy_ai_draft(
     """Generate a policy/standard/procedure document using AI based on framework requirements"""
     controls_context = ""
     framework_controls = []
+    domain_context: List[str] = []
     
     if request.framework_ids:
         frameworks = db.query(UploadedFramework).filter(
@@ -1695,30 +1957,9 @@ def generate_policy_ai_draft(
         ).all()
         
         if frameworks:
-            controls_context = "The document should align with the following framework controls:\n\n"
-            
-            for framework in frameworks:
-                controls = db.query(ParsedFrameworkControl).filter(
-                    ParsedFrameworkControl.uploaded_framework_id == framework.id
-                ).limit(50).all()
-                
-                if controls:
-                    framework_name = framework.name
-                    control_ids = []
-                    controls_context += f"Framework: {framework_name}\n"
-                    
-                    for control in controls:
-                        ref = control.original_reference or control.control_id
-                        controls_context += f"- {ref}: {control.title}\n"
-                        if control.description:
-                            controls_context += f"  Description: {control.description[:200]}...\n"
-                        control_ids.append(ref)
-                    
-                    controls_context += "\n"
-                    framework_controls.append({
-                        "framework": framework_name,
-                        "controls": control_ids[:10]
-                    })
+            summary_text, framework_controls, domain_context = build_framework_control_context(frameworks, db)
+            controls_context = "The document should align with the following framework controls and governance domains:\n\n"
+            controls_context += summary_text
     
     if request.regulatory_scope:
         for scope in request.regulatory_scope:
@@ -1728,27 +1969,19 @@ def generate_policy_ai_draft(
             
             for framework in matching_frameworks:
                 if not any(fc.get("framework") == framework.name for fc in framework_controls):
-                    controls = db.query(ParsedFrameworkControl).filter(
-                        ParsedFrameworkControl.uploaded_framework_id == framework.id
-                    ).limit(30).all()
-                    
-                    if controls:
-                        control_ids = [c.original_reference or c.control_id for c in controls]
-                        framework_controls.append({
-                            "framework": framework.name,
-                            "controls": control_ids[:10]
-                        })
-                        
-                        controls_context += f"Framework: {framework.name}\n"
-                        for control in controls:
-                            ref = control.original_reference or control.control_id
-                            controls_context += f"- {ref}: {control.title}\n"
-                        controls_context += "\n"
+                    summary_text, extra_alignment, extra_domains = build_framework_control_context([framework], db, per_framework_limit=40)
+                    if summary_text:
+                        controls_context += ("\n\n" if controls_context else "") + summary_text
+                        framework_controls.extend(extra_alignment)
+                        for domain in extra_domains:
+                            if domain not in domain_context:
+                                domain_context.append(domain)
     
     result = generate_policy_with_openai(
         doc_type=request.doc_type,
         title=request.title,
         controls_context=controls_context,
+        domain_context=domain_context,
         regulatory_scope=request.regulatory_scope or [],
         description=request.description,
         include_sections=request.include_sections

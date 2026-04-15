@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
 import {
@@ -16,6 +17,7 @@ import {
   BarChart3,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Calendar,
   User,
   Tag,
@@ -25,6 +27,8 @@ import {
   Sparkles,
   Loader2,
   Paperclip,
+  Target,
+  ClipboardList,
 } from 'lucide-react';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -59,8 +63,10 @@ const CCCE_BORDERS: Record<string, string> = {
 };
 
 export default function AuditFindingsPage() {
+  const router = useRouter();
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [activeListTab, setActiveListTab] = useState<'findings' | 'aging' | 'recommendations'>('findings');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
@@ -97,6 +103,10 @@ export default function AuditFindingsPage() {
   const [aiDrafting, setAiDrafting] = useState(false);
   const [checkingSimilarity, setCheckingSimilarity] = useState(false);
   const [similarFindings, setSimilarFindings] = useState<any[]>([]);
+  const [recurringLoading, setRecurringLoading] = useState(false);
+  const [recurringResult, setRecurringResult] = useState<any>(null);
+  const [showRecurringModal, setShowRecurringModal] = useState(false);
+  const [severityLoading, setSeverityLoading] = useState(false);
 
   const { data: findings, refetch, isLoading } = useQuery({
     queryKey: ['audit-findings', filters],
@@ -285,6 +295,46 @@ export default function AuditFindingsPage() {
     finally { setCheckingSimilarity(false); }
   };
 
+  const handleSuggestSeverity = async (mode: 'create' | 'edit') => {
+    const form = mode === 'create' ? newFinding : editFindingForm;
+    if (!form.title) return;
+    setSeverityLoading(true);
+    try {
+      const res = await auditApi.ai.calibrateSeverity({
+        title: form.title,
+        condition: form.condition || '',
+        cause: form.cause || '',
+        effect: form.effect || '',
+        criteria: form.criteria || '',
+        control_area: form.root_cause_category || '',
+      });
+      const cal = res.data?.calibration;
+      if (cal?.recommended_severity) {
+        if (mode === 'create') {
+          setNewFinding(prev => ({ ...prev, severity: cal.recommended_severity }));
+        } else {
+          setEditFindingForm(prev => ({ ...prev, severity: cal.recommended_severity }));
+        }
+      }
+    } catch (err) {
+      console.error('AI severity suggestion failed:', err);
+      alert('Failed to suggest severity. Please try again.');
+    } finally {
+      setSeverityLoading(false);
+    }
+  };
+
+  const handleDetectRecurring = async () => {
+    setRecurringLoading(true);
+    setRecurringResult(null);
+    try {
+      const res = await auditApi.ai.detectRecurringIssues({});
+      setRecurringResult(res.data);
+      setShowRecurringModal(true);
+    } catch (err) { console.error('Recurring issue detection failed:', err); alert('Failed to detect recurring issues. Please try again.'); }
+    finally { setRecurringLoading(false); }
+  };
+
   const items = Array.isArray(findings) ? findings : [];
   const overdueItems = Array.isArray(overdue) ? overdue : [];
   const themeList = Array.isArray(themes) ? themes : [];
@@ -316,6 +366,34 @@ export default function AuditFindingsPage() {
   const overdueCount = overdueItems.length;
   const closedFindings = items.filter((f: any) => f.status === 'closed' || f.status === 'remediated').length;
   const closureRate = totalFindings > 0 ? Math.round((closedFindings / totalFindings) * 100) : 0;
+
+  const agingBuckets = useMemo(() => {
+    const now = Date.now();
+    const buckets = { '0_30': 0, '30_60': 0, '60_90': 0, '90_plus': 0 };
+    overdueItems.forEach((f: any) => {
+      if (!f.due_date) return;
+      const daysOverdue = Math.floor((now - new Date(f.due_date).getTime()) / 86400000);
+      if (daysOverdue <= 30) buckets['0_30']++;
+      else if (daysOverdue <= 60) buckets['30_60']++;
+      else if (daysOverdue <= 90) buckets['60_90']++;
+      else buckets['90_plus']++;
+    });
+    return buckets;
+  }, [overdueItems]);
+
+  const allRecommendations = useMemo(() => {
+    const recs: { findingId: number; findingTitle: string; findingNumber: string; engagementTitle: string; rec: any }[] = [];
+    items.forEach((f: any) => {
+      if (f.recommendations) {
+        f.recommendations.forEach((r: any) => {
+          if (r.status !== 'completed') {
+            recs.push({ findingId: f.id, findingTitle: f.title, findingNumber: f.finding_number, engagementTitle: f.engagement_title || '', rec: r });
+          }
+        });
+      }
+    });
+    return recs;
+  }, [items]);
 
   const updateFilter = (key: string, value: string) => {
     setFilters((prev) => {
@@ -366,6 +444,14 @@ export default function AuditFindingsPage() {
           >
             {importMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             Import
+          </button>
+          <button
+            onClick={handleDetectRecurring}
+            disabled={recurringLoading}
+            className="flex items-center gap-2 px-3 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded-lg text-sm transition-colors disabled:opacity-50"
+          >
+            {recurringLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            Recurring Issues
           </button>
           <button
             onClick={() => setGroupByEngagement((v) => !v)}
@@ -505,7 +591,170 @@ export default function AuditFindingsPage() {
         </div>
       </div>
 
-      {groupByEngagement ? (
+      <div className="flex gap-1 bg-white rounded-xl border border-slate-200 p-1">
+        {([
+          { key: 'findings' as const, label: 'Findings List', icon: <FileText className="w-4 h-4" /> },
+          { key: 'aging' as const, label: 'Aging Analysis', icon: <Clock className="w-4 h-4" />, count: overdueCount },
+          { key: 'recommendations' as const, label: 'Recommendations', icon: <ClipboardList className="w-4 h-4" />, count: allRecommendations.length },
+        ]).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveListTab(tab.key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeListTab === tab.key ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+            {tab.count !== undefined && tab.count > 0 && (
+              <span className={`px-1.5 py-0.5 text-xs rounded-full ${activeListTab === tab.key ? 'bg-blue-200 text-blue-800' : 'bg-slate-200 text-slate-600'}`}>{tab.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {activeListTab === 'aging' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Finding Aging — Overdue Breakdown</h3>
+            {overdueCount === 0 ? (
+              <div className="text-center py-8">
+                <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
+                <p className="text-slate-600">No overdue findings</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-4 gap-4">
+                  {[
+                    { label: '0–30 days', count: agingBuckets['0_30'], color: 'bg-amber-500', bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700' },
+                    { label: '30–60 days', count: agingBuckets['30_60'], color: 'bg-orange-500', bg: 'bg-orange-50 border-orange-200', text: 'text-orange-700' },
+                    { label: '60–90 days', count: agingBuckets['60_90'], color: 'bg-red-400', bg: 'bg-red-50 border-red-200', text: 'text-red-700' },
+                    { label: '90+ days', count: agingBuckets['90_plus'], color: 'bg-red-600', bg: 'bg-red-50 border-red-300', text: 'text-red-800' },
+                  ].map(bucket => (
+                    <div key={bucket.label} className={`rounded-lg border p-4 ${bucket.bg}`}>
+                      <p className={`text-2xl font-bold ${bucket.text}`}>{bucket.count}</p>
+                      <p className="text-xs text-slate-600 mt-1">{bucket.label}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="h-6 bg-slate-100 rounded-full overflow-hidden flex">
+                  {[
+                    { count: agingBuckets['0_30'], color: 'bg-amber-400' },
+                    { count: agingBuckets['30_60'], color: 'bg-orange-400' },
+                    { count: agingBuckets['60_90'], color: 'bg-red-400' },
+                    { count: agingBuckets['90_plus'], color: 'bg-red-600' },
+                  ].map((b, i) => (
+                    b.count > 0 && <div key={i} className={`${b.color} h-full transition-all`} style={{ width: `${(b.count / overdueCount) * 100}%` }} />
+                  ))}
+                </div>
+                <div className="flex items-center gap-4 text-xs text-slate-500">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400" /> 0–30d</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-400" /> 30–60d</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-400" /> 60–90d</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-600" /> 90+d</span>
+                </div>
+              </div>
+            )}
+          </div>
+          {overdueItems.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-3 border-b border-slate-200 bg-slate-50">
+                <h4 className="text-sm font-semibold text-slate-900">Overdue Findings Detail</h4>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {overdueItems.map((f: any) => {
+                  const daysOver = Math.floor((Date.now() - new Date(f.due_date).getTime()) / 86400000);
+                  return (
+                    <div
+                      key={f.id}
+                      onClick={() => router.push(`/audit/findings/${f.id}`)}
+                      className="px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-blue-600 truncate">{f.title}</p>
+                        <p className="text-xs text-slate-500">{f.finding_number} · {f.engagement_title || `Engagement ${f.engagement_id}`}</p>
+                      </div>
+                      <div className="flex items-center gap-2 ml-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs border ${daysOver > 90 ? 'bg-red-100 text-red-700 border-red-200' : daysOver > 60 ? 'bg-red-50 text-red-600 border-red-200' : daysOver > 30 ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                          {daysOver}d overdue
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs border ${SEVERITY_COLORS[f.severity] || ''}`}>{f.severity}</span>
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeListTab === 'recommendations' && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-900">Open Recommendations Tracker</h3>
+            <span className="text-xs text-slate-500">{allRecommendations.length} open recommendations</span>
+          </div>
+          {allRecommendations.length === 0 ? (
+            <div className="text-center py-12">
+              <ClipboardList className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-slate-600">No open recommendations</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {allRecommendations.map(({ findingId, findingTitle, findingNumber, engagementTitle, rec }) => {
+                const totalAps = rec.action_plans?.length || 0;
+                const completedAps = rec.action_plans?.filter((ap: any) => ap.status === 'completed').length || 0;
+                const progress = totalAps > 0 ? Math.round((completedAps / totalAps) * 100) : 0;
+                const recOverdue = rec.due_date && new Date(rec.due_date) < new Date();
+                return (
+                  <div
+                    key={`${findingId}-${rec.id}`}
+                    onClick={() => router.push(`/audit/findings/${findingId}`)}
+                    className="px-5 py-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-sm font-medium text-slate-900 truncate">{rec.title}</h4>
+                          <span className={`px-2 py-0.5 rounded-full text-xs ${rec.priority === 'critical' ? 'bg-red-100 text-red-700' : rec.priority === 'high' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
+                            {rec.priority}
+                          </span>
+                          {recOverdue && <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">Overdue</span>}
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          {findingNumber} · {findingTitle} · {engagementTitle}
+                        </p>
+                        {rec.description && <p className="text-xs text-slate-500 mt-1 line-clamp-1">{rec.description}</p>}
+                        <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+                          {rec.owner_id && <span className="flex items-center gap-1"><User className="w-3 h-3" /> Owner #{rec.owner_id}</span>}
+                          {rec.due_date && <span className={recOverdue ? 'text-red-500' : ''}>Due: {new Date(rec.due_date).toLocaleDateString()}</span>}
+                          {rec.due_date && <span>{Math.max(0, Math.floor((Date.now() - new Date(rec.created_at || rec.due_date).getTime()) / 86400000))}d age</span>}
+                          {totalAps > 0 && <span>{completedAps}/{totalAps} milestones</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 ml-3">
+                        {totalAps > 0 && (
+                          <div className="w-20">
+                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${progress}%` }} />
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-0.5 text-right">{progress}%</p>
+                          </div>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeListTab === 'findings' && groupByEngagement ? (
         groupedLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -527,9 +776,13 @@ export default function AuditFindingsPage() {
                   {group.findings.map((finding: any) => {
                     const overdueFlag = finding.due_date && isOverdue(finding.due_date) && finding.status !== 'closed' && finding.status !== 'remediated';
                     return (
-                      <div key={finding.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                      <div
+                        key={finding.id}
+                        onClick={() => router.push(`/audit/findings/${finding.id}`)}
+                        className="px-5 py-3 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                      >
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-900 truncate">{finding.title}</p>
+                          <p className="text-sm font-medium text-blue-600 truncate">{finding.title}</p>
                           <p className="text-xs text-slate-500">{finding.finding_number || `#${finding.id}`}</p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -540,6 +793,7 @@ export default function AuditFindingsPage() {
                             {STATUS_LABELS[finding.status] || finding.status}
                           </span>
                           {overdueFlag && <span className="px-2 py-0.5 rounded-full text-xs bg-red-500/20 text-red-400 border border-red-500/30">Overdue</span>}
+                          <ChevronRight className="w-4 h-4 text-slate-400" />
                         </div>
                       </div>
                     );
@@ -549,7 +803,7 @@ export default function AuditFindingsPage() {
             ))}
           </div>
         )
-      ) : isLoading ? (
+      ) : activeListTab !== 'findings' ? null : isLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
         </div>
@@ -597,7 +851,10 @@ export default function AuditFindingsPage() {
                           </span>
                         )}
                       </div>
-                      <h3 className="text-lg font-semibold text-slate-900 truncate">{finding.title}</h3>
+                      <h3
+                        className="text-lg font-semibold text-blue-600 hover:text-blue-500 truncate cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); router.push(`/audit/findings/${finding.id}`); }}
+                      >{finding.title}</h3>
                       <div className="flex items-center gap-4 mt-2 flex-wrap">
                         {finding.engagement_title && (
                           <span className="flex items-center gap-1.5 text-sm text-slate-600">
@@ -639,6 +896,12 @@ export default function AuditFindingsPage() {
                       )}
                     </div>
                     <div className="ml-4 flex items-center gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); router.push(`/audit/findings/${finding.id}`); }}
+                        className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      >
+                        View Details <ChevronRight className="w-3 h-3" />
+                      </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); openEditFinding(finding); }}
                         className="p-1 text-slate-600 hover:text-blue-400 transition-colors"
@@ -910,6 +1173,15 @@ export default function AuditFindingsPage() {
                     <option value="low">Low</option>
                     <option value="observation">Observation</option>
                   </select>
+                  <button
+                    type="button"
+                    onClick={() => handleSuggestSeverity('create')}
+                    disabled={severityLoading || !newFinding.title}
+                    className="mt-1 flex items-center gap-1 text-xs text-violet-600 hover:text-violet-800 disabled:opacity-50"
+                  >
+                    {severityLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    Suggest Severity with AI
+                  </button>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -1093,6 +1365,15 @@ export default function AuditFindingsPage() {
                     <option value="low">Low</option>
                     <option value="observation">Observation</option>
                   </select>
+                  <button
+                    type="button"
+                    onClick={() => handleSuggestSeverity('edit')}
+                    disabled={severityLoading || !editFindingForm.title}
+                    className="mt-1 flex items-center gap-1 text-xs text-violet-600 hover:text-violet-800 disabled:opacity-50"
+                  >
+                    {severityLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    Suggest Severity with AI
+                  </button>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -1131,6 +1412,78 @@ export default function AuditFindingsPage() {
               >
                 {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRecurringModal && recurringResult && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Sparkles className="w-5 h-5 text-violet-500" /> Recurring Issue Analysis</h3>
+              <button onClick={() => setShowRecurringModal(false)} className="text-slate-500 hover:text-slate-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-4">
+              {recurringResult.summary && (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                  <p className="text-sm text-slate-700">{recurringResult.summary}</p>
+                  <div className="flex gap-4 mt-2 text-xs text-slate-500">
+                    <span>Findings analyzed: {recurringResult.findings_analyzed || 0}</span>
+                    {recurringResult.trend_direction && <span>Trend: {recurringResult.trend_direction}</span>}
+                  </div>
+                </div>
+              )}
+              {recurringResult.patterns && recurringResult.patterns.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Patterns Detected</h4>
+                  <div className="space-y-3">
+                    {recurringResult.patterns.map((p: any, i: number) => (
+                      <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <h5 className="text-sm font-medium text-amber-800">{p.pattern_name}</h5>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-amber-600">{p.frequency} findings</span>
+                            {p.severity_trend && (
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                p.severity_trend === 'escalating' ? 'bg-red-100 text-red-700' :
+                                p.severity_trend === 'improving' ? 'bg-emerald-100 text-emerald-700' :
+                                'bg-slate-100 text-slate-600'
+                              }`}>{p.severity_trend}</span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-sm text-amber-700">{p.description}</p>
+                        {p.root_cause_commonality && <p className="text-xs text-amber-600 mt-1">Root cause: {p.root_cause_commonality}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {recurringResult.systemic_weaknesses && recurringResult.systemic_weaknesses.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Systemic Weaknesses</h4>
+                  <div className="space-y-3">
+                    {recurringResult.systemic_weaknesses.map((w: any, i: number) => (
+                      <div key={i} className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            w.risk_level === 'critical' ? 'bg-red-200 text-red-800' :
+                            w.risk_level === 'high' ? 'bg-orange-100 text-orange-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>{w.risk_level}</span>
+                        </div>
+                        <p className="text-sm text-red-800 font-medium">{w.weakness}</p>
+                        {w.recommended_action && <p className="text-xs text-red-600 mt-1">Action: {w.recommended_action}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end mt-4 pt-4 border-t border-slate-200">
+              <button onClick={() => setShowRecurringModal(false)} className="px-4 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
             </div>
           </div>
         </div>

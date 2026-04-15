@@ -120,29 +120,29 @@ export default function SLAConfigPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div>
-        <h1 className="text-2xl font-bold cw-text-default">SLA Configuration</h1>
-        <p className="mt-1 cw-text-muted">Configure remediation SLA timeframes by severity</p>
+        <h1 className="text-xl font-bold cw-text-default">SLA Configuration</h1>
+        <p className="text-xs cw-text-muted">Configure remediation SLA timeframes by severity</p>
       </div>
 
       <div className="cw-card overflow-hidden">
         <table className="w-full">
           <thead className="bg-[var(--color-subtle)]">
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
                 Severity
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
                 Remediation Days
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
                 Notification Days
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
                 Escalation Days
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">
                 Actions
               </th>
             </tr>
@@ -155,12 +155,12 @@ export default function SLAConfigPage() {
 
               return (
                 <tr key={severity} className="hover:bg-[var(--color-hover)] transition-colors">
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${style.bg} ${style.text} capitalize`}>
+                  <td className="px-3 py-2">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${style.bg} ${style.text} capitalize`}>
                       {severity}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-2">
                     {config ? (
                       isEditing ? (
                         <input
@@ -177,7 +177,7 @@ export default function SLAConfigPage() {
                       <span className="cw-text-muted">Not configured</span>
                     )}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-2">
                     {config ? (
                       isEditing ? (
                         <input
@@ -197,7 +197,7 @@ export default function SLAConfigPage() {
                       <span className="cw-text-muted">-</span>
                     )}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-2">
                     {config ? (
                       isEditing ? (
                         <input
@@ -217,7 +217,7 @@ export default function SLAConfigPage() {
                       <span className="cw-text-muted">-</span>
                     )}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-2">
                     {config ? (
                       isEditing ? (
                         <div className="flex items-center gap-2">

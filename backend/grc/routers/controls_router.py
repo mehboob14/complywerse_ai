@@ -4,7 +4,7 @@ import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from pydantic import BaseModel
 from openai import OpenAI
 
@@ -298,7 +298,13 @@ def get_framework_controls_summary(
         ParsedFrameworkControl,
         UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id
     ).filter(
-        (UploadedFramework.tenant_id.in_(user_tenants)) | (UploadedFramework.tenant_id.is_(None))
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.tenant_id.is_(None),
+            UploadedFramework.is_shared == True
+        ),
+        UploadedFramework.upload_status.in_(['published', 'completed', 'parsed', 'classified']),
+        UploadedFramework.is_active == True
     ).group_by(
         UploadedFramework.id,
         UploadedFramework.name,
@@ -344,7 +350,12 @@ def list_framework_controls(
         UploadedFramework,
         ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
     ).filter(
-        (UploadedFramework.tenant_id.in_(user_tenants)) | (UploadedFramework.tenant_id.is_(None))
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.tenant_id.is_(None),
+            UploadedFramework.is_shared == True
+        ),
+        UploadedFramework.is_active == True
     )
     
     if framework_id:

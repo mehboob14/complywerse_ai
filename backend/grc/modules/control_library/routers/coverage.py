@@ -58,9 +58,21 @@ def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: O
     matrix = {}
     categories = set()
 
-    legacy_frameworks = db.query(Framework).filter(
-        or_(Framework.is_active == True, Framework.is_active.is_(None))
+    # Only show Framework records published from this tenant's uploaded frameworks
+    _effective_tenants = visible_tenant_ids if visible_tenant_ids else [tenant_id]
+    _tenant_pub_fw_ids = db.query(UploadedFramework.published_framework_id).filter(
+        UploadedFramework.upload_status == 'published',
+        UploadedFramework.published_framework_id.isnot(None),
+        or_(
+            UploadedFramework.tenant_id.in_(_effective_tenants),
+            UploadedFramework.is_shared == True
+        )
     ).all()
+    _tenant_fw_id_set = list({row[0] for row in _tenant_pub_fw_ids})
+    legacy_frameworks = db.query(Framework).filter(
+        Framework.id.in_(_tenant_fw_id_set),
+        or_(Framework.is_active == True, Framework.is_active.is_(None))
+    ).all() if _tenant_fw_id_set else []
     for fw in legacy_frameworks:
         fw_key = str(fw.id)
         matrix[fw_key] = {
@@ -101,7 +113,9 @@ def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: O
     if visible_tenant_ids:
         tenant_filter = visible_tenant_ids
 
+    # Only show unpublished uploaded frameworks (published ones are in the legacy_frameworks list above)
     uploaded_frameworks = db.query(UploadedFramework).filter(
+        UploadedFramework.upload_status.in_(['completed', 'parsed', 'classified']),
         or_(UploadedFramework.is_active == True, UploadedFramework.is_active.is_(None)),
         or_(
             UploadedFramework.tenant_id.in_(tenant_filter),
@@ -529,9 +543,20 @@ def get_coverage_by_framework(
     covered_parsed_ids_set = set(row[0] for row in covered_pc_ids.all())
     covered_parsed_ids_set.update(implementation_covered_ids)
 
-    frameworks = db.query(Framework).filter(
-        or_(Framework.is_active == True, Framework.is_active.is_(None))
+    # Only show Framework records published from this tenant's uploaded frameworks
+    _by_fw_pub_ids = db.query(UploadedFramework.published_framework_id).filter(
+        UploadedFramework.upload_status == 'published',
+        UploadedFramework.published_framework_id.isnot(None),
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.is_shared == True
+        )
     ).all()
+    _by_fw_id_set = list({row[0] for row in _by_fw_pub_ids})
+    frameworks = db.query(Framework).filter(
+        Framework.id.in_(_by_fw_id_set),
+        or_(Framework.is_active == True, Framework.is_active.is_(None))
+    ).all() if _by_fw_id_set else []
     results = []
     
     for fw in frameworks:
@@ -577,7 +602,9 @@ def get_coverage_by_framework(
             "by_category": list(by_category.values())
         })
 
+    # Only show unpublished uploaded frameworks (published ones are in the frameworks list above)
     uploaded_frameworks = db.query(UploadedFramework).filter(
+        UploadedFramework.upload_status.in_(['completed', 'parsed', 'classified']),
         or_(UploadedFramework.is_active == True, UploadedFramework.is_active.is_(None)),
         or_(
             UploadedFramework.tenant_id.in_(user_tenants),

@@ -497,12 +497,6 @@ def delete_risk_assessment(
     user_tenants = get_user_tenants(current_user, db)
     assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
 
-    if assessment.status != "draft":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only delete assessments with 'draft' status"
-        )
-
     db.delete(assessment)
     db.commit()
     return None

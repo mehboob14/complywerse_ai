@@ -9,7 +9,7 @@ from sqlalchemy import func
 
 from ....models import (
     Vendor, VendorAssessment, VendorQuestionnaireTemplate,
-    VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, get_db,
+    VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, TenantUser, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -186,10 +186,15 @@ def create_assessment(
     tenant_id = payload.tenant_id if payload.tenant_id and payload.tenant_id in tenant_ids else vendor.tenant_id
     assessed_by = current_user.id
     if payload.assessed_by:
-        assessor = db.query(GRCUser).filter(
-            GRCUser.id == payload.assessed_by,
-            GRCUser.tenant_id.in_(tenant_ids),
-        ).first()
+        assessor = (
+            db.query(GRCUser)
+            .join(TenantUser, TenantUser.user_id == GRCUser.id)
+            .filter(
+                GRCUser.id == payload.assessed_by,
+                TenantUser.tenant_id.in_(tenant_ids),
+            )
+            .first()
+        )
         if not assessor:
             raise HTTPException(status_code=400, detail="Selected assessor is not part of your tenant")
         assessed_by = payload.assessed_by

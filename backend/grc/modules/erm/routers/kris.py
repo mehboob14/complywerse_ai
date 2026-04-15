@@ -88,6 +88,7 @@ def _fallback_kri_suggestion(name: str, description: Optional[str] = None) -> di
         "frequency": frequency,
         "green_threshold": green_threshold,
         "amber_threshold": amber_threshold,
+        "suggested_name": name,
         "data_source": "AI-suggested",
         "rationale": "Heuristic suggestion generated from indicator name/description"
     }
@@ -100,14 +101,15 @@ def _ai_suggest_kri_payload(name: str, description: Optional[str] = None, risk_c
 
     prompt = f"""You are a GRC and ERM specialist. Suggest KRI setup values for manual KRI entry.
 Return ONLY valid JSON with keys:
-description, metric_type, unit, threshold_direction, frequency, green_threshold, amber_threshold, data_source, rationale
+suggested_name, description, metric_type, unit, threshold_direction, frequency, green_threshold, amber_threshold, data_source, rationale
 
-KRI Name: {name}
+KRI Name: {name or 'Not provided'}
 Description: {description or 'Not provided'}
 Metric Hint: {metric_hint or 'Not provided'}
 Risk Context: {risk_context or 'Not provided'}
 
 Constraints:
+- suggested_name: concise KRI indicator name that fits the risk context (e.g. "Number of Critical Incidents", "IT Uptime Rate")
 - metric_type in [numeric, percentage, count, boolean]
 - threshold_direction in [lower_is_better, higher_is_better]
 - frequency in [daily, weekly, monthly, quarterly, annually]

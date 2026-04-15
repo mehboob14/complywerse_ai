@@ -11,6 +11,7 @@ from .appetite import router as appetite_router
 from .internal_controls import router as internal_controls_router
 from .rcsa import router as rcsa_router
 from .risk_assessments import router as risk_assessments_router
+from .framework_risk_assessments import router as framework_risk_assessments_router
 from .advanced_analytics import router as advanced_analytics_router
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "internal_controls_router",
     "rcsa_router",
     "risk_assessments_router",
+    "framework_risk_assessments_router",
     "advanced_analytics_router"
 ]

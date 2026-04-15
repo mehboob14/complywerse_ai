@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -1298,6 +1300,10 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
 }
 
 function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }: any) {
+  // Detect if doc.content is markdown (AI-generated docs always are)
+  const rawContent: string = doc?.content || '';
+  const isMarkdown = /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(rawContent);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 rounded-xl border border-gray-300 bg-white overflow-hidden">
@@ -1309,31 +1315,40 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
             <div className="flex h-48 items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
             </div>
+          ) : isMarkdown ? (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                h1: ({ children }) => <h1 className="text-2xl font-bold text-black mt-6 mb-3 pb-2 border-b border-gray-200">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-xl font-semibold text-black mt-5 mb-2">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-lg font-semibold text-black mt-4 mb-2">{children}</h3>,
+                h4: ({ children }) => <h4 className="text-base font-semibold text-black mt-3 mb-1">{children}</h4>,
+                h5: ({ children }) => <h5 className="text-sm font-semibold text-black mt-2 mb-1">{children}</h5>,
+                h6: ({ children }) => <h6 className="text-sm font-medium text-gray-700 mt-2 mb-1">{children}</h6>,
+                p: ({ children }) => <p className="text-gray-800 mb-3 leading-relaxed">{children}</p>,
+                ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1 text-gray-800 pl-4">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1 text-gray-800 pl-4">{children}</ol>,
+                li: ({ children }) => <li className="text-gray-800">{children}</li>,
+                strong: ({ children }) => <strong className="font-semibold text-black">{children}</strong>,
+                em: ({ children }) => <em className="italic text-gray-800">{children}</em>,
+                blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 pl-4 my-3 text-gray-700 italic">{children}</blockquote>,
+                code: ({ children }) => <code className="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>,
+                pre: ({ children }) => <pre className="bg-gray-100 text-gray-800 p-4 rounded-lg overflow-x-auto mb-3 text-sm font-mono">{children}</pre>,
+                hr: () => <hr className="border-gray-200 my-4" />,
+                a: ({ href, children }) => <a href={href} className="text-blue-600 underline hover:text-blue-800">{children}</a>,
+                table: ({ children }) => <div className="overflow-x-auto mb-4"><table className="w-full border-collapse border border-gray-300 text-sm">{children}</table></div>,
+                th: ({ children }) => <th className="border border-gray-300 bg-gray-100 px-3 py-2 text-left font-semibold text-black">{children}</th>,
+                td: ({ children }) => <td className="border border-gray-300 px-3 py-2 text-gray-800">{children}</td>,
+              }}
+            >
+              {rawContent}
+            </ReactMarkdown>
           ) : htmlContent?.html ? (
-            <>
-              <style jsx global>{`
-                .document-content * {
-                  color: #000000 !important;
-                }
-                .document-content a {
-                  color: #2563eb !important;
-                }
-                .document-content h1,
-                .document-content h2,
-                .document-content h3,
-                .document-content h4,
-                .document-content h5,
-                .document-content h6 {
-                  color: #000000 !important;
-                  font-weight: 600;
-                }
-              `}</style>
-              <div
-                className="document-content prose max-w-none !text-black prose-headings:!text-black prose-h1:!text-black prose-h2:!text-black prose-h3:!text-black prose-h4:!text-black prose-h5:!text-black prose-h6:!text-black prose-p:!text-black prose-li:!text-black prose-strong:!text-black prose-em:!text-black prose-code:!text-black prose-pre:!text-black prose-blockquote:!text-black prose-a:!text-blue-600 prose-table:!text-black prose-td:!text-black prose-th:!text-black prose-tr:!text-black prose-thead:!text-black prose-tbody:!text-black prose-ul:!text-black prose-ol:!text-black prose-hr:!border-gray-300"
-                style={{ color: '#000000' }}
-                dangerouslySetInnerHTML={{ __html: htmlContent.html }}
-              />
-            </>
+            <div
+              className="document-viewer-html text-black"
+              dangerouslySetInnerHTML={{ __html: htmlContent.html }}
+              style={{ color: '#000' }}
+            />
           ) : (
             <div className="flex h-48 flex-col items-center justify-center gap-3 text-gray-600">
               <FileText className="h-12 w-12" />

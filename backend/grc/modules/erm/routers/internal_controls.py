@@ -19,7 +19,7 @@ from ....models import (
     InternalControl, InternalControlTest, InternalControlRiskLink,
     InternalControlFrameworkLink, InternalControlEscalation,
     InternalControlWorkflowAction, Risk, FrameworkControl,
-    NormalizedControl, GRCUser, Tenant, BusinessUnit, get_db
+    NormalizedControl, GovernanceDocument, GRCUser, Tenant, BusinessUnit, get_db
 )
 from ....schemas import (
     InternalControlCreate, InternalControlUpdate, InternalControlResponse,
@@ -475,6 +475,7 @@ def list_internal_controls(
             next_test_date=c.next_test_date,
             priority=c.priority,
             is_key_control=c.is_key_control,
+            source_document_id=c.source_document_id,
             created_at=c.created_at,
             updated_at=c.updated_at,
             created_by=c.created_by,
@@ -509,6 +510,17 @@ def create_internal_control(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Control ID '{control.control_id}' already exists for this tenant"
         )
+
+    if control.source_document_id:
+        source_document = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == control.source_document_id,
+            GovernanceDocument.tenant_id == tenant_id
+        ).first()
+        if not source_document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Source governance document not found"
+            )
     
     db_control = InternalControl(
         tenant_id=tenant_id,
@@ -528,6 +540,7 @@ def create_internal_control(
         review_date=control.review_date,
         priority=control.priority,
         is_key_control=control.is_key_control,
+        source_document_id=control.source_document_id,
         created_by=current_user.id
     )
     db.add(db_control)
@@ -619,6 +632,107 @@ def upload_internal_controls_manual(
         "errors": errors,
         "preview": enriched[:25]
     }
+
+
+class AISuggestControlRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class AISuggestControlResponse(BaseModel):
+    suggested_category: str
+    suggested_subcategory: str
+    suggested_description: Optional[str] = None
+    suggested_control_type: Optional[str] = None
+    suggested_control_nature: Optional[str] = None
+    suggested_frequency: Optional[str] = None
+    suggested_priority: Optional[str] = None
+    suggestion_confidence: Optional[float] = None
+
+
+@router.post("/ai-suggest-category", response_model=AISuggestControlResponse)
+def ai_suggest_control_category(
+    request: AISuggestControlRequest,
+    current_user: GRCUser = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Use AI to suggest category, subcategory, and other fields for a new internal control."""
+    client = _get_openai_client()
+    if not client:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    prompt = f"""You are an internal controls expert. Based on this control name and description, suggest the best category, subcategory, and other key attributes.
+
+Control Name: {request.name}
+Description: {request.description or 'Not provided'}
+
+Available categories and their subcategories:
+- Operations: Process Management, Change Management, Business Continuity, Quality Assurance
+- Financial: General Ledger, Reconciliations, Accounts Payable, Accounts Receivable, Treasury
+- IT Security: Access Management, Network Security, Endpoint Security, Vulnerability Management, Data Protection
+- AML/CFT: KYC, Transaction Monitoring, Sanctions Screening, Suspicious Activity Reporting
+- Credit Risk: Underwriting, Credit Review, Collateral Management, Provisioning
+- Customer Service: Complaint Handling, Service Delivery, Customer Onboarding, Escalation Management
+
+Control types: preventive, detective, corrective
+Control natures: manual, automated, it_dependent_manual
+Priorities: critical, high, medium, low
+Frequencies: continuous, daily, weekly, monthly, quarterly, annually, ad_hoc
+
+Return ONLY valid JSON with these fields:
+- "suggested_category": one of the categories above
+- "suggested_subcategory": one of the subcategories for that category
+- "suggested_description": improved description if not provided, otherwise enhance the given one (1-2 sentences)
+- "suggested_control_type": one of preventive/detective/corrective
+- "suggested_control_nature": one of manual/automated/it_dependent_manual
+- "suggested_frequency": one of the frequencies above
+- "suggested_priority": one of critical/high/medium/low
+- "suggestion_confidence": confidence score 0.0-1.0"""
+
+    try:
+        model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL", "gpt-4o-mini")
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are an internal controls expert. Return only valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=500,
+        )
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+
+        data = json.loads(content)
+
+        valid_categories = ["Operations", "Financial", "IT Security", "AML/CFT", "Credit Risk", "Customer Service"]
+        valid_types = {"preventive", "detective", "corrective"}
+        valid_natures = {"manual", "automated", "it_dependent_manual"}
+        valid_priorities = {"critical", "high", "medium", "low"}
+        valid_freqs = {"continuous", "daily", "weekly", "monthly", "quarterly", "annually", "ad_hoc"}
+
+        cat = data.get("suggested_category", "Operations")
+        if cat not in valid_categories:
+            cat = "Operations"
+
+        return AISuggestControlResponse(
+            suggested_category=cat,
+            suggested_subcategory=data.get("suggested_subcategory", ""),
+            suggested_description=data.get("suggested_description"),
+            suggested_control_type=data.get("suggested_control_type") if data.get("suggested_control_type") in valid_types else None,
+            suggested_control_nature=data.get("suggested_control_nature") if data.get("suggested_control_nature") in valid_natures else None,
+            suggested_frequency=data.get("suggested_frequency") if data.get("suggested_frequency") in valid_freqs else None,
+            suggested_priority=data.get("suggested_priority") if data.get("suggested_priority") in valid_priorities else None,
+            suggestion_confidence=float(data.get("suggestion_confidence", 0.8)),
+        )
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Failed to parse AI response")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI suggestion failed: {str(e)}")
 
 
 @router.get("/{control_id}", response_model=InternalControlDetailResponse)
@@ -718,6 +832,7 @@ def get_internal_control(
         next_test_date=control.next_test_date,
         priority=control.priority,
         is_key_control=control.is_key_control,
+        source_document_id=control.source_document_id,
         created_at=control.created_at,
         updated_at=control.updated_at,
         created_by=control.created_by,
@@ -744,6 +859,16 @@ def update_internal_control(
     control = get_control_or_404(control_id, user_tenants, db)
     
     update_data = control_update.model_dump(exclude_unset=True)
+    if "source_document_id" in update_data and update_data["source_document_id"] is not None:
+        source_document = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == update_data["source_document_id"],
+            GovernanceDocument.tenant_id.in_(user_tenants)
+        ).first()
+        if not source_document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Source governance document not found"
+            )
     for field, value in update_data.items():
         setattr(control, field, value)
     

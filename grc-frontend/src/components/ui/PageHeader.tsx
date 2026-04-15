@@ -35,29 +35,29 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={clsx('mb-6', className)}>
+    <div className={clsx('mb-4', className)}>
       {showBreadcrumb && (
-        <div className="mb-4">
+        <div className="mb-2.5">
           <Breadcrumb items={breadcrumbs} />
         </div>
       )}
       
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
           {Icon && (
             <div className={clsx(
               'flex-shrink-0',
               iconColorClasses[iconColor]
             )}>
-              <Icon size={24} />
+              <Icon size={20} />
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-black tracking-tight">
+            <h1 className="text-xl font-semibold text-black tracking-tight">
               {title}
             </h1>
             {subtitle && (
-              <p className="mt-1 text-slate-600 text-sm leading-relaxed max-w-2xl">
+              <p className="mt-1 max-w-2xl text-sm leading-snug text-slate-600">
                 {subtitle}
               </p>
             )}
@@ -65,7 +65,7 @@ export function PageHeader({
         </div>
         
         {actions && (
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex flex-shrink-0 items-center gap-2.5">
             {actions}
           </div>
         )}

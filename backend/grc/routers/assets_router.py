@@ -12,7 +12,9 @@ from pydantic import BaseModel
 
 from ..models import (
     ITAsset, AssetControlLink, AssetRiskAssessment, AssetFrameworkControlLink,
-    AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, Risk, GRCUser, Tenant, TenantUser, get_db
+    AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, Risk,
+    Vulnerability, VulnerabilityAssetLink,
+    GRCUser, Tenant, TenantUser, get_db
 )
 from ..schemas import (
     ITAssetCreate, ITAssetUpdate, ITAssetResponse,
@@ -1013,6 +1015,28 @@ def get_asset_detail(
                 "name": ev.name,
                 "relationship_type": link.relationship_type
             })
+
+    linked_vulnerabilities = []
+    vuln_links = db.query(VulnerabilityAssetLink).options(
+        joinedload(VulnerabilityAssetLink.vulnerability)
+    ).join(Vulnerability).filter(
+        VulnerabilityAssetLink.asset_id == asset_id,
+        Vulnerability.tenant_id.in_(user_tenants)
+    ).all()
+    for link in vuln_links:
+        vuln = link.vulnerability
+        if vuln:
+            linked_vulnerabilities.append({
+                "link_id": link.id,
+                "vulnerability_id": vuln.id,
+                "vuln_id": vuln.vuln_id,
+                "title": vuln.title,
+                "severity": vuln.severity,
+                "status": vuln.status,
+                "impact_on_asset": link.impact_on_asset,
+                "notes": link.notes,
+                "created_at": link.created_at,
+            })
     
     risk_assessments = []
     for assessment in asset.risk_assessments:
@@ -1051,6 +1075,7 @@ def get_asset_detail(
         linked_framework_controls=linked_framework_controls,
         linked_risks=linked_risks,
         linked_evidence=linked_evidence,
+        linked_vulnerabilities=linked_vulnerabilities,
         risk_assessments=risk_assessments,
         coverage_percentage=float(coverage)
     )

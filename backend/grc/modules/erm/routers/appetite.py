@@ -256,6 +256,27 @@ def update_appetite_config(
     return db_config
 
 
+@router.delete("/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_appetite_config(
+    config_id: int,
+    current_user: GRCUser = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Delete a risk appetite configuration"""
+    tenant_ids = get_user_tenants(current_user, db)
+
+    db_config = db.query(RiskAppetiteConfig).filter(
+        RiskAppetiteConfig.id == config_id,
+        RiskAppetiteConfig.tenant_id.in_(tenant_ids)
+    ).first()
+
+    if not db_config:
+        raise HTTPException(status_code=404, detail="Appetite config not found")
+
+    db.delete(db_config)
+    db.commit()
+
+
 @router.post("/seed-defaults")
 def seed_default_appetite_configs(
     tenant_id: int,

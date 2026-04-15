@@ -7,6 +7,7 @@ from .ccm import router as ccm_router
 from .reporting import router as reporting_router
 from .qaip import router as qaip_router
 from .ai_agents import router as ai_agents_router
+from .notifications import router as notifications_router
 
 __all__ = [
     "audit_universe_router",
@@ -18,4 +19,5 @@ __all__ = [
     "reporting_router",
     "qaip_router",
     "ai_agents_router",
+    "notifications_router",
 ]

@@ -247,7 +247,7 @@ export default function ScenarioAnalysisPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
@@ -258,7 +258,7 @@ export default function ScenarioAnalysisPage() {
             Back
           </Link>
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
               <Target className="h-5 w-5 text-primary-400" />
               Scenario Analysis
             </h2>
@@ -289,7 +289,7 @@ export default function ScenarioAnalysisPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="rounded-xl border border-slate-200 bg-white p-4.5">
         <h3 className="text-slate-900 font-medium flex items-center gap-2 mb-4">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-xs text-white font-bold">1</span>
           Select Risks
@@ -352,7 +352,7 @@ export default function ScenarioAnalysisPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="rounded-xl border border-slate-200 bg-white p-4.5">
         <h3 className="text-slate-900 font-medium flex items-center gap-2 mb-4">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-xs text-white font-bold">2</span>
           Choose Approach
@@ -386,12 +386,12 @@ export default function ScenarioAnalysisPage() {
         </div>
 
         {approach === 'preset' && (
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3">
             {presets.map((preset) => (
               <button
                 key={preset.id}
                 onClick={() => setSelectedPresetId(preset.id)}
-                className={`rounded-lg border p-4 text-left transition-all ${
+                className={`rounded-lg border p-3.5 text-left transition-all ${
                   selectedPresetId === preset.id
                     ? 'border-primary-500 bg-primary-600/10 ring-1 ring-primary-500'
                     : 'border-slate-200 bg-white/50 hover:border-slate-300'
@@ -429,7 +429,7 @@ export default function ScenarioAnalysisPage() {
         )}
 
         {approach === 'custom' && (
-          <div className="space-y-3">
+            <div className="space-y-2.5">
             {selectedRiskIds.size === 0 ? (
               <p className="text-sm text-slate-500 text-center py-4">Select risks in Step 1 first</p>
             ) : (
@@ -448,7 +448,7 @@ export default function ScenarioAnalysisPage() {
                       impact: scoreType === 'inherent' ? (risk.inherent_impact || 3) : (risk.residual_impact || 3),
                     };
                     return (
-                      <div key={riskId} className="grid grid-cols-[1fr_120px_120px] gap-3 items-center rounded-lg bg-white/50 px-3 py-2 border border-slate-200">
+                      <div key={riskId} className="grid grid-cols-[1fr_112px_112px] gap-3 items-center rounded-lg bg-white/50 px-3 py-2 border border-slate-200">
                         <div className="min-w-0">
                           <span className="text-sm text-slate-900 truncate block">{risk.title}</span>
                           <span className="text-xs text-slate-500">{risk.risk_category}</span>
@@ -491,7 +491,7 @@ export default function ScenarioAnalysisPage() {
         )}
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <input
           type="text"
           placeholder="Scenario name (optional)"
@@ -520,26 +520,26 @@ export default function ScenarioAnalysisPage() {
       )}
 
       {results && (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <h3 className="text-slate-900 font-semibold flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-primary-400" />
             Analysis Results
           </h3>
 
-          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
               <p className="text-xs text-slate-600">Risks Analyzed</p>
               <p className="mt-1 text-2xl font-bold text-slate-900">{results.summary.total_risks_analyzed}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
               <p className="text-xs text-slate-600">Total Original Score</p>
               <p className="mt-1 text-2xl font-bold text-slate-900">{results.summary.total_original_score}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
               <p className="text-xs text-slate-600">Total Adjusted Score</p>
               <p className="mt-1 text-2xl font-bold text-slate-900">{results.summary.total_adjusted_score}</p>
             </div>
-            <div className={`rounded-xl border p-4 ${
+            <div className={`rounded-xl border p-3.5 ${
               results.summary.total_change > 0
                 ? 'border-red-500/30 bg-red-500/10'
                 : results.summary.total_change < 0
@@ -557,7 +557,7 @@ export default function ScenarioAnalysisPage() {
                 {results.summary.total_change > 0 ? '+' : ''}{results.summary.total_change}
               </p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
               <p className="text-xs text-slate-600">Increased / Decreased</p>
               <div className="mt-1 flex items-center gap-2">
                 <span className="text-lg font-bold text-red-400">{results.summary.risks_increased}</span>
@@ -565,7 +565,7 @@ export default function ScenarioAnalysisPage() {
                 <span className="text-lg font-bold text-green-400">{results.summary.risks_decreased}</span>
               </div>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
               <p className="text-xs text-slate-600">Unchanged</p>
               <p className="mt-1 text-2xl font-bold text-slate-700">{results.summary.risks_unchanged}</p>
             </div>
@@ -593,7 +593,7 @@ export default function ScenarioAnalysisPage() {
           )}
 
           {aiExplanation && (
-            <div className="rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-blue-500/5 p-6">
+            <div className="rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-blue-500/5 p-4.5">
               <div className="flex items-center gap-2 mb-4">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-purple-600 to-blue-600">
                   <Sparkles className="h-4 w-4 text-slate-900" />

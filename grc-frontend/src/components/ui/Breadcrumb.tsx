@@ -59,17 +59,17 @@ export function Breadcrumb({ items, showHome = true, className }: BreadcrumbProp
 
   return (
     <nav 
-      className={clsx('flex items-center gap-1.5 text-sm', className)}
+      className={clsx('flex items-center gap-1 text-xs sm:text-sm', className)}
       aria-label="Breadcrumb"
     >
       {showHome && (
         <>
           <Link 
             href="/dashboard" 
-            className="flex items-center justify-center w-7 h-7 rounded-md text-slate-600 hover:text-slate-700 hover:bg-slate-100 transition-all duration-150"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-600 transition-all duration-150 hover:bg-slate-100 hover:text-slate-700"
             aria-label="Home"
           >
-            <Home size={15} />
+            <Home size={14} />
           </Link>
           {breadcrumbItems.length > 0 && (
             <ChevronRight size={14} className="text-slate-600 flex-shrink-0" />
@@ -84,14 +84,14 @@ export function Breadcrumb({ items, showHome = true, className }: BreadcrumbProp
               <ChevronRight size={14} className="text-slate-600 flex-shrink-0" />
             )}
             {isLast ? (
-              <span className="flex items-center gap-1.5 px-2 py-1 text-white font-medium">
+              <span className="flex items-center gap-1.5 px-1.5 py-0.5 font-medium text-slate-900">
                 {item.icon && <item.icon size={14} />}
                 <span className="truncate max-w-[200px]">{item.label}</span>
               </span>
             ) : (
               <Link
                 href={item.href}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-600 hover:text-slate-700 hover:bg-slate-100 transition-all duration-150"
+                className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-slate-600 transition-all duration-150 hover:bg-slate-100 hover:text-slate-700"
               >
                 {item.icon && <item.icon size={14} />}
                 <span className="truncate max-w-[150px]">{item.label}</span>

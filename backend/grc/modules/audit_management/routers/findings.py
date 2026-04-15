@@ -914,7 +914,7 @@ def get_overdue_findings(
         joinedload(AuditFinding.engagement),
     ).filter(
         AuditFinding.tenant_id.in_(user_tenants),
-        AuditFinding.status.in_(["open", "in_progress"]),
+        AuditFinding.status.in_(["open", "in_progress", "management_agreed", "management_disagreed", "partially_agreed", "retest_failed"]),
         AuditFinding.due_date < now
     ).order_by(AuditFinding.due_date.asc()).all()
     
@@ -1332,6 +1332,12 @@ def close_finding(
     if not fu:
         raise HTTPException(status_code=404, detail="Follow-up not found")
     
+    if fu.retest_result != "pass":
+        raise HTTPException(status_code=400, detail="Cannot close finding: follow-up retest result must be 'pass'")
+
+    if finding.status not in ("remediated", "open", "in_progress", "management_agreed", "retest_failed"):
+        raise HTTPException(status_code=400, detail=f"Cannot close finding in '{finding.status}' status")
+
     fu.closure_approved = True
     fu.closure_approved_by_id = current_user.id
     fu.closure_approved_at = datetime.utcnow()
@@ -1340,6 +1346,110 @@ def close_finding(
     
     db.commit()
     return {"message": "Finding closed successfully"}
+
+
+@router.post("/{finding_id}/ai-root-cause")
+def ai_suggest_root_cause(
+    finding_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    finding = db.query(AuditFinding).options(
+        joinedload(AuditFinding.engagement),
+    ).filter(
+        AuditFinding.id == finding_id,
+        AuditFinding.tenant_id.in_(user_tenants)
+    ).first()
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    context_parts = [
+        f"Finding: {finding.title}",
+        f"Condition: {finding.condition or 'N/A'}",
+        f"Criteria: {finding.criteria or 'N/A'}",
+        f"Cause: {finding.cause or 'N/A'}",
+        f"Effect: {finding.effect or 'N/A'}",
+        f"Severity: {finding.severity or 'N/A'}",
+        f"Root Cause Category: {finding.root_cause_category or 'N/A'}",
+    ]
+    if finding.engagement:
+        context_parts.append(f"Engagement: {finding.engagement.title}")
+        if finding.engagement.scope:
+            context_parts.append(f"Scope: {finding.engagement.scope}")
+
+    similar_findings = db.query(AuditFinding).filter(
+        AuditFinding.tenant_id.in_(user_tenants),
+        AuditFinding.id != finding_id,
+        AuditFinding.root_cause_category == finding.root_cause_category,
+    ).limit(5).all()
+
+    if similar_findings:
+        context_parts.append(f"\nHistorical patterns — {len(similar_findings)} similar findings in same root cause category:")
+        for sf in similar_findings:
+            context_parts.append(f"  - {sf.title}: {sf.cause or 'No cause documented'}")
+
+    context = "\n".join(context_parts)
+
+    heuristic_causes = []
+    text_lower = f"{finding.title} {finding.condition or ''} {finding.cause or ''}".lower()
+    if any(k in text_lower for k in ["access", "privilege", "unauthorized"]):
+        heuristic_causes.append({"category": "technology", "description": "Inadequate access control mechanisms or privilege management gaps.", "likelihood": "high"})
+    if any(k in text_lower for k in ["training", "awareness", "human", "manual"]):
+        heuristic_causes.append({"category": "people", "description": "Insufficient staff training, awareness gaps, or over-reliance on manual processes.", "likelihood": "high"})
+    if any(k in text_lower for k in ["policy", "procedure", "process", "segregation"]):
+        heuristic_causes.append({"category": "process", "description": "Process design deficiency — missing or outdated policies, inadequate segregation of duties.", "likelihood": "medium"})
+    if any(k in text_lower for k in ["oversight", "governance", "committee", "monitoring"]):
+        heuristic_causes.append({"category": "governance", "description": "Governance and oversight gaps — lack of monitoring or committee review.", "likelihood": "medium"})
+    if not heuristic_causes:
+        heuristic_causes.append({"category": finding.root_cause_category or "process", "description": "Control design or operational effectiveness gap requiring further analysis.", "likelihood": "medium"})
+
+    client = get_openai_client()
+    if not client:
+        return {"root_causes": heuristic_causes, "summary": "Heuristic root cause analysis based on finding keywords and patterns.", "source": "heuristic"}
+
+    prompt = f"""You are an internal audit root cause analysis expert.
+Analyze the audit finding below and suggest 2-4 potential root causes.
+For each root cause, provide: category (people/process/technology/governance), a concise description, and likelihood (high/medium/low).
+Also provide a brief summary paragraph of the overall root cause analysis.
+Return STRICT JSON with keys: root_causes (array of objects with category, description, likelihood), summary (string).
+
+{context}"""
+
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-4o",
+            temperature=0.3,
+            messages=[
+                {"role": "system", "content": "Return valid JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        content = (completion.choices[0].message.content or "").strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        parsed = json.loads(content)
+        raw_causes = parsed.get("root_causes")
+        if not isinstance(raw_causes, list):
+            raw_causes = heuristic_causes
+        validated_causes = []
+        for rc in raw_causes:
+            if isinstance(rc, dict) and "description" in rc:
+                validated_causes.append({
+                    "category": rc.get("category", "process"),
+                    "description": str(rc["description"]),
+                    "likelihood": rc.get("likelihood", "medium"),
+                })
+        if not validated_causes:
+            validated_causes = heuristic_causes
+        return {
+            "root_causes": validated_causes,
+            "summary": str(parsed.get("summary", "AI-powered root cause analysis.")),
+            "source": "ai",
+        }
+    except Exception as exc:
+        logger.warning(f"AI root cause suggestion fallback: {exc}")
+        return {"root_causes": heuristic_causes, "summary": "Heuristic root cause analysis (AI unavailable).", "source": "heuristic"}
 
 
 @router.delete("/{finding_id}")

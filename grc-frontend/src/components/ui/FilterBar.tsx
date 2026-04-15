@@ -47,8 +47,8 @@ export function FilterBar({
   const hasActiveFilters = activeFilters.length > 0;
 
   return (
-    <div className={clsx('space-y-3', className)}>
-      <div className="flex flex-wrap items-center gap-3">
+    <div className={clsx('space-y-2.5', className)}>
+      <div className="flex flex-wrap items-center gap-2.5">
         {onSearchChange && (
           <div className="relative flex-1 min-w-64">
             <Search
@@ -61,13 +61,13 @@ export function FilterBar({
               value={searchValue}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors"
+              className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-9 pr-3 text-sm text-black placeholder-slate-500 transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               aria-label={searchPlaceholder}
             />
             {searchValue && (
               <button
                 onClick={() => onSearchChange('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 transition-colors hover:text-slate-900"
                 aria-label="Clear search"
               >
                 <X size={14} />
@@ -81,7 +81,7 @@ export function FilterBar({
             <select
               value={filter.value}
               onChange={(e) => filter.onChange(e.target.value)}
-              className="appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors cursor-pointer"
+              className="cursor-pointer appearance-none rounded-lg border border-slate-300 bg-white py-1.5 pl-3 pr-8 text-sm text-black transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               aria-label={filter.label}
             >
               {filter.options.map((option) => (
@@ -111,7 +111,7 @@ export function FilterBar({
               {onClearFilter && (
                 <button
                   onClick={() => onClearFilter(filter.id)}
-                  className="hover:text-white transition-colors"
+                  className="transition-colors hover:text-primary-700"
                   aria-label={`Remove ${filter.label} filter`}
                 >
                   <X size={12} />
@@ -122,7 +122,7 @@ export function FilterBar({
           {onClearAll && (
             <button
               onClick={onClearAll}
-              className="text-xs text-slate-500 hover:text-white transition-colors underline underline-offset-2"
+              className="text-xs text-slate-500 underline underline-offset-2 transition-colors hover:text-slate-900"
             >
               Clear all
             </button>

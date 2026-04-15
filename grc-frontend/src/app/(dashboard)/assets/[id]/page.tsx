@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { assetsApi, controlsApi, evidenceApi } from '@/lib/api';
+import { assetsApi, controlsApi, evidenceApi, vulnManagementApi } from '@/lib/api';
+import type { ITAsset } from '@/types';
 import { 
   ArrowLeft, Loader2, AlertCircle, Shield, DollarSign, 
   Target, TrendingUp, Link as LinkIcon, FileCheck, AlertTriangle,
   ClipboardList, History, Plus, X, Trash2, Edit, RefreshCw,
   AppWindow, HardDrive, Database, Cloud, Building2,
-  Lock, ShieldCheck, Zap, Calendar, MapPin, User, Building, Search
+  Lock, ShieldCheck, Zap, Calendar, MapPin, User, Building, Search, Bug
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -29,7 +30,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   third_party: 'Third-Party System',
 };
 
-type TabType = 'details' | 'controls' | 'evidence' | 'risks' | 'assessments';
+type TabType = 'details' | 'controls' | 'evidence' | 'risks' | 'assessments' | 'vulnerabilities';
 
 interface LinkedControl {
   id: number;
@@ -54,6 +55,18 @@ interface LinkedEvidence {
   relationship_type: string;
 }
 
+interface LinkedVulnerability {
+  link_id?: number;
+  vulnerability_id: number;
+  vuln_id?: string | null;
+  title?: string | null;
+  severity?: string | null;
+  status?: string | null;
+  impact_on_asset?: string | null;
+  notes?: string | null;
+  created_at?: string | null;
+}
+
 interface RiskAssessment {
   id: number;
   assessment_date: string;
@@ -70,6 +83,9 @@ interface AssetDetailData {
   asset_type: string;
   owner_id?: number;
   owner_name?: string;
+  custodian?: string;
+  host_name?: string;
+  ip_address?: string;
   criticality: string;
   confidentiality_rating?: number;
   integrity_rating?: number;
@@ -83,9 +99,28 @@ interface AssetDetailData {
   linked_framework_controls: LinkedFrameworkControl[];
   linked_risks: Array<{ risk_id: number; title?: string; status?: string }>;
   linked_evidence: LinkedEvidence[];
+  linked_vulnerabilities: LinkedVulnerability[];
   risk_assessments: RiskAssessment[];
   coverage_percentage: number;
 }
+
+type AssetUpdatePayload = Partial<
+  Pick<
+    ITAsset,
+    | 'name'
+    | 'description'
+    | 'host_name'
+    | 'ip_address'
+    | 'criticality'
+    | 'confidentiality_rating'
+    | 'integrity_rating'
+    | 'availability_rating'
+    | 'valuation'
+    | 'vendor'
+    | 'location'
+    | 'status'
+  >
+>;
 
 export default function AssetDetailPage() {
   const params = useParams();
@@ -95,7 +130,9 @@ export default function AssetDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>('details');
   const [showLinkControlModal, setShowLinkControlModal] = useState(false);
   const [showLinkEvidenceModal, setShowLinkEvidenceModal] = useState(false);
+  const [showLinkVulnerabilityModal, setShowLinkVulnerabilityModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const { data: asset, isLoading, error } = useQuery<AssetDetailData>({
     queryKey: ['asset-detail', assetId],
@@ -113,10 +150,10 @@ export default function AssetDetailPage() {
     },
   });
 
-  const { data: allControls } = useQuery({
+  const { data: allControls, isLoading: controlsLoading } = useQuery({
     queryKey: ['all-normalized-controls'],
     queryFn: async () => {
-      const response = await controlsApi.getNormalized();
+      const response = await controlsApi.getAll();
       return response.data;
     },
     enabled: showLinkControlModal,
@@ -129,6 +166,15 @@ export default function AssetDetailPage() {
       return response.data;
     },
     enabled: showLinkEvidenceModal,
+  });
+
+  const { data: allVulnerabilities } = useQuery({
+    queryKey: ['all-vulnerabilities'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.vulnerabilities.getAll();
+      return response.data as Array<{ id: number; vuln_id?: string; title?: string; severity?: string; status?: string }>;
+    },
+    enabled: showLinkVulnerabilityModal,
   });
 
   const assessRiskMutation = useMutation({
@@ -161,8 +207,8 @@ export default function AssetDetailPage() {
   });
 
   const linkControlMutation = useMutation({
-    mutationFn: (data: { framework_control_id: number; coverage_status?: string }) => 
-      assetsApi.linkFrameworkControl(assetId, data),
+    mutationFn: (data: { normalized_control_id: number; coverage_status?: string }) => 
+      assetsApi.linkControl(assetId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
       setShowLinkControlModal(false);
@@ -178,6 +224,32 @@ export default function AssetDetailPage() {
     },
   });
 
+  const linkVulnerabilityMutation = useMutation({
+    mutationFn: (vulnId: number) =>
+      vulnManagementApi.assetLinks.create(vulnId, { asset_id: assetId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      setShowLinkVulnerabilityModal(false);
+    },
+  });
+
+  const unlinkVulnerabilityMutation = useMutation({
+    mutationFn: (vulnId: number) =>
+      vulnManagementApi.assetLinks.delete(vulnId, assetId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+    },
+  });
+
+  const updateAssetMutation = useMutation({
+    mutationFn: (data: AssetUpdatePayload) => assetsApi.update(assetId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
+      setShowEditModal(false);
+    },
+  });
+
   const getAssetIcon = (type: string) => {
     const Icon = ASSET_TYPE_ICONS[type] || AppWindow;
     return <Icon className="h-6 w-6" />;
@@ -185,12 +257,12 @@ export default function AssetDetailPage() {
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      active: 'bg-green-900/50 text-green-400 border-green-700',
-      inactive: 'bg-yellow-900/50 text-yellow-400 border-yellow-700',
-      decommissioned: 'bg-slate-700 text-slate-400 border-slate-600',
+      active: 'bg-green-50 text-green-700 border-green-200',
+      inactive: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+      decommissioned: 'bg-slate-100 text-slate-600 border-slate-200',
     };
     return (
-      <span className={`rounded-full border px-3 py-1 text-sm ${colors[status] || 'bg-slate-700 text-slate-400 border-slate-600'}`}>
+      <span className={`rounded-full border px-3 py-1 text-sm font-medium ${colors[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     );
@@ -198,13 +270,13 @@ export default function AssetDetailPage() {
 
   const getCriticalityBadge = (criticality: string) => {
     const colors: Record<string, string> = {
-      critical: 'bg-red-900/50 text-red-400 border-red-700',
-      high: 'bg-orange-900/50 text-orange-400 border-orange-700',
-      medium: 'bg-yellow-900/50 text-yellow-400 border-yellow-700',
-      low: 'bg-green-900/50 text-green-400 border-green-700',
+      critical: 'bg-red-50 text-red-600 border-red-200',
+      high: 'bg-orange-50 text-orange-600 border-orange-200',
+      medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+      low: 'bg-green-50 text-green-600 border-green-200',
     };
     return (
-      <span className={`rounded-full border px-3 py-1 text-sm ${colors[criticality] || 'bg-slate-700 text-slate-400 border-slate-600'}`}>
+      <span className={`rounded-full border px-3 py-1 text-sm font-medium ${colors[criticality] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
         {criticality.charAt(0).toUpperCase() + criticality.slice(1)}
       </span>
     );
@@ -270,10 +342,22 @@ export default function AssetDetailPage() {
     ? asset.risk_assessments.sort((a, b) => new Date(b.assessment_date).getTime() - new Date(a.assessment_date).getTime())[0]
     : null;
 
+  const displayName = (() => {
+    const isAutoName = asset.name === asset.ip_address || asset.name?.startsWith('Nessus-Host-');
+    if (isAutoName) {
+      const locationName = asset.location
+        ? asset.location.split(',')[0].trim()
+        : '';
+      return asset.host_name || locationName || asset.name;
+    }
+    return asset.name;
+  })();
+
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
     { id: 'details', label: 'Details', icon: ClipboardList },
     { id: 'controls', label: 'Controls', icon: Shield },
     { id: 'evidence', label: 'Evidence', icon: FileCheck },
+    { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
     { id: 'risks', label: 'Risks', icon: AlertTriangle },
     { id: 'assessments', label: 'Assessments', icon: History },
   ];
@@ -293,7 +377,7 @@ export default function AssetDetailPage() {
               {getAssetIcon(asset.asset_type)}
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">{asset.name}</h1>
+              <h1 className="text-2xl font-bold text-white">{displayName}</h1>
               <p className="text-slate-400">{asset.description || 'No description'}</p>
             </div>
           </div>
@@ -307,6 +391,7 @@ export default function AssetDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowEditModal(true)}
             className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-white hover:bg-slate-600"
             title="Edit Asset"
           >
@@ -450,6 +535,14 @@ export default function AssetDetailPage() {
             isUnlinking={unlinkEvidenceMutation.isPending}
           />
         )}
+        {activeTab === 'vulnerabilities' && (
+          <VulnerabilitiesTab
+            asset={asset}
+            onLinkVulnerability={() => setShowLinkVulnerabilityModal(true)}
+            onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
+            isUnlinking={unlinkVulnerabilityMutation.isPending}
+          />
+        )}
         {activeTab === 'risks' && (
           <RisksTab asset={asset} />
         )}
@@ -466,12 +559,13 @@ export default function AssetDetailPage() {
         <LinkControlModal
           onClose={() => setShowLinkControlModal(false)}
           onLink={(controlId, coverageStatus) => linkControlMutation.mutate({ 
-            framework_control_id: controlId, 
+            normalized_control_id: controlId, 
             coverage_status: coverageStatus 
           })}
           isLinking={linkControlMutation.isPending}
-          linkedControlIds={asset.linked_framework_controls?.map(c => c.framework_control_id) || []}
-          allControls={allControls || []}
+          isLoading={controlsLoading}
+          linkedControlIds={asset.linked_controls?.map(c => c.control_id) || []}
+          allControls={(allControls || []).map(c => ({ id: c.id, internal_id: (c as any).code, name: c.name, category: (c as any).control_owner }))}
         />
       )}
 
@@ -488,6 +582,16 @@ export default function AssetDetailPage() {
         />
       )}
 
+      {showLinkVulnerabilityModal && (
+        <LinkVulnerabilityModal
+          onClose={() => setShowLinkVulnerabilityModal(false)}
+          onLink={(vulnId) => linkVulnerabilityMutation.mutate(vulnId)}
+          isLinking={linkVulnerabilityMutation.isPending}
+          linkedVulnerabilityIds={asset.linked_vulnerabilities?.map((v) => v.vulnerability_id) || []}
+          allVulnerabilities={allVulnerabilities || []}
+        />
+      )}
+
       {showDeleteConfirm && (
         <DeleteConfirmModal
           assetName={asset.name}
@@ -496,6 +600,227 @@ export default function AssetDetailPage() {
           isDeleting={deleteMutation.isPending}
         />
       )}
+
+      {showEditModal && (
+        <EditAssetModal
+          asset={asset}
+          onClose={() => setShowEditModal(false)}
+          onSave={(data) => updateAssetMutation.mutate(data)}
+          isSaving={updateAssetMutation.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditAssetModal({
+  asset,
+  onClose,
+  onSave,
+  isSaving,
+}: {
+  asset: AssetDetailData;
+  onClose: () => void;
+  onSave: (data: AssetUpdatePayload) => void;
+  isSaving: boolean;
+}) {
+  const [form, setForm] = useState({
+    name: asset.name || '',
+    description: asset.description || '',
+    host_name: asset.host_name || '',
+    ip_address: asset.ip_address || '',
+    criticality: asset.criticality || 'medium',
+    confidentiality_rating: asset.confidentiality_rating || 0,
+    integrity_rating: asset.integrity_rating || 0,
+    availability_rating: asset.availability_rating || 0,
+    valuation: asset.valuation || 0,
+    vendor: asset.vendor || '',
+    location: asset.location || '',
+    status: asset.status || 'active',
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave({
+      name: form.name,
+      description: form.description || undefined,
+      host_name: form.host_name || undefined,
+      ip_address: form.ip_address || undefined,
+      criticality: form.criticality as ITAsset['criticality'],
+      confidentiality_rating: Number(form.confidentiality_rating) || 0,
+      integrity_rating: Number(form.integrity_rating) || 0,
+      availability_rating: Number(form.availability_rating) || 0,
+      valuation: Number(form.valuation) || 0,
+      vendor: form.vendor || undefined,
+      location: form.location || undefined,
+      status: form.status as ITAsset['status'],
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-white">Edit Asset</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-slate-400">Asset Name</label>
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-400">Description</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              rows={3}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-sm text-slate-400">Primary Component</label>
+              <input
+                value={form.host_name}
+                onChange={(e) => setForm({ ...form, host_name: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400">IP Address</label>
+              <input
+                value={form.ip_address}
+                onChange={(e) => setForm({ ...form, ip_address: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-sm text-slate-400">Criticality</label>
+              <select
+                value={form.criticality}
+                onChange={(e) => setForm({ ...form, criticality: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400">Status</label>
+              <select
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="decommissioned">Decommissioned</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <label className="block text-sm text-slate-400">Confidentiality (0-5)</label>
+              <input
+                type="number"
+                min={0}
+                max={5}
+                value={form.confidentiality_rating}
+                onChange={(e) => setForm({ ...form, confidentiality_rating: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400">Integrity (0-5)</label>
+              <input
+                type="number"
+                min={0}
+                max={5}
+                value={form.integrity_rating}
+                onChange={(e) => setForm({ ...form, integrity_rating: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400">Availability (0-5)</label>
+              <input
+                type="number"
+                min={0}
+                max={5}
+                value={form.availability_rating}
+                onChange={(e) => setForm({ ...form, availability_rating: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-sm text-slate-400">Valuation</label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.valuation}
+                onChange={(e) => setForm({ ...form, valuation: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400">Vendor</label>
+              <input
+                value={form.vendor}
+                onChange={(e) => setForm({ ...form, vendor: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-400">Location</label>
+            <input
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+            >
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -520,6 +845,14 @@ function DetailsTab({ asset }: { asset: AssetDetailData }) {
           <div>
             <span className="text-sm text-slate-400">Asset Type</span>
             <p className="text-white">{ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}</p>
+          </div>
+          <div>
+            <span className="text-sm text-slate-400">Primary Component</span>
+            <p className="text-white">{asset.host_name || 'Not specified'}</p>
+          </div>
+          <div>
+            <span className="text-sm text-slate-400">Sub-components</span>
+            <p className="text-white">{asset.custodian || 'Not specified'}</p>
           </div>
           <div>
             <span className="text-sm text-slate-400">Criticality</span>
@@ -558,6 +891,10 @@ function DetailsTab({ asset }: { asset: AssetDetailData }) {
           <div>
             <span className="text-sm text-slate-400">Location</span>
             <p className="text-white">{asset.location || 'Unknown'}</p>
+          </div>
+          <div>
+            <span className="text-sm text-slate-400">IP Address</span>
+            <p className="text-white">{asset.ip_address || 'N/A'}</p>
           </div>
           <div>
             <span className="text-sm text-slate-400">Created</span>
@@ -752,6 +1089,107 @@ function EvidenceTab({
   );
 }
 
+function VulnerabilitiesTab({
+  asset,
+  onLinkVulnerability,
+  onUnlinkVulnerability,
+  isUnlinking,
+}: {
+  asset: AssetDetailData;
+  onLinkVulnerability: () => void;
+  onUnlinkVulnerability: (vulnId: number) => void;
+  isUnlinking: boolean;
+}) {
+  const severityColors: Record<string, string> = {
+    critical: 'bg-red-900/50 text-red-400',
+    high: 'bg-orange-900/50 text-orange-400',
+    medium: 'bg-yellow-900/50 text-yellow-400',
+    low: 'bg-green-900/50 text-green-400',
+    info: 'bg-slate-700 text-slate-400',
+  };
+
+  const statusColors: Record<string, string> = {
+    open: 'bg-blue-900/50 text-blue-400',
+    in_progress: 'bg-purple-900/50 text-purple-400',
+    resolved: 'bg-green-900/50 text-green-400',
+    accepted: 'bg-slate-700 text-slate-400',
+    false_positive: 'bg-slate-700 text-slate-400',
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+          <Bug className="h-5 w-5 text-primary-400" />
+          Linked Vulnerabilities ({asset.linked_vulnerabilities?.length || 0})
+        </h3>
+        <button
+          onClick={onLinkVulnerability}
+          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+        >
+          <Plus className="h-4 w-4" />
+          Link Vulnerability
+        </button>
+      </div>
+
+      {asset.linked_vulnerabilities && asset.linked_vulnerabilities.length > 0 ? (
+        <div className="space-y-2">
+          {asset.linked_vulnerabilities.map((vuln) => (
+            <div key={`${vuln.vulnerability_id}-${vuln.link_id || 'link'}`} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
+              <div className="flex items-center gap-3">
+                <Bug className="h-5 w-5 text-red-400" />
+                <div>
+                  <p className="text-white">
+                    {vuln.title || `Vulnerability #${vuln.vulnerability_id}`}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {vuln.vuln_id ? `${vuln.vuln_id} • ` : ''}{vuln.status || 'status unknown'}
+                  </p>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 text-xs ${severityColors[(vuln.severity || '').toLowerCase()] || 'bg-slate-700 text-slate-400'}`}>
+                  {vuln.severity || 'unknown'}
+                </span>
+                <span className={`rounded-full px-2 py-0.5 text-xs ${statusColors[(vuln.status || '').toLowerCase()] || 'bg-slate-700 text-slate-400'}`}>
+                  {(vuln.status || 'unknown').replace(/_/g, ' ')}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Link
+                  href={`/vulnerabilities/${vuln.vulnerability_id}`}
+                  className="text-sm text-primary-400 hover:underline"
+                >
+                  View
+                </Link>
+                <button
+                  onClick={() => onUnlinkVulnerability(vuln.vulnerability_id)}
+                  disabled={isUnlinking}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-red-400 disabled:opacity-50"
+                  title="Unlink Vulnerability"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Bug className="mb-4 h-12 w-12 text-slate-600" />
+          <h4 className="text-lg font-medium text-white">No Vulnerabilities Linked</h4>
+          <p className="mt-1 text-slate-400">Link vulnerabilities to track asset exposure</p>
+          <button
+            onClick={onLinkVulnerability}
+            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+          >
+            <Plus className="h-4 w-4" />
+            Link First Vulnerability
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RisksTab({ asset }: { asset: AssetDetailData }) {
   return (
     <div className="space-y-6">
@@ -904,12 +1342,14 @@ function LinkControlModal({
   onClose,
   onLink,
   isLinking,
+  isLoading,
   linkedControlIds,
   allControls,
 }: {
   onClose: () => void;
   onLink: (controlId: number, coverageStatus: string) => void;
   isLinking: boolean;
+  isLoading?: boolean;
   linkedControlIds: number[];
   allControls: Array<{ id: number | string; internal_id?: string; name: string; category?: string }>;
 }) {
@@ -968,7 +1408,9 @@ function LinkControlModal({
             ))
           ) : (
             <div className="p-4 text-center text-slate-400">
-              {allControls.length === 0 ? 'Loading controls...' : 'No controls found'}
+              {isLoading ? (
+                <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading controls...</span>
+              ) : allControls.length === 0 ? 'No controls available' : 'No controls found'}
             </div>
           )}
         </div>
@@ -1117,6 +1559,115 @@ function LinkEvidenceModal({
               <LinkIcon className="h-4 w-4" />
             )}
             Link Evidence
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LinkVulnerabilityModal({
+  onClose,
+  onLink,
+  isLinking,
+  linkedVulnerabilityIds,
+  allVulnerabilities,
+}: {
+  onClose: () => void;
+  onLink: (vulnId: number) => void;
+  isLinking: boolean;
+  linkedVulnerabilityIds: number[];
+  allVulnerabilities: Array<{ id: number; vuln_id?: string; title?: string; severity?: string; status?: string }>;
+}) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedVulnId, setSelectedVulnId] = useState<number | null>(null);
+
+  const filteredVulns = allVulnerabilities.filter((vuln) => {
+    const name = `${vuln.vuln_id || ''} ${vuln.title || ''}`.toLowerCase();
+    const matchesSearch = name.includes(searchTerm.toLowerCase());
+    const notLinked = !linkedVulnerabilityIds.includes(vuln.id);
+    return matchesSearch && notLinked;
+  });
+
+  const severityColors: Record<string, string> = {
+    critical: 'text-red-400',
+    high: 'text-orange-400',
+    medium: 'text-yellow-400',
+    low: 'text-green-400',
+    info: 'text-slate-400',
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-white">Link Vulnerability</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search vulnerabilities..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+          />
+        </div>
+
+        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-700">
+          {filteredVulns.length > 0 ? (
+            filteredVulns.map((vuln) => (
+              <button
+                key={vuln.id}
+                onClick={() => setSelectedVulnId(vuln.id)}
+                className={`flex w-full items-center gap-3 border-b border-slate-700 p-3 text-left last:border-0 ${
+                  selectedVulnId === vuln.id ? 'bg-primary-900/30' : 'hover:bg-slate-800'
+                }`}
+              >
+                <Bug className={`h-5 w-5 ${selectedVulnId === vuln.id ? 'text-primary-400' : 'text-slate-400'}`} />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-primary-400">{vuln.vuln_id || `VULN-${vuln.id}`}</span>
+                    <span className={`text-xs ${severityColors[(vuln.severity || '').toLowerCase()] || 'text-slate-400'}`}>
+                      {vuln.severity || 'unknown'}
+                    </span>
+                  </div>
+                  <p className="text-white">{vuln.title || 'Untitled vulnerability'}</p>
+                  {vuln.status && (
+                    <span className="text-xs text-slate-400">{vuln.status.replace(/_/g, ' ')}</span>
+                  )}
+                </div>
+              </button>
+            ))
+          ) : (
+            <div className="p-4 text-center text-slate-400">
+              {allVulnerabilities.length === 0 ? 'Loading vulnerabilities...' : 'No vulnerabilities found'}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-800"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => selectedVulnId && onLink(selectedVulnId)}
+            disabled={!selectedVulnId || isLinking}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {isLinking ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <LinkIcon className="h-4 w-4" />
+            )}
+            Link Vulnerability
           </button>
         </div>
       </div>

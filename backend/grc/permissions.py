@@ -346,6 +346,79 @@ PERMISSION_MATRIX = [
                 "actions": ["view", "edit"]
             }
         ]
+    },
+    {
+        "module": "integrations",
+        "display_name": "Integrations",
+        "submodules": [
+            {
+                "name": "connections",
+                "display_name": "Scanner Connections",
+                "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "exceptions",
+                "display_name": "Vulnerability Exceptions",
+                "actions": ["view", "create", "edit", "delete", "approve", "reject"]
+            },
+            {
+                "name": "sync",
+                "display_name": "Sync Management",
+                "actions": ["view", "trigger"]
+            },
+            {
+                "name": "analytics",
+                "display_name": "Integration Analytics",
+                "actions": ["view"]
+            }
+        ]
+    },
+    {
+        "module": "is_projects",
+        "display_name": "IS Projects",
+        "submodules": [
+            {
+                "name": "projects",
+                "display_name": "Projects",
+                "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "dashboard",
+                "display_name": "Portfolio Dashboard",
+                "actions": ["view"]
+            }
+        ]
+    },
+    {
+        "module": "critical_tasks",
+        "display_name": "Critical Tasks",
+        "submodules": [
+            {
+                "name": "tasks",
+                "display_name": "Task Board",
+                "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "reports",
+                "display_name": "Task Reports",
+                "actions": ["view"]
+            },
+            {
+                "name": "templates",
+                "display_name": "Task Templates",
+                "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "approvals",
+                "display_name": "Task Approvals",
+                "actions": ["view", "approve", "reject"]
+            },
+            {
+                "name": "ai",
+                "display_name": "Task AI",
+                "actions": ["view", "create"]
+            }
+        ]
     }
 ]
 

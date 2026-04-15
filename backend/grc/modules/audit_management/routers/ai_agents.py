@@ -1465,3 +1465,626 @@ Recommend 8-15 primary skills and 2-5 cross-domain skills. Prioritize practical 
     except Exception as e:
         logger.error(f"AI suggest engagement skills error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
+
+
+class ScopeGeneratorRequest(BaseModel):
+    engagement_id: Optional[int] = None
+    entity_id: Optional[int] = None
+    title: Optional[str] = None
+    engagement_type: Optional[str] = "assurance"
+
+
+class EngagementLetterRequest(BaseModel):
+    engagement_id: int
+
+
+class SeverityCalibratorRequest(BaseModel):
+    title: str
+    condition: Optional[str] = None
+    criteria: Optional[str] = None
+    cause: Optional[str] = None
+    effect: Optional[str] = None
+    control_area: Optional[str] = None
+    regulatory_context: Optional[str] = None
+
+
+class RecurringIssueRequest(BaseModel):
+    entity_id: Optional[int] = None
+    engagement_id: Optional[int] = None
+    theme: Optional[str] = None
+
+
+class ResponseEvaluatorRequest(BaseModel):
+    finding_id: int
+    response_text: str
+    response_type: Optional[str] = "agree"
+    action_plan: Optional[str] = None
+    target_date: Optional[str] = None
+
+
+class AuditOpinionRequest(BaseModel):
+    engagement_id: int
+
+
+class ThemeAggregatorRequest(BaseModel):
+    engagement_ids: list
+    period: Optional[str] = None
+
+
+def _parse_ai_json(content: str, fallback: dict) -> dict:
+    try:
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
+        return json.loads(content.strip())
+    except (json.JSONDecodeError, IndexError, ValueError):
+        return fallback
+
+
+@router.post("/generate-scope")
+def ai_generate_scope(
+    data: ScopeGeneratorRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=403, detail="No tenant access")
+
+    context_parts = []
+    entity = None
+    engagement = None
+
+    if data.engagement_id:
+        engagement = db.query(AuditEngagement).filter(
+            AuditEngagement.id == data.engagement_id,
+            AuditEngagement.tenant_id.in_(user_tenants)
+        ).first()
+        if engagement:
+            context_parts.append(f"Engagement: {engagement.title}")
+            context_parts.append(f"Type: {engagement.engagement_type}")
+            if engagement.auditable_entity_id:
+                entity = db.query(AuditableEntity).filter(
+                    AuditableEntity.id == engagement.auditable_entity_id,
+                    AuditableEntity.tenant_id.in_(user_tenants)
+                ).first()
+
+    if data.entity_id and not entity:
+        entity = db.query(AuditableEntity).filter(
+            AuditableEntity.id == data.entity_id,
+            AuditableEntity.tenant_id.in_(user_tenants)
+        ).first()
+
+    if entity:
+        context_parts.append(f"Entity: {entity.name}")
+        if hasattr(entity, 'industry') and entity.industry:
+            context_parts.append(f"Industry: {entity.industry}")
+        if entity.description:
+            context_parts.append(f"Entity Description: {entity.description}")
+
+    if data.title:
+        context_parts.append(f"Title: {data.title}")
+
+    prior_findings = db.query(AuditFinding).filter(
+        AuditFinding.tenant_id.in_(user_tenants)
+    )
+    if entity and engagement and engagement.auditable_entity_id:
+        prior_findings = prior_findings.join(AuditEngagement, AuditFinding.engagement_id == AuditEngagement.id).filter(
+            AuditEngagement.auditable_entity_id == entity.id
+        )
+    prior = prior_findings.order_by(AuditFinding.created_at.desc()).limit(10).all()
+    if prior:
+        context_parts.append(f"\nPrior findings ({len(prior)}):")
+        for f in prior:
+            context_parts.append(f"  - [{f.severity}] {f.title}")
+
+    risks = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants)).order_by(Risk.inherent_score.desc()).limit(5).all()
+    if risks:
+        context_parts.append(f"\nTop risks:")
+        for r in risks:
+            context_parts.append(f"  - {r.title} (score: {r.inherent_score})")
+
+    context = "\n".join(context_parts) or "General assurance engagement"
+
+    prompt = f"""You are a Chief Audit Executive following IIA Global Standards 2024.
+Based on the context below, generate a comprehensive engagement scope, objectives, and methodology.
+
+{context}
+
+Return JSON:
+{{
+    "scope": "<detailed scope statement: what will be examined, time period, boundaries, key areas. 4-6 sentences>",
+    "objectives": "<3-5 numbered audit objectives focused on controls, compliance, effectiveness>",
+    "methodology": "<audit methodology description: approach, sampling, testing methods, tools. 3-4 sentences>",
+    "key_risks": ["<3-5 key risk areas to focus on>"],
+    "estimated_duration_days": <number>,
+    "suggested_team_size": <number>
+}}
+
+Return ONLY valid JSON."""
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=1500,
+        )
+        result = _parse_ai_json(response.choices[0].message.content, {
+            "scope": "Scope generation requires more context.",
+            "objectives": "", "methodology": "", "key_risks": [],
+        })
+        return {"scope_data": result, "context_used": len(context_parts)}
+    except Exception as e:
+        logger.error(f"AI scope generator error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="AI scope generation failed. Please try again.")
+
+
+@router.post("/generate-engagement-letter")
+def ai_generate_engagement_letter(
+    data: EngagementLetterRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    engagement = db.query(AuditEngagement).filter(
+        AuditEngagement.id == data.engagement_id,
+        AuditEngagement.tenant_id.in_(user_tenants)
+    ).first()
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    team_members = []
+    if hasattr(engagement, 'team_members') and engagement.team_members:
+        for tm in engagement.team_members:
+            if hasattr(tm, 'user') and tm.user:
+                team_members.append(f"{tm.user.display_name or tm.user.username} ({tm.role})")
+
+    entity_name = ""
+    if engagement.auditable_entity_id:
+        entity = db.query(AuditableEntity).filter(
+            AuditableEntity.id == engagement.auditable_entity_id,
+            AuditableEntity.tenant_id.in_(user_tenants)
+        ).first()
+        if entity:
+            entity_name = entity.name
+
+    context = f"""Engagement: {engagement.title}
+Type: {engagement.engagement_type}
+Entity: {entity_name or 'N/A'}
+Scope: {engagement.scope or 'To be determined'}
+Objectives: {engagement.objectives or 'To be determined'}
+Methodology: {engagement.methodology or 'Standard audit methodology'}
+Start Date: {engagement.planned_start.isoformat() if engagement.planned_start else 'TBD'}
+End Date: {engagement.planned_end.isoformat() if engagement.planned_end else 'TBD'}
+Budget Days: {getattr(engagement, 'budget_hours', None) or getattr(engagement, 'budget_days', None) or 'TBD'}
+Team: {', '.join(team_members) if team_members else 'To be assigned'}"""
+
+    prompt = f"""You are the Chief Audit Executive drafting a formal audit engagement letter following IIA Standard 2210.
+
+{context}
+
+Generate a professional engagement letter in JSON format:
+{{
+    "letter_content": "<full engagement letter text in professional format with sections: Purpose, Scope, Objectives, Methodology, Timeline, Team, Responsibilities, Confidentiality. Use formal business language.>",
+    "subject_line": "<email subject line for the letter>",
+    "key_dates": {{
+        "fieldwork_start": "<date or TBD>",
+        "fieldwork_end": "<date or TBD>",
+        "draft_report": "<estimated>",
+        "final_report": "<estimated>"
+    }}
+}}
+
+Return ONLY valid JSON."""
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=2000,
+        )
+        result = _parse_ai_json(response.choices[0].message.content, {
+            "letter_content": "Engagement letter generation failed.",
+            "subject_line": f"Audit Engagement: {engagement.title}",
+            "key_dates": {},
+        })
+        return {"letter": result, "engagement_title": engagement.title}
+    except Exception as e:
+        logger.error(f"AI engagement letter error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="AI engagement letter generation failed. Please try again.")
+
+
+@router.post("/calibrate-severity")
+def ai_calibrate_severity(
+    data: SeverityCalibratorRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=403, detail="No tenant access")
+
+    prompt = f"""You are an expert internal audit quality assurance reviewer calibrating finding severity.
+
+Finding Title: {data.title}
+Condition: {data.condition or 'N/A'}
+Criteria: {data.criteria or 'N/A'}
+Cause: {data.cause or 'N/A'}
+Effect: {data.effect or 'N/A'}
+Control Area: {data.control_area or 'N/A'}
+Regulatory Context: {data.regulatory_context or 'N/A'}
+
+Analyze this finding and recommend a severity rating. Consider:
+- Impact on financial statements, operations, compliance, reputation
+- Likelihood of recurrence
+- Pervasiveness (isolated vs systemic)
+- Regulatory implications
+- Compensating controls
+
+Return JSON:
+{{
+    "recommended_severity": "<critical|high|medium|low|observation>",
+    "justification": "<2-3 sentence justification for the severity rating>",
+    "impact_dimensions": {{
+        "financial": "<high|medium|low|none>",
+        "operational": "<high|medium|low|none>",
+        "compliance": "<high|medium|low|none>",
+        "reputational": "<high|medium|low|none>"
+    }},
+    "aggravating_factors": ["<factors that increase severity>"],
+    "mitigating_factors": ["<factors that reduce severity>"],
+    "calibration_notes": "<any additional context for the audit team>"
+}}
+
+Return ONLY valid JSON."""
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=1000,
+        )
+        result = _parse_ai_json(response.choices[0].message.content, {
+            "recommended_severity": "medium",
+            "justification": "Unable to calibrate severity with AI. Manual assessment recommended.",
+            "impact_dimensions": {}, "aggravating_factors": [], "mitigating_factors": [],
+        })
+        return {"calibration": result}
+    except Exception as e:
+        logger.error(f"AI severity calibrator error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="AI severity calibration failed. Please try again.")
+
+
+@router.post("/detect-recurring-issues")
+def ai_detect_recurring_issues(
+    data: RecurringIssueRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=403, detail="No tenant access")
+
+    query = db.query(AuditFinding).filter(AuditFinding.tenant_id.in_(user_tenants))
+
+    if data.entity_id:
+        query = query.join(AuditEngagement, AuditFinding.engagement_id == AuditEngagement.id).filter(
+            AuditEngagement.auditable_entity_id == data.entity_id
+        )
+    if data.engagement_id:
+        query = query.filter(AuditFinding.engagement_id == data.engagement_id)
+    if data.theme:
+        query = query.filter(AuditFinding.theme == data.theme)
+
+    findings = query.order_by(AuditFinding.created_at.desc()).limit(50).all()
+    if not findings:
+        return {"patterns": [], "systemic_weaknesses": [], "summary": "No findings to analyze.", "findings_analyzed": 0}
+
+    findings_data = []
+    for f in findings:
+        findings_data.append({
+            "title": f.title,
+            "severity": f.severity,
+            "status": f.status,
+            "theme": f.theme,
+            "root_cause_category": f.root_cause_category,
+            "condition": (f.condition or "")[:200],
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+        })
+
+    prompt = f"""You are an internal audit analytics expert. Analyze these {len(findings_data)} findings for recurring patterns and systemic control weaknesses.
+
+Findings:
+{json.dumps(findings_data, indent=2)}
+
+Return JSON:
+{{
+    "patterns": [
+        {{
+            "pattern_name": "<descriptive name>",
+            "description": "<what the pattern is>",
+            "frequency": <number of findings matching>,
+            "affected_themes": ["<themes>"],
+            "severity_trend": "<escalating|stable|improving>",
+            "root_cause_commonality": "<common root cause>"
+        }}
+    ],
+    "systemic_weaknesses": [
+        {{
+            "weakness": "<description of systemic control weakness>",
+            "evidence": "<which findings support this>",
+            "risk_level": "<critical|high|medium|low>",
+            "recommended_action": "<what should be done>"
+        }}
+    ],
+    "summary": "<executive summary of the pattern analysis, 2-3 sentences>",
+    "trend_direction": "<improving|stable|deteriorating>"
+}}
+
+Return ONLY valid JSON."""
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=2000,
+        )
+        result = _parse_ai_json(response.choices[0].message.content, {
+            "patterns": [], "systemic_weaknesses": [], "summary": "Analysis unavailable.", "trend_direction": "stable",
+        })
+        return {**result, "findings_analyzed": len(findings_data)}
+    except Exception as e:
+        logger.error(f"AI recurring issue detector error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="AI recurring issue detection failed. Please try again.")
+
+
+@router.post("/evaluate-response")
+def ai_evaluate_management_response(
+    data: ResponseEvaluatorRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    finding = db.query(AuditFinding).filter(
+        AuditFinding.id == data.finding_id,
+        AuditFinding.tenant_id.in_(user_tenants)
+    ).first()
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    prompt = f"""You are an internal audit quality reviewer evaluating a management response to an audit finding.
+
+Finding:
+- Title: {finding.title}
+- Severity: {finding.severity}
+- Condition: {finding.condition or 'N/A'}
+- Criteria: {finding.criteria or 'N/A'}
+- Cause: {finding.cause or 'N/A'}
+- Effect: {finding.effect or 'N/A'}
+
+Management Response:
+- Type: {data.response_type}
+- Response: {data.response_text}
+- Action Plan: {data.action_plan or 'None provided'}
+- Target Date: {data.target_date or 'Not specified'}
+
+Evaluate the adequacy of this management response. Assess:
+1. Completeness — does it address the root cause?
+2. Specificity — are actions concrete and measurable?
+3. Timeline — is the target date reasonable for the severity?
+4. Accountability — are responsibilities clear?
+5. Effectiveness — will the proposed actions likely resolve the issue?
+
+Return JSON:
+{{
+    "overall_rating": "<adequate|partially_adequate|inadequate>",
+    "score": <1-10>,
+    "assessment": "<2-3 sentence overall assessment>",
+    "strengths": ["<what the response does well>"],
+    "gaps": ["<what is missing or weak>"],
+    "recommendations": ["<specific improvements to strengthen the response>"],
+    "timeline_assessment": "<assessment of whether the target date is reasonable>",
+    "risk_of_recurrence": "<high|medium|low> — likelihood the issue recurs with this response"
+}}
+
+Return ONLY valid JSON."""
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=1200,
+        )
+        result = _parse_ai_json(response.choices[0].message.content, {
+            "overall_rating": "partially_adequate",
+            "score": 5,
+            "assessment": "Unable to evaluate response with AI.",
+            "strengths": [], "gaps": [], "recommendations": [],
+        })
+        return {"evaluation": result, "finding_id": finding.id}
+    except Exception as e:
+        logger.error(f"AI response evaluator error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="AI response evaluation failed. Please try again.")
+
+
+@router.post("/suggest-opinion")
+def ai_suggest_audit_opinion(
+    data: AuditOpinionRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    engagement = db.query(AuditEngagement).filter(
+        AuditEngagement.id == data.engagement_id,
+        AuditEngagement.tenant_id.in_(user_tenants)
+    ).first()
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    findings = db.query(AuditFinding).filter(
+        AuditFinding.engagement_id == data.engagement_id,
+        AuditFinding.tenant_id.in_(user_tenants)
+    ).all()
+
+    severity_dist = {"critical": 0, "high": 0, "medium": 0, "low": 0, "observation": 0}
+    status_dist = {}
+    for f in findings:
+        sev = f.severity or "medium"
+        if sev in severity_dist:
+            severity_dist[sev] += 1
+        st = f.status or "open"
+        status_dist[st] = status_dist.get(st, 0) + 1
+
+    context = f"""Engagement: {engagement.title}
+Type: {engagement.engagement_type}
+Scope: {engagement.scope or 'N/A'}
+Total Findings: {len(findings)}
+Severity Distribution: {json.dumps(severity_dist)}
+Status Distribution: {json.dumps(status_dist)}
+Finding Titles:
+{chr(10).join(f'  - [{f.severity}] {f.title}' for f in findings[:15])}"""
+
+    prompt = f"""You are the Chief Audit Executive forming an audit opinion per IIA Standard 2450.
+
+{context}
+
+Based on the finding distribution and severity, recommend an audit opinion rating.
+
+Return JSON:
+{{
+    "recommended_opinion": "<satisfactory|needs_improvement|unsatisfactory>",
+    "confidence": "<high|medium|low>",
+    "opinion_narrative": "<formal opinion statement, 3-4 sentences, suitable for the audit report>",
+    "key_factors": ["<factors driving this opinion>"],
+    "caveats": ["<any limitations or caveats to note>"],
+    "comparison_context": "<how this compares to typical engagements of this type>"
+}}
+
+Return ONLY valid JSON."""
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=1200,
+        )
+        result = _parse_ai_json(response.choices[0].message.content, {
+            "recommended_opinion": "needs_improvement",
+            "confidence": "low",
+            "opinion_narrative": "Opinion requires manual assessment.",
+            "key_factors": [], "caveats": [],
+        })
+        return {
+            "opinion": result,
+            "finding_summary": {"total": len(findings), "severity_distribution": severity_dist, "status_distribution": status_dist},
+            "engagement_title": engagement.title,
+        }
+    except Exception as e:
+        logger.error(f"AI opinion advisor error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="AI opinion suggestion failed. Please try again.")
+
+
+@router.post("/aggregate-themes")
+def ai_aggregate_themes(
+    data: ThemeAggregatorRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    engagements = db.query(AuditEngagement).filter(
+        AuditEngagement.id.in_(data.engagement_ids),
+        AuditEngagement.tenant_id.in_(user_tenants)
+    ).all()
+    if not engagements:
+        raise HTTPException(status_code=404, detail="No engagements found")
+
+    all_findings = []
+    eng_summaries = []
+    for eng in engagements:
+        findings = db.query(AuditFinding).filter(
+            AuditFinding.engagement_id == eng.id,
+            AuditFinding.tenant_id.in_(user_tenants)
+        ).all()
+        eng_summaries.append({
+            "title": eng.title,
+            "type": eng.engagement_type,
+            "opinion": eng.opinion,
+            "findings_count": len(findings),
+            "themes": list(set(f.theme for f in findings if f.theme)),
+            "severities": {s: sum(1 for f in findings if f.severity == s) for s in ["critical", "high", "medium", "low"]},
+        })
+        for f in findings:
+            all_findings.append({
+                "engagement": eng.title,
+                "title": f.title,
+                "severity": f.severity,
+                "theme": f.theme,
+                "root_cause": f.root_cause_category,
+                "condition": (f.condition or "")[:150],
+            })
+
+    prompt = f"""You are the Chief Audit Executive preparing board-level theme analysis across multiple engagements.
+
+Period: {data.period or 'Current reporting period'}
+Engagements ({len(engagements)}):
+{json.dumps(eng_summaries, indent=2)}
+
+All Findings ({len(all_findings)}):
+{json.dumps(all_findings[:30], indent=2)}
+
+Identify cross-engagement themes and generate board-ready narrative summaries.
+
+Return JSON:
+{{
+    "themes": [
+        {{
+            "theme_name": "<descriptive theme name>",
+            "narrative": "<2-3 sentence board-ready narrative about this theme>",
+            "affected_engagements": ["<engagement titles>"],
+            "finding_count": <number>,
+            "overall_risk_level": "<critical|high|medium|low>",
+            "trend": "<escalating|stable|improving|new>",
+            "recommended_board_action": "<specific action for the board>"
+        }}
+    ],
+    "executive_narrative": "<3-4 paragraph executive summary suitable for board presentation>",
+    "positive_themes": ["<areas of strong control across engagements>"],
+    "areas_requiring_attention": ["<areas needing immediate board attention>"]
+}}
+
+Return ONLY valid JSON."""
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=2500,
+        )
+        result = _parse_ai_json(response.choices[0].message.content, {
+            "themes": [], "executive_narrative": "Theme analysis unavailable.",
+            "positive_themes": [], "areas_requiring_attention": [],
+        })
+        return {
+            "theme_analysis": result,
+            "engagements_analyzed": len(engagements),
+            "findings_analyzed": len(all_findings),
+        }
+    except Exception as e:
+        logger.error(f"AI theme aggregator error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="AI theme aggregation failed. Please try again.")

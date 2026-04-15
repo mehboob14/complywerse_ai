@@ -95,27 +95,27 @@ export default function AIInsightsPanel() {
   if (isLoading) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 p-2">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 p-1.5">
               <Sparkles className="h-5 w-5 text-violet-400" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">AI Insights</h3>
+              <h3 className="text-sm font-semibold text-slate-900">AI Insights</h3>
               <p className="text-xs text-slate-600">Loading recommendations...</p>
             </div>
           </div>
         </div>
-        <div className="p-5">
+        <div className="p-4">
           <div className="space-y-4 animate-pulse">
             {[1, 2, 3].map((i) => (
               <div key={i} className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
                 <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-slate-700" />
+                  <div className="h-8 w-8 rounded-lg bg-slate-200" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-4 w-3/4 rounded bg-slate-700" />
-                    <div className="h-3 w-full rounded bg-slate-700" />
-                    <div className="h-3 w-2/3 rounded bg-slate-700" />
+                    <div className="h-4 w-3/4 rounded bg-slate-200" />
+                    <div className="h-3 w-full rounded bg-slate-200" />
+                    <div className="h-3 w-2/3 rounded bg-slate-200" />
                   </div>
                 </div>
               </div>
@@ -129,20 +129,20 @@ export default function AIInsightsPanel() {
   if (error) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 p-2">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 p-1.5">
               <Sparkles className="h-5 w-5 text-violet-400" />
             </div>
-            <h3 className="text-sm font-semibold text-white">AI Insights</h3>
+            <h3 className="text-sm font-semibold text-slate-900">AI Insights</h3>
           </div>
         </div>
-        <div className="p-8 text-center">
+        <div className="p-6 text-center">
           <AlertCircle className="h-10 w-10 text-slate-500 mx-auto mb-3" />
           <p className="text-sm text-slate-600 mb-4">Unable to load AI insights</p>
           <button
             onClick={() => refetch()}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-700 text-sm text-slate-300 hover:bg-slate-600 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50"
           >
             <RefreshCw className="h-4 w-4" />
             Retry
@@ -161,13 +161,13 @@ export default function AIInsightsPanel() {
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 p-2">
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 p-1.5">
             <Sparkles className="h-5 w-5 text-violet-400" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">AI Insights</h3>
+            <h3 className="text-sm font-semibold text-slate-900">AI Insights</h3>
             <p className="text-xs text-slate-600">
               {totalSignals > 0 ? `${totalSignals} issues detected` : 'Analyzing your GRC posture'}
             </p>
@@ -176,14 +176,14 @@ export default function AIInsightsPanel() {
         <button
           onClick={() => refetch()}
           disabled={isFetching}
-          className="p-2 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50"
+          className="rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50"
           title="Refresh insights"
         >
           <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
-      <div className="p-5">
+      <div className="p-4">
         {recommendations.length > 0 ? (
           <div className="space-y-3">
             {recommendations.slice(0, 6).map((rec) => {
@@ -199,7 +199,7 @@ export default function AIInsightsPanel() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <h4 className="text-sm font-medium text-white truncate" title={rec.title}>
+                          <h4 className="truncate text-sm font-medium text-slate-900" title={rec.title}>
                           {rec.title}
                         </h4>
                         <span
@@ -213,7 +213,7 @@ export default function AIInsightsPanel() {
                       <p className="text-xs text-slate-600 line-clamp-2 mb-3">{rec.rationale}</p>
                       <Link
                         href={rec.action_link}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-300 transition-colors"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 transition-colors hover:text-primary-700"
                       >
                         {rec.action_text}
                         <ChevronRight className="h-3 w-3" />
@@ -227,7 +227,7 @@ export default function AIInsightsPanel() {
         ) : (
           <div className="text-center py-8">
             <Shield className="h-10 w-10 text-emerald-500/50 mx-auto mb-3" />
-            <p className="text-sm font-medium text-slate-300">All clear!</p>
+            <p className="text-sm font-medium text-slate-900">All clear!</p>
             <p className="text-xs text-slate-500 mt-1">
               No critical issues detected at this time
             </p>
@@ -236,7 +236,7 @@ export default function AIInsightsPanel() {
       </div>
 
       {data?.generated_at && (
-        <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/30">
+        <div className="border-t border-slate-200 bg-slate-50/30 px-4 py-2.5">
           <p className="text-xs text-slate-500">
             Generated {new Date(data.generated_at).toLocaleString()}
           </p>

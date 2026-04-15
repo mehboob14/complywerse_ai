@@ -6,7 +6,7 @@ from sqlalchemy import func
 
 from ....models import (
     Vulnerability, VulnerabilityReport, VulnerabilitySLAConfig,
-    GRCUser, get_db
+    VulnerabilityAssetLink, GRCUser, get_db
 )
 from ....schemas import (
     VulnerabilityCreate, VulnerabilityUpdate, VulnerabilityResponse,
@@ -56,6 +56,56 @@ def generate_vuln_id(tenant_id: int, db: Session) -> str:
     return f"VULN-{count + 1:05d}"
 
 
+def _build_vulnerability_response(v: Vulnerability) -> VulnerabilityResponse:
+    linked_assets = []
+    if getattr(v, "asset_links", None):
+        linked_assets = [
+            link.asset.name
+            for link in v.asset_links
+            if getattr(link, "asset", None) and getattr(link.asset, "name", None)
+        ]
+
+    return VulnerabilityResponse(
+        id=v.id,
+        tenant_id=v.tenant_id,
+        report_id=v.report_id,
+        vuln_id=v.vuln_id,
+        title=v.title,
+        description=v.description,
+        severity=v.severity,
+        cvss_score=v.cvss_score,
+        cvss_vector=v.cvss_vector,
+        cve_id=v.cve_id,
+        cwe_id=v.cwe_id,
+        affected_component=v.affected_component,
+        affected_host=v.affected_host,
+        affected_port=v.affected_port,
+        affected_url=v.affected_url,
+        evidence=v.evidence,
+        reproduction_steps=v.reproduction_steps,
+        recommendation=v.recommendation,
+        ai_recommendation=v.ai_recommendation,
+        ai_impact_assessment=v.ai_impact_assessment,
+        status=v.status,
+        resolution_notes=v.resolution_notes,
+        discovered_at=v.discovered_at,
+        due_date=v.due_date,
+        resolved_at=v.resolved_at,
+        assigned_to=v.assigned_to,
+        verified_by=v.verified_by,
+        verified_at=v.verified_at,
+        is_exception=v.is_exception,
+        exception_reason=v.exception_reason,
+        exception_approved_by=v.exception_approved_by,
+        exception_expiry=v.exception_expiry,
+        created_at=v.created_at,
+        updated_at=v.updated_at,
+        assignee_name=v.assignee.display_name if v.assignee else None,
+        verifier_name=v.verifier.display_name if v.verifier else None,
+        linked_assets=linked_assets,
+    )
+
+
 @router.get("/vulnerabilities", response_model=List[VulnerabilityResponse])
 def list_vulnerabilities(
     tenant_id: Optional[int] = None,
@@ -79,7 +129,8 @@ def list_vulnerabilities(
     
     query = db.query(Vulnerability).options(
         joinedload(Vulnerability.assignee),
-        joinedload(Vulnerability.verifier)
+        joinedload(Vulnerability.verifier),
+        joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
     ).filter(Vulnerability.tenant_id.in_(user_tenants))
     
     if tenant_id:
@@ -111,47 +162,7 @@ def list_vulnerabilities(
     
     vulns = query.order_by(Vulnerability.created_at.desc()).offset(skip).limit(limit).all()
     
-    return [
-        VulnerabilityResponse(
-            id=v.id,
-            tenant_id=v.tenant_id,
-            report_id=v.report_id,
-            vuln_id=v.vuln_id,
-            title=v.title,
-            description=v.description,
-            severity=v.severity,
-            cvss_score=v.cvss_score,
-            cvss_vector=v.cvss_vector,
-            cve_id=v.cve_id,
-            cwe_id=v.cwe_id,
-            affected_component=v.affected_component,
-            affected_host=v.affected_host,
-            affected_port=v.affected_port,
-            affected_url=v.affected_url,
-            evidence=v.evidence,
-            reproduction_steps=v.reproduction_steps,
-            recommendation=v.recommendation,
-            ai_recommendation=v.ai_recommendation,
-            ai_impact_assessment=v.ai_impact_assessment,
-            status=v.status,
-            resolution_notes=v.resolution_notes,
-            discovered_at=v.discovered_at,
-            due_date=v.due_date,
-            resolved_at=v.resolved_at,
-            assigned_to=v.assigned_to,
-            verified_by=v.verified_by,
-            verified_at=v.verified_at,
-            is_exception=v.is_exception,
-            exception_reason=v.exception_reason,
-            exception_approved_by=v.exception_approved_by,
-            exception_expiry=v.exception_expiry,
-            created_at=v.created_at,
-            updated_at=v.updated_at,
-            assignee_name=v.assignee.display_name if v.assignee else None,
-            verifier_name=v.verifier.display_name if v.verifier else None
-        )
-        for v in vulns
-    ]
+    return [_build_vulnerability_response(v) for v in vulns]
 
 
 @router.post("/vulnerabilities", response_model=VulnerabilityResponse, status_code=status.HTTP_201_CREATED)
@@ -204,42 +215,8 @@ def create_vulnerability(
     db.commit()
     db.refresh(vuln)
     
-    return VulnerabilityResponse(
-        id=vuln.id,
-        tenant_id=vuln.tenant_id,
-        report_id=vuln.report_id,
-        vuln_id=vuln.vuln_id,
-        title=vuln.title,
-        description=vuln.description,
-        severity=vuln.severity,
-        cvss_score=vuln.cvss_score,
-        cvss_vector=vuln.cvss_vector,
-        cve_id=vuln.cve_id,
-        cwe_id=vuln.cwe_id,
-        affected_component=vuln.affected_component,
-        affected_host=vuln.affected_host,
-        affected_port=vuln.affected_port,
-        affected_url=vuln.affected_url,
-        evidence=vuln.evidence,
-        reproduction_steps=vuln.reproduction_steps,
-        recommendation=vuln.recommendation,
-        ai_recommendation=vuln.ai_recommendation,
-        ai_impact_assessment=vuln.ai_impact_assessment,
-        status=vuln.status,
-        resolution_notes=vuln.resolution_notes,
-        discovered_at=vuln.discovered_at,
-        due_date=vuln.due_date,
-        resolved_at=vuln.resolved_at,
-        assigned_to=vuln.assigned_to,
-        verified_by=vuln.verified_by,
-        verified_at=vuln.verified_at,
-        is_exception=vuln.is_exception,
-        exception_reason=vuln.exception_reason,
-        exception_approved_by=vuln.exception_approved_by,
-        exception_expiry=vuln.exception_expiry,
-        created_at=vuln.created_at,
-        updated_at=vuln.updated_at
-    )
+    db.refresh(vuln)
+    return _build_vulnerability_response(vuln)
 
 
 @router.get("/vulnerabilities/{vuln_id}", response_model=VulnerabilityResponse)
@@ -255,7 +232,8 @@ def get_vulnerability(
     
     vuln = db.query(Vulnerability).options(
         joinedload(Vulnerability.assignee),
-        joinedload(Vulnerability.verifier)
+        joinedload(Vulnerability.verifier),
+        joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
     ).filter(
         Vulnerability.id == vuln_id,
         Vulnerability.tenant_id.in_(user_tenants)
@@ -264,44 +242,7 @@ def get_vulnerability(
     if not vuln:
         raise HTTPException(status_code=404, detail="Vulnerability not found")
     
-    return VulnerabilityResponse(
-        id=vuln.id,
-        tenant_id=vuln.tenant_id,
-        report_id=vuln.report_id,
-        vuln_id=vuln.vuln_id,
-        title=vuln.title,
-        description=vuln.description,
-        severity=vuln.severity,
-        cvss_score=vuln.cvss_score,
-        cvss_vector=vuln.cvss_vector,
-        cve_id=vuln.cve_id,
-        cwe_id=vuln.cwe_id,
-        affected_component=vuln.affected_component,
-        affected_host=vuln.affected_host,
-        affected_port=vuln.affected_port,
-        affected_url=vuln.affected_url,
-        evidence=vuln.evidence,
-        reproduction_steps=vuln.reproduction_steps,
-        recommendation=vuln.recommendation,
-        ai_recommendation=vuln.ai_recommendation,
-        ai_impact_assessment=vuln.ai_impact_assessment,
-        status=vuln.status,
-        resolution_notes=vuln.resolution_notes,
-        discovered_at=vuln.discovered_at,
-        due_date=vuln.due_date,
-        resolved_at=vuln.resolved_at,
-        assigned_to=vuln.assigned_to,
-        verified_by=vuln.verified_by,
-        verified_at=vuln.verified_at,
-        is_exception=vuln.is_exception,
-        exception_reason=vuln.exception_reason,
-        exception_approved_by=vuln.exception_approved_by,
-        exception_expiry=vuln.exception_expiry,
-        created_at=vuln.created_at,
-        updated_at=vuln.updated_at,
-        assignee_name=vuln.assignee.display_name if vuln.assignee else None,
-        verifier_name=vuln.verifier.display_name if vuln.verifier else None
-    )
+    return _build_vulnerability_response(vuln)
 
 
 @router.put("/vulnerabilities/{vuln_id}", response_model=VulnerabilityResponse)
@@ -322,45 +263,14 @@ def update_vulnerability(
     vuln.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(vuln)
-    
-    return VulnerabilityResponse(
-        id=vuln.id,
-        tenant_id=vuln.tenant_id,
-        report_id=vuln.report_id,
-        vuln_id=vuln.vuln_id,
-        title=vuln.title,
-        description=vuln.description,
-        severity=vuln.severity,
-        cvss_score=vuln.cvss_score,
-        cvss_vector=vuln.cvss_vector,
-        cve_id=vuln.cve_id,
-        cwe_id=vuln.cwe_id,
-        affected_component=vuln.affected_component,
-        affected_host=vuln.affected_host,
-        affected_port=vuln.affected_port,
-        affected_url=vuln.affected_url,
-        evidence=vuln.evidence,
-        reproduction_steps=vuln.reproduction_steps,
-        recommendation=vuln.recommendation,
-        ai_recommendation=vuln.ai_recommendation,
-        ai_impact_assessment=vuln.ai_impact_assessment,
-        status=vuln.status,
-        resolution_notes=vuln.resolution_notes,
-        discovered_at=vuln.discovered_at,
-        due_date=vuln.due_date,
-        resolved_at=vuln.resolved_at,
-        assigned_to=vuln.assigned_to,
-        verified_by=vuln.verified_by,
-        verified_at=vuln.verified_at,
-        is_exception=vuln.is_exception,
-        exception_reason=vuln.exception_reason,
-        exception_approved_by=vuln.exception_approved_by,
-        exception_expiry=vuln.exception_expiry,
-        created_at=vuln.created_at,
-        updated_at=vuln.updated_at,
-        assignee_name=vuln.assignee.display_name if vuln.assignee else None,
-        verifier_name=vuln.verifier.display_name if vuln.verifier else None
-    )
+
+    vuln = db.query(Vulnerability).options(
+        joinedload(Vulnerability.assignee),
+        joinedload(Vulnerability.verifier),
+        joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
+    ).filter(Vulnerability.id == vuln.id).first()
+
+    return _build_vulnerability_response(vuln)
 
 
 @router.delete("/vulnerabilities/{vuln_id}", response_model=MessageResponse)
@@ -402,44 +312,14 @@ def assign_vulnerability(
     
     db.commit()
     db.refresh(vuln)
-    
-    return VulnerabilityResponse(
-        id=vuln.id,
-        tenant_id=vuln.tenant_id,
-        report_id=vuln.report_id,
-        vuln_id=vuln.vuln_id,
-        title=vuln.title,
-        description=vuln.description,
-        severity=vuln.severity,
-        cvss_score=vuln.cvss_score,
-        cvss_vector=vuln.cvss_vector,
-        cve_id=vuln.cve_id,
-        cwe_id=vuln.cwe_id,
-        affected_component=vuln.affected_component,
-        affected_host=vuln.affected_host,
-        affected_port=vuln.affected_port,
-        affected_url=vuln.affected_url,
-        evidence=vuln.evidence,
-        reproduction_steps=vuln.reproduction_steps,
-        recommendation=vuln.recommendation,
-        ai_recommendation=vuln.ai_recommendation,
-        ai_impact_assessment=vuln.ai_impact_assessment,
-        status=vuln.status,
-        resolution_notes=vuln.resolution_notes,
-        discovered_at=vuln.discovered_at,
-        due_date=vuln.due_date,
-        resolved_at=vuln.resolved_at,
-        assigned_to=vuln.assigned_to,
-        verified_by=vuln.verified_by,
-        verified_at=vuln.verified_at,
-        is_exception=vuln.is_exception,
-        exception_reason=vuln.exception_reason,
-        exception_approved_by=vuln.exception_approved_by,
-        exception_expiry=vuln.exception_expiry,
-        created_at=vuln.created_at,
-        updated_at=vuln.updated_at,
-        assignee_name=user.display_name
-    )
+
+    vuln = db.query(Vulnerability).options(
+        joinedload(Vulnerability.assignee),
+        joinedload(Vulnerability.verifier),
+        joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
+    ).filter(Vulnerability.id == vuln.id).first()
+
+    return _build_vulnerability_response(vuln)
 
 
 @router.post("/vulnerabilities/{vuln_id}/status", response_model=VulnerabilityResponse)
@@ -453,7 +333,7 @@ def change_vulnerability_status(
     user_tenants = get_user_tenants(current_user, db)
     vuln = get_vuln_or_404(vuln_id, user_tenants, db)
     
-    valid_statuses = ["open", "in_progress", "resolved", "accepted", "false_positive"]
+    valid_statuses = ["open", "in_progress", "remediated", "verified", "closed", "resolved", "accepted", "false_positive"]
     if request.status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
     
@@ -463,49 +343,19 @@ def change_vulnerability_status(
     if request.resolution_notes:
         vuln.resolution_notes = request.resolution_notes
     
-    if request.status in ["resolved", "accepted", "false_positive"]:
+    if request.status in ["resolved", "remediated", "verified", "closed", "accepted", "false_positive"]:
         vuln.resolved_at = datetime.utcnow()
+    if request.status in ["verified", "resolved", "closed"]:
         vuln.verified_by = current_user.id
         vuln.verified_at = datetime.utcnow()
     
     db.commit()
     db.refresh(vuln)
-    
-    return VulnerabilityResponse(
-        id=vuln.id,
-        tenant_id=vuln.tenant_id,
-        report_id=vuln.report_id,
-        vuln_id=vuln.vuln_id,
-        title=vuln.title,
-        description=vuln.description,
-        severity=vuln.severity,
-        cvss_score=vuln.cvss_score,
-        cvss_vector=vuln.cvss_vector,
-        cve_id=vuln.cve_id,
-        cwe_id=vuln.cwe_id,
-        affected_component=vuln.affected_component,
-        affected_host=vuln.affected_host,
-        affected_port=vuln.affected_port,
-        affected_url=vuln.affected_url,
-        evidence=vuln.evidence,
-        reproduction_steps=vuln.reproduction_steps,
-        recommendation=vuln.recommendation,
-        ai_recommendation=vuln.ai_recommendation,
-        ai_impact_assessment=vuln.ai_impact_assessment,
-        status=vuln.status,
-        resolution_notes=vuln.resolution_notes,
-        discovered_at=vuln.discovered_at,
-        due_date=vuln.due_date,
-        resolved_at=vuln.resolved_at,
-        assigned_to=vuln.assigned_to,
-        verified_by=vuln.verified_by,
-        verified_at=vuln.verified_at,
-        is_exception=vuln.is_exception,
-        exception_reason=vuln.exception_reason,
-        exception_approved_by=vuln.exception_approved_by,
-        exception_expiry=vuln.exception_expiry,
-        created_at=vuln.created_at,
-        updated_at=vuln.updated_at,
-        assignee_name=vuln.assignee.display_name if vuln.assignee else None,
-        verifier_name=current_user.display_name
-    )
+
+    vuln = db.query(Vulnerability).options(
+        joinedload(Vulnerability.assignee),
+        joinedload(Vulnerability.verifier),
+        joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
+    ).filter(Vulnerability.id == vuln.id).first()
+
+    return _build_vulnerability_response(vuln)

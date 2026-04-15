@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { auditApi, apiClient } from '@/lib/api';
 import {
@@ -22,12 +23,18 @@ import {
   Link2,
   ChevronDown,
   ChevronRight,
+  Sparkles,
+  Phone,
+  Mail,
+  Building2,
+  Eye,
 } from 'lucide-react';
 
 const ENTITY_TYPES = ['Business Unit', 'Process', 'IT System', 'Department', 'Project', 'Third Party', 'Regulatory'];
 const RISK_RATINGS = ['critical', 'high', 'medium', 'low'];
 const STATUSES = ['active', 'inactive', 'pending_review', 'archived'];
 const AUDIT_CYCLES = ['annual', 'semi-annual', 'quarterly', 'biennial', 'ad-hoc'];
+const INDUSTRIES = ['Banking', 'Healthcare', 'Insurance', 'Technology', 'Energy', 'Government', 'Manufacturing', 'Retail', 'Telecom', 'Other'];
 
 function getRiskBadgeClasses(rating: string) {
   switch (rating?.toLowerCase()) {
@@ -69,9 +76,15 @@ const defaultForm = {
   status: 'active',
   last_audited: '',
   next_audit_due: '',
+  industry: '',
+  contact_name: '',
+  contact_email: '',
+  contact_phone: '',
+  contact_designation: '',
 };
 
 export default function AuditUniversePage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterRisk, setFilterRisk] = useState('');
@@ -135,6 +148,14 @@ export default function AuditUniversePage() {
     onSuccess: () => { refetch(); },
   });
 
+  const aiDescriptionMutation = useMutation({
+    mutationFn: (data: { entity_name: string; entity_type: string; industry?: string }) =>
+      auditApi.universe.generateDescription(data).then(r => r.data),
+    onSuccess: (data: any) => {
+      setForm(prev => ({ ...prev, description: data.description || '' }));
+    },
+  });
+
   const { data: entityDetail } = useQuery({
     queryKey: ['audit-entity-detail', expandedEntity],
     queryFn: () => expandedEntity ? auditApi.universe.getById(expandedEntity).then(r => r.data) : null,
@@ -166,6 +187,11 @@ export default function AuditUniversePage() {
       status: entity.status || 'active',
       last_audited: entity.last_audited?.split('T')[0] || '',
       next_audit_due: entity.next_audit_due?.split('T')[0] || '',
+      industry: entity.industry || '',
+      contact_name: entity.contact_name || '',
+      contact_email: entity.contact_email || '',
+      contact_phone: entity.contact_phone || '',
+      contact_designation: entity.contact_designation || '',
     });
     setShowModal(true);
   }
@@ -177,6 +203,11 @@ export default function AuditUniversePage() {
     else delete payload.owner_id;
     if (!payload.last_audited) delete payload.last_audited;
     if (!payload.next_audit_due) delete payload.next_audit_due;
+    if (!payload.industry) payload.industry = null;
+    if (!payload.contact_name) payload.contact_name = null;
+    if (!payload.contact_email) payload.contact_email = null;
+    if (!payload.contact_phone) payload.contact_phone = null;
+    if (!payload.contact_designation) payload.contact_designation = null;
 
     if (editingEntity) {
       updateMutation.mutate({ id: editingEntity.id, data: payload });
@@ -332,10 +363,9 @@ export default function AuditUniversePage() {
               <tr className="border-b border-slate-200">
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Name</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Type</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Industry</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Risk Score</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Risk Rating</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Audit Cycle</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Last Audited</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Next Due</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Owner</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Linked Risks</th>
@@ -347,7 +377,7 @@ export default function AuditUniversePage() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b border-slate-200/30">
-                    {Array.from({ length: 11 }).map((_, j) => (
+                    {Array.from({ length: 10 }).map((_, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 bg-slate-100 rounded animate-pulse" />
                       </td>
@@ -356,7 +386,7 @@ export default function AuditUniversePage() {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center">
+                  <td colSpan={10} className="px-4 py-12 text-center">
                     <Globe className="h-10 w-10 text-slate-600 mx-auto mb-3" />
                     <p className="text-slate-600 font-medium">No entities found</p>
                     <p className="text-slate-500 text-xs mt-1">Add entities to build your audit universe</p>
@@ -370,17 +400,31 @@ export default function AuditUniversePage() {
                   <React.Fragment key={entity.id}>
                   <tr className="border-b border-slate-200/30 hover:bg-slate-100/20 transition-colors">
                     <td className="px-4 py-3">
-                      <span className="text-slate-900 font-medium">{entity.name}</span>
+                      <button
+                        onClick={() => setExpandedEntity(isExpanded ? null : entity.id)}
+                        className="text-slate-900 font-medium hover:text-blue-600 transition-colors text-left flex items-center gap-1"
+                      >
+                        {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        {entity.name}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-slate-700">{entity.entity_type}</td>
+                    <td className="px-4 py-3">
+                      {entity.industry ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600 border border-indigo-200">
+                          <Building2 className="h-3 w-3" />
+                          {entity.industry}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-700">{entity.risk_score ?? '—'}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getRiskBadgeClasses(entity.risk_rating)}`}>
                         {entity.risk_rating ? entity.risk_rating.charAt(0).toUpperCase() + entity.risk_rating.slice(1) : '—'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-700 capitalize">{entity.audit_cycle || '—'}</td>
-                    <td className="px-4 py-3 text-slate-700">{formatDate(entity.last_audited)}</td>
                     <td className="px-4 py-3 text-slate-700">{formatDate(entity.next_audit_due)}</td>
                     <td className="px-4 py-3 text-slate-700">{entity.owner_name || entity.owner || '—'}</td>
                     <td className="px-4 py-3">
@@ -405,6 +449,13 @@ export default function AuditUniversePage() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          onClick={() => router.push(`/audit/universe/${entity.id}`)}
+                          className="p-1.5 text-slate-600 hover:text-emerald-400 rounded-lg hover:bg-slate-100 transition-colors"
+                          title="View details"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
                           onClick={() => openEditModal(entity)}
                           className="p-1.5 text-slate-600 hover:text-blue-400 rounded-lg hover:bg-slate-100 transition-colors"
                         >
@@ -419,28 +470,68 @@ export default function AuditUniversePage() {
                       </div>
                     </td>
                   </tr>
-                  {isExpanded && entityDetail?.linked_risks && (
-                    <tr className="border-b border-slate-200/30 bg-slate-750">
-                      <td colSpan={11} className="px-6 py-3">
-                        <div className="space-y-1">
-                          <p className="text-xs font-semibold text-slate-600 mb-2">Linked Risk Register Entries</p>
-                          {entityDetail.linked_risks.map((risk: any) => (
-                            <div key={risk.id} className="flex items-center justify-between bg-slate-100 rounded-lg px-3 py-2">
-                              <div className="flex items-center gap-3">
-                                <span className="text-sm text-slate-900">{risk.title}</span>
-                                <span className="text-xs text-slate-600 capitalize">{risk.category}</span>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getRiskBadgeClasses(risk.risk_rating)}`}>
-                                  {risk.risk_rating?.charAt(0).toUpperCase() + risk.risk_rating?.slice(1)}
-                                </span>
-                                <span className="text-xs text-slate-600">Residual: {risk.residual_score ?? '—'}</span>
-                                <span className={`text-xs ${risk.status === 'open' ? 'text-amber-400' : 'text-slate-500'}`}>{risk.status}</span>
+                  {isExpanded && (
+                    <tr className="border-b border-slate-200/30 bg-slate-50">
+                      <td colSpan={10} className="px-6 py-4">
+                        <div className="space-y-4">
+                          {entity.description && (
+                            <div>
+                              <p className="text-xs font-semibold text-slate-600 mb-1">Description</p>
+                              <p className="text-sm text-slate-700">{entity.description}</p>
+                            </div>
+                          )}
+                          {(entity.contact_name || entity.contact_email || entity.contact_phone) && (
+                            <div>
+                              <p className="text-xs font-semibold text-slate-600 mb-2">Point of Contact</p>
+                              <div className="flex flex-wrap items-center gap-4 text-sm">
+                                {entity.contact_name && (
+                                  <span className="flex items-center gap-1.5 text-slate-700">
+                                    <User className="h-3.5 w-3.5 text-slate-400" />
+                                    {entity.contact_name}
+                                    {entity.contact_designation && (
+                                      <span className="text-xs text-slate-500">({entity.contact_designation})</span>
+                                    )}
+                                  </span>
+                                )}
+                                {entity.contact_email && (
+                                  <a href={`mailto:${entity.contact_email}`} className="flex items-center gap-1.5 text-blue-600 hover:underline">
+                                    <Mail className="h-3.5 w-3.5" />
+                                    {entity.contact_email}
+                                  </a>
+                                )}
+                                {entity.contact_phone && (
+                                  <span className="flex items-center gap-1.5 text-slate-700">
+                                    <Phone className="h-3.5 w-3.5 text-slate-400" />
+                                    {entity.contact_phone}
+                                  </span>
+                                )}
                               </div>
                             </div>
-                          ))}
-                          {entityDetail.linked_risks.length === 0 && (
-                            <p className="text-xs text-slate-500">No linked risks found</p>
+                          )}
+                          {entityDetail?.linked_risks && (
+                            <div>
+                              <p className="text-xs font-semibold text-slate-600 mb-2">Linked Risk Register Entries</p>
+                              <div className="space-y-1">
+                                {entityDetail.linked_risks.map((risk: any) => (
+                                  <div key={risk.id} className="flex items-center justify-between bg-slate-100 rounded-lg px-3 py-2">
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-sm text-slate-900">{risk.title}</span>
+                                      <span className="text-xs text-slate-600 capitalize">{risk.category}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getRiskBadgeClasses(risk.risk_rating)}`}>
+                                        {risk.risk_rating?.charAt(0).toUpperCase() + risk.risk_rating?.slice(1)}
+                                      </span>
+                                      <span className="text-xs text-slate-600">Residual: {risk.residual_score ?? '—'}</span>
+                                      <span className={`text-xs ${risk.status === 'open' ? 'text-amber-400' : 'text-slate-500'}`}>{risk.status}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                                {entityDetail.linked_risks.length === 0 && (
+                                  <p className="text-xs text-slate-500">No linked risks found</p>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -550,6 +641,44 @@ export default function AuditUniversePage() {
                   </select>
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Industry</label>
+                  <select
+                    value={form.industry}
+                    onChange={e => setForm({ ...form, industry: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">Select industry...</option>
+                    {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-slate-700">Description</label>
+                  <button
+                    type="button"
+                    disabled={!form.name || aiDescriptionMutation.isPending}
+                    onClick={() => aiDescriptionMutation.mutate({
+                      entity_name: form.name,
+                      entity_type: form.entity_type,
+                      industry: form.industry || undefined,
+                    })}
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Sparkles className={`h-3.5 w-3.5 ${aiDescriptionMutation.isPending ? 'animate-spin' : ''}`} />
+                    {aiDescriptionMutation.isPending ? 'Generating...' : 'Generate with AI'}
+                  </button>
+                </div>
+                <textarea
+                  value={form.description}
+                  onChange={e => setForm({ ...form, description: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500 resize-none"
+                  placeholder="Brief description or use AI to generate..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Risk Rating</label>
                   <select
                     value={form.risk_rating}
@@ -559,18 +688,6 @@ export default function AuditUniversePage() {
                     {RISK_RATINGS.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
                   </select>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500 resize-none"
-                  placeholder="Brief description..."
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Risk Score</label>
                   <input
@@ -582,6 +699,8 @@ export default function AuditUniversePage() {
                     className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500"
                   />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Audit Cycle</label>
                   <select
@@ -590,23 +709,6 @@ export default function AuditUniversePage() {
                     className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500"
                   >
                     {AUDIT_CYCLES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1).replace(/-/g, ' ')}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Owner</label>
-                  <select
-                    value={form.owner_id}
-                    onChange={e => setForm({ ...form, owner_id: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">Select owner...</option>
-                    {(tenantUsers || []).map((tu: any) => (
-                      <option key={tu.user?.id || tu.user_id} value={tu.user?.id || tu.user_id}>
-                        {tu.user?.display_name || tu.user?.username || tu.user?.email || `User ${tu.user_id}`}
-                      </option>
-                    ))}
                   </select>
                 </div>
                 <div>
@@ -619,6 +721,21 @@ export default function AuditUniversePage() {
                     {STATUSES.map(s => <option key={s} value={s}>{formatStatus(s)}</option>)}
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Owner</label>
+                <select
+                  value={form.owner_id}
+                  onChange={e => setForm({ ...form, owner_id: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select owner...</option>
+                  {(tenantUsers || []).map((tu: any) => (
+                    <option key={tu.user?.id || tu.user_id} value={tu.user?.id || tu.user_id}>
+                      {tu.user?.display_name || tu.user?.username || tu.user?.email || `User ${tu.user_id}`}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -638,6 +755,51 @@ export default function AuditUniversePage() {
                     onChange={e => setForm({ ...form, next_audit_due: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500"
                   />
+                </div>
+              </div>
+              <div className="border-t border-slate-200 pt-4">
+                <p className="text-sm font-medium text-slate-700 mb-3">Point of Contact</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Contact Name</label>
+                    <input
+                      type="text"
+                      value={form.contact_name}
+                      onChange={e => setForm({ ...form, contact_name: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                      placeholder="Full name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Designation / Title</label>
+                    <input
+                      type="text"
+                      value={form.contact_designation}
+                      onChange={e => setForm({ ...form, contact_designation: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                      placeholder="e.g. VP of Operations"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={form.contact_email}
+                      onChange={e => setForm({ ...form, contact_email: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                      placeholder="contact@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Phone</label>
+                    <input
+                      type="tel"
+                      value={form.contact_phone}
+                      onChange={e => setForm({ ...form, contact_phone: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-300 text-slate-900 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                      placeholder="+1 (555) 000-0000"
+                    />
+                  </div>
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">

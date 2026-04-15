@@ -70,6 +70,7 @@ export default function AuditEngagementsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingEngagement, setEditingEngagement] = useState<any>(null);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [createAiLoading, setCreateAiLoading] = useState(false);
   const [editEngForm, setEditEngForm] = useState({
     title: '',
     description: '',
@@ -87,6 +88,7 @@ export default function AuditEngagementsPage() {
     engagement_type: 'assurance',
     scope: '',
     objectives: '',
+    methodology: '',
     planned_start: '',
     planned_end: '',
     budget_hours: '',
@@ -141,7 +143,7 @@ export default function AuditEngagementsPage() {
     onSuccess: () => {
       refetch();
       setShowCreateModal(false);
-      setNewEngagement({ title: '', description: '', engagement_type: 'assurance', scope: '', objectives: '', planned_start: '', planned_end: '', budget_hours: '' });
+      setNewEngagement({ title: '', description: '', engagement_type: 'assurance', scope: '', objectives: '', methodology: '', planned_start: '', planned_end: '', budget_hours: '' });
     },
   });
 
@@ -221,6 +223,31 @@ export default function AuditEngagementsPage() {
     }
   };
 
+  const handleCreateAiScope = async () => {
+    if (!newEngagement.title) return;
+    setCreateAiLoading(true);
+    try {
+      const res = await auditApi.ai.generateScope({
+        engagement_type: newEngagement.engagement_type || 'assurance',
+        title: newEngagement.title,
+      });
+      const d = res.data?.scope_data;
+      if (d) {
+        setNewEngagement(prev => ({
+          ...prev,
+          scope: d.scope || prev.scope,
+          objectives: d.objectives || prev.objectives,
+          methodology: d.methodology || prev.methodology,
+        }));
+      }
+    } catch (err) {
+      console.error('AI scope generation failed:', err);
+      alert('Failed to generate scope. Please try again.');
+    } finally {
+      setCreateAiLoading(false);
+    }
+  };
+
   const handleCreate = () => {
     const data: Record<string, unknown> = {
       title: newEngagement.title,
@@ -228,6 +255,7 @@ export default function AuditEngagementsPage() {
       engagement_type: newEngagement.engagement_type,
       scope: newEngagement.scope,
       objectives: newEngagement.objectives,
+      methodology: newEngagement.methodology,
     };
     if (newEngagement.planned_start) data.planned_start = newEngagement.planned_start;
     if (newEngagement.planned_end) data.planned_end = newEngagement.planned_end;
@@ -345,7 +373,8 @@ export default function AuditEngagementsPage() {
             return (
               <div
                 key={eng.id}
-                className="bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-300/50 transition-colors"
+                onClick={() => router.push(`/audit/engagements/${eng.id}`)}
+                className="bg-white rounded-xl border border-slate-200 p-5 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1 min-w-0">
@@ -362,7 +391,7 @@ export default function AuditEngagementsPage() {
                         </span>
                       )}
                     </div>
-                    <h3 className="text-lg font-semibold text-slate-900 truncate">{eng.title}</h3>
+                    <h3 className="text-lg font-semibold text-blue-600 hover:text-blue-500 truncate">{eng.title}</h3>
                     {eng.entity_name && (
                       <p className="text-sm text-slate-600 mt-0.5 flex items-center gap-1">
                         <Target className="w-3.5 h-3.5" />
@@ -380,7 +409,7 @@ export default function AuditEngagementsPage() {
                     </button>
                     {nextStatus && (
                       <button
-                        onClick={() => transitionMutation.mutate({ id: eng.id, status: nextStatus })}
+                        onClick={(e) => { e.stopPropagation(); transitionMutation.mutate({ id: eng.id, status: nextStatus }); }}
                         disabled={transitionMutation.isPending}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-900 text-xs rounded-lg transition-colors whitespace-nowrap"
                       >
@@ -466,15 +495,18 @@ export default function AuditEngagementsPage() {
                   </div>
                   <div className="flex items-center gap-2 ml-auto">
                     {(eng.status === 'planning' || eng.status === 'fieldwork') && (
-                      <button onClick={() => handleFieldworkGuidance(eng.id)} className="flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-purple-600/80 to-blue-600/80 hover:from-purple-500 hover:to-blue-500 text-slate-900 text-xs rounded-lg transition-all">
+                      <button onClick={(e) => { e.stopPropagation(); handleFieldworkGuidance(eng.id); }} className="flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-purple-600/80 to-blue-600/80 hover:from-purple-500 hover:to-blue-500 text-slate-900 text-xs rounded-lg transition-all">
                         <Sparkles className="w-3 h-3" />Fieldwork Guide
                       </button>
                     )}
                     {(eng.status === 'reporting' || eng.status === 'follow_up' || eng.status === 'closed') && (
-                      <button onClick={() => handleRiskSuggestions(eng.id)} className="flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-purple-600/80 to-blue-600/80 hover:from-purple-500 hover:to-blue-500 text-slate-900 text-xs rounded-lg transition-all">
+                      <button onClick={(e) => { e.stopPropagation(); handleRiskSuggestions(eng.id); }} className="flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-purple-600/80 to-blue-600/80 hover:from-purple-500 hover:to-blue-500 text-slate-900 text-xs rounded-lg transition-all">
                         <Sparkles className="w-3 h-3" />Risk Suggestions
                       </button>
                     )}
+                    <span className="flex items-center gap-1 text-xs text-blue-600 font-medium">
+                      View Details <ChevronRight className="w-3.5 h-3.5" />
+                    </span>
                   </div>
                 </div>
               </div>
@@ -781,6 +813,15 @@ export default function AuditEngagementsPage() {
                   <option value="follow_up">Follow-up</option>
                 </select>
               </div>
+              <button
+                type="button"
+                onClick={handleCreateAiScope}
+                disabled={createAiLoading || !newEngagement.title}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                {createAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Generate Scope, Objectives & Methodology with AI
+              </button>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Scope</label>
                 <textarea
@@ -799,6 +840,16 @@ export default function AuditEngagementsPage() {
                   rows={2}
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   placeholder="Engagement objectives..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Methodology</label>
+                <textarea
+                  value={newEngagement.methodology}
+                  onChange={(e) => setNewEngagement({ ...newEngagement, methodology: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  placeholder="Audit methodology..."
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">

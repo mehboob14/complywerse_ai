@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
+from sqlalchemy.orm.attributes import flag_modified
 import openpyxl
 from openpyxl.utils import get_column_letter
 import pandas as pd
@@ -89,6 +90,16 @@ class AssessmentContextRequest(BaseModel):
     assessment_type: str
     source: Optional[str] = None
     notes: Optional[str] = None
+
+
+class XlsxScoreUpdateRequest(BaseModel):
+    sheet: str
+    row_index: int
+    target_score: Optional[float] = None
+    policy_score: Optional[float] = None
+    practice_score: Optional[float] = None
+    policy_maturity: Optional[float] = None
+    practice_maturity: Optional[float] = None
 
 COLUMN_MAPPINGS = {
     "item_number": ["sr", "sr.", "sr#", "s#", "s.no", "s.no.", "no", "no.", "item", "item no", "item number", "control id", "control #", "id", "ref", "reference", "#"],
@@ -269,6 +280,373 @@ def extract_row_data(row, column_map: dict, current_area: str) -> dict:
     return item
 
 
+# --------------------------------------------------------------------------- #
+#  XLSX Maturity Tool — detection & parsing
+# --------------------------------------------------------------------------- #
+
+XLSX_MATURITY_SHEET_NAMES = {"Introduction", "CSF Summary", "Maturity Levels", "NIST CSF Details", "References"}
+
+
+def detect_xlsx_maturity_format(wb) -> bool:
+    """Return True when the workbook contains the NIST CSF Maturity Tool sheets."""
+    return XLSX_MATURITY_SHEET_NAMES.issubset(set(wb.sheetnames))
+
+
+def _safe_float(v):
+    try:
+        return round(float(v), 3) if v is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _normalize_sheet_label(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    return ''.join(ch.lower() for ch in str(value) if ch.isalnum())
+
+
+def _recalculate_csf_summary_overall(data: dict) -> None:
+    sheets = data.get("sheets", {})
+    summary = sheets.get("csf_summary") or {}
+    categories = summary.get("categories") or []
+
+    target_vals = [c.get("target_score") for c in categories if c.get("target_score") is not None]
+    policy_vals = [c.get("policy_score") for c in categories if c.get("policy_score") is not None]
+    practice_vals = [c.get("practice_score") for c in categories if c.get("practice_score") is not None]
+
+    summary["overall"] = {
+        "target_score": round(sum(target_vals) / len(target_vals), 3) if target_vals else None,
+        "policy_score": round(sum(policy_vals) / len(policy_vals), 3) if policy_vals else None,
+        "practice_score": round(sum(practice_vals) / len(practice_vals), 3) if practice_vals else None,
+    }
+
+
+def _recalculate_csf_summary_from_details(data: dict) -> None:
+    sheets = data.get("sheets", {})
+    summary = sheets.get("csf_summary") or {}
+    details = sheets.get("details") or []
+    categories = summary.get("categories") or []
+
+    if not categories or not details:
+        _recalculate_csf_summary_overall(data)
+        return
+
+    details_by_category = {}
+    for detail in details:
+        key = _normalize_sheet_label(detail.get("category"))
+        if not key:
+            continue
+        details_by_category.setdefault(key, []).append(detail)
+
+    for category in categories:
+        key = _normalize_sheet_label(category.get("category"))
+        if not key or key not in details_by_category:
+            continue
+
+        category_details = details_by_category[key]
+        policy_vals = [d.get("policy_maturity") for d in category_details if d.get("policy_maturity") is not None]
+        practice_vals = [d.get("practice_maturity") for d in category_details if d.get("practice_maturity") is not None]
+
+        category["policy_score"] = round(sum(policy_vals) / len(policy_vals), 3) if policy_vals else None
+        category["practice_score"] = round(sum(practice_vals) / len(practice_vals), 3) if practice_vals else None
+
+    _recalculate_csf_summary_overall(data)
+
+
+def parse_xlsx_maturity_tool(file_content: bytes) -> dict:
+    """Parse a NIST CSF Maturity Tool workbook into a structured JSON dict."""
+    wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+    result: dict = {"format": "xlsx_maturity", "framework_name": "NIST CSF", "sheets": {}}
+
+    # ------------------------------------------------------------------ #
+    # Sheet 1 – Introduction
+    # ------------------------------------------------------------------ #
+    if "Introduction" in wb.sheetnames:
+        ws = wb["Introduction"]
+        texts = []
+        for row in ws.iter_rows():
+            for cell in row:
+                val = cell.value
+                if val and isinstance(val, str) and val.strip():
+                    texts.append(val.strip())
+        result["sheets"]["introduction"] = {"text": "\n\n".join(texts)}
+
+    # ------------------------------------------------------------------ #
+    # Sheet 2 – CSF Summary  (uses workbook headers exactly)
+    # ------------------------------------------------------------------ #
+    if "CSF Summary" in wb.sheetnames:
+        ws = wb["CSF Summary"]
+        rows_list = [tuple(c.value for c in row) for row in ws.iter_rows()]
+
+        # Detect year from any cell containing a 4-digit year
+        year = 2018
+        for row in rows_list[:5]:
+            for v in row:
+                if isinstance(v, (int, float)) and 2000 <= int(v) <= 2100:
+                    year = int(v)
+                    break
+
+        # Find header row: contains both 'target' and 'policy' (case-insensitive)
+        header_row_idx = None
+        for i, row in enumerate(rows_list):
+            row_lower = [str(v).lower() if v else "" for v in row]
+            if any("target" in v for v in row_lower) and any("policy" in v for v in row_lower):
+                header_row_idx = i
+                break
+
+        categories = []
+        category_header = "NIST 2018 CSF Categories"
+        target_header = "Target Score"
+        policy_header = "Policy Score"
+        practice_header = "Practice Score"
+        if header_row_idx is not None:
+            raw_header = [str(v).strip() if v else "" for v in rows_list[header_row_idx]]
+            header = [h.lower() for h in raw_header]
+
+            # Exact workbook layout for this template: B=Category, C=Target, D=Policy, E=Practice, A=Function markers
+            col_func = 0
+            col_cat = 1
+            col_target = 2
+            col_policy = 3
+            col_practice = 4
+
+            # Preserve header labels from workbook row (when available)
+            if len(raw_header) > 1 and raw_header[1]:
+                category_header = raw_header[1]
+            if len(raw_header) > 2 and raw_header[2]:
+                target_header = raw_header[2]
+            if len(raw_header) > 3 and raw_header[3]:
+                policy_header = raw_header[3]
+            if len(raw_header) > 4 and raw_header[4]:
+                practice_header = raw_header[4]
+
+            current_func = ""
+            overall_row = None
+            for row in rows_list[header_row_idx + 1:]:
+                if not row or not any(v for v in row):
+                    continue
+                f_val = row[col_func] if col_func < len(row) else None
+                c_val = row[col_cat] if col_cat < len(row) else None
+                t_val = row[col_target] if col_target < len(row) else None
+                p_val = row[col_policy] if col_policy < len(row) else None
+                pr_val = row[col_practice] if col_practice < len(row) else None
+
+                if f_val and str(f_val).strip():
+                    current_func = str(f_val).strip()
+                if not c_val:
+                    continue
+                target = _safe_float(t_val)
+                policy = _safe_float(p_val)
+                practice = _safe_float(pr_val)
+                if target is None and policy is None:
+                    continue
+                category_name = str(c_val).strip()
+                if category_name.lower() == "overall":
+                    overall_row = {
+                        "target_score": target,
+                        "policy_score": policy,
+                        "practice_score": practice,
+                    }
+                    continue
+
+                categories.append({
+                    "function": current_func,
+                    "category": category_name,
+                    "target_score": target,
+                    "policy_score": policy,
+                    "practice_score": practice,
+                })
+
+        # Compute overall averages
+        policy_vals = [c["policy_score"] for c in categories if c["policy_score"] is not None]
+        practice_vals = [c["practice_score"] for c in categories if c["practice_score"] is not None]
+        target_vals = [c["target_score"] for c in categories if c["target_score"] is not None]
+        overall = overall_row if 'overall_row' in locals() and overall_row else {
+            "target_score": round(sum(target_vals) / len(target_vals), 3) if target_vals else None,
+            "policy_score": round(sum(policy_vals) / len(policy_vals), 3) if policy_vals else None,
+            "practice_score": round(sum(practice_vals) / len(practice_vals), 3) if practice_vals else None,
+        }
+        result["sheets"]["csf_summary"] = {
+            "year": year,
+            "headers": {
+                "category": category_header,
+                "target_score": target_header,
+                "policy_score": policy_header,
+                "practice_score": practice_header,
+            },
+            "overall": overall,
+            "categories": categories,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Sheet 3 – Maturity Levels (text labels like "Level 1 - Initial")
+    # ------------------------------------------------------------------ #
+    if "Maturity Levels" in wb.sheetnames:
+        ws = wb["Maturity Levels"]
+        maturity_levels = []
+        rows = list(ws.iter_rows(values_only=True))
+
+        level_header = "Maturity Level"
+        policy_header = "Expectation of Policy Maturity Level"
+        process_header = "Expectation of Process Maturity Level"
+        if rows and rows[0]:
+            if rows[0][0]:
+                level_header = str(rows[0][0]).replace("\xa0", " ").strip()
+            if len(rows[0]) > 1 and rows[0][1]:
+                policy_header = str(rows[0][1]).replace("\xa0", " ").strip()
+            if len(rows[0]) > 2 and rows[0][2]:
+                process_header = str(rows[0][2]).replace("\xa0", " ").strip()
+
+        for row in rows[1:]:
+            if not row or row[0] is None:
+                continue
+            lv = row[0]
+
+            lv_text = str(lv).strip().replace("\xa0", " ")
+            if not lv_text.lower().startswith("level"):
+                continue
+
+            # Parse "Level 1 - Initial" -> level=1, name=Initial
+            lv_int = None
+            lv_name = ""
+            try:
+                right = lv_text.split(" ", 1)[1]  # "1 - Initial"
+                lv_int = int(right.split("-")[0].strip())
+                if "-" in right:
+                    lv_name = right.split("-", 1)[1].strip()
+            except Exception:
+                continue
+
+            if not (1 <= lv_int <= 10):
+                continue
+            maturity_levels.append({
+                "level": lv_int,
+                "name": lv_name,
+                "policy_expectation": str(row[1]).strip() if len(row) > 1 and row[1] else "",
+                "process_expectation": str(row[2]).strip() if len(row) > 2 and row[2] else "",
+            })
+        result["sheets"]["maturity_levels"] = {
+            "headers": {
+                "level": level_header,
+                "policy_expectation": policy_header,
+                "process_expectation": process_header,
+            },
+            "rows": sorted(maturity_levels, key=lambda x: x["level"]),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Sheet 4 – NIST CSF Details  (Function | Category | Subcategory | References | Policy | Practice)
+    # ------------------------------------------------------------------ #
+    if "NIST CSF Details" in wb.sheetnames:
+        ws = wb["NIST CSF Details"]
+        rows_list = [tuple(c.value for c in row) for row in ws.iter_rows()]
+
+        # Detect header row
+        header_row_idx = None
+        for i, row in enumerate(rows_list[:15]):
+            low = [str(v).lower().strip() if v else "" for v in row]
+            if any("function" in v for v in low) and any("subcategory" in v or "sub-category" in v for v in low):
+                header_row_idx = i
+                break
+
+        details = []
+        if header_row_idx is not None:
+            header = [str(v).lower().strip() if v else "" for v in rows_list[header_row_idx]]
+            col = {}
+            for j, h in enumerate(header):
+                if "function" in h and "col" not in h and "col" not in h:
+                    col.setdefault("function", j)
+                elif "subcategory" in h or "sub-category" in h:
+                    col.setdefault("subcategory", j)
+                elif "category" in h:
+                    col.setdefault("category", j)
+                elif "reference" in h or "informative" in h:
+                    col.setdefault("references", j)
+                elif "policy" in h and "maturity" in h:
+                    col.setdefault("policy_maturity", j)
+                elif "practice" in h and "maturity" in h:
+                    col.setdefault("practice_maturity", j)
+
+            # Defaults if not found
+            col = {
+                "function": col.get("function", 0),
+                "category": col.get("category", 1),
+                "subcategory": col.get("subcategory", 2),
+                "references": col.get("references", 3),
+                "policy_maturity": col.get("policy_maturity", 4),
+                "practice_maturity": col.get("practice_maturity", 5),
+            }
+
+            # Group rows by subcategory, accumulating references; maturity from first row
+            current_sub = current_func = current_cat = ""
+            current_refs: list = []
+            current_policy = current_practice = None
+
+            def _flush():
+                if current_sub:
+                    details.append({
+                        "function": current_func,
+                        "category": current_cat,
+                        "subcategory": current_sub,
+                        "references": list(current_refs),
+                        "policy_maturity": current_policy,
+                        "practice_maturity": current_practice,
+                    })
+
+            for row in rows_list[header_row_idx + 1:]:
+                if not row or not any(v for v in row):
+                    continue
+                get = lambda c: row[col[c]] if col[c] < len(row) else None  # noqa: E731
+
+                sub_val = get("subcategory")
+                sub_str = str(sub_val).strip() if sub_val else ""
+
+                if sub_str and sub_str != current_sub:
+                    _flush()
+                    current_refs = []
+                    current_policy = current_practice = None
+                    current_sub = sub_str
+                    f_v = get("function")
+                    c_v = get("category")
+                    if f_v:
+                        current_func = str(f_v).strip()
+                    if c_v:
+                        current_cat = str(c_v).strip()
+
+                ref_val = get("references")
+                if ref_val:
+                    ref_str = str(ref_val).strip()
+                    if ref_str and ref_str not in current_refs:
+                        current_refs.append(ref_str)
+
+                if current_policy is None:
+                    current_policy = _safe_float(get("policy_maturity"))
+                if current_practice is None:
+                    current_practice = _safe_float(get("practice_maturity"))
+
+            _flush()
+
+        result["sheets"]["details"] = details
+
+    # ------------------------------------------------------------------ #
+    # Sheet 5 – References
+    # ------------------------------------------------------------------ #
+    if "References" in wb.sheetnames:
+        ws = wb["References"]
+        refs = []
+        for row in ws.iter_rows(values_only=True):
+            if not row or not row[0]:
+                continue
+            doc_str = str(row[0]).strip()
+            if not doc_str:
+                continue
+            link_str = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+            refs.append({"document": doc_str, "link": link_str})
+        result["sheets"]["references"] = refs
+
+    return result
+
+
 def calculate_assessment_stats(items: List[ComplianceAssessmentDocumentItem]) -> dict:
     stats = {
         "total": len(items),
@@ -422,6 +800,112 @@ async def upload_assessment(
         with open(file_path, "wb") as f:
             f.write(file_content)
         logger.info(f"File saved to: {file_path}")
+
+        # ---------------------------------------------------------- #
+        # Detect if this is an XLSX Maturity Tool (e.g. NIST CSF)
+        # ---------------------------------------------------------- #
+        is_maturity_format = False
+        if file.filename.endswith(('.xlsx', '.xls')):
+            try:
+                _wb_check = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
+                is_maturity_format = detect_xlsx_maturity_format(_wb_check)
+                _wb_check.close()
+            except Exception:
+                pass
+
+        if is_maturity_format:
+            logger.info("Detected XLSX Maturity Tool format – using maturity parser")
+            xlsx_data = parse_xlsx_maturity_tool(file_content)
+
+            # Extract framework name for the assessment name if not provided
+            framework_name = xlsx_data.get("framework_name", "Maturity Assessment")
+
+            # Build summary items from the details sheet for compatibility
+            details = xlsx_data.get("sheets", {}).get("details", [])
+            items_data = [
+                {
+                    "item_number": d.get("subcategory", "")[:50] if d.get("subcategory") else str(i + 1),
+                    "area_domain": f"{d.get('function', '')} - {d.get('category', '')}".strip(" -"),
+                    "control_description": d.get("subcategory", ""),
+                    "compliance_status": "in_progress",
+                    "remarks": (
+                        f"Policy Maturity: {d['policy_maturity']}, Practice Maturity: {d['practice_maturity']}"
+                        if d.get("policy_maturity") is not None else None
+                    ),
+                }
+                for i, d in enumerate(details)
+            ]
+            logger.info(f"Maturity tool parsed: {len(items_data)} subcategories")
+
+            parsed_due_date = None
+            if due_date:
+                try:
+                    parsed_due_date = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                except Exception:
+                    pass
+
+            db_assessment = ComplianceAssessmentDocument(
+                tenant_id=tenant_id,
+                name=name or framework_name,
+                assessment_type=assessment_type,
+                source=source,
+                file_name=file.filename,
+                file_path=file_path,
+                due_date=parsed_due_date,
+                assessor=assessor,
+                notes=notes,
+                status="draft",
+                created_by=current_user.id,
+                total_items=len(items_data),
+                assessment_format="xlsx_maturity",
+                xlsx_data=xlsx_data,
+            )
+            db.add(db_assessment)
+            db.flush()
+
+            for idx, item_data in enumerate(items_data):
+                db_item = ComplianceAssessmentDocumentItem(
+                    assessment_id=db_assessment.id,
+                    tenant_id=tenant_id,
+                    item_number=item_data.get("item_number") or str(idx + 1),
+                    area_domain=item_data.get("area_domain"),
+                    control_description=item_data.get("control_description"),
+                    compliance_status=item_data.get("compliance_status", "in_progress"),
+                    remarks=item_data.get("remarks"),
+                )
+                db.add(db_item)
+
+            db.flush()
+            items_objs = db.query(ComplianceAssessmentDocumentItem).filter(
+                ComplianceAssessmentDocumentItem.assessment_id == db_assessment.id
+            ).all()
+            stats = calculate_assessment_stats(items_objs)
+            db_assessment.complied_count = stats["complied"]
+            db_assessment.partially_complied_count = stats["partially_complied"]
+            db_assessment.not_complied_count = stats["not_complied"]
+            db_assessment.in_progress_count = stats["in_progress"]
+            db_assessment.na_count = stats["na"]
+            db_assessment.overall_score = stats["overall_score"]
+
+            db.commit()
+            db.refresh(db_assessment)
+            logger.info(f"Maturity tool upload complete: ID={db_assessment.id}")
+
+            csf_summary = xlsx_data.get("sheets", {}).get("csf_summary", {})
+            overall_scores = csf_summary.get("overall", {})
+            return {
+                "id": db_assessment.id,
+                "name": db_assessment.name,
+                "assessment_type": db_assessment.assessment_type,
+                "assessment_format": "xlsx_maturity",
+                "source": db_assessment.source,
+                "file_name": db_assessment.file_name,
+                "status": db_assessment.status,
+                "total_items": db_assessment.total_items,
+                "overall_scores": overall_scores,
+                "framework_name": xlsx_data.get("framework_name"),
+                "message": f"Successfully uploaded maturity assessment with {len(details)} subcategories across {len(set(d.get('function','') for d in details))} functions",
+            }
         
         logger.info("Parsing Excel file...")
         items_data, column_map = parse_excel_file(file_content, file.filename)
@@ -576,6 +1060,7 @@ def list_assessments(
                 "id": a.id,
                 "name": a.name,
                 "assessment_type": a.assessment_type,
+                "assessment_format": getattr(a, "assessment_format", "standard") or "standard",
                 "source": a.source,
                 "file_name": a.file_name,
                 "status": a.status,
@@ -1073,12 +1558,135 @@ def get_approval_history(
     }
 
 
+@router.get("/{assessment_id}/xlsx-data")
+def get_assessment_xlsx_data(
+    assessment_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Return the full parsed multi-sheet JSON for an xlsx_maturity assessment."""
+    user_tenants = get_user_tenants(current_user, db)
+    assessment = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.id == assessment_id,
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants)
+    ).first()
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
+    if getattr(assessment, "assessment_format", "standard") != "xlsx_maturity":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assessment is not in xlsx_maturity format")
+    
+    raw = getattr(assessment, "xlsx_data", None)
+    if raw is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No xlsx data stored for this assessment")
+    
+    import json as _json
+    data = raw if isinstance(raw, dict) else _json.loads(raw)
+
+    # Backward-compatibility: re-parse older uploads if summary/maturity sections are missing.
+    sheets = data.get("sheets", {}) if isinstance(data, dict) else {}
+    csf_categories = sheets.get("csf_summary", {}).get("categories", [])
+    maturity_section = sheets.get("maturity_levels", {})
+    maturity_rows = maturity_section.get("rows", []) if isinstance(maturity_section, dict) else maturity_section
+
+    needs_reparse = (len(csf_categories) == 0) or (len(maturity_rows) == 0)
+    if needs_reparse and assessment.file_path and os.path.exists(assessment.file_path):
+        try:
+            with open(assessment.file_path, "rb") as fh:
+                reparsed = parse_xlsx_maturity_tool(fh.read())
+            data = reparsed
+            assessment.xlsx_data = reparsed
+            db.commit()
+        except Exception:
+            # Keep serving stored data if re-parse fails.
+            pass
+
+    # Backfill AI-recommended evidence for each detail row (max 5 per item).
+    try:
+        recommendations_changed = _ensure_xlsx_detail_recommendations(data)
+        if recommendations_changed:
+            assessment.xlsx_data = data
+            flag_modified(assessment, "xlsx_data")
+            db.commit()
+    except Exception:
+        # Do not fail the viewer payload if recommendation generation has issues.
+        pass
+
+    return data
+
+
+@router.put("/{assessment_id}/xlsx-data")
+def update_assessment_xlsx_data(
+    assessment_id: int,
+    request: XlsxScoreUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    assessment = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.id == assessment_id,
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
+    if getattr(assessment, "assessment_format", "standard") != "xlsx_maturity":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assessment is not in xlsx_maturity format")
+
+    raw = getattr(assessment, "xlsx_data", None)
+    if raw is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No xlsx data stored for this assessment")
+
+    data = raw if isinstance(raw, dict) else json.loads(raw)
+    sheets = data.setdefault("sheets", {})
+
+    if request.sheet == "details":
+        details = sheets.get("details") or []
+        if request.row_index < 0 or request.row_index >= len(details):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid details row index")
+
+        row = details[request.row_index]
+        if request.policy_maturity is not None:
+            row["policy_maturity"] = _safe_float(request.policy_maturity)
+        if request.practice_maturity is not None:
+            row["practice_maturity"] = _safe_float(request.practice_maturity)
+
+        _recalculate_csf_summary_from_details(data)
+
+    elif request.sheet == "csf_summary":
+        summary = sheets.get("csf_summary") or {}
+        categories = summary.get("categories") or []
+        if request.row_index < 0 or request.row_index >= len(categories):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid summary row index")
+
+        row = categories[request.row_index]
+        if request.target_score is not None:
+            row["target_score"] = _safe_float(request.target_score)
+        if request.policy_score is not None:
+            row["policy_score"] = _safe_float(request.policy_score)
+        if request.practice_score is not None:
+            row["practice_score"] = _safe_float(request.practice_score)
+
+        _recalculate_csf_summary_overall(data)
+
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported xlsx sheet update target")
+
+    assessment.xlsx_data = data
+    flag_modified(assessment, "xlsx_data")
+    assessment.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(assessment)
+
+    return data
+
+
 @router.get("/{assessment_id}")
 def get_assessment(
     assessment_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+
     user_tenants = get_user_tenants(current_user, db)
     
     assessment = db.query(ComplianceAssessmentDocument).options(
@@ -1123,6 +1731,7 @@ def get_assessment(
         "tenant_id": assessment.tenant_id,
         "name": assessment.name,
         "assessment_type": assessment.assessment_type,
+        "assessment_format": getattr(assessment, "assessment_format", "standard") or "standard",
         "source": assessment.source,
         "file_name": assessment.file_name,
         "status": assessment.status,
@@ -1504,6 +2113,201 @@ def parse_ai_response(response_text: str) -> dict:
         return json.loads(cleaned.strip())
     except json.JSONDecodeError:
         return {"recommendations": [], "summary": "Failed to parse AI response"}
+
+
+def _iter_openai_clients_for_xlsx() -> List[OpenAI]:
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    is_modelfarm = bool(base_url and "modelfarm" in base_url)
+    clients: List[OpenAI] = []
+    seen = set()
+
+    for key_name in ("OPENAI_API_KEY", "AI_INTEGRATIONS_OPENAI_API_KEY"):
+        key = (os.environ.get(key_name) or "").strip()
+        if not key:
+            continue
+        if key.startswith("_DUMMY") or key == "your-api-key-here" or len(key) < 20:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        clients.append(OpenAI(api_key=key, base_url=base_url))
+
+    if is_modelfarm and not clients:
+        clients.append(OpenAI(api_key=None, base_url=base_url))
+
+    return clients
+
+
+def _normalize_recommendations(raw_recommendations) -> List[dict]:
+    if not isinstance(raw_recommendations, list):
+        return []
+
+    cleaned = []
+    for rec in raw_recommendations:
+        if not isinstance(rec, dict):
+            continue
+        evidence_type = str(rec.get("evidence_type") or rec.get("type") or "").strip()
+        if not evidence_type:
+            continue
+        cleaned.append({
+            "evidence_type": evidence_type,
+            "artifact_name": str(rec.get("artifact_name") or rec.get("artifact") or "").strip(),
+            "why_auditable": str(rec.get("why_auditable") or rec.get("description") or "").strip(),
+            "priority": str(rec.get("priority") or "medium").strip().lower() or "medium",
+            "verification_checks": [
+                str(x).strip() for x in (rec.get("verification_checks") or [])
+                if str(x).strip()
+            ][:3],
+        })
+        if len(cleaned) >= 5:
+            break
+
+    return cleaned
+
+
+def _fallback_detail_recommendations(detail: dict, framework_name: str) -> List[dict]:
+    subcategory = str(detail.get("subcategory") or "this control").strip()
+    category = str(detail.get("category") or "control domain").strip()
+    references = detail.get("references") or []
+    refs = [str(r).strip() for r in references if str(r).strip()][:3]
+    ref_text = ", ".join(refs) if refs else f"{framework_name} {subcategory}"
+
+    return [
+        {
+            "evidence_type": "Approved Policy/Standard",
+            "artifact_name": f"{subcategory} Policy Standard",
+            "why_auditable": f"Demonstrates formal management approval, scope, ownership, and review cadence for {subcategory} within {category}.",
+            "priority": "high",
+            "verification_checks": ["Approval signatures", "Version history", "Effective/review dates"],
+        },
+        {
+            "evidence_type": "Control Procedure / SOP",
+            "artifact_name": f"{subcategory} SOP",
+            "why_auditable": f"Shows how the control is executed in practice, including responsible roles and step-by-step activities mapped to {ref_text}.",
+            "priority": "high",
+            "verification_checks": ["RACI/owner", "Execution steps", "Exception handling"],
+        },
+        {
+            "evidence_type": "System Configuration Evidence",
+            "artifact_name": f"{subcategory} Configuration Baseline and Screenshots",
+            "why_auditable": "Provides objective proof that required control settings are enabled and consistently configured in production systems.",
+            "priority": "high",
+            "verification_checks": ["Timestamped screenshots", "System identifiers", "Configuration values"],
+        },
+        {
+            "evidence_type": "Operational Logs / Reports",
+            "artifact_name": f"{subcategory} Monitoring Logs and Monthly Exception Report",
+            "why_auditable": "Demonstrates the control is operating over time, not just documented, and captures incidents or deviations.",
+            "priority": "medium",
+            "verification_checks": ["Date range coverage", "Exception counts", "Reviewer sign-off"],
+        },
+        {
+            "evidence_type": "Independent Review / Test Result",
+            "artifact_name": f"{subcategory} Internal Audit or Control Testing Result",
+            "why_auditable": "Confirms effectiveness through independent validation and documents gaps with remediation tracking.",
+            "priority": "medium",
+            "verification_checks": ["Test scope", "Findings and ratings", "Remediation actions"],
+        },
+    ]
+
+
+def _generate_detail_recommendations_batch_ai(framework_name: str, detail_batch: List[dict]) -> dict:
+    clients = _iter_openai_clients_for_xlsx()
+    if not clients:
+        return {}
+
+    payload = {
+        "framework_name": framework_name,
+        "items": detail_batch,
+        "instructions": (
+            "For EACH item, generate up to 5 specific, auditable evidence recommendations. "
+            "Recommendations must be tailored to the exact subcategory/control context, not generic. "
+            "Return ONLY JSON object format: {\"items\":[{\"row_index\":<number>,\"recommendations\":[{\"evidence_type\":\"...\",\"artifact_name\":\"...\",\"why_auditable\":\"...\",\"priority\":\"high|medium|low\",\"verification_checks\":[\"...\"]}]}]}."
+        ),
+    }
+
+    for client in clients:
+        try:
+            response = client.chat.completions.create(
+                model=os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL", "gpt-4o-mini"),
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a senior GRC auditor. You provide precise, item-specific, audit-defensible evidence requirements. "
+                            "Output valid JSON only."
+                        ),
+                    },
+                    {"role": "user", "content": json.dumps(payload)},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.2,
+                max_tokens=2500,
+            )
+            parsed = parse_ai_response(response.choices[0].message.content or "{}")
+            items = parsed.get("items") if isinstance(parsed, dict) else None
+            if not isinstance(items, list):
+                continue
+
+            out = {}
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                row_index = item.get("row_index")
+                if not isinstance(row_index, int):
+                    continue
+                normalized = _normalize_recommendations(item.get("recommendations"))
+                if normalized:
+                    out[row_index] = normalized
+            return out
+        except Exception:
+            continue
+
+    return {}
+
+
+def _ensure_xlsx_detail_recommendations(data: dict) -> bool:
+    if not isinstance(data, dict):
+        return False
+    sheets = data.get("sheets") or {}
+    details = sheets.get("details") or []
+    if not isinstance(details, list) or not details:
+        return False
+
+    framework_name = str(data.get("framework_name") or "NIST CSF").strip() or "NIST CSF"
+    missing_indices = [
+        idx for idx, row in enumerate(details)
+        if isinstance(row, dict) and not row.get("recommended_evidence")
+    ]
+    if not missing_indices:
+        return False
+
+    changed = False
+    chunk_size = 12
+    for start in range(0, len(missing_indices), chunk_size):
+        chunk = missing_indices[start:start + chunk_size]
+        batch_payload = []
+        for idx in chunk:
+            row = details[idx]
+            batch_payload.append({
+                "row_index": idx,
+                "function": str(row.get("function") or ""),
+                "category": str(row.get("category") or ""),
+                "subcategory": str(row.get("subcategory") or ""),
+                "references": [str(r).strip() for r in (row.get("references") or []) if str(r).strip()][:4],
+                "policy_maturity": row.get("policy_maturity"),
+                "practice_maturity": row.get("practice_maturity"),
+            })
+
+        ai_map = _generate_detail_recommendations_batch_ai(framework_name, batch_payload)
+
+        for idx in chunk:
+            row = details[idx]
+            recommendations = ai_map.get(idx) or _fallback_detail_recommendations(row, framework_name)
+            row["recommended_evidence"] = recommendations[:5]
+            changed = True
+
+    return changed
 
 
 @router.get("/{assessment_id}/items/{item_id}/evidence")

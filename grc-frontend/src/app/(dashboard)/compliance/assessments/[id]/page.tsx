@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import apiClient from '@/lib/api';
+import XlsxMaturityViewer from './XlsxMaturityViewer';
 import {
   ArrowLeft,
   FileText,
@@ -94,6 +95,7 @@ interface Assessment {
   tenant_id: number;
   name: string;
   assessment_type: string;
+  assessment_format?: string;
   source: string | null;
   file_name: string | null;
   status: string;
@@ -168,6 +170,14 @@ function parseAIRecommendation(jsonStr: string | null): AIRecommendation | null 
   }
 }
 
+function getDomainDisplayName(domain: string): string {
+  const normalized = domain.trim().toLowerCase();
+  if (!normalized || normalized === 'uncategorized') {
+    return 'Requirements';
+  }
+  return domain;
+}
+
 export default function AssessmentDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -208,6 +218,8 @@ export default function AssessmentDetailPage() {
             evidence_id: ev.evidence_id,
             status: ev.approval_status || ev.status || 'draft',
             current_tier: ev.current_tier,
+            ai_recommendation: ev.ai_recommendation || null,
+            submitted_at: ev.submitted_at || null,
             workflow_id: ev.workflow_id,
             created_at: ev.created_at,
             evidence: ev.evidence_id ? {
@@ -216,7 +228,8 @@ export default function AssessmentDetailPage() {
               file_name: ev.evidence_file_name,
               file_type: ev.evidence_file_type,
               status: ev.evidence_status,
-            } : null,
+              uploaded_at: ev.evidence_uploaded_at || ev.created_at || '',
+            } : undefined,
           })) : [];
         } catch {
           results[itemId] = [];
@@ -593,6 +606,9 @@ export default function AssessmentDetailPage() {
         </div>
       </div>
 
+      {assessment.assessment_format === 'xlsx_maturity' ? (
+        <XlsxMaturityViewer assessmentId={assessmentId} />
+      ) : (
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -639,7 +655,7 @@ export default function AssessmentDetailPage() {
                       ) : (
                         <ChevronRight className="h-5 w-5 text-gray-600" />
                       )}
-                      <span className="font-medium text-black">{domain}</span>
+                      <span className="font-medium text-black">{getDomainDisplayName(domain)}</span>
                       <span className="text-sm text-gray-500">({items.length} items)</span>
                     </div>
                     <div className="flex items-center gap-3">
@@ -1028,6 +1044,7 @@ export default function AssessmentDetailPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

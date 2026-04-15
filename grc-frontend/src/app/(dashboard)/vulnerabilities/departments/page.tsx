@@ -193,11 +193,11 @@ export default function DepartmentsManagementPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold cw-text-default">Vulnerability Departments</h1>
-          <p className="cw-text-muted mt-1">Manage departments responsible for vulnerability remediation</p>
+          <h1 className="text-xl font-bold cw-text-default">Vulnerability Departments</h1>
+          <p className="text-xs cw-text-muted">Manage departments responsible for vulnerability remediation</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -221,12 +221,12 @@ export default function DepartmentsManagementPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {(!filteredDepartments || filteredDepartments.length === 0) ? (
-          <div className="col-span-full cw-card p-12 text-center">
-            <Building2 className="h-12 w-12 mx-auto cw-text-muted mb-4" />
-            <h3 className="text-lg font-medium cw-text-default mb-2">No departments found</h3>
-            <p className="cw-text-muted mb-4">Create your first department to start assigning vulnerabilities</p>
+          <div className="col-span-full cw-card p-8 text-center">
+            <Building2 className="h-10 w-10 mx-auto cw-text-muted mb-3" />
+            <h3 className="text-base font-medium cw-text-default mb-1">No departments found</h3>
+            <p className="text-sm cw-text-muted mb-3">Create your first department to start assigning vulnerabilities</p>
             <button
               onClick={() => setShowCreateModal(true)}
               className="btn-primary inline-flex items-center gap-2"
@@ -239,12 +239,12 @@ export default function DepartmentsManagementPage() {
           filteredDepartments.map((dept) => (
             <div
               key={dept.id}
-              className="cw-card p-6 hover:shadow-md transition-colors"
+              className="cw-card p-4 hover:shadow-md transition-colors"
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
-                    <Building2 className="h-5 w-5 text-primary-600" />
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50">
+                    <Building2 className="h-4 w-4 text-primary-600" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">

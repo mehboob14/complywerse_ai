@@ -446,7 +446,10 @@ export default function GapAnalysisDashboardPage() {
                     borderRadius: '8px',
                     color: '#111827'
                   }}
-                  formatter={(value: number) => [`${value}%`, 'Coverage']}
+                  formatter={(value) => {
+                    const numericValue = typeof value === 'number' ? value : Number(value ?? 0);
+                    return [`${numericValue}%`, 'Coverage'];
+                  }}
                 />
                 <Bar dataKey="coverage" radius={[0, 4, 4, 0]}>
                   {frameworkChartData.map((entry, index) => (

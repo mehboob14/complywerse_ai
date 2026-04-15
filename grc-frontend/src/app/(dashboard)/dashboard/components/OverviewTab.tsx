@@ -65,9 +65,9 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
               return (
                 <>
                   <div className="relative">
-                    <ResponsiveContainer width={180} height={180}>
+                    <ResponsiveContainer width={160} height={160}>
                       <PieChart>
-                        <Pie data={riskDonutData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" strokeWidth={0}>
+                        <Pie data={riskDonutData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} dataKey="value" strokeWidth={0}>
                           {riskDonutData.map((entry, index) => (
                             <Cell key={index} fill={entry.color} />
                           ))}
@@ -80,7 +80,7 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
                       <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Total</span>
                     </div>
                   </div>
-                  <div className="flex flex-wrap justify-center gap-3 mt-2">
+                  <div className="mt-2 flex flex-wrap justify-center gap-2.5">
                     {riskDonutData.map((d, i) => (
                       <div key={i} className="flex items-center gap-1.5 text-xs">
                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
@@ -106,7 +106,7 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
           </div>
           <div className="p-5 flex justify-center">
             {data.compliance.framework_coverage.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={240}>
                 <RadarChart data={data.compliance.framework_coverage.slice(0, 8).map(fw => ({ framework: fw.short_code, score: fw.score, fullMark: 100 }))}>
                   <PolarGrid stroke="#DDE1E7" />
                   <PolarAngleAxis dataKey="framework" tick={{ fill: '#6B7280', fontSize: 11 }} />
@@ -130,7 +130,7 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
           </div>
           <div className="p-5">
             {data.kpis.evidence_trend && data.kpis.evidence_trend.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={220}>
                 <AreaChart data={data.kpis.evidence_trend}>
                   <defs>
                     <linearGradient id="evidenceGrad" x1="0" y1="0" x2="0" y2="1">
@@ -161,7 +161,7 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
         </div>
         <div className="p-5">
           {(data.kpis.compliance_trend.length > 0 || data.kpis.risk_trend.length > 0) ? (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={240}>
               <LineChart data={data.kpis.compliance_trend.map((ct, idx) => ({
                 month: ct.month,
                 compliance: ct.value,
@@ -214,7 +214,7 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
                       <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{g.value}%</span>
                     </div>
                   </div>
-                  <span className="text-xs font-medium mt-3 text-center" style={{ color: 'var(--color-text)' }}>{g.label}</span>
+                  <span className="mt-2.5 text-center text-xs font-medium" style={{ color: 'var(--color-text)' }}>{g.label}</span>
                   <span className="text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}>{g.subtitle}</span>
                 </div>
               ));
@@ -293,7 +293,7 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
           </div>
           <div className="p-5">
             {data.compliance.framework_coverage.length > 0 ? (
-              <ResponsiveContainer width="100%" height={Math.max(200, data.compliance.framework_coverage.length * 45)}>
+              <ResponsiveContainer width="100%" height={Math.max(180, data.compliance.framework_coverage.length * 38)}>
                 <BarChart
                   data={data.compliance.framework_coverage.map(fw => ({
                     name: fw.short_code,

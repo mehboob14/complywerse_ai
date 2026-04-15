@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useMemo } from 'react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { policyExceptionApi, governanceApi } from '@/lib/api';
+import { policyExceptionApi, governanceApi, documentsApi } from '@/lib/api';
 import {
   Shield,
   Plus,
@@ -21,6 +23,8 @@ import {
   MessageSquare,
   Calendar,
   FileText,
+  Sparkles,
+  Trash2,
 } from 'lucide-react';
 
 const STATUS_OPTIONS = [
@@ -43,18 +47,18 @@ const PRIORITY_OPTIONS = [
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   draft: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
-  pending_approval: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pending Approval' },
-  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Approved' },
-  rejected: { bg: 'bg-rose-500/20', text: 'text-rose-400', label: 'Rejected' },
-  expired: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Expired' },
-  revoked: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Revoked' },
+  pending_approval: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Pending Approval' },
+  approved: { bg: 'bg-green-100', text: 'text-green-700', label: 'Approved' },
+  rejected: { bg: 'bg-red-100', text: 'text-red-700', label: 'Rejected' },
+  expired: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Expired' },
+  revoked: { bg: 'bg-gray-200', text: 'text-gray-700', label: 'Revoked' },
 };
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   low: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Low' },
-  medium: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Medium' },
-  high: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'High' },
-  critical: { bg: 'bg-rose-500/20', text: 'text-rose-400', label: 'Critical' },
+  medium: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Medium' },
+  high: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'High' },
+  critical: { bg: 'bg-red-100', text: 'text-red-700', label: 'Critical' },
 };
 
 interface ExceptionItem {
@@ -94,6 +98,13 @@ interface SummaryData {
   expiring_soon: number;
 }
 
+interface GovernancePolicyOption {
+  id: number;
+  title: string;
+  document_code?: string;
+  doc_type?: string;
+}
+
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -112,8 +123,6 @@ export default function PolicyExceptionsPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [revokeReason, setRevokeReason] = useState('');
   const [newComment, setNewComment] = useState('');
-  const [lastAutofillKey, setLastAutofillKey] = useState('');
-
   const [formData, setFormData] = useState({
     title: '',
     document_id: '' as string | number,
@@ -127,6 +136,15 @@ export default function PolicyExceptionsPage() {
 
   const queryClient = useQueryClient();
 
+  const extractItemsArray = (payload: any): any[] => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.exceptions)) return payload.exceptions;
+    if (Array.isArray(payload?.documents)) return payload.documents;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [];
+  };
+
   const { data: summary } = useQuery({
     queryKey: ['policy-exceptions-summary'],
     queryFn: async () => {
@@ -135,23 +153,37 @@ export default function PolicyExceptionsPage() {
     },
   });
 
-  const { data: exceptions, isLoading } = useQuery({
+  const { data: exceptions, isLoading, error: exceptionsError } = useQuery({
     queryKey: ['policy-exceptions', statusFilter, priorityFilter],
     queryFn: async () => {
       const params: Record<string, string | number> = {};
       if (statusFilter) params.status = statusFilter;
       if (priorityFilter) params.priority = priorityFilter;
-      const response = await policyExceptionApi.getAll(params);
-      return (response.data?.items || response.data || []) as ExceptionItem[];
+      try {
+        const response = await policyExceptionApi.getAll(params);
+        return extractItemsArray(response.data) as ExceptionItem[];
+      } catch {
+        const fallback = await governanceApi.getExceptions();
+        return extractItemsArray(fallback.data) as ExceptionItem[];
+      }
     },
   });
 
-  const { data: documents } = useQuery({
+  const { data: documents, error: documentsError } = useQuery({
     queryKey: ['governance-documents-list'],
     queryFn: async () => {
-      const response = await governanceApi.getDocuments({ limit: 200 });
-      const data = response.data as any;
-      return Array.isArray(data) ? data : (data?.items || []);
+      try {
+        const response = await governanceApi.getDocuments({ limit: 200 });
+        const allDocs = extractItemsArray(response.data);
+        const policyDocs = allDocs.filter((doc: any) => {
+          const t = String(doc?.doc_type || '').toLowerCase();
+          return t === 'policy' || t === 'standard' || t === 'procedure' || t === 'guideline' || t === 'charter';
+        });
+        return (policyDocs.length > 0 ? policyDocs : allDocs) as GovernancePolicyOption[];
+      } catch {
+        const fallback = await documentsApi.getAll();
+        return extractItemsArray(fallback.data) as GovernancePolicyOption[];
+      }
     },
   });
 
@@ -245,6 +277,16 @@ export default function PolicyExceptionsPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await policyExceptionApi.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['policy-exceptions'] });
+      queryClient.invalidateQueries({ queryKey: ['policy-exceptions-summary'] });
+    },
+  });
+
   const suggestContentMutation = useMutation({
     mutationFn: async (data: { title: string; document_id: number }) => {
       const response = await policyExceptionApi.suggestContent(data);
@@ -265,7 +307,6 @@ export default function PolicyExceptionsPage() {
   });
 
   const resetForm = () => {
-    setLastAutofillKey('');
     setFormData({
       title: '',
       document_id: '',
@@ -279,7 +320,6 @@ export default function PolicyExceptionsPage() {
   };
 
   const openEditModal = (exception: ExceptionItem) => {
-    setLastAutofillKey('');
     setFormData({
       title: exception.title,
       document_id: exception.document_id || '',
@@ -316,24 +356,6 @@ export default function PolicyExceptionsPage() {
   const selectedDocumentId = formData.document_id ? Number(formData.document_id) : 0;
   const normalizedTitle = formData.title.trim();
 
-  useEffect(() => {
-    if (!showCreateModal || editingException) return;
-    if (!selectedDocumentId || !normalizedTitle) return;
-
-    const key = `${selectedDocumentId}:${normalizedTitle.toLowerCase()}`;
-    if (lastAutofillKey === key) return;
-
-    setLastAutofillKey(key);
-    suggestContentMutation.mutate({ title: normalizedTitle, document_id: selectedDocumentId });
-  }, [
-    showCreateModal,
-    editingException,
-    selectedDocumentId,
-    normalizedTitle,
-    lastAutofillKey,
-    suggestContentMutation,
-  ]);
-
   return (
     <div className="governance-exceptions space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -355,49 +377,84 @@ export default function PolicyExceptionsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="stat-card">
-          <div className="flex items-start justify-between mb-4">
-            <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <FileText className="h-6 w-6 text-primary-400" />
+      {/* Exception status — single donut chart */}
+      {(() => {
+        const exceptionChartData = [
+          { name: 'Pending Approval', value: summary?.pending_approval || 0, fill: '#f59e0b' },
+          { name: 'Active / Approved',  value: summary?.approved || 0,          fill: '#10b981' },
+          { name: 'Expiring Soon',      value: summary?.expiring_soon || 0,     fill: '#f97316' },
+          {
+            name: 'Other',
+            value: Math.max(0, (summary?.total || 0) - (summary?.pending_approval || 0) - (summary?.approved || 0) - (summary?.expiring_soon || 0)),
+            fill: '#94a3b8',
+          },
+        ].filter((d) => d.value > 0);
+        const total = summary?.total || 0;
+        const ExcTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) =>
+          active && payload?.length ? (
+            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-md text-xs">
+              <p className="font-medium text-gray-800">{payload[0].name}</p>
+              <p className="text-gray-500">{payload[0].value} exception{payload[0].value !== 1 ? 's' : ''}</p>
+            </div>
+          ) : null;
+        return (
+          <div className="rounded-xl border border-slate-200 bg-white p-5">
+            <div className="flex items-center gap-6">
+              <div className="relative h-[110px] w-[110px] flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={exceptionChartData.length ? exceptionChartData : [{ name: 'None', value: 1, fill: '#e2e8f0' }]}
+                      cx="50%" cy="50%" innerRadius={32} outerRadius={52} dataKey="value" paddingAngle={2}>
+                      {(exceptionChartData.length ? exceptionChartData : [{ name: 'None', value: 1, fill: '#e2e8f0' }]).map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<ExcTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-xl font-bold text-slate-900">{total}</span>
+                  <span className="text-[10px] text-slate-400">total</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  <span className="text-slate-500">Pending Approval</span>
+                  <span className="ml-auto font-semibold text-slate-800">{summary?.pending_approval || 0}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <span className="text-slate-500">Active / Approved</span>
+                  <span className="ml-auto font-semibold text-slate-800">{summary?.approved || 0}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+                  <span className="text-slate-500">Expiring Soon (30d)</span>
+                  <span className="ml-auto font-semibold text-slate-800">{summary?.expiring_soon || 0}</span>
+                </div>
+                {(total - (summary?.pending_approval || 0) - (summary?.approved || 0) - (summary?.expiring_soon || 0)) > 0 && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+                    <span className="text-slate-500">Other</span>
+                    <span className="ml-auto font-semibold text-slate-800">
+                      {total - (summary?.pending_approval || 0) - (summary?.approved || 0) - (summary?.expiring_soon || 0)}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <p className="stat-value">{summary?.total || 0}</p>
-          <p className="stat-label">Total Exceptions</p>
-        </div>
-
-        <div className="stat-card">
-          <div className="flex items-start justify-between mb-4">
-            <div className="rounded-xl bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 p-3">
-              <Clock className="h-6 w-6 text-yellow-400" />
-            </div>
-          </div>
-          <p className="stat-value">{summary?.pending_approval || 0}</p>
-          <p className="stat-label">Pending Approval</p>
-        </div>
-
-        <div className="stat-card">
-          <div className="flex items-start justify-between mb-4">
-            <div className="rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-3">
-              <CheckCircle className="h-6 w-6 text-emerald-400" />
-            </div>
-          </div>
-          <p className="stat-value">{summary?.approved || 0}</p>
-          <p className="stat-label">Active (Approved)</p>
-        </div>
-
-        <div className="stat-card">
-          <div className="flex items-start justify-between mb-4">
-            <div className="rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 p-3">
-              <AlertTriangle className="h-6 w-6 text-orange-400" />
-            </div>
-          </div>
-          <p className="stat-value">{summary?.expiring_soon || 0}</p>
-          <p className="stat-label">Expiring Soon (30 days)</p>
-        </div>
-      </div>
+        );
+      })()}
 
       <div className="flex flex-wrap gap-3">
+        {(exceptionsError || documentsError) && (
+          <div className="w-full flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800 text-sm">
+            <AlertCircle className="h-4 w-4" />
+            Some governance data could not be loaded from the primary endpoint. Fallback data is shown when available.
+          </div>
+        )}
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -494,7 +551,7 @@ export default function PolicyExceptionsPage() {
                             <button
                               onClick={() => submitMutation.mutate(exc.id)}
                               disabled={submitMutation.isPending}
-                              className="btn-ghost btn-sm text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                              className="btn-ghost btn-sm"
                               title="Submit for Approval"
                             >
                               <Send className="h-4 w-4" />
@@ -505,14 +562,14 @@ export default function PolicyExceptionsPage() {
                           <>
                             <button
                               onClick={() => setApproveModal(exc)}
-                              className="btn-ghost btn-sm text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                              className="btn-ghost btn-sm text-green-700 hover:text-green-800 hover:bg-green-50"
                               title="Approve"
                             >
                               <Check className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => setRejectModal(exc)}
-                              className="btn-ghost btn-sm text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                              className="btn-ghost btn-sm text-red-700 hover:text-red-800 hover:bg-red-50"
                               title="Reject"
                             >
                               <XCircle className="h-4 w-4" />
@@ -522,10 +579,24 @@ export default function PolicyExceptionsPage() {
                         {exc.status === 'approved' && (
                           <button
                             onClick={() => setRevokeModal(exc)}
-                            className="btn-ghost btn-sm text-gray-400 hover:text-gray-300 hover:bg-gray-500/10"
+                            className="btn-ghost btn-sm"
                             title="Revoke"
                           >
                             <Ban className="h-4 w-4" />
+                          </button>
+                        )}
+                        {(exc.status === 'draft' || exc.status === 'revoked' || exc.status === 'rejected') && (
+                          <button
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this exception?')) {
+                                deleteMutation.mutate(exc.id);
+                              }
+                            }}
+                            disabled={deleteMutation.isPending}
+                            className="btn-ghost btn-sm text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         )}
                       </div>
@@ -539,14 +610,14 @@ export default function PolicyExceptionsPage() {
       </div>
 
       {(showCreateModal || editingException) && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-300">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-2xl overflow-y-auto rounded-xl border border-gray-300 bg-white max-h-[82vh] shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <div>
-                <h2 className="text-lg font-semibold text-black">
+                <h2 className="text-base font-semibold text-black">
                   {editingException ? 'Edit Exception Request' : 'New Exception Request'}
                 </h2>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs text-gray-600 mt-0.5">
                   {editingException ? 'Update the exception details' : 'Create a new policy exception request'}
                 </p>
               </div>
@@ -557,7 +628,7 @@ export default function PolicyExceptionsPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="px-5 py-4 space-y-3.5">
               <div>
                 <label className="label">Title *</label>
                 <input
@@ -567,6 +638,26 @@ export default function PolicyExceptionsPage() {
                   className="input"
                   placeholder="Exception request title"
                 />
+                {showCreateModal && !editingException && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => suggestContentMutation.mutate({ title: normalizedTitle, document_id: selectedDocumentId })}
+                      disabled={!selectedDocumentId || !normalizedTitle || suggestContentMutation.isPending}
+                      className="btn-secondary inline-flex items-center gap-2"
+                    >
+                      {suggestContentMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      AI Assist
+                    </button>
+                    <p className="mt-1 text-xs text-gray-600">
+                      Select a policy and enter title, then use AI Assist to fill suggested details.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -577,16 +668,36 @@ export default function PolicyExceptionsPage() {
                   className="select"
                 >
                   <option value="">Select a policy...</option>
-                  {(documents || []).map((doc: any) => (
+                  {(documents || []).map((doc: GovernancePolicyOption) => (
                     <option key={doc.id} value={doc.id}>
                       {doc.title} ({doc.document_code || doc.doc_type})
                     </option>
                   ))}
                 </select>
-                {showCreateModal && !editingException && suggestContentMutation.isPending && (
-                  <p className="mt-2 text-xs text-gray-600">Generating suggested justification and risk details...</p>
-                )}
               </div>
+
+                {showCreateModal && !editingException && suggestContentMutation.isPending && (
+                <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 flex items-center gap-3">
+                  <div className="relative flex-shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                      <Sparkles className="h-5 w-5 text-blue-600 animate-pulse" />
+                    </div>
+                    <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-blue-900">AI is working...</p>
+                    <p className="text-xs text-blue-700 mt-0.5">Generating suggested justification and risk details...</p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="label">Justification *</label>
@@ -632,7 +743,7 @@ export default function PolicyExceptionsPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Effective Date</label>
                   <input
@@ -653,7 +764,7 @@ export default function PolicyExceptionsPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-2.5 px-5 py-4 border-t border-gray-200">
               <button
                 onClick={() => { setShowCreateModal(false); setEditingException(null); resetForm(); }}
                 className="btn-secondary"
@@ -674,11 +785,11 @@ export default function PolicyExceptionsPage() {
       )}
 
       {viewingException && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-gray-300">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-3xl overflow-y-auto rounded-xl border border-gray-300 bg-white max-h-[82vh] shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <div>
-                <h2 className="text-lg font-semibold text-black">{viewingException.title}</h2>
+                <h2 className="text-base font-semibold text-black">{viewingException.title}</h2>
                 <div className="flex items-center gap-2 mt-1">
                   {(() => {
                     const ss = STATUS_STYLES[viewingException.status] || STATUS_STYLES.draft;
@@ -706,8 +817,8 @@ export default function PolicyExceptionsPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="px-5 py-4 space-y-4.5">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-600 uppercase tracking-wide">Policy</label>
                   <p className="text-black mt-1">{viewingException.document_title || viewingException.policy_name || '-'}</p>
@@ -752,21 +863,21 @@ export default function PolicyExceptionsPage() {
               </div>
 
               {viewingException.rejection_reason && (
-                <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-4">
-                  <label className="text-xs text-rose-400 uppercase tracking-wide">Rejection Reason</label>
-                  <p className="text-rose-300 mt-1">{viewingException.rejection_reason}</p>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3.5">
+                  <label className="text-xs text-red-700 uppercase tracking-wide font-medium">Rejection Reason</label>
+                  <p className="text-red-800 mt-1">{viewingException.rejection_reason}</p>
                 </div>
               )}
 
               {viewingException.approval_comments && (
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
-                  <label className="text-xs text-emerald-400 uppercase tracking-wide">Approval Comments</label>
-                  <p className="text-emerald-300 mt-1">{viewingException.approval_comments}</p>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3.5">
+                  <label className="text-xs text-green-700 uppercase tracking-wide font-medium">Approval Comments</label>
+                  <p className="text-green-800 mt-1">{viewingException.approval_comments}</p>
                 </div>
               )}
 
-              <div className="border-t border-gray-200 pt-4">
-                <h3 className="text-sm font-semibold text-black flex items-center gap-2 mb-4">
+              <div className="border-t border-gray-200 pt-3.5">
+                <h3 className="text-sm font-semibold text-black flex items-center gap-2 mb-3">
                   <MessageSquare className="h-4 w-4 text-gray-600" />
                   Comments
                 </h3>
@@ -775,12 +886,12 @@ export default function PolicyExceptionsPage() {
                     <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
                   </div>
                 ) : (
-                  <div className="space-y-3 mb-4">
+                  <div className="space-y-2.5 mb-3.5">
                     {(!comments || comments.length === 0) && (
                       <p className="text-sm text-gray-600 text-center py-2">No comments yet</p>
                     )}
                     {(comments || []).map((comment) => (
-                      <div key={comment.id} className="bg-gray-100 rounded-lg p-3">
+                      <div key={comment.id} className="bg-gray-100 rounded-lg p-2.5">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm font-medium text-black">{comment.user_name}</span>
                           <span className="text-xs text-gray-600">{formatDate(comment.created_at)}</span>
@@ -822,9 +933,9 @@ export default function PolicyExceptionsPage() {
       )}
 
       {approveModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md border border-gray-300">
-            <div className="p-6 border-b border-gray-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-xl border border-gray-300 bg-white shadow-xl">
+            <div className="px-5 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-black flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-emerald-400" />
                 Approve Exception
@@ -833,7 +944,7 @@ export default function PolicyExceptionsPage() {
                 Approve &quot;{approveModal.title}&quot;
               </p>
             </div>
-            <div className="p-6">
+            <div className="px-5 py-4">
               <label className="label">Comments (optional)</label>
               <textarea
                 value={approveComments}
@@ -842,14 +953,14 @@ export default function PolicyExceptionsPage() {
                 placeholder="Add approval comments..."
               />
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-2.5 px-5 py-4 border-t border-gray-200">
               <button onClick={() => { setApproveModal(null); setApproveComments(''); }} className="btn-secondary">
                 Cancel
               </button>
               <button
                 onClick={() => approveMutation.mutate({ id: approveModal.id, data: approveComments ? { comments: approveComments } : undefined })}
                 disabled={approveMutation.isPending}
-                className="btn-primary flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700"
+                className="btn-primary flex items-center gap-2"
               >
                 {approveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Approve
@@ -860,9 +971,9 @@ export default function PolicyExceptionsPage() {
       )}
 
       {rejectModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md border border-gray-300">
-            <div className="p-6 border-b border-gray-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-xl border border-gray-300 bg-white shadow-xl">
+            <div className="px-5 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-black flex items-center gap-2">
                 <XCircle className="h-5 w-5 text-rose-400" />
                 Reject Exception
@@ -871,7 +982,7 @@ export default function PolicyExceptionsPage() {
                 Reject &quot;{rejectModal.title}&quot;
               </p>
             </div>
-            <div className="p-6">
+            <div className="px-5 py-4">
               <label className="label">Rejection Reason *</label>
               <textarea
                 value={rejectReason}
@@ -880,7 +991,7 @@ export default function PolicyExceptionsPage() {
                 placeholder="Explain why this exception is being rejected..."
               />
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-2.5 px-5 py-4 border-t border-gray-200">
               <button onClick={() => { setRejectModal(null); setRejectReason(''); }} className="btn-secondary">
                 Cancel
               </button>
@@ -898,9 +1009,9 @@ export default function PolicyExceptionsPage() {
       )}
 
       {revokeModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md border border-gray-300">
-            <div className="p-6 border-b border-gray-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-xl border border-gray-300 bg-white shadow-xl">
+            <div className="px-5 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-black flex items-center gap-2">
                 <Ban className="h-5 w-5 text-gray-400" />
                 Revoke Exception
@@ -909,7 +1020,7 @@ export default function PolicyExceptionsPage() {
                 Revoke &quot;{revokeModal.title}&quot;
               </p>
             </div>
-            <div className="p-6">
+            <div className="px-5 py-4">
               <label className="label">Reason (optional)</label>
               <textarea
                 value={revokeReason}
@@ -918,7 +1029,7 @@ export default function PolicyExceptionsPage() {
                 placeholder="Reason for revoking this exception..."
               />
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-2.5 px-5 py-4 border-t border-gray-200">
               <button onClick={() => { setRevokeModal(null); setRevokeReason(''); }} className="btn-secondary">
                 Cancel
               </button>

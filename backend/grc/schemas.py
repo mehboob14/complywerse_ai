@@ -828,6 +828,10 @@ class ITAssetUpdate(BaseModel):
     host_name: Optional[str] = None
     ip_address: Optional[str] = None
     criticality: Optional[str] = None
+    confidentiality_rating: Optional[int] = None
+    integrity_rating: Optional[int] = None
+    availability_rating: Optional[int] = None
+    valuation: Optional[float] = None
     vendor: Optional[str] = None
     location: Optional[str] = None
     status: Optional[str] = None
@@ -906,6 +910,7 @@ class AssetDetailResponse(BaseModel):
     linked_framework_controls: List[dict] = []
     linked_risks: List[dict] = []
     linked_evidence: List[dict] = []
+    linked_vulnerabilities: List[dict] = []
     risk_assessments: List[dict] = []
     coverage_percentage: Optional[float] = None
     
@@ -1574,6 +1579,7 @@ class InternalControlBase(BaseModel):
     review_date: Optional[datetime] = None
     priority: str = "medium"
     is_key_control: bool = False
+    source_document_id: Optional[int] = None
 
 
 class InternalControlCreate(InternalControlBase):
@@ -1597,6 +1603,7 @@ class InternalControlUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
     is_key_control: Optional[bool] = None
+    source_document_id: Optional[int] = None
     design_effectiveness: Optional[str] = None
     operating_effectiveness: Optional[str] = None
     next_test_date: Optional[datetime] = None
@@ -1627,6 +1634,7 @@ class InternalControlResponse(BaseModel):
     next_test_date: Optional[datetime]
     priority: str
     is_key_control: bool
+    source_document_id: Optional[int]
     created_at: datetime
     updated_at: datetime
     created_by: Optional[int]
@@ -1975,6 +1983,7 @@ class VulnerabilityResponse(BaseModel):
     updated_at: datetime
     assignee_name: Optional[str] = None
     verifier_name: Optional[str] = None
+    linked_assets: List[str] = []
 
     class Config:
         from_attributes = True
@@ -2190,6 +2199,9 @@ class VulnerabilityDashboard(BaseModel):
     aging_buckets: Dict[str, int]
     top_affected_assets: List[Dict[str, Any]] = []
     recent_activities: List[Dict[str, Any]] = []
+    by_assignee: Dict[str, int] = {}
+    mitigation_coverage: Dict[str, int] = {}
+    by_department: Dict[str, int] = {}
 
 
 class OverdueVulnerabilityResponse(BaseModel):

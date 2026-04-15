@@ -448,7 +448,7 @@ export default function AuditorPortalPage() {
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => handleReview('approve')}
+                  onClick={() => handleReview('approved')}
                   disabled={reviewMutation.isPending}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                 >
@@ -462,7 +462,7 @@ export default function AuditorPortalPage() {
                   )}
                 </button>
                 <button
-                  onClick={() => handleReview('reject')}
+                  onClick={() => handleReview('rejected')}
                   disabled={reviewMutation.isPending}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 font-medium text-white hover:bg-rose-700 disabled:opacity-50 transition-colors"
                 >

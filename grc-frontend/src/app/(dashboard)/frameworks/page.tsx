@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import apiClient, { certificationsApi } from '@/lib/api';
@@ -565,16 +566,34 @@ export default function FrameworksPage() {
                   </div>
 
                   <div className="mt-4">
-                    <div className="mb-2 flex items-center justify-between text-sm">
-                      <span className="cw-text-muted">Progress</span>
-                      <span className="font-medium cw-text-default">{progress}%</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-[var(--color-subtle)]">
-                      <div
-                        className={`h-full rounded-full transition-all ${getProgressColor(progress)}`}
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
+                    {(() => {
+                      const gaugeData = [
+                        { name: 'done', value: progress, fill: progress >= 80 ? '#22c55e' : progress >= 50 ? '#f59e0b' : progress >= 25 ? '#f97316' : '#ef4444' },
+                        { name: 'rem',  value: 100 - progress, fill: '#e2e8f0' },
+                      ];
+                      return (
+                        <div className="flex items-center gap-4">
+                          <div className="relative h-[72px] w-[72px] flex-shrink-0">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie data={gaugeData} cx="50%" cy="50%" startAngle={225} endAngle={-45}
+                                  innerRadius={24} outerRadius={34} dataKey="value" paddingAngle={0} stroke="none">
+                                  {gaugeData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                                </Pie>
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <span className="text-xs font-bold" style={{ color: gaugeData[0].fill }}>{progress}%</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1 text-xs cw-text-muted">
+                            <span className="font-medium cw-text-default">Readiness</span>
+                            <span>{implemented} implemented</span>
+                            <span>{inProgress} in progress</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="mt-4 flex items-center justify-between border-t border-[var(--color-border)] pt-4">

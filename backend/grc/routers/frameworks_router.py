@@ -1,11 +1,12 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, or_
 
 from ..models import (
     Framework, FrameworkDomain, ControlObjective, 
     FrameworkControl, FrameworkSubControl, GRCUser, get_db,
-    CertificationJourney
+    CertificationJourney, UploadedFramework, ParsedFrameworkControl
 )
 from ..schemas import (
     FrameworkCreate, FrameworkUpdate, FrameworkResponse,
@@ -14,9 +15,17 @@ from ..schemas import (
     FrameworkControlCreate, FrameworkControlResponse,
     SubControlResponse, FrameworkImport, MessageResponse
 )
-from .auth_router import require_auth
+from .auth_router import require_auth, get_user_tenants
 
 router = APIRouter(prefix="/frameworks", tags=["Frameworks"])
+
+# Status priority for deduplication (higher = preferred)
+_STATUS_PRIORITY = {
+    'classified': 7, 'published': 6, 'completed': 5,
+    'parsed': 4, 'classifying': 3, 'text_extracted': 2, 'draft': 1,
+}
+# Statuses that count as "available" (matches the Frameworks page source of truth)
+_AVAILABLE_STATUSES = ['published', 'completed', 'parsed', 'classified']
 
 
 @router.get("", response_model=List[FrameworkResponse])
@@ -97,6 +106,71 @@ def create_framework(
     db.commit()
     db.refresh(db_framework)
     return db_framework
+
+
+@router.get("/available")
+def get_available_frameworks(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """
+    Returns tenant-specific available frameworks — exactly the same set
+    shown on the Frameworks page (source of truth).
+    Deduped by (name, version), keeps highest-priority upload status.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+
+    uploaded = db.query(UploadedFramework).filter(
+        UploadedFramework.upload_status.in_(_AVAILABLE_STATUSES),
+        UploadedFramework.is_active == True,
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.is_shared == True
+        )
+    ).order_by(UploadedFramework.created_at.desc()).all()
+
+    # Deduplicate by (name, version) keeping highest-status entry
+    seen: dict = {}
+    for fw in uploaded:
+        key = (fw.name.lower().strip(), (fw.version or '').lower().strip())
+        priority = _STATUS_PRIORITY.get(fw.upload_status or '', 0)
+        existing = seen.get(key)
+        if existing is None or priority > existing['_priority']:
+            seen[key] = {
+                '_priority': priority,
+                '_fw': fw,
+            }
+
+    result = []
+    for entry in seen.values():
+        fw = entry['_fw']
+        controls_count = db.query(func.count(ParsedFrameworkControl.id)).filter(
+            ParsedFrameworkControl.uploaded_framework_id == fw.id
+        ).scalar() or 0
+
+        short_code = None
+        if fw.published_framework_id:
+            pub = db.query(Framework.short_code).filter(
+                Framework.id == fw.published_framework_id
+            ).scalar()
+            short_code = pub
+
+        result.append({
+            'id': fw.id,
+            'name': fw.name,
+            'short_code': short_code or fw.name[:10].upper().replace(' ', '_'),
+            'version': fw.version or '1.0',
+            'upload_status': fw.upload_status,
+            'framework_type': fw.framework_type,
+            'published_framework_id': fw.published_framework_id,
+            'is_shared': fw.is_shared,
+            'controls_count': controls_count,
+        })
+
+    result.sort(key=lambda x: x['name'])
+    return result
 
 
 @router.get("/{framework_id}", response_model=dict)

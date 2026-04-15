@@ -436,12 +436,15 @@ function ActionModal({
   const [aiError, setAiError] = useState('');
 
   const handleAiSuggest = async () => {
-    if (!formData.risk_id) return;
+    if (!formData.risk_id && !formData.title) return;
     setAiLoading(true);
     setAiError('');
     setAiSuggestions([]);
     try {
-      const response = await ermApi.mitigationActions.aiSuggest(formData.risk_id);
+      const response = await ermApi.mitigationActions.aiSuggest({
+        risk_id: formData.risk_id || undefined,
+        title: formData.title || undefined,
+      });
       setAiSuggestions(response.data.suggestions);
     } catch (err: any) {
       setAiError(err?.response?.data?.detail || 'Failed to get AI suggestions');
@@ -501,48 +504,38 @@ function ActionModal({
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
-            <label className="block text-sm text-slate-600">Title *</label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-600">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              rows={2}
-            />
-          </div>
-
-          <div>
             <label className="block text-sm text-slate-600">Risk *</label>
+            <select
+              value={formData.risk_id}
+              onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
+              required
+              disabled={!!action}
+            >
+              {risks.map((risk) => (
+                <option key={risk.id} value={risk.id}>
+                  {risk.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-600">Title *</label>
             <div className="flex gap-2">
-              <select
-                value={formData.risk_id}
-                onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
                 required
-                disabled={!!action}
-              >
-                {risks.map((risk) => (
-                  <option key={risk.id} value={risk.id}>
-                    {risk.title}
-                  </option>
-                ))}
-              </select>
+              />
               {!action && (
                 <button
                   type="button"
                   onClick={handleAiSuggest}
-                  disabled={aiLoading || !formData.risk_id}
-                  className="mt-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-slate-900 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50"
+                  disabled={aiLoading || (!formData.risk_id && !formData.title)}
+                  className="mt-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-50"
                 >
                   {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   AI Suggest
@@ -551,18 +544,28 @@ function ActionModal({
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm text-slate-600">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
+              rows={2}
+            />
+          </div>
+
           {aiError && (
-            <div className="rounded-lg border border-red-700/50 bg-red-900/20 px-3 py-2 text-sm text-red-400">
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {aiError}
             </div>
           )}
 
           {aiSuggestions.length > 0 && (
-            <div className="rounded-xl border border-purple-700/50 bg-gradient-to-br from-purple-900/20 to-blue-900/20 p-4">
+            <div className="rounded-xl border border-primary-200 bg-primary-50 p-4">
               <div className="mb-3 flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-purple-400" />
-                <span className="text-sm font-medium text-purple-300">AI Suggested Mitigations</span>
-                <span className="text-xs text-slate-600">Click to apply</span>
+                <Sparkles className="h-4 w-4 text-primary-600" />
+                <span className="text-sm font-medium text-primary-700">AI Suggested Mitigations</span>
+                <span className="text-xs text-slate-500">Click to apply</span>
               </div>
               <div className="space-y-2">
                 {aiSuggestions.map((s, idx) => {
@@ -573,7 +576,7 @@ function ActionModal({
                       key={idx}
                       type="button"
                       onClick={() => applySuggestion(s)}
-                      className="w-full rounded-lg border border-slate-300/50 bg-white/50 p-3 text-left transition hover:border-purple-500/50 hover:bg-slate-100/50"
+                      className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-primary-300 hover:bg-primary-50"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-sm font-medium text-slate-900">{s.title}</span>
@@ -603,7 +606,7 @@ function ActionModal({
               <select
                 value={formData.action_type}
                 onChange={(e) => setFormData({ ...formData, action_type: e.target.value as ActionType })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
               >
                 {ACTION_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -615,7 +618,7 @@ function ActionModal({
               <select
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value as ActionPriority })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
               >
                 {ACTION_PRIORITIES.map((p) => (
                   <option key={p.value} value={p.value}>{p.label}</option>
@@ -630,7 +633,7 @@ function ActionModal({
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as ActionStatus })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
               >
                 {ACTION_STATUSES.filter(s => s.value !== 'overdue').map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -643,7 +646,7 @@ function ActionModal({
                 type="date"
                 value={formData.due_date}
                 onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
               />
             </div>
           </div>
@@ -659,7 +662,7 @@ function ActionModal({
                 ...formData, 
                 expected_residual_reduction: e.target.value ? Number(e.target.value) : undefined 
               })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
               placeholder="e.g., 25"
             />
           </div>
@@ -669,7 +672,7 @@ function ActionModal({
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
               rows={2}
             />
           </div>

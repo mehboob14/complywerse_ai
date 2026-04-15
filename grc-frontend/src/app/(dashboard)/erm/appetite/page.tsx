@@ -17,6 +17,8 @@ import {
   Database,
   X,
   Sparkles,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -122,6 +124,22 @@ export default function RiskAppetitePage() {
   const [aiSuggestingFor, setAiSuggestingFor] = useState<number | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState<AISuggestion | null>(null);
   const [aiSuggestionConfigId, setAiSuggestionConfigId] = useState<number | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState<{
+    category: RiskCategory;
+    appetite_level: AppetiteLevel;
+    tolerance_threshold: number;
+    max_acceptable_score: number;
+    description: string;
+    alert_enabled: boolean;
+  }>({
+    category: 'strategic',
+    appetite_level: 'moderate',
+    tolerance_threshold: 12,
+    max_acceptable_score: 15,
+    description: '',
+    alert_enabled: true,
+  });
 
   const { data: appetiteConfigs, isLoading: configsLoading, error: configsError } = useQuery({
     queryKey: ['appetite-configs-with-stats'],
@@ -147,6 +165,30 @@ export default function RiskAppetitePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appetite-configs-with-stats'] });
       queryClient.invalidateQueries({ queryKey: ['appetite-breaches'] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await ermApi.appetite.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appetite-configs-with-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['appetite-breaches'] });
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: typeof createForm) => {
+      const tenantId = appetiteConfigs?.[0]?.tenant_id || 1;
+      const response = await ermApi.appetite.create(tenantId, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appetite-configs-with-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['appetite-breaches'] });
+      setShowCreateModal(false);
+      setCreateForm({ category: 'strategic', appetite_level: 'moderate', tolerance_threshold: 12, max_acceptable_score: 15, description: '', alert_enabled: true });
     },
   });
 
@@ -336,7 +378,21 @@ export default function RiskAppetitePage() {
         </div>
         <div className="flex items-center gap-3">
           {saveSuccess && (
-            <span className="text-sm text-green-400">Configuration saved successfully!</span>
+            <span className="text-sm text-green-600">Configuration saved successfully!</span>
+          )}
+          {appetiteConfigs && (
+            <button
+              onClick={() => {
+                const existingCategories = appetiteConfigs.map(c => c.category);
+                const missing = RISK_CATEGORIES.find(c => !existingCategories.includes(c.value));
+                setCreateForm(prev => ({ ...prev, category: missing?.value || RISK_CATEGORIES[0].value }));
+                setShowCreateModal(true);
+              }}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Plus className="h-4 w-4" />
+              New Config
+            </button>
           )}
           <button
             onClick={handleSave}
@@ -385,27 +441,37 @@ export default function RiskAppetitePage() {
                         <button
                           onClick={() => saveEditing(config.id)}
                           disabled={isSaving}
-                          className="p-1 rounded hover:bg-slate-100/50 text-green-400 hover:text-green-300 transition-colors"
+                          className="p-1 rounded hover:bg-slate-50 text-green-600 hover:text-green-700 transition-colors"
                           title="Save"
                         >
                           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                         </button>
                         <button
                           onClick={cancelEditing}
-                          className="p-1 rounded hover:bg-slate-100/50 text-red-400 hover:text-red-300 transition-colors"
+                          className="p-1 rounded hover:bg-slate-50 text-red-500 hover:text-red-600 transition-colors"
                           title="Cancel"
                         >
                           <X className="h-4 w-4" />
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => startEditing(config)}
-                        className="p-1 rounded hover:bg-slate-100/50 text-slate-700 hover:text-slate-900 transition-colors"
-                        title="Edit"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => startEditing(config)}
+                          className="p-1 rounded hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-colors"
+                          title="Edit"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => { if (confirm('Delete this risk appetite configuration?')) deleteMutation.mutate(config.id); }}
+                          disabled={deleteMutation.isPending}
+                          className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -689,6 +755,99 @@ export default function RiskAppetitePage() {
           </table>
         </div>
       </div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h3 className="text-lg font-semibold text-slate-900">New Appetite Configuration</h3>
+              <button onClick={() => setShowCreateModal(false)} className="rounded p-1 hover:bg-slate-100 text-slate-500">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 p-6">
+              <div>
+                <label className="label">Category</label>
+                <select
+                  value={createForm.category}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, category: e.target.value as RiskCategory }))}
+                  className="select w-full"
+                >
+                  {RISK_CATEGORIES.map(c => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Appetite Level</label>
+                <select
+                  value={createForm.appetite_level}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, appetite_level: e.target.value as AppetiteLevel }))}
+                  className="select w-full"
+                >
+                  {APPETITE_LEVELS.map(l => (
+                    <option key={l.value} value={l.value}>{l.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Tolerance Threshold</label>
+                  <input
+                    type="number" min="1" max="25"
+                    value={createForm.tolerance_threshold}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, tolerance_threshold: parseFloat(e.target.value) || 0 }))}
+                    className="input w-full"
+                  />
+                </div>
+                <div>
+                  <label className="label">Max Acceptable Score</label>
+                  <input
+                    type="number" min="1" max="25"
+                    value={createForm.max_acceptable_score}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, max_acceptable_score: parseFloat(e.target.value) || 0 }))}
+                    className="input w-full"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Description</label>
+                <textarea
+                  value={createForm.description}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
+                  className="input w-full resize-none"
+                  placeholder="Optional description..."
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-700">Enable Breach Alerts</span>
+                <button
+                  type="button"
+                  onClick={() => setCreateForm(prev => ({ ...prev, alert_enabled: !prev.alert_enabled }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    createForm.alert_enabled ? 'bg-primary-600' : 'bg-slate-200'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    createForm.alert_enabled ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+              <button onClick={() => setShowCreateModal(false)} className="btn-secondary btn-sm">Cancel</button>
+              <button
+                onClick={() => createMutation.mutate(createForm)}
+                disabled={createMutation.isPending}
+                className="btn-primary btn-sm"
+              >
+                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

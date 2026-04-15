@@ -592,7 +592,20 @@ def get_unmapped_summary(
         ~NormalizedControl.id.in_(mapped_normalized_ids)
     ).count()
     
-    frameworks = db.query(Framework).filter(Framework.is_active == True).all()
+    # Only count unmapped controls in frameworks published from this tenant's uploads
+    _unmap_pub_ids = db.query(UploadedFramework.published_framework_id).filter(
+        UploadedFramework.upload_status == 'published',
+        UploadedFramework.published_framework_id.isnot(None),
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.is_shared == True
+        )
+    ).all() if user_tenants else []
+    _unmap_fw_id_set = list({row[0] for row in _unmap_pub_ids})
+    frameworks = db.query(Framework).filter(
+        Framework.id.in_(_unmap_fw_id_set),
+        Framework.is_active == True
+    ).all() if _unmap_fw_id_set else []
     by_framework = []
     
     for fw in frameworks:
@@ -1122,17 +1135,37 @@ def get_gap_analysis_dashboard(
     controls_without_evidence = total_controls - controls_with_evidence
     
     coverage_by_framework = []
-    
-    frameworks = db.query(Framework).filter(Framework.is_active == True).all()
+
+    # Only show Framework records published from this tenant's uploaded frameworks
+    _dash_pub_ids = db.query(UploadedFramework.published_framework_id).filter(
+        UploadedFramework.upload_status == 'published',
+        UploadedFramework.published_framework_id.isnot(None),
+        UploadedFramework.is_active == True,
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.is_shared == True
+        )
+    ).all() if user_tenants else []
+    _dash_fw_id_set = list({row[0] for row in _dash_pub_ids})
+    frameworks = db.query(Framework).filter(
+        Framework.id.in_(_dash_fw_id_set),
+        Framework.is_active == True
+    ).all() if _dash_fw_id_set else []
     for fw in frameworks:
         coverage = calculate_framework_coverage(db, tenant_id, fw.id)
         if coverage["total_controls"] > 0:
             coverage["framework_type"] = "legacy"
             coverage_by_framework.append(coverage)
-    
+
+    # Only show unpublished uploaded frameworks (published ones are in frameworks list above)
     uploaded_frameworks = db.query(UploadedFramework).filter(
-        UploadedFramework.is_active == True
-    ).all()
+        UploadedFramework.upload_status.in_(['completed', 'parsed', 'classified']),
+        UploadedFramework.is_active == True,
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.is_shared == True
+        )
+    ).all() if user_tenants else []
     for ufw in uploaded_frameworks:
         coverage = calculate_uploaded_framework_coverage(db, tenant_id, ufw.id)
         if coverage["total_controls"] > 0:

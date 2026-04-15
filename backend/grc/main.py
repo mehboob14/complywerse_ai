@@ -18,7 +18,9 @@ from .routers import (
     enriched_dashboard_router,
     certification_router,
     advanced_erm_router,
-    compliance_assessments_router
+    compliance_assessments_router,
+    critical_tasks_router,
+    is_projects_router,
 )
 from .routers.admin_router import router as admin_router
 from .modules.erm import erm_router
@@ -29,18 +31,18 @@ from .modules.evidence import evidence_module_router
 from .modules.control_library import control_library_router
 from .modules.vuln_management import vuln_management_router
 from .modules.chatbot import chatbot_router
-from .modules.audit_management import audit_management_router
 from .modules.vendor_risk import vendor_risk_router
 from .modules.workflow_engine import (
     workflow_engine_router,
     start_workflow_engine_runtime,
     stop_workflow_engine_runtime,
 )
+from .modules.integrations import integrations_router
 from .middleware.subdomain import TenantMiddleware
 
 app = FastAPI(
-    title="Enterprise GRC Platform API",
-    description="Enterprise-scale Governance, Risk, and Compliance platform",
+    title="Enterprise GRC Platform API's",
+    description="Enterprise Governance, Risk, and Compliance platform",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -103,6 +105,8 @@ app.include_router(enriched_dashboard_router)
 app.include_router(certification_router)
 app.include_router(advanced_erm_router)
 app.include_router(compliance_assessments_router)
+app.include_router(critical_tasks_router)
+app.include_router(is_projects_router)
 app.include_router(erm_router)
 app.include_router(governance_module_router)
 app.include_router(framework_upload_router)
@@ -111,9 +115,9 @@ app.include_router(evidence_module_router)
 app.include_router(control_library_router)
 app.include_router(vuln_management_router)
 app.include_router(chatbot_router)
-app.include_router(audit_management_router)
 app.include_router(vendor_risk_router)
 app.include_router(workflow_engine_router)
+app.include_router(integrations_router)
 
 
 @app.on_event("startup")

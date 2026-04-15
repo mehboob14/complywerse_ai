@@ -125,7 +125,7 @@ export default function InteractiveHeatMapPage() {
   const impactLabels = data?.impact_labels || IMPACT_LABELS;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex items-center gap-4">
         <Link
           href="/erm/analytics"
@@ -135,12 +135,12 @@ export default function InteractiveHeatMapPage() {
           Back
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Interactive Risk Heat Map</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Interactive Risk Heat Map</h1>
           <p className="text-sm text-slate-600">Visualize risk distribution across likelihood and impact dimensions</p>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3.5">
         <Filter className="h-4 w-4 text-slate-600" />
         <div className="flex rounded-lg border border-slate-300 overflow-hidden">
           <button
@@ -189,8 +189,8 @@ export default function InteractiveHeatMapPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/10 p-2">
               <BarChart3 className="h-5 w-5 text-blue-400" />
@@ -201,7 +201,7 @@ export default function InteractiveHeatMapPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-red-500/10 p-2">
               <AlertOctagon className="h-5 w-5 text-red-400" />
@@ -212,7 +212,7 @@ export default function InteractiveHeatMapPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-orange-500/10 p-2">
               <AlertTriangle className="h-5 w-5 text-orange-400" />
@@ -223,7 +223,7 @@ export default function InteractiveHeatMapPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-yellow-500/10 p-2">
               <Shield className="h-5 w-5 text-yellow-400" />
@@ -234,7 +234,7 @@ export default function InteractiveHeatMapPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-500/10 p-2">
               <CheckCircle className="h-5 w-5 text-green-400" />
@@ -252,13 +252,13 @@ export default function InteractiveHeatMapPage() {
           <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
         </div>
       ) : (
-        <div className="rounded-xl border border-slate-200 bg-white p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-slate-900">
+        <div className="rounded-xl border border-slate-200 bg-white p-4.5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-slate-900">
               {scoreType === 'inherent' ? 'Inherent' : 'Residual'} Risk Heat Map
               {category && ` — ${CATEGORIES.find(c => c.value === category)?.label}`}
             </h2>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-green-600" />
                 <span className="text-xs text-slate-600">Low (1-4)</span>
@@ -310,7 +310,7 @@ export default function InteractiveHeatMapPage() {
                             setSelectedCell(cell);
                           }
                         }}
-                        className={`relative h-16 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all duration-200 ${getCellColor(score)} ${
+                        className={`relative h-14 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all duration-200 ${getCellColor(score)} ${
                           count > 0 ? `ring-1 ${getCellBorderColor(score)}` : ''
                         }`}
                       >
@@ -340,14 +340,14 @@ export default function InteractiveHeatMapPage() {
       )}
 
       {selectedCell && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSelectedCell(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onClick={() => setSelectedCell(null)}>
           <div
-            className="w-full max-w-lg rounded-xl bg-white border border-slate-200 p-6 mx-4 max-h-[80vh] overflow-y-auto"
+            className="w-full max-w-lg rounded-xl bg-white border border-slate-200 p-4.5 mx-4 max-h-[78vh] overflow-y-auto shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3.5">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-slate-900">
                   Cell Detail — L{selectedCell.likelihood} × I{selectedCell.impact}
                 </h2>
                 <p className="text-sm text-slate-600">

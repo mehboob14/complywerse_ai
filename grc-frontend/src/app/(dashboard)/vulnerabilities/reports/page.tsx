@@ -106,11 +106,11 @@ export default function VulnerabilityReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold cw-text-default">Vulnerability Reports</h1>
-          <p className="mt-1 cw-text-muted">Upload and manage vulnerability scan reports</p>
+          <h1 className="text-xl font-bold cw-text-default">Vulnerability Reports</h1>
+          <p className="text-xs cw-text-muted">Upload and manage vulnerability scan reports</p>
         </div>
         <div>
           <input
