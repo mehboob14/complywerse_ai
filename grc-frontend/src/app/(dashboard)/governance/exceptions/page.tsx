@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { policyExceptionApi, governanceApi, documentsApi } from '@/lib/api';
@@ -91,13 +90,6 @@ interface ExceptionComment {
   created_at: string;
 }
 
-interface SummaryData {
-  total: number;
-  pending_approval: number;
-  approved: number;
-  expiring_soon: number;
-}
-
 interface GovernancePolicyOption {
   id: number;
   title: string;
@@ -144,14 +136,6 @@ export default function PolicyExceptionsPage() {
     if (Array.isArray(payload?.data)) return payload.data;
     return [];
   };
-
-  const { data: summary } = useQuery({
-    queryKey: ['policy-exceptions-summary'],
-    queryFn: async () => {
-      const response = await policyExceptionApi.getSummary();
-      return response.data as SummaryData;
-    },
-  });
 
   const { data: exceptions, isLoading, error: exceptionsError } = useQuery({
     queryKey: ['policy-exceptions', statusFilter, priorityFilter],
@@ -357,11 +341,11 @@ export default function PolicyExceptionsPage() {
   const normalizedTitle = formData.title.trim();
 
   return (
-    <div className="governance-exceptions space-y-8">
+    <div className="governance-exceptions space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black flex items-center gap-3">
-            <Shield className="h-7 w-7 text-primary-400" />
+          <h1 className="flex items-center gap-3 text-lg font-semibold text-black">
+            <Shield className="h-6 w-6 text-primary-400" />
             Policy Exception Management
           </h1>
           <p className="text-gray-600 mt-1">
@@ -376,77 +360,6 @@ export default function PolicyExceptionsPage() {
           New Exception Request
         </button>
       </div>
-
-      {/* Exception status — single donut chart */}
-      {(() => {
-        const exceptionChartData = [
-          { name: 'Pending Approval', value: summary?.pending_approval || 0, fill: '#f59e0b' },
-          { name: 'Active / Approved',  value: summary?.approved || 0,          fill: '#10b981' },
-          { name: 'Expiring Soon',      value: summary?.expiring_soon || 0,     fill: '#f97316' },
-          {
-            name: 'Other',
-            value: Math.max(0, (summary?.total || 0) - (summary?.pending_approval || 0) - (summary?.approved || 0) - (summary?.expiring_soon || 0)),
-            fill: '#94a3b8',
-          },
-        ].filter((d) => d.value > 0);
-        const total = summary?.total || 0;
-        const ExcTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) =>
-          active && payload?.length ? (
-            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-md text-xs">
-              <p className="font-medium text-gray-800">{payload[0].name}</p>
-              <p className="text-gray-500">{payload[0].value} exception{payload[0].value !== 1 ? 's' : ''}</p>
-            </div>
-          ) : null;
-        return (
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <div className="flex items-center gap-6">
-              <div className="relative h-[110px] w-[110px] flex-shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={exceptionChartData.length ? exceptionChartData : [{ name: 'None', value: 1, fill: '#e2e8f0' }]}
-                      cx="50%" cy="50%" innerRadius={32} outerRadius={52} dataKey="value" paddingAngle={2}>
-                      {(exceptionChartData.length ? exceptionChartData : [{ name: 'None', value: 1, fill: '#e2e8f0' }]).map((entry, i) => (
-                        <Cell key={i} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<ExcTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-slate-900">{total}</span>
-                  <span className="text-[10px] text-slate-400">total</span>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                  <span className="text-slate-500">Pending Approval</span>
-                  <span className="ml-auto font-semibold text-slate-800">{summary?.pending_approval || 0}</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-slate-500">Active / Approved</span>
-                  <span className="ml-auto font-semibold text-slate-800">{summary?.approved || 0}</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
-                  <span className="text-slate-500">Expiring Soon (30d)</span>
-                  <span className="ml-auto font-semibold text-slate-800">{summary?.expiring_soon || 0}</span>
-                </div>
-                {(total - (summary?.pending_approval || 0) - (summary?.approved || 0) - (summary?.expiring_soon || 0)) > 0 && (
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
-                    <span className="text-slate-500">Other</span>
-                    <span className="ml-auto font-semibold text-slate-800">
-                      {total - (summary?.pending_approval || 0) - (summary?.approved || 0) - (summary?.expiring_soon || 0)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       <div className="flex flex-wrap gap-3">
         {(exceptionsError || documentsError) && (

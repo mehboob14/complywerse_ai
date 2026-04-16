@@ -172,7 +172,7 @@ function DelegateModal({ isOpen, onClose, onConfirm, documentTitle, isLoading }:
         </div>
 
         <p className="mb-4 text-sm text-gray-800">
-          Forward the approval of "{documentTitle}" to another user.
+          Forward the approval of &ldquo;{documentTitle}&rdquo; to another user.
         </p>
 
         <div className="mb-4">

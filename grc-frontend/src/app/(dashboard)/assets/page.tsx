@@ -844,7 +844,7 @@ function AssetModal({
     <>
       <div className="fixed inset-y-0 right-0 z-50 flex w-[780px] flex-col bg-white shadow-2xl border-l border-slate-200">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 flex-shrink-0">
-          <h2 className="text-lg font-semibold text-slate-900">{isEditMode ? 'Edit Asset' : 'Add Asset'}</h2>
+          <h2 className="text-sm font-semibold text-slate-900">{isEditMode ? 'Edit Asset' : 'Add Asset'}</h2>
           <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-900">
             <X size={20} />
           </button>

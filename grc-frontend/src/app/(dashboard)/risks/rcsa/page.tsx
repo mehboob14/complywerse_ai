@@ -86,56 +86,6 @@ interface Assessment {
   progress: number;
 }
 
-function DonutChart({ data, total }: { data: { label: string; value: number; color: string }[]; total: number }) {
-  let cumulativePercent = 0;
-  
-  const segments = data.map((item) => {
-    const percent = total > 0 ? (item.value / total) * 100 : 0;
-    const startPercent = cumulativePercent;
-    cumulativePercent += percent;
-    
-    return {
-      ...item,
-      percent,
-      startPercent,
-      endPercent: cumulativePercent,
-    };
-  });
-
-  const getConicGradient = () => {
-    if (total === 0) return 'conic-gradient(#475569 0% 100%)';
-    const stops = segments.map((seg) => 
-      `${seg.color} ${seg.startPercent}% ${seg.endPercent}%`
-    ).join(', ');
-    return `conic-gradient(${stops})`;
-  };
-
-  return (
-    <div className="flex items-center gap-6">
-      <div 
-        className="relative h-32 w-32 rounded-full"
-        style={{ background: getConicGradient() }}
-      >
-        <div className="absolute inset-4 rounded-full bg-white flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-xl font-bold text-slate-900">{total}</p>
-            <p className="text-xs text-slate-600">Total</p>
-          </div>
-        </div>
-      </div>
-      <div className="flex-1 space-y-2">
-        {segments.filter(s => s.value > 0).map((seg, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: seg.color }}></div>
-            <span className="text-sm text-slate-700 flex-1 capitalize">{seg.label}</span>
-            <span className="text-sm font-medium text-slate-900">{seg.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function ProgressBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
   const percent = total > 0 ? (value / total) * 100 : 0;
   return (
@@ -306,14 +256,15 @@ export default function RCSADashboardPage() {
     color: SEVERITY_COLORS[f.severity] || '#64748b',
   }));
   const totalFindings = findingsChartData.reduce((sum, f) => sum + f.value, 0);
+  const dominantSeverity = [...findingsChartData].sort((a, b) => b.value - a.value)[0];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="page-header">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">RCSA Dashboard</h1>
-            <p className="text-slate-600 mt-1">Risk & Control Self-Assessment Overview</p>
+            <h1 className="text-xl font-semibold text-slate-900">RCSA Dashboard</h1>
+            <p className="mt-0.5 text-slate-600">Risk and control self-assessment overview</p>
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -355,27 +306,52 @@ export default function RCSADashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-slate-900 flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-primary-400" />
-              Findings by Severity
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="card p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-base font-medium text-slate-900">
+              <BarChart3 className="h-4 w-4 text-primary-400" />
+              Findings Severity Pressure
             </h3>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
+              Total {totalFindings}
+            </span>
           </div>
-          <DonutChart data={findingsChartData} total={totalFindings} />
+          {totalFindings > 0 ? (
+            <div className="space-y-3">
+              {dominantSeverity ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  Highest pressure: <span className="font-semibold text-slate-900 capitalize">{dominantSeverity.label}</span>
+                </div>
+              ) : null}
+              {findingsChartData.filter((item) => item.value > 0).map((item) => (
+                <ProgressBar
+                  key={item.label}
+                  label={item.label.charAt(0).toUpperCase() + item.label.slice(1)}
+                  value={item.value}
+                  total={totalFindings}
+                  color={item.color}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-sm text-slate-400">No findings data yet</div>
+          )}
         </div>
 
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-slate-900 flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary-400" />
-              Completion by Business Unit
+        <div className="card p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-base font-medium text-slate-900">
+              <Building2 className="h-4 w-4 text-primary-400" />
+              BU Completion Ladder
             </h3>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
+              {(buProgress || []).length} units
+            </span>
           </div>
-          <div className="space-y-4">
-            {(buProgress || []).slice(0, 5).map((bu, idx) => (
-              <ProgressBar 
+          <div className="space-y-3">
+            {(buProgress || []).slice(0, 6).map((bu, idx) => (
+              <ProgressBar
                 key={idx}
                 label={bu.business_unit}
                 value={bu.completed_assessments}
@@ -383,6 +359,9 @@ export default function RCSADashboardPage() {
                 color={bu.completion_rate >= 80 ? '#22c55e' : bu.completion_rate >= 50 ? '#eab308' : '#ef4444'}
               />
             ))}
+            {(buProgress || []).length === 0 && (
+              <div className="py-8 text-center text-sm text-slate-400">No business unit progress yet</div>
+            )}
           </div>
         </div>
       </div>

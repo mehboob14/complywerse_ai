@@ -106,6 +106,286 @@ interface HeatmapCellData {
   risks: Array<{ id: number; title: string; score: number }>;
 }
 
+function RiskSpeedometer({
+  score,
+  signals,
+}: {
+  score: number;
+  signals: Array<{ label: string; value: string; tone?: string }>;
+}) {
+  const safeScore = Math.max(0, Math.min(100, score));
+  const gaugeColor = safeScore >= 75 ? '#10b981' : safeScore >= 55 ? '#f59e0b' : '#ef4444';
+  const data = [
+    { name: 'score', value: safeScore, fill: gaugeColor },
+    { name: 'remaining', value: 100 - safeScore, fill: '#e5e7eb' },
+  ];
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <h2 className="card-title">Risk Pulse Speedometer</h2>
+          <p className="card-description">Blended view of exposure, KRIs, and response capacity</p>
+        </div>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[220px_1fr] lg:items-center">
+        <div className="relative mx-auto h-[190px] w-full max-w-[220px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="78%"
+                startAngle={180}
+                endAngle={0}
+                innerRadius={56}
+                outerRadius={80}
+                dataKey="value"
+                stroke="none"
+              >
+                {data.map((entry, idx) => (
+                  <Cell key={idx} fill={entry.fill} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pt-7">
+            <span className="text-3xl font-semibold" style={{ color: gaugeColor }}>{safeScore}%</span>
+            <span className="mt-1 text-xs text-slate-500">overall posture</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+          {signals.map((signal) => (
+            <div key={signal.label} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{signal.label}</p>
+              <p className={`mt-1 text-sm font-semibold ${signal.tone || 'text-slate-900'}`}>{signal.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExposureLollipop({
+  items,
+  maxValue = 25,
+  suffix = '',
+}: {
+  items: Array<{ label: string; value: number; color: string; meta?: string }>;
+  maxValue?: number;
+  suffix?: string;
+}) {
+  if (!items.length) {
+    return <div className="flex h-[220px] items-center justify-center text-xs text-slate-500">No data available</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {items.map((item) => {
+        const width = Math.max(6, (item.value / Math.max(1, maxValue)) * 100);
+        return (
+          <div key={item.label}>
+            <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-slate-700">{item.label}</span>
+              <span className="text-slate-500">
+                <span className="font-semibold text-slate-900">{item.value}{suffix}</span>
+                {item.meta ? <span className="ml-1">• {item.meta}</span> : null}
+              </span>
+            </div>
+            <div className="relative h-2 rounded-full bg-slate-100">
+              <div className="absolute left-0 top-1/2 h-2 -translate-y-1/2 rounded-full" style={{ width: `${width}%`, backgroundColor: item.color }} />
+              <span
+                className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-white shadow-sm"
+                style={{ left: `calc(${width}% - 8px)`, backgroundColor: item.color }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ResidualDotPlot({
+  data,
+}: {
+  data: Array<{ category: string; inherent: number; residual: number }>;
+}) {
+  if (!data.length) {
+    return <div className="flex h-[220px] items-center justify-center text-xs text-slate-500">No score data yet</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-4 text-[11px] text-slate-500">
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />Inherent</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-600" />Residual</span>
+      </div>
+      {data.map((item) => (
+        <div key={item.category}>
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="font-medium text-slate-700">{item.category}</span>
+            <span className="text-slate-500">{item.residual} / {item.inherent}</span>
+          </div>
+          <div className="relative h-3 rounded-full bg-slate-100">
+            <span className="absolute inset-y-0 left-0 right-0 rounded-full border border-dashed border-slate-200" />
+            <span className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2 border-white bg-amber-500 shadow-sm" style={{ left: `calc(${(item.inherent / 25) * 100}% - 7px)` }} />
+            <span className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2 border-white bg-blue-600 shadow-sm" style={{ left: `calc(${(item.residual / 25) * 100}% - 7px)` }} />
+          </div>
+        </div>
+      ))}
+      <div className="flex justify-between text-[10px] text-slate-400">
+        <span>0</span>
+        <span>5</span>
+        <span>10</span>
+        <span>15</span>
+        <span>20</span>
+        <span>25</span>
+      </div>
+    </div>
+  );
+}
+
+function RiskSunburst({
+  rings,
+  centerValue,
+  centerLabel,
+}: {
+  rings: Array<{ label: string; items: Array<{ name: string; value: number; color: string }> }>;
+  centerValue: string;
+  centerLabel: string;
+}) {
+  const radii = [
+    { inner: 30, outer: 48 },
+    { inner: 54, outer: 72 },
+    { inner: 78, outer: 96 },
+  ];
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <h2 className="card-title">Risk Universe Sunburst</h2>
+          <p className="card-description">Exposure layers across score, treatment, and signal status</p>
+        </div>
+      </div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+        <div className="relative mx-auto h-[240px] w-[240px] flex-shrink-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              {rings.map((ring, ringIndex) => {
+                const data = ring.items.filter((item) => item.value > 0);
+                const chartData = data.length ? data : [{ name: 'None', value: 1, color: '#e2e8f0' }];
+                return (
+                  <Pie
+                    key={ring.label}
+                    data={chartData}
+                    dataKey="value"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={radii[ringIndex]?.inner || 30}
+                    outerRadius={radii[ringIndex]?.outer || 48}
+                    paddingAngle={2}
+                    stroke="white"
+                    strokeWidth={2}
+                  >
+                    {chartData.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.color} />
+                    ))}
+                  </Pie>
+                );
+              })}
+              <Tooltip contentStyle={tooltipStyle} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-2xl font-semibold text-slate-900">{centerValue}</span>
+            <span className="text-xs text-slate-500">{centerLabel}</span>
+          </div>
+        </div>
+        <div className="flex-1 space-y-3">
+          {rings.map((ring) => (
+            <div key={ring.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{ring.label}</p>
+              <div className="space-y-1.5">
+                {ring.items.filter((item) => item.value > 0).map((item) => (
+                  <div key={item.name} className="flex items-center gap-2 text-xs">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="flex-1 text-slate-600">{item.name}</span>
+                    <span className="font-semibold text-slate-900">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RiskBowTie({
+  leftNodes,
+  rightNodes,
+  centerValue,
+  centerLabel,
+}: {
+  leftNodes: Array<{ label: string; value: number; hint: string; tone: string }>;
+  rightNodes: Array<{ label: string; value: number; hint: string; tone: string }>;
+  centerValue: string;
+  centerLabel: string;
+}) {
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <h2 className="card-title">Exposure vs Response Bow-Tie</h2>
+          <p className="card-description">Incoming risk pressure against treatment and mitigation capacity</p>
+        </div>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[1fr_170px_1fr] lg:items-center">
+        <div className="space-y-3">
+          {leftNodes.map((node) => (
+            <div key={node.label} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 lg:mr-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">{node.label}</p>
+                  <p className="text-[11px] text-slate-500">{node.hint}</p>
+                </div>
+                <span className={`text-lg font-semibold ${node.tone}`}>{node.value}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="relative mx-auto flex h-36 w-36 items-center justify-center rounded-full border-8 border-blue-100 bg-white text-center shadow-sm">
+          <div className="absolute left-[-24px] top-1/2 hidden h-px w-6 -translate-y-1/2 bg-slate-300 lg:block" />
+          <div className="absolute right-[-24px] top-1/2 hidden h-px w-6 -translate-y-1/2 bg-slate-300 lg:block" />
+          <div>
+            <p className="text-2xl font-semibold text-slate-900">{centerValue}</p>
+            <p className="text-xs font-medium text-slate-500">{centerLabel}</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {rightNodes.map((node) => (
+            <div key={node.label} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 lg:ml-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">{node.label}</p>
+                  <p className="text-[11px] text-slate-500">{node.hint}</p>
+                </div>
+                <span className={`text-lg font-semibold ${node.tone}`}>{node.value}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ERMOverviewPage() {
   const [hoveredCell, setHoveredCell] = useState<{ likelihood: number; impact: number } | null>(null);
   const [heatmapType, setHeatmapType] = useState<'inherent' | 'residual'>('inherent');
@@ -286,34 +566,6 @@ export default function ERMOverviewPage() {
     }));
   }, [risks]);
 
-  const riskMovement = useMemo(() => {
-    if (!risks) return { improved: 0, unchanged: 0, worsened: 0 };
-    let improved = 0;
-    let unchanged = 0;
-    let worsened = 0;
-
-    risks.forEach((risk: any) => {
-      const inherent = risk.inherent_score || 0;
-      const residual = risk.residual_score || inherent;
-      if (residual < inherent) improved += 1;
-      else if (residual > inherent) worsened += 1;
-      else unchanged += 1;
-    });
-
-    return { improved, unchanged, worsened };
-  }, [risks]);
-
-  const mitigationTimelineData = useMemo(() => {
-    const notStarted = (risks || []).flatMap((risk: any) => risk.mitigation_actions || []).filter(
-      (action: any) => action.status === 'not_started' || action.status === 'pending'
-    ).length;
-    return [
-      { name: 'Completed', value: mitigationProgress.completed, fill: '#10b981' },
-      { name: 'In Progress', value: mitigationProgress.inProgress, fill: '#3b82f6' },
-      { name: 'Overdue', value: overdueActions?.length || 0, fill: '#ef4444' },
-      { name: 'Not Started', value: notStarted, fill: '#6b7280' },
-    ].filter((item) => item.value > 0);
-  }, [mitigationProgress, overdueActions, risks]);
 
   const topRisks = useMemo(() => {
     if (!risks) return [];
@@ -325,27 +577,6 @@ export default function ERMOverviewPage() {
     });
     return sorted.slice(0, 10);
   }, [risks, topRiskSort]);
-
-  const incidentSeverity = useMemo(() => {
-    if (!incidents) return [];
-    const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
-    incidents.forEach((incident: any) => {
-      const severity = (incident.severity || 'medium').toLowerCase();
-      if (counts[severity] !== undefined) {
-        counts[severity] += 1;
-      } else {
-        counts.medium += 1;
-      }
-    });
-
-    return Object.entries(counts)
-      .filter(([, value]) => value > 0)
-      .map(([name, value]) => ({
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        value,
-        fill: SEVERITY_COLORS[name] || '#6b7280',
-      }));
-  }, [incidents]);
 
   const appetiteUtilization = useMemo(() => {
     if (!appetiteData || !Array.isArray(appetiteData)) return [];
@@ -364,6 +595,65 @@ export default function ERMOverviewPage() {
       };
     });
   }, [appetiteData]);
+
+  const totalRisks = dashboard?.total_risks || 0;
+  const openRisks = dashboard?.open_risks || 0;
+  const closedRisks = totalRisks - openRisks;
+  const criticalHighRisks = (dashboard?.by_score_range?.critical || 0) + (dashboard?.by_score_range?.high || 0);
+  const recentIncidents = incidents?.slice(0, 5) || [];
+  const appetiteBreaches = appetiteUtilization.filter((item) => item.status === 'breach').length;
+  const residualHealth = Math.max(0, 100 - Math.round((avgRiskScore.value / 25) * 100));
+  const exposureHealth = totalRisks > 0 ? Math.max(0, 100 - Math.round((criticalHighRisks / totalRisks) * 100)) : 100;
+  const kriHealth = kriSummary.total > 0 ? Math.max(0, 100 - Math.round((kriSummary.red / kriSummary.total) * 100)) : 100;
+  const actionHealth = mitigationProgress.total > 0
+    ? Math.round((mitigationProgress.percentage * 0.7) + (Math.max(0, 100 - Math.round(((overdueActions?.length || 0) / mitigationProgress.total) * 100)) * 0.3))
+    : 100;
+  const ermHealthScore = Math.round((residualHealth * 0.35) + (exposureHealth * 0.25) + (kriHealth * 0.2) + (actionHealth * 0.2));
+
+  const scoreRangeData = [
+    { name: 'Critical', value: dashboard?.by_score_range?.critical || 0, color: '#ef4444' },
+    { name: 'High', value: dashboard?.by_score_range?.high || 0, color: '#f97316' },
+    { name: 'Medium', value: dashboard?.by_score_range?.medium || 0, color: '#eab308' },
+    { name: 'Low', value: dashboard?.by_score_range?.low || 0, color: '#22c55e' },
+  ];
+
+  const categoryExposureItems = categoryData.slice(0, 6).map((item) => ({
+    label: item.label,
+    value: item.avgScore,
+    color: item.avgScore >= 15 ? '#ef4444' : item.avgScore >= 8 ? '#f59e0b' : '#10b981',
+    meta: `${item.count} risks`,
+  }));
+
+  const sunburstRings = [
+    {
+      label: 'Score mix',
+      items: scoreRangeData,
+    },
+    {
+      label: 'Treatment mix',
+      items: treatmentDistribution.map((item) => ({ name: item.name, value: item.value, color: item.fill })),
+    },
+    {
+      label: 'Signals',
+      items: [
+        { name: 'Red KRIs', value: kriSummary.red, color: '#ef4444' },
+        { name: 'Critical incidents', value: (incidents || []).filter((incident: any) => ['critical', 'high'].includes((incident.severity || '').toLowerCase())).length, color: '#8b5cf6' },
+        { name: 'Overdue actions', value: overdueActions?.length || 0, color: '#f59e0b' },
+      ],
+    },
+  ];
+
+  const bowTieLeftNodes = [
+    { label: 'Critical / High', value: criticalHighRisks, hint: 'priority exposure', tone: 'text-rose-600' },
+    { label: 'Red KRIs', value: kriSummary.red, hint: 'threshold breaches', tone: 'text-amber-600' },
+    { label: 'Incidents', value: incidents?.length || 0, hint: 'reported events', tone: 'text-violet-600' },
+  ];
+
+  const bowTieRightNodes = [
+    { label: 'Completed', value: mitigationProgress.completed, hint: 'actions closed', tone: 'text-emerald-600' },
+    { label: 'In progress', value: mitigationProgress.inProgress, hint: 'being treated', tone: 'text-blue-600' },
+    { label: 'Overdue', value: overdueActions?.length || 0, hint: 'needs escalation', tone: 'text-rose-600' },
+  ];
 
   if (dashboardLoading) {
     return (
@@ -399,19 +689,9 @@ export default function ERMOverviewPage() {
     );
   }
 
-  const totalRisks = dashboard?.total_risks || 0;
-  const openRisks = dashboard?.open_risks || 0;
-  const closedRisks = totalRisks - openRisks;
-  const criticalHighRisks = (dashboard?.by_score_range?.critical || 0) + (dashboard?.by_score_range?.high || 0);
-  const recentIncidents = incidents?.slice(0, 5) || [];
-  const totalMovement = riskMovement.improved + riskMovement.unchanged + riskMovement.worsened;
 
   return (
-    <div className="space-y-6">
-      <div className="page-header">
-        <h1 className="page-title">Enterprise Risk Management</h1>
-        <p className="page-description">Monitor, assess, and mitigate organizational risks</p>
-      </div>
+    <div className="space-y-4">
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -667,224 +947,51 @@ export default function ERMOverviewPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+        <RiskSpeedometer
+          score={ermHealthScore}
+          signals={[
+            { label: 'Residual', value: avgRiskScore.value.toFixed(1), tone: 'text-blue-600' },
+            { label: 'Priority', value: `${criticalHighRisks}`, tone: 'text-rose-600' },
+            { label: 'KRIs Red', value: `${kriSummary.red}`, tone: 'text-amber-600' },
+            { label: 'Breaches', value: `${appetiteBreaches}`, tone: 'text-violet-600' },
+          ]}
+        />
+        <RiskSunburst
+          rings={sunburstRings}
+          centerValue={totalRisks.toLocaleString()}
+          centerLabel="tracked risks"
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
         <div className="card">
           <div className="card-header">
             <div>
-              <h2 className="card-title">Risk Treatment Status</h2>
-              <p className="card-description">Distribution by treatment type</p>
+              <h2 className="card-title">Category Exposure Ladder</h2>
+              <p className="card-description">Average residual score with risk count by category</p>
             </div>
           </div>
-          {treatmentDistribution.length > 0 ? (
-            <div className="flex flex-col items-center">
-              <div className="h-56 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={treatmentDistribution}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={80}
-                      paddingAngle={3}
-                      dataKey="value"
-                      strokeWidth={0}
-                    >
-                      {treatmentDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={tooltipStyle} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex flex-wrap justify-center gap-3 -mt-2">
-                {treatmentDistribution.map((item, index) => (
-                  <div key={index} className="flex items-center gap-1.5 text-xs">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
-                    <span className="text-slate-600">{item.name}</span>
-                    <span className="text-slate-900 font-medium">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="empty-state py-8">
-              <div className="empty-state-icon">
-                <Shield className="h-8 w-8 text-slate-500" />
-              </div>
-              <p className="empty-state-title">No Treatment Data</p>
-              <p className="empty-state-description text-sm">Add risks to see treatment distribution</p>
-            </div>
-          )}
+          <ExposureLollipop items={categoryExposureItems} maxValue={25} />
         </div>
 
         <div className="card">
           <div className="card-header">
             <div>
-              <h2 className="card-title">Inherent vs Residual</h2>
-              <p className="card-description">Average scores by category</p>
+              <h2 className="card-title">Inherent vs Residual Dot Plot</h2>
+              <p className="card-description">Score shift by category after treatment</p>
             </div>
           </div>
-          {inherentVsResidual.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={inherentVsResidual} margin={{ left: 0, right: 10, top: 10, bottom: 0 }}>
-                  <XAxis dataKey="category" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} angle={-20} textAnchor="end" height={50} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 25]} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Bar dataKey="inherent" name="Inherent" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={20} />
-                  <Bar dataKey="residual" name="Residual" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={20} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="empty-state py-8">
-              <div className="empty-state-icon">
-                <BarChart3 className="h-8 w-8 text-slate-500" />
-              </div>
-              <p className="empty-state-title">No Score Data</p>
-              <p className="empty-state-description text-sm">Risk scores will appear here</p>
-            </div>
-          )}
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h2 className="card-title">Risk Velocity Tracker</h2>
-              <p className="card-description">Score movement analysis</p>
-            </div>
-          </div>
-          {totalMovement > 0 ? (
-            <div className="space-y-4 mt-2">
-              <div className="flex items-center gap-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200">
-                <div className="rounded-lg bg-emerald-100 p-3">
-                  <ArrowDown className="h-6 w-6 text-emerald-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-slate-600">Improved</p>
-                  <p className="text-2xl font-bold text-emerald-600">{riskMovement.improved}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="rounded-lg bg-slate-100 p-3">
-                  <Minus className="h-6 w-6 text-slate-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-slate-600">Unchanged</p>
-                  <p className="text-2xl font-bold text-slate-700">{riskMovement.unchanged}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 p-4 rounded-xl bg-rose-50 border border-rose-200">
-                <div className="rounded-lg bg-rose-100 p-3">
-                  <ArrowUp className="h-6 w-6 text-rose-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-slate-600">Worsened</p>
-                  <p className="text-2xl font-bold text-rose-600">{riskMovement.worsened}</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="empty-state py-8">
-              <div className="empty-state-icon">
-                <TrendingUp className="h-8 w-8 text-slate-500" />
-              </div>
-              <p className="empty-state-title">No Movement Data</p>
-              <p className="empty-state-description text-sm">Risk score changes will appear here</p>
-            </div>
-          )}
+          <ResidualDotPlot data={inherentVsResidual.slice(0, 6)} />
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h2 className="card-title">Mitigation Actions Timeline</h2>
-              <p className="card-description">Action status breakdown</p>
-            </div>
-          </div>
-          {mitigationTimelineData.length > 0 ? (
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={mitigationTimelineData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                  <XAxis type="number" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" width={90} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={28}>
-                    {mitigationTimelineData.map((entry, index) => (
-                      <Cell key={`timeline-${index}`} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="empty-state py-8">
-              <div className="empty-state-icon">
-                <CheckCircle className="h-8 w-8 text-slate-500" />
-              </div>
-              <p className="empty-state-title">No Actions Yet</p>
-              <p className="empty-state-description text-sm">Mitigation actions will appear here</p>
-            </div>
-          )}
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h2 className="card-title">Incident Severity Breakdown</h2>
-              <p className="card-description">Incidents by severity level</p>
-            </div>
-          </div>
-          {incidentSeverity.length > 0 ? (
-            <div className="flex items-center gap-6">
-              <div className="h-52 flex-1">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={incidentSeverity}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={70}
-                      paddingAngle={3}
-                      dataKey="value"
-                      strokeWidth={0}
-                    >
-                      {incidentSeverity.map((entry, index) => (
-                        <Cell key={`incident-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={tooltipStyle} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="space-y-3 min-w-[140px]">
-                {incidentSeverity.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.fill }} />
-                      <span className="text-sm text-slate-700">{item.name}</span>
-                    </div>
-                    <span className="text-sm font-bold text-slate-900">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="empty-state py-8">
-              <div className="empty-state-icon">
-                <Shield className="h-8 w-8 text-slate-500" />
-              </div>
-              <p className="empty-state-title">No Incidents</p>
-              <p className="empty-state-description text-sm">No incidents have been recorded</p>
-            </div>
-          )}
-        </div>
-      </div>
+      <RiskBowTie
+        leftNodes={bowTieLeftNodes}
+        rightNodes={bowTieRightNodes}
+        centerValue={openRisks.toLocaleString()}
+        centerLabel="open risks"
+      />
 
       <div className="card">
         <div className="card-header">

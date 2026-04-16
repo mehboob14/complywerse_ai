@@ -163,7 +163,7 @@ export default function CampaignDetailPage() {
         <div className="card p-12 text-center">
           <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-white mb-2">Campaign Not Found</h2>
-          <p className="text-slate-400 mb-6">The campaign you're looking for doesn't exist or you don't have access to it.</p>
+          <p className="text-slate-400 mb-6">The campaign you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.</p>
           <Link href="/governance/attestations/campaigns" className="btn-primary inline-flex items-center gap-2">
             <ArrowLeft className="h-4 w-4" />
             Go Back

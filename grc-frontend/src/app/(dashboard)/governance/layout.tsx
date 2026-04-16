@@ -31,15 +31,15 @@ export default function GovernanceLayout({
   const pathname = usePathname();
 
   return (
-    <div className="governance-light space-y-5">
+    <div className="governance-light min-h-full space-y-3 px-0.5 pb-1">
       <div className="gov-header-row">
-        <div>
-          <h1 className="text-[17px] font-semibold text-[var(--color-text)]">Governance</h1>
+        <div className="space-y-0.5">
+          <h1 className="text-[15px] font-semibold text-[var(--color-text)]">Governance</h1>
           <p className="helper-text">Policy and document lifecycle management</p>
         </div>
       </div>
 
-      <div className="filters-row rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-0.5">
+      <div className="filters-row rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-[3px]">
         {governanceNavigation.map((item) => {
           const isActive = pathname === item.href || 
             (item.href !== '/governance' && pathname.startsWith(item.href));
@@ -48,9 +48,9 @@ export default function GovernanceLayout({
               key={item.name}
               href={item.href}
               className={clsx(
-                'gov-tab flex items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-[12px] transition-colors',
+                'gov-tab flex items-center gap-1.5 rounded-[var(--radius-md)] px-2.5 py-1.5 text-[11px] font-semibold transition-colors',
                 isActive
-                  ? 'gov-tab-active bg-[var(--color-subtle)] text-[var(--color-text)]'
+                  ? 'gov-tab-active bg-[var(--color-subtle)] text-[var(--color-text)] shadow-sm'
                   : 'text-[var(--color-muted)] hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]'
               )}
             >

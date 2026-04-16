@@ -518,18 +518,18 @@ export default function VulnerabilityDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+      <div className="flex h-64 items-center justify-center rounded-xl border border-slate-200 bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
   if (error || !vulnerability) {
     return (
-      <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
         <AlertCircle className="mx-auto h-8 w-8 text-red-600" />
         <p className="mt-2 text-red-600">Failed to load vulnerability details</p>
-        <Link href="/vulnerabilities" className="mt-4 inline-flex items-center gap-2 text-primary-600 hover:text-primary-300">
+        <Link href="/vulnerabilities" className="mt-4 inline-flex items-center gap-2 text-blue-600 hover:underline">
           <ArrowLeft size={16} />
           Back to Vulnerabilities
         </Link>
@@ -541,14 +541,14 @@ export default function VulnerabilityDetailPage() {
   const statusStyle = getStatusStyle(vulnerability.status);
 
   return (
-    <div className="space-y-3">
+    <div className="min-h-full space-y-4 bg-white p-4 md:p-6">
       <div className="flex items-center gap-3">
         <Link href="/vulnerabilities" className="text-slate-600 hover:text-slate-900 transition-colors">
           <ArrowLeft size={18} />
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold cw-text">{vulnerability.title}</h1>
+            <h1 className="text-base font-semibold text-slate-900">{vulnerability.title}</h1>
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${severityStyle.bg} ${severityStyle.text}`}>
               {severityStyle.label}
             </span>
@@ -558,12 +558,12 @@ export default function VulnerabilityDetailPage() {
           </div>
           <p className="text-xs text-slate-500">VULN-{vulnerability.id}</p>
         </div>
-        <button onClick={() => setShowStatusModal(true)} className="btn-secondary text-sm py-1 px-3">
+        <button onClick={() => setShowStatusModal(true)} className="btn-secondary text-xs py-1 px-2.5">
           Change Status
         </button>
       </div>
 
-      <div className="border-b border-[var(--color-border)]">
+      <div className="border-b border-slate-200">
         <nav className="flex gap-0 overflow-x-auto">
           {TABS.map((tab) => (
             <button
@@ -693,7 +693,7 @@ export default function VulnerabilityDetailPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Assigned To</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700">
+                <tbody className="divide-y divide-slate-200">
                   {mitigations.map((m) => (
                     <tr key={m.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 cw-text">{m.action_title}</td>
@@ -737,7 +737,7 @@ export default function VulnerabilityDetailPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700">
+                <tbody className="divide-y divide-slate-200">
                   {assetLinks.map((link) => (
                     <tr key={link.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 cw-text">{link.asset_name}</td>
@@ -782,7 +782,7 @@ export default function VulnerabilityDetailPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700">
+                <tbody className="divide-y divide-slate-200">
                   {controlLinks.map((link) => {
                     const displayName = link.internal_control_name || link.framework_control_name || link.normalized_control_name || '-';
                     const displayCode = link.framework_control_code || link.normalized_control_code || (link.internal_control_id ? `IC-${link.internal_control_id}` : '-');
@@ -833,7 +833,7 @@ export default function VulnerabilityDetailPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700">
+                <tbody className="divide-y divide-slate-200">
                   {departmentAssignments.map((assignment) => (
                     <tr key={assignment.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
@@ -985,7 +985,7 @@ export default function VulnerabilityDetailPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700">
+                <tbody className="divide-y divide-slate-200">
                   {escalationsData.map((esc) => (
                     <tr key={esc.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
@@ -1057,8 +1057,8 @@ export default function VulnerabilityDetailPage() {
       {activeTab === 'exception' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold cw-text">Risk Exception</h2>
-            <button onClick={() => setShowExceptionModal(true)} className="btn-primary flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-slate-900">Risk Exception</h2>
+            <button onClick={() => setShowExceptionModal(true)} className="btn-primary flex items-center gap-2 text-sm">
               <Plus size={16} />
               Create Exception
             </button>

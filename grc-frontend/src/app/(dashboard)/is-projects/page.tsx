@@ -24,6 +24,8 @@ import {
   Clock,
   AlertTriangle,
 } from 'lucide-react';
+import PortfolioDashboardPage from './dashboard/page';
+import MyProjectsPage from './my-projects/page';
 
 const STATUSES = ['Planning', 'In Progress', 'On Hold', 'Completed', 'Cancelled'];
 const CATEGORIES = ['Infrastructure', 'Application Security', 'Compliance', 'Risk Remediation', 'Training', 'DR/BCP', 'Other'];
@@ -100,6 +102,13 @@ export default function ISProjectsPage() {
   const [dateTo, setDateTo] = useState('');
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'projects' | 'dashboard' | 'my-projects'>('projects');
+
+  const projectTabs = [
+    { id: 'projects' as const, label: 'Projects' },
+    { id: 'dashboard' as const, label: 'Portfolio Dashboard' },
+    { id: 'my-projects' as const, label: 'My Projects' },
+  ];
 
   const [form, setForm] = useState({
     name: '', description: '', category: 'Other', priority: 'Medium',
@@ -150,19 +159,43 @@ export default function ISProjectsPage() {
 
   return (
     <div className="space-y-6 text-[var(--color-text)]">
-      <PageHeader
-        title="IS Projects"
-        subtitle="Track and manage information security projects across the organization"
-        icon={FolderKanban}
-        actions={(
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="cw-btn-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
-          >
-            <Plus size={16} /> New Project
-          </button>
-        )}
-      />
+      <div className="rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
+        <div className="flex flex-wrap gap-2">
+          {projectTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeTab === 'projects' && (
+        <>
+          <PageHeader
+            title="IS Projects"
+            subtitle="Track and manage information security projects across the organization"
+            icon={FolderKanban}
+            actions={(
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="cw-btn-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
+              >
+                <Plus size={16} /> New Project
+              </button>
+            )}
+          />
 
       <div className="cw-card p-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -323,82 +356,87 @@ export default function ISProjectsPage() {
         </div>
       )}
 
-      {showCreateModal && (
-        <div className="fixed inset-0 cw-overlay flex items-center justify-center z-50 p-4" onClick={() => setShowCreateModal(false)}>
-          <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-[var(--color-border)]">
-              <h2 className="text-lg font-semibold text-[var(--color-text)]">Create IS Project</h2>
-              <button onClick={() => setShowCreateModal(false)} className="p-1 rounded hover:bg-[var(--color-subtle)]"><X size={18} /></button>
+          {showCreateModal && (
+            <div className="fixed inset-0 cw-overlay flex items-center justify-center z-50 p-4" onClick={() => setShowCreateModal(false)}>
+              <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-6 border-b border-[var(--color-border)]">
+                  <h2 className="text-lg font-semibold text-[var(--color-text)]">Create IS Project</h2>
+                  <button onClick={() => setShowCreateModal(false)} className="p-1 rounded hover:bg-[var(--color-subtle)]"><X size={18} /></button>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Project Name <span className="cw-required">*</span></label>
+                    <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="e.g., SIEM Platform Upgrade" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Description</label>
+                    <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} className="cw-field w-full px-3 py-2 text-sm" placeholder="Describe the project objectives..." />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Category</label>
+                      <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="cw-field w-full px-3 py-2 text-sm">
+                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Priority</label>
+                      <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className="cw-field w-full px-3 py-2 text-sm">
+                        {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Project Owner</label>
+                      <input type="text" value={form.project_owner_name} onChange={(e) => setForm({ ...form, project_owner_name: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="Owner name" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Sponsor</label>
+                      <input type="text" value={form.sponsor} onChange={(e) => setForm({ ...form, sponsor: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="Executive sponsor" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Department</label>
+                    <input type="text" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="e.g., Information Security" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Start Date</label>
+                      <input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Target End Date</label>
+                      <input type="date" value={form.target_end_date} onChange={(e) => setForm({ ...form, target_end_date: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Estimated Budget</label>
+                    <div className="relative">
+                      <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                      <input type="number" value={form.budget_estimated} onChange={(e) => setForm({ ...form, budget_estimated: e.target.value })} className="cw-field w-full pl-8 pr-3 py-2 text-sm" placeholder="0.00" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Business Justification</label>
+                    <textarea value={form.business_justification} onChange={(e) => setForm({ ...form, business_justification: e.target.value })} rows={3} className="cw-field w-full px-3 py-2 text-sm" placeholder="Why is this project needed?" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-3 p-6 border-t border-[var(--color-border)]">
+                  <button onClick={() => setShowCreateModal(false)} className="cw-btn-secondary px-4 py-2 rounded-lg text-sm">Cancel</button>
+                  <button onClick={handleCreate} disabled={!form.name || createMutation.isPending} className="cw-btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2">
+                    {createMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                    Create Project
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Project Name <span className="cw-required">*</span></label>
-                <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="e.g., SIEM Platform Upgrade" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Description</label>
-                <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} className="cw-field w-full px-3 py-2 text-sm" placeholder="Describe the project objectives..." />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Category</label>
-                  <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="cw-field w-full px-3 py-2 text-sm">
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Priority</label>
-                  <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className="cw-field w-full px-3 py-2 text-sm">
-                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Project Owner</label>
-                  <input type="text" value={form.project_owner_name} onChange={(e) => setForm({ ...form, project_owner_name: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="Owner name" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Sponsor</label>
-                  <input type="text" value={form.sponsor} onChange={(e) => setForm({ ...form, sponsor: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="Executive sponsor" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Department</label>
-                <input type="text" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="e.g., Information Security" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Start Date</label>
-                  <input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Target End Date</label>
-                  <input type="date" value={form.target_end_date} onChange={(e) => setForm({ ...form, target_end_date: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Estimated Budget</label>
-                <div className="relative">
-                  <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
-                  <input type="number" value={form.budget_estimated} onChange={(e) => setForm({ ...form, budget_estimated: e.target.value })} className="cw-field w-full pl-8 pr-3 py-2 text-sm" placeholder="0.00" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Business Justification</label>
-                <textarea value={form.business_justification} onChange={(e) => setForm({ ...form, business_justification: e.target.value })} rows={3} className="cw-field w-full px-3 py-2 text-sm" placeholder="Why is this project needed?" />
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-[var(--color-border)]">
-              <button onClick={() => setShowCreateModal(false)} className="cw-btn-secondary px-4 py-2 rounded-lg text-sm">Cancel</button>
-              <button onClick={handleCreate} disabled={!form.name || createMutation.isPending} className="cw-btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2">
-                {createMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                Create Project
-              </button>
-            </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
+
+      {activeTab === 'dashboard' && <PortfolioDashboardPage />}
+      {activeTab === 'my-projects' && <MyProjectsPage />}
     </div>
   );
 }

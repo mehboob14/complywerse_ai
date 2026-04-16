@@ -158,12 +158,12 @@ export default function CommitteesPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Board & Committee Management</h1>
-            <p className="text-slate-600 mt-1">Manage committees, meetings, and oversight actions</p>
+            <h1 className="text-lg font-semibold text-slate-900">Board & Committee Management</h1>
+            <p className="mt-1 text-slate-600">Manage committees, meetings, and oversight actions</p>
           </div>
           <div className="flex items-center gap-3">
             <Link href="/governance/committees/actions" className="btn-secondary flex items-center gap-2">

@@ -14,6 +14,7 @@ import {
   X,
   UserPlus,
   Bug,
+  Clock,
   ChevronRight,
   Building2,
   Route,
@@ -193,7 +194,7 @@ export default function DepartmentsManagementPage() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 px-6 py-3 bg-[var(--color-subtle)]">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold cw-text-default">Vulnerability Departments</h1>

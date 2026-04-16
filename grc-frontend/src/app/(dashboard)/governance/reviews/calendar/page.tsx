@@ -310,10 +310,10 @@ export default function ReviewCalendarPage() {
     : [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="mb-1 flex items-center gap-3">
             <Link
               href="/governance/reviews"
               className="flex items-center gap-1 text-gray-600 hover:text-black transition-colors"
@@ -322,7 +322,7 @@ export default function ReviewCalendarPage() {
               <span className="text-sm">Back to Reviews</span>
             </Link>
           </div>
-          <h1 className="text-2xl font-bold text-black">Review Calendar</h1>
+          <h1 className="text-lg font-semibold text-black">Review Calendar</h1>
           <p className="text-gray-600">Visual overview of upcoming document reviews</p>
         </div>
       </div>

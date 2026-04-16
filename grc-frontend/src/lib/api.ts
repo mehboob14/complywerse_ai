@@ -468,6 +468,10 @@ export const assetsApi = {
     apiClient.post(`/assets/${id}/controls`, data),
   unlinkControl: (id: number, linkId: number) =>
     apiClient.delete(`/assets/${id}/controls/${linkId}`),
+  linkInternalControl: (id: number, data: { internal_control_id: number; coverage_status?: string }) =>
+    apiClient.post(`/assets/${id}/internal-controls`, data),
+  unlinkInternalControl: (id: number, linkId: number) =>
+    apiClient.delete(`/assets/${id}/internal-controls/${linkId}`),
   linkFrameworkControl: (id: number, data: {framework_control_id: number, coverage_status?: string}) => 
     apiClient.post(`/assets/${id}/link-framework-control`, data),
   unlinkFrameworkControl: (id: number, linkId: number) => 

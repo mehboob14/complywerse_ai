@@ -257,11 +257,11 @@ export default function RegulatoryChangesPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Regulatory Change Management</h1>
-          <p className="text-gray-600 mt-1">Track and manage regulatory changes and their implementation</p>
+          <h1 className="text-lg font-semibold text-black">Regulatory Change Management</h1>
+          <p className="mt-1 text-gray-600">Track and manage regulatory changes and their implementation</p>
         </div>
         <button
           onClick={() => setIsModalOpen(true)}

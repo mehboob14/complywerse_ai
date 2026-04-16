@@ -285,10 +285,10 @@ export default function GovernanceReviewsPage() {
 
   if (reviewsSection === 'actions') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-5">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-black">My Reviews</h1>
+            <h1 className="text-lg font-semibold text-black">My Reviews</h1>
             <p className="text-gray-600">Track and manage your submitted actions requiring review</p>
           </div>
           <div className="flex gap-2">
@@ -447,10 +447,10 @@ export default function GovernanceReviewsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Document Reviews</h1>
+          <h1 className="text-lg font-semibold text-black">Document Reviews</h1>
           <p className="text-gray-600">Track and complete document review schedules</p>
         </div>
         <div className="flex gap-2">

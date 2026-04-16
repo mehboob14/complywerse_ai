@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from 'react';
 import { PageHeader, DataTable } from '@/components/ui';
 import { adminApi } from '@/lib/api';

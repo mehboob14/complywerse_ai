@@ -62,6 +62,29 @@ interface NavGroup {
 
 type NavEntry = (NavItem & { requiredModules?: string[]; adminOnly?: boolean }) | NavGroup;
 
+const ADMIN_DEFAULT_MODULES = [
+  'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
+  'vulnerabilities', 'assets', 'frameworks', 'reports', 'admin', 'workflow_engine', 'integrations',
+  'is_projects', 'critical_tasks'
+];
+
+const AUTHENTICATED_DEFAULT_MODULES = [
+  'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
+  'vulnerabilities', 'assets', 'frameworks', 'reports', 'workflow_engine', 'integrations',
+  'is_projects', 'critical_tasks'
+];
+
+const normalizePerm = (perm: string): string => {
+  const cleaned = perm.trim();
+  if (!cleaned) return '';
+  return cleaned.includes('.') ? cleaned.replace(/\./g, ':') : cleaned;
+};
+
+const extractModuleFromPerm = (perm: string): string => {
+  const normalized = normalizePerm(perm);
+  return normalized.split(':')[0] || '';
+};
+
 const navigation: NavEntry[] = [
   { 
     name: 'Dashboard', 
@@ -124,50 +147,30 @@ const navigation: NavEntry[] = [
     icon: Bug,
     requiredModules: ['vulnerabilities'],
     items: [
-      { name: 'Dashboard', href: '/vulnerabilities/dashboard', icon: BarChart3, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
+      { name: 'Overview', href: '/vulnerabilities/dashboard', icon: BarChart3, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
       { name: 'Vulnerabilities', href: '/vulnerabilities', icon: Bug, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
-      { name: 'Departments', href: '/vulnerabilities/departments', icon: Users, requiredPermissions: ['vulnerabilities:remediation:*'] },
+      // { name: 'Departments', href: '/vulnerabilities/departments', icon: Users, requiredPermissions: ['vulnerabilities:remediation:*'] },
       // { name: 'Reports', href: '/vulnerabilities/reports', icon: FileText, requiredPermissions: ['vulnerabilities:reports:*'] },
-      { name: 'SLA Config', href: '/vulnerabilities/sla', icon: Clock, requiredPermissions: ['vulnerabilities:sla_management:*'] },
+      // { name: 'SLA Config', href: '/vulnerabilities/sla', icon: Clock, requiredPermissions: ['vulnerabilities:sla_management:*'] },
     ],
   },
-  {
-    name: 'Scanner Integration',
-    icon: Wifi,
-    requiredModules: ['integrations'],
-    items: [
-      { name: 'Connections', href: '/integrations/connections', icon: Wifi, requiredPermissions: ['integrations:connections:*'] },
-      { name: 'Exceptions', href: '/integrations/exceptions', icon: AlertTriangle, requiredPermissions: ['integrations:exceptions:*'] },
-      { name: 'Analytics', href: '/integrations', icon: BarChart3, requiredPermissions: ['integrations:analytics:*'] },
-    ],
-  },
-  {
-    name: 'Assets',
-    icon: Server,
-    requiredModules: ['assets'],
-    items: [
-      { name: 'IT Assets', href: '/assets', icon: Server, requiredPermissions: ['assets:asset_inventory:*'] },
-    ],
-  },
+    { name: 'Integrations', href: '/integrations/connections', icon: Bot, requiredPermissions: ['dashboard:assets*'] },
+
+    { name: 'IT Assets', href: '/assets', icon: Bot, requiredPermissions: ['dashboard:assets*'] },
+
   {
     name: 'IS Projects',
+    href: '/is-projects',
     icon: FolderKanban,
     requiredModules: ['is_projects'],
-    items: [
-      { name: 'Projects', href: '/is-projects', icon: FolderKanban, requiredPermissions: ['is_projects:projects:*'] },
-      { name: 'Portfolio Dashboard', href: '/is-projects/dashboard', icon: BarChart3, requiredPermissions: ['is_projects:dashboard:view'] },
-      { name: 'My Projects', href: '/is-projects/my-projects', icon: Users, requiredPermissions: ['is_projects:projects:view'] },
-    ],
+    requiredPermissions: ['is_projects:projects:*', 'is_projects:dashboard:view']
   },
   {
     name: 'Critical Tasks',
+    href: '/tasks',
     icon: ListTodo,
     requiredModules: ['critical_tasks'],
-    items: [
-      { name: 'Task Board', href: '/tasks', icon: ListTodo, requiredPermissions: ['critical_tasks:tasks:*'] },
-      { name: 'My Tasks', href: '/tasks/my-tasks', icon: Target, requiredPermissions: ['critical_tasks:tasks:view'] },
-      { name: 'Reports', href: '/tasks/reports', icon: BarChart3, requiredPermissions: ['critical_tasks:reports:view'] },
-    ],
+    requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
   },
   {
     name: 'Workflow Engine',
@@ -178,16 +181,11 @@ const navigation: NavEntry[] = [
   { name: 'ComplyChat', href: '/complychat', icon: Bot, requiredPermissions: ['dashboard:ai_insights:*'] },
   {
     name: 'Administration',
+    href: '/admin',
     icon: Settings,
     adminOnly: true,
     requiredModules: ['admin'],
-    items: [
-      { name: 'Overview', href: '/admin', icon: Settings, requiredPermissions: ['admin:organization:*'] },
-      { name: 'Company', href: '/admin/organization', icon: Server, requiredPermissions: ['admin:organization:*'] },
-      { name: 'User Management', href: '/admin/users', icon: Users, requiredPermissions: ['admin:users:*'] },
-      { name: 'Role Management', href: '/admin/roles', icon: Shield, requiredPermissions: ['admin:roles:*'] },
-      { name: 'Audit Logs', href: '/admin/audit-logs', icon: FileText, requiredPermissions: ['admin:audit_logs:*'] },
-    ],
+    requiredPermissions: ['admin:organization:*', 'admin:users:*', 'admin:roles:*', 'admin:audit_logs:*']
   },
 ];
 
@@ -204,10 +202,10 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
     <Link
       href={item.href}
       className={clsx(
-        'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[12px] font-normal transition-all duration-150',
+        'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[12px] font-semibold tracking-[0.01em] transition-all duration-150',
         isActive 
-          ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] font-medium' 
-          : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
+          ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm' 
+          : 'border-transparent text-[var(--sidebar-text)] font-medium hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
         collapsed && 'justify-center px-2'
       )}
       title={collapsed ? item.name : undefined}
@@ -226,17 +224,16 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
 
 function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boolean }) {
   const pathname = usePathname();
-  const isAnyChildActive = group.items.some(
-    item => pathname === item.href || 
-    (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'))
-  );
-  const [isOpen, setIsOpen] = useState(group.defaultOpen || isAnyChildActive);
+  const activeChild = group.items
+    .filter((item) => pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+  const activeChildHref = activeChild?.href;
+  const isAnyChildActive = !!activeChildHref;
+  const isOpen = true;
 
   useEffect(() => {
-    if (isAnyChildActive && !isOpen) {
-      setIsOpen(true);
-    }
-  }, [isAnyChildActive, isOpen]);
+    // Groups remain open by default.
+  }, []);
 
   if (collapsed) {
     return (
@@ -261,9 +258,9 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                 key={item.href}
                 href={item.href}
                 className={clsx(
-                  'flex items-center gap-2 border-l-[3px] px-3 py-1.5 text-[12px] transition-colors',
-                  pathname === item.href || pathname.startsWith(item.href + '/')
-                    ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)]'
+                  'flex items-center gap-2 border-l-[3px] px-3 py-1.5 text-[12px] font-semibold tracking-[0.01em] transition-colors',
+                  activeChildHref === item.href
+                    ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm'
                     : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
                 )}
               >
@@ -279,12 +276,11 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
 
   return (
     <div className="space-y-0.5">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
+      <div
         className={clsx(
-          'group flex w-full items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[9px] font-normal uppercase tracking-[0.12em] transition-all duration-150',
+          'group flex w-full items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] transition-all duration-150',
           isAnyChildActive
-            ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)]'
+            ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm'
             : 'border-transparent text-[var(--sidebar-text-section)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
         )}
       >
@@ -296,14 +292,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
           )} 
         />
         <span className="flex-1 text-left truncate">{group.name}</span>
-        <ChevronDown
-          {...navIconProps}
-          className={clsx(
-            'text-[var(--sidebar-icon)] transition-transform duration-200',
-            isOpen ? '' : '-rotate-90'
-          )}
-        />
-      </button>
+      </div>
       {isOpen && (
         <div className="ml-3 space-y-0.5 border-l border-[var(--sidebar-hover-bg)] pl-3">
           {group.items.map(item => (
@@ -311,9 +300,9 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
               key={item.href}
               href={item.href}
               className={clsx(
-                'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[11px] transition-all duration-150',
-                (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')))
-                  ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] font-medium'
+                'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[11px] font-semibold tracking-[0.01em] transition-all duration-150',
+                activeChildHref === item.href
+                  ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm'
                   : 'border-transparent text-[var(--sidebar-text-subitem)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
               )}
             >
@@ -321,7 +310,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                 {...navIconProps}
                 className={clsx(
                   'flex-shrink-0',
-                  (pathname === item.href || pathname.startsWith(item.href + '/'))
+                  activeChildHref === item.href
                     ? 'text-[var(--color-on-base)]' 
                     : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
                 )} 
@@ -341,29 +330,6 @@ export default function Sidebar() {
   const [allowedPermissions, setAllowedPermissions] = useState<string[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loaded, setLoaded] = useState(false);
-
-  const adminDefaultModules = [
-    'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
-    'vulnerabilities', 'assets', 'frameworks', 'reports', 'admin', 'workflow_engine', 'integrations',
-    'is_projects', 'critical_tasks'
-  ];
-
-  const authenticatedDefaultModules = [
-    'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
-    'vulnerabilities', 'assets', 'frameworks', 'reports', 'workflow_engine', 'integrations',
-    'is_projects', 'critical_tasks'
-  ];
-
-  const normalizePerm = (perm: string): string => {
-    const cleaned = perm.trim();
-    if (!cleaned) return '';
-    return cleaned.includes('.') ? cleaned.replace(/\./g, ':') : cleaned;
-  };
-
-  const extractModuleFromPerm = (perm: string): string => {
-    const normalized = normalizePerm(perm);
-    return normalized.split(':')[0] || '';
-  };
 
   useEffect(() => {
     const loadMe = async () => {
@@ -399,14 +365,14 @@ export default function Sidebar() {
         // In that case, avoid collapsing sidebar to a near-empty state.
         const hasNoAccessPayload = resolvedModules.length === 0 && permissions.length === 0;
 
-        setAllowedModules(hasNoAccessPayload ? authenticatedDefaultModules : resolvedModules);
+        setAllowedModules(hasNoAccessPayload ? AUTHENTICATED_DEFAULT_MODULES : resolvedModules);
         setAllowedPermissions(permissions);
         const adminStatus = data.user.is_admin || false;
         setIsAdmin(adminStatus);
         
         // If admin but no modules/permissions set, initialize with all modules
         if (adminStatus && resolvedModules.length === 0) {
-          setAllowedModules(adminDefaultModules);
+          setAllowedModules(ADMIN_DEFAULT_MODULES);
           setAllowedPermissions(['*:*:*']);
         }
       }

@@ -176,6 +176,112 @@
     box-shadow: 0 0 0 1px var(--color-base);
   }
 
+  .risk-workspace {
+    color: var(--color-text);
+  }
+
+  .risk-workspace h1 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .risk-workspace h2,
+  .risk-workspace h3 {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .risk-workspace .page-title {
+    font-size: 1.0625rem;
+    line-height: 1.2;
+  }
+
+  .risk-workspace .page-description {
+    font-size: 0.6875rem;
+    margin-top: 0.125rem;
+  }
+
+  .risk-workspace .card,
+  .risk-workspace .stat-card {
+    padding: 0.75rem;
+  }
+
+  .risk-workspace .card-header {
+    margin-bottom: 0.375rem;
+    padding-bottom: 0.375rem;
+  }
+
+  .risk-workspace .text-2xl {
+    font-size: 1.125rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .risk-workspace .text-xl {
+    font-size: 1rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .risk-workspace .text-lg {
+    font-size: 0.9375rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .risk-workspace .text-sm {
+    font-size: 0.75rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .risk-workspace .text-xs {
+    font-size: 0.65625rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .risk-workspace .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.875rem;
+  }
+
+  .risk-workspace .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem;
+  }
+
+  .risk-workspace .gap-6 {
+    gap: 0.75rem;
+  }
+
+  .risk-workspace .gap-5 {
+    gap: 0.625rem;
+  }
+
+  .risk-workspace .gap-4 {
+    gap: 0.5rem;
+  }
+
+  .risk-workspace .p-6 {
+    padding: 0.75rem;
+  }
+
+  .risk-workspace .p-5 {
+    padding: 0.625rem;
+  }
+
+  .risk-workspace .p-4 {
+    padding: 0.5rem;
+  }
+
+  .risk-workspace table th {
+    padding-top: 0.45rem !important;
+    padding-bottom: 0.45rem !important;
+    font-size: 0.6875rem;
+  }
+
+  .risk-workspace table td {
+    padding-top: 0.45rem !important;
+    padding-bottom: 0.45rem !important;
+    font-size: 0.75rem;
+  }
+
   .cw-btn-secondary {
     border: 1px solid var(--color-border);
     color: var(--color-text);
@@ -242,7 +348,7 @@
 
   .cw-dashboard h1,
   .governance-light h1 {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--color-text);
   }
@@ -251,8 +357,8 @@
   .cw-dashboard h3,
   .governance-light h2,
   .governance-light h3 {
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 12.5px;
+    font-weight: 600;
     color: var(--color-text);
   }
 
@@ -262,21 +368,21 @@
   .governance-light p,
   .governance-light td,
   .governance-light th {
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 400;
     color: var(--color-text);
   }
 
   .cw-dashboard .helper-text,
   .governance-light .helper-text {
-    font-size: 11px;
+    font-size: 10.5px;
     color: var(--color-muted);
   }
 
   .cw-dashboard .label-text,
   .governance-light .label-text {
-    font-size: 11px;
-    font-weight: 500;
+    font-size: 10.5px;
+    font-weight: 600;
   }
 
   .cw-dashboard .dashboard-header-row,
@@ -284,7 +390,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-4);
+    gap: var(--space-3);
     flex-wrap: nowrap;
   }
 
@@ -292,7 +398,7 @@
   .governance-light .filters-row {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: 0.375rem;
     flex-wrap: nowrap;
     overflow-x: auto;
   }
@@ -302,7 +408,7 @@
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-5);
+    padding: var(--space-4);
   }
 
   .platform-ui.compact-density main .space-y-8 > :not([hidden]) ~ :not([hidden]) {
@@ -621,14 +727,15 @@
   }
 
   .governance-light .gov-tab {
-    font-size: 13px;
+    font-size: 11px;
+    font-weight: 600;
     color: var(--color-muted);
     border-bottom: 2px solid transparent;
   }
 
   .governance-light .gov-tab-active {
     color: var(--color-text);
-    font-weight: 500;
+    font-weight: 600;
     border-bottom-color: var(--color-base);
   }
 
@@ -763,98 +870,169 @@
   }
 
   .governance-light .cw-field {
-    min-height: 2.5rem;
-    padding: 0.5rem 0.75rem;
+    min-height: 2.25rem;
+    padding: 0.4375rem 0.625rem;
     border-radius: var(--radius-md);
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    font-size: 0.8125rem;
+    line-height: 1.15rem;
   }
 
   .governance-light select.cw-field {
-    min-width: 9.5rem;
+    min-width: 8.75rem;
   }
 
   .governance-light textarea.cw-field {
-    min-height: 6rem;
-    line-height: 1.4;
+    min-height: 5rem;
+    line-height: 1.35;
   }
 
   /* ── Governance information density ─────────────────────── */
   .governance-light .stat-card {
-    padding: 0.75rem;
+    padding: 0.625rem;
   }
 
   .governance-light .stat-value {
-    font-size: 1.5rem;
-    line-height: 1.1;
+    font-size: 1.375rem;
+    line-height: 1.05;
   }
 
   .governance-light .stat-label {
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     margin-top: 0.125rem;
   }
 
   .governance-light .card {
-    padding: 0.875rem;
-  }
-
-  .governance-light .card-header {
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.5rem;
-  }
-
-  .governance-light .card-title {
-    font-size: 0.8125rem;
-  }
-
-  .governance-light .card-description {
-    font-size: 0.6875rem;
-  }
-
-  .governance-light .page-title {
-    font-size: 1.1875rem;
-    line-height: 1.25;
-  }
-
-  .governance-light .page-description {
-    font-size: 0.75rem;
-    margin-top: 0.125rem;
-  }
-
-  .governance-light .space-y-8 > :not([hidden]) ~ :not([hidden]) {
-    margin-top: 1rem;
-  }
-
-  .governance-light .space-y-6 > :not([hidden]) ~ :not([hidden]) {
-    margin-top: 0.875rem;
-  }
-
-  .governance-light .space-y-5 > :not([hidden]) ~ :not([hidden]) {
-    margin-top: 0.75rem;
-  }
-
-  .governance-light .gap-6 {
-    gap: 0.875rem;
-  }
-
-  .governance-light .gap-5 {
-    gap: 0.75rem;
-  }
-
-  .governance-light .gap-4 {
-    gap: 0.625rem;
-  }
-
-  .governance-light .p-6 {
-    padding: 0.875rem;
-  }
-
-  .governance-light .p-5 {
     padding: 0.75rem;
   }
 
-  .governance-light .p-4 {
+  .governance-light .card-header {
+    margin-bottom: 0.375rem;
+    padding-bottom: 0.375rem;
+  }
+
+  .governance-light .card-title {
+    font-size: 0.78rem;
+  }
+
+  .governance-light .card-description {
+    font-size: 0.65625rem;
+  }
+
+  .governance-light .page-title {
+    font-size: 1.0625rem;
+    line-height: 1.2;
+  }
+
+  .governance-light .page-description {
+    font-size: 0.6875rem;
+    margin-top: 0.125rem;
+  }
+
+  .governance-light .text-3xl {
+    font-size: 1.25rem !important;
+    line-height: 1.15 !important;
+  }
+
+  .governance-light .text-2xl {
+    font-size: 1rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .governance-light .text-xl {
+    font-size: 0.9375rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .governance-light .text-lg {
+    font-size: 0.875rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .governance-light .text-base {
+    font-size: 0.8125rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .governance-light .text-sm {
+    font-size: 0.75rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .governance-light .text-xs {
+    font-size: 0.65625rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .governance-light .font-bold {
+    font-weight: 700 !important;
+  }
+
+  .governance-light .font-semibold {
+    font-weight: 600 !important;
+  }
+
+  .governance-light .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.875rem;
+  }
+
+  .governance-light .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem;
+  }
+
+  .governance-light .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.625rem;
+  }
+
+  .governance-light .gap-6 {
+    gap: 0.75rem;
+  }
+
+  .governance-light .gap-5 {
+    gap: 0.625rem;
+  }
+
+  .governance-light .gap-4 {
+    gap: 0.5rem;
+  }
+
+  .governance-light .gap-3 {
+    gap: 0.375rem;
+  }
+
+  .governance-light .p-6 {
+    padding: 0.75rem;
+  }
+
+  .governance-light .p-5 {
     padding: 0.625rem;
+  }
+
+  .governance-light .p-4 {
+    padding: 0.5rem;
+  }
+
+  .governance-light .p-3 {
+    padding: 0.4375rem;
+  }
+
+  .governance-light .px-4 {
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+  }
+
+  .governance-light .px-3 {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .governance-light .py-3 {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .governance-light .py-2 {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
   }
 
   .governance-light .rounded-xl {
@@ -862,28 +1040,122 @@
   }
 
   .governance-light table th {
-    padding-top: 0.5rem !important;
-    padding-bottom: 0.5rem !important;
-    font-size: 0.6875rem;
+    padding-top: 0.4375rem !important;
+    padding-bottom: 0.4375rem !important;
+    font-size: 0.65625rem;
   }
 
   .governance-light table td {
-    padding-top: 0.5rem !important;
-    padding-bottom: 0.5rem !important;
-    font-size: 0.8125rem;
+    padding-top: 0.4375rem !important;
+    padding-bottom: 0.4375rem !important;
+    font-size: 0.75rem;
   }
 
   .governance-light .badge {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    padding-top: 0.125rem;
-    padding-bottom: 0.125rem;
-    font-size: 0.6875rem;
+    padding-left: 0.4375rem;
+    padding-right: 0.4375rem;
+    padding-top: 0.1rem;
+    padding-bottom: 0.1rem;
+    font-size: 0.65625rem;
   }
 
   .governance-light dialog,
   .governance-light [role="dialog"] {
     font-size: 0.875rem;
+  }
+
+  .governance-light .bg-blue-500\/20,
+  .governance-light .bg-primary-500\/20,
+  .governance-light .bg-blue-100 {
+    background-color: #eff6ff !important;
+  }
+
+  .governance-light .bg-green-500\/20,
+  .governance-light .bg-emerald-500\/20,
+  .governance-light .bg-green-100 {
+    background-color: #ecfdf5 !important;
+  }
+
+  .governance-light .bg-yellow-500\/20,
+  .governance-light .bg-amber-500\/20,
+  .governance-light .bg-orange-500\/20 {
+    background-color: #fffbeb !important;
+  }
+
+  .governance-light .bg-red-500\/20,
+  .governance-light .bg-rose-500\/20 {
+    background-color: #fff1f2 !important;
+  }
+
+  .governance-light .bg-purple-500\/20,
+  .governance-light .bg-indigo-500\/20,
+  .governance-light .bg-cyan-500\/20 {
+    background-color: #faf5ff !important;
+  }
+
+  .governance-light .text-blue-400,
+  .governance-light .text-primary-400 {
+    color: #2563eb !important;
+  }
+
+  .governance-light .text-green-400,
+  .governance-light .text-emerald-400 {
+    color: #047857 !important;
+  }
+
+  .governance-light .text-yellow-400,
+  .governance-light .text-amber-400,
+  .governance-light .text-orange-400 {
+    color: #b45309 !important;
+  }
+
+  .governance-light .text-red-400,
+  .governance-light .text-red-300,
+  .governance-light .text-rose-400 {
+    color: #be123c !important;
+  }
+
+  .governance-light .text-purple-400,
+  .governance-light .text-purple-300,
+  .governance-light .text-cyan-400,
+  .governance-light .text-blue-300,
+  .governance-light .text-green-300,
+  .governance-light .text-amber-300,
+  .governance-light .text-indigo-300,
+  .governance-light .text-indigo-700,
+  .governance-light .text-teal-300 {
+    color: #7c3aed !important;
+  }
+
+  .governance-light .cw-overlay {
+    padding: 0.75rem;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+  }
+
+  .governance-light .cw-modal-panel {
+    width: min(760px, 100%);
+    max-height: calc(100vh - 1.5rem);
+    overflow-y: auto;
+    border-radius: 0.875rem;
+    padding: 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .governance-light .cw-overlay {
+      padding: 0;
+      align-items: stretch;
+      justify-content: flex-end;
+    }
+
+    .governance-light .cw-modal-panel {
+      height: 100vh;
+      max-height: 100vh;
+      max-width: 760px;
+      border-radius: 0;
+      border-right: 0;
+    }
   }
   /* ─────────────────────────────────────────────────────────── */
 
@@ -1323,7 +1595,8 @@
 .governance-light .text-slate-300,
 .governance-light .text-slate-400,
 .governance-light .text-slate-500,
-.governance-light .text-slate-600 {
+.governance-light .text-slate-600,
+.governance-light .text-white {
   color: #4b5563 !important;
 }
 

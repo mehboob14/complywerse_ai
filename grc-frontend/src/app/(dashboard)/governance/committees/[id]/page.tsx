@@ -630,9 +630,9 @@ export default function CommitteeDetailPage() {
   });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div>
-        <Link href="/governance/committees" className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4">
+        <Link href="/governance/committees" className="mb-3 flex items-center gap-2 text-slate-600 hover:text-slate-900">
           <ArrowLeft className="h-4 w-4" />
           Back to Committees
         </Link>
@@ -644,8 +644,8 @@ export default function CommitteeDetailPage() {
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-slate-900">{committee.name}</h1>
-                <span className={`text-xs px-2.5 py-0.5 rounded-full ${typeStyle.bg} ${typeStyle.text}`}>
+                <h1 className="text-lg font-semibold text-slate-900">{committee.name}</h1>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs ${typeStyle.bg} ${typeStyle.text}`}>
                   {typeStyle.label}
                 </span>
               </div>
@@ -1637,7 +1637,7 @@ export default function CommitteeDetailPage() {
             </div>
             
             <div className="space-y-3 mb-6">
-              <p className="text-sm text-black">Select one or more frameworks to generate the charter based on those frameworks only. If you don't select any, all available frameworks will be used.</p>
+              <p className="text-sm text-black">Select one or more frameworks to generate the charter based on those frameworks only. If you don&apos;t select any, all available frameworks will be used.</p>
               
               {!availableFrameworks || availableFrameworks.length === 0 ? (
                 <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">

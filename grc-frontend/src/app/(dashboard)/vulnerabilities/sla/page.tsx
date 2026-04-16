@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi } from '@/lib/api';
 import {
@@ -120,7 +121,7 @@ export default function SLAConfigPage() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 px-6 py-3 bg-[var(--color-subtle)]">
       <div>
         <h1 className="text-xl font-bold cw-text-default">SLA Configuration</h1>
         <p className="text-xs cw-text-muted">Configure remediation SLA timeframes by severity</p>

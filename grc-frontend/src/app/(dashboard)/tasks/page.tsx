@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { criticalTasksApi } from '@/lib/api';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
+import MyTasksPage from './my-tasks/page';
+import TaskReportsPage from './reports/page';
 import {
   Plus, X, Search, Filter,
   ArrowUpDown, MoreHorizontal, Target, Loader2,
@@ -109,6 +111,12 @@ export default function TaskBoardPage() {
   const [sortOrder, setSortOrder] = useState('desc');
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const [users, setUsers] = useState<TaskUser[]>([]);
+  const [activeTab, setActiveTab] = useState<'board' | 'my-tasks' | 'reports'>('board');
+  const taskTabs = [
+    { id: 'board' as const, label: 'Task Board' },
+    { id: 'my-tasks' as const, label: 'My Tasks' },
+    { id: 'reports' as const, label: 'Reports' },
+  ];
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showAiResult, setShowAiResult] = useState(false);
   const [aiResult, setAiResult] = useState<Record<string, unknown> | null>(null);
@@ -277,7 +285,31 @@ export default function TaskBoardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
+        <div className="flex flex-wrap gap-2">
+          {taskTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeTab === 'board' && (
+        <>
+          <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-[var(--color-text)]">Task Board</h1>
           <p className="text-sm text-[var(--color-muted)] mt-1">Centralized critical task management — {total} tasks</p>
@@ -765,61 +797,66 @@ export default function TaskBoardPage() {
         </div>
       )}
 
-      {showAiResult && aiResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center cw-overlay p-4">
-          <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-[var(--color-text)] flex items-center gap-2"><Sparkles size={18} className="text-purple-600" /> AI Priority Suggestions</h2>
-              <button onClick={() => setShowAiResult(false)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={20} /></button>
-            </div>
-            {(aiResult.suggestions as Record<string, unknown>[])?.length === 0 ? (
-              <p className="text-sm text-[var(--color-muted)] text-center py-8">All tasks are optimally prioritized.</p>
-            ) : (
-              <>
-                <div className="space-y-3">
-                  {(aiResult.suggestions as Record<string, unknown>[])?.map((s: Record<string, unknown>, i: number) => (
-                    <div key={i} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-xs text-[var(--color-muted)]">Task #{s.task_id as number}</span>
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[s.current_priority as string] || ''}`}>
-                          {s.current_priority as string}
-                        </span>
-                        <span className="text-[var(--color-muted)]">→</span>
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[s.suggested_priority as string] || ''}`}>
-                          {s.suggested_priority as string}
-                        </span>
-                      </div>
-                      <p className="text-xs text-[var(--color-muted)]">{s.justification as string}</p>
+          {showAiResult && aiResult && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center cw-overlay p-4">
+              <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-semibold text-[var(--color-text)] flex items-center gap-2"><Sparkles size={18} className="text-purple-600" /> AI Priority Suggestions</h2>
+                  <button onClick={() => setShowAiResult(false)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={20} /></button>
+                </div>
+                {(aiResult.suggestions as Record<string, unknown>[])?.length === 0 ? (
+                  <p className="text-sm text-[var(--color-muted)] text-center py-8">All tasks are optimally prioritized.</p>
+                ) : (
+                  <>
+                    <div className="space-y-3">
+                      {(aiResult.suggestions as Record<string, unknown>[])?.map((s: Record<string, unknown>, i: number) => (
+                        <div key={i} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-xs text-[var(--color-muted)]">Task #{s.task_id as number}</span>
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[s.current_priority as string] || ''}`}>
+                              {s.current_priority as string}
+                            </span>
+                            <span className="text-[var(--color-muted)]">→</span>
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[s.suggested_priority as string] || ''}`}>
+                              {s.suggested_priority as string}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[var(--color-muted)]">{s.justification as string}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-[var(--color-border)]">
-                  <button onClick={() => setShowAiResult(false)}
-                    className="cw-btn-secondary px-4 py-2 text-sm">
-                    Discard
-                  </button>
-                  <button onClick={async () => {
-                    const suggestions = aiResult.suggestions as Record<string, unknown>[];
-                    for (const s of suggestions) {
-                      if (s.task_id && s.suggested_priority) {
-                        try {
-                          await criticalTasksApi.update(s.task_id as number, { priority: s.suggested_priority as string });
-                        } catch { /* skip failed updates */ }
-                      }
-                    }
-                    queryClient.invalidateQueries({ queryKey: ['critical-tasks'] });
-                    setShowAiResult(false);
-                    setAiResult(null);
-                  }}
-                    className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition-colors">
-                    Apply All Changes
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+                    <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-[var(--color-border)]">
+                      <button onClick={() => setShowAiResult(false)}
+                        className="cw-btn-secondary px-4 py-2 text-sm">
+                        Discard
+                      </button>
+                      <button onClick={async () => {
+                        const suggestions = aiResult.suggestions as Record<string, unknown>[];
+                        for (const s of suggestions) {
+                          if (s.task_id && s.suggested_priority) {
+                            try {
+                              await criticalTasksApi.update(s.task_id as number, { priority: s.suggested_priority as string });
+                            } catch { /* skip failed updates */ }
+                          }
+                        }
+                        queryClient.invalidateQueries({ queryKey: ['critical-tasks'] });
+                        setShowAiResult(false);
+                        setAiResult(null);
+                      }}
+                        className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition-colors">
+                        Apply All Changes
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
+
+      {activeTab === 'my-tasks' && <MyTasksPage />}
+      {activeTab === 'reports' && <TaskReportsPage />}
     </div>
   );
 }

@@ -162,14 +162,14 @@ export default function CompleteAttestationPage() {
   const isOverdue = attestation.status === 'overdue';
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
+    <div className="mx-auto max-w-3xl space-y-5">
       <div className="page-header">
         <div className="flex items-center gap-4 mb-4">
           <Link href="/governance/attestations" className="text-slate-400 hover:text-white">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1">
-            <h1 className="text-2xl font-semibold text-white">Complete Attestation</h1>
+            <h1 className="text-lg font-semibold text-white">Complete Attestation</h1>
             <p className="text-slate-400 mt-1">{attestation.campaign_name}</p>
           </div>
         </div>

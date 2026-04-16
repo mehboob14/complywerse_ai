@@ -12,15 +12,18 @@ import {
   Plus,
   X,
   AlertCircle,
-  Calendar,
-  User,
   ExternalLink,
   Building2,
   CheckSquare,
-  TrendingUp,
-  Shield,
   Clock,
-  Target,
+  Users,
+  MoreVertical,
+  Edit2,
+  Trash2,
+  UserPlus,
+  ChevronRight,
+  Route,
+  Save,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -70,7 +73,72 @@ interface Department {
   id: number;
   name: string;
   code?: string;
+  description?: string;
+  parent_department_id?: number;
+  department_head_user_id?: number;
+  member_count?: number;
+  vulnerability_count?: number;
+  created_at: string;
 }
+
+interface DepartmentMember {
+  id: number;
+  user_id: number;
+  user_name?: string;
+  user_email?: string;
+  role: string;
+  email_notifications_enabled?: boolean;
+  escalation_order?: number;
+  added_at: string;
+}
+
+interface DepartmentVulnerability {
+  id: number;
+  vulnerability_id: number;
+  vuln_id: string;
+  title: string;
+  severity: string;
+  status: string;
+  priority: string;
+}
+
+interface EscalationPath {
+  id: number;
+  name: string;
+  description?: string;
+  escalation_order: number;
+  target_user_id?: number;
+  target_role?: string;
+  time_threshold_hours?: number;
+}
+
+interface SLAConfig {
+  id: number;
+  severity: string;
+  remediation_days: number;
+  notification_days?: number;
+  escalation_days?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
+
+const SLA_SEVERITY_STYLES: Record<string, { bg: string; text: string }> = {
+  critical: { bg: 'bg-red-50', text: 'text-red-600' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-600' },
+  medium: { bg: 'bg-yellow-50', text: 'text-yellow-600' },
+  low: { bg: 'bg-blue-50', text: 'text-blue-600' },
+  info: { bg: 'bg-slate-50', text: 'text-slate-600' },
+};
+
+const DEFAULT_SLA: Record<string, number> = {
+  critical: 7,
+  high: 30,
+  medium: 90,
+  low: 180,
+  info: 365,
+};
 
 interface Vulnerability {
   id: number;
@@ -134,6 +202,9 @@ function getStatusStyle(status: string) {
 
 export default function VulnerabilitiesPage() {
   const { hasPermission } = usePermissions();
+  const [activeTab, setActiveTab] = useState('vulnerabilities' as 'vulnerabilities' | 'departments' | 'sla');
+
+  // Vulnerabilities tab state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
@@ -143,7 +214,27 @@ export default function VulnerabilitiesPage() {
   const bulkFileRef = useRef<HTMLInputElement>(null);
   const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
   const [selectedVulnIds, setSelectedVulnIds] = useState<Set<number>>(new Set());
+
+  // Departments tab state
+  const [deptSearchQuery, setDeptSearchQuery] = useState('');
+  const [showCreateDeptModal, setShowCreateDeptModal] = useState(false);
+  const [showEditDeptModal, setShowEditDeptModal] = useState(false);
+  const [showMemberModal, setShowMemberModal] = useState(false);
+  const [showEscalationModal, setShowEscalationModal] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
+
+  // SLA tab state
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValues, setEditValues] = useState<{ remediation_days: number; notification_days?: number; escalation_days?: number }>({ remediation_days: 0 });
+
   const queryClient = useQueryClient();
+
+  const tabs = [
+    { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
+    { id: 'departments', label: 'Departments', icon: Building2 },
+    { id: 'sla', label: 'SLA Config', icon: Clock },
+  ];
 
   const { data: vulnerabilities, isLoading, error } = useQuery({
     queryKey: ['vulnerabilities', statusFilter, severityFilter],
@@ -172,6 +263,159 @@ export default function VulnerabilitiesPage() {
     },
     enabled: showBulkAssignModal,
   });
+
+  // Departments tab queries
+  const { data: allDepartments, isLoading: deptsLoading } = useQuery({
+    queryKey: ['all-departments-tab'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.departments.getAll();
+      return response.data as Department[];
+    },
+    enabled: activeTab === 'departments',
+  });
+
+  const { data: departmentMembers } = useQuery({
+    queryKey: ['department-members', selectedDepartment?.id],
+    queryFn: async () => {
+      if (!selectedDepartment) return [];
+      const response = await vulnManagementApi.departments.getMembers(selectedDepartment.id);
+      return response.data as DepartmentMember[];
+    },
+    enabled: !!selectedDepartment && showMemberModal,
+  });
+
+  const { data: departmentVulnerabilities } = useQuery({
+    queryKey: ['department-vulnerabilities', selectedDepartment?.id],
+    queryFn: async () => {
+      if (!selectedDepartment) return [];
+      const response = await vulnManagementApi.departments.getDepartmentVulnerabilities(selectedDepartment.id);
+      return response.data as DepartmentVulnerability[];
+    },
+    enabled: !!selectedDepartment,
+  });
+
+  const { data: escalationPaths } = useQuery({
+    queryKey: ['escalation-paths', selectedDepartment?.id],
+    queryFn: async () => {
+      if (!selectedDepartment) return [];
+      const response = await vulnManagementApi.departments.getEscalationPaths(selectedDepartment.id);
+      return response.data as EscalationPath[];
+    },
+    enabled: !!selectedDepartment && showEscalationModal,
+  });
+
+  // SLA tab queries
+  const { data: slaConfigs, isLoading: slaLoading, error: slaError } = useQuery({
+    queryKey: ['vuln-sla'],
+    queryFn: async () => {
+      const response = await vulnManagementApi.sla.get();
+      return response.data as SLAConfig[];
+    },
+    enabled: activeTab === 'sla',
+  });
+
+  // Departments mutations
+  const createDepartmentMutation = useMutation({
+    mutationFn: (data: { name: string; code?: string; description?: string }) =>
+      vulnManagementApi.departments.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['all-departments-tab'] });
+      setShowCreateDeptModal(false);
+    },
+  });
+
+  const updateDepartmentMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { name: string; code?: string; description?: string } }) =>
+      vulnManagementApi.departments.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['all-departments-tab'] });
+      setShowEditDeptModal(false);
+      setSelectedDepartment(null);
+    },
+  });
+
+  const deleteDepartmentMutation = useMutation({
+    mutationFn: (id: number) => vulnManagementApi.departments.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['all-departments-tab'] });
+      setActiveMenuId(null);
+    },
+  });
+
+  const addMemberMutation = useMutation({
+    mutationFn: ({ deptId, data }: { deptId: number; data: { user_id: number; role?: string; email_notifications_enabled?: boolean; escalation_order?: number } }) =>
+      vulnManagementApi.departments.addMember(deptId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['department-members', selectedDepartment?.id] });
+      queryClient.invalidateQueries({ queryKey: ['all-departments-tab'] });
+    },
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: ({ deptId, memberId }: { deptId: number; memberId: number }) =>
+      vulnManagementApi.departments.removeMember(deptId, memberId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['department-members', selectedDepartment?.id] });
+      queryClient.invalidateQueries({ queryKey: ['all-departments-tab'] });
+    },
+  });
+
+  const createEscalationPathMutation = useMutation({
+    mutationFn: ({ deptId, data }: { deptId: number; data: Record<string, unknown> }) =>
+      vulnManagementApi.departments.createEscalationPath(deptId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['escalation-paths', selectedDepartment?.id] });
+    },
+  });
+
+  // SLA mutations
+  const updateSlaMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
+      vulnManagementApi.sla.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vuln-sla'] });
+      setEditingId(null);
+    },
+  });
+
+  const createSlaMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => vulnManagementApi.sla.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vuln-sla'] });
+    },
+  });
+
+  const getSLAForSeverity = (severity: string) => slaConfigs?.find((s) => s.severity === severity);
+
+  const handleSlaEdit = (config: SLAConfig) => {
+    setEditingId(config.id);
+    setEditValues({ remediation_days: config.remediation_days, notification_days: config.notification_days, escalation_days: config.escalation_days });
+  };
+  const handleSlaSave = () => { if (editingId) updateSlaMutation.mutate({ id: editingId, data: editValues }); };
+  const handleSlaCancel = () => { setEditingId(null); setEditValues({ remediation_days: 0 }); };
+  const handleCreateDefaultSla = (severity: string) => {
+    createSlaMutation.mutate({ severity, remediation_days: DEFAULT_SLA[severity] });
+  };
+
+  const filteredDepartments = allDepartments?.filter(dept =>
+    dept.name.toLowerCase().includes(deptSearchQuery.toLowerCase()) ||
+    dept.code?.toLowerCase().includes(deptSearchQuery.toLowerCase()) ||
+    dept.description?.toLowerCase().includes(deptSearchQuery.toLowerCase())
+  );
+
+  const deptSeverityStyles: Record<string, string> = {
+    critical: 'bg-red-50 text-red-700',
+    high: 'bg-orange-50 text-orange-700',
+    medium: 'bg-yellow-50 text-yellow-700',
+    low: 'bg-blue-50 text-blue-700',
+    info: 'bg-slate-50 text-slate-700',
+  };
+
+  const deptPriorityStyles: Record<string, string> = {
+    high: 'bg-red-50 text-red-700',
+    medium: 'bg-yellow-50 text-yellow-700',
+    low: 'bg-green-50 text-green-700',
+  };
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => vulnManagementApi.vulnerabilities.create(data),
@@ -313,8 +557,28 @@ export default function VulnerabilitiesPage() {
 
   return (
     <div className="-m-4 lg:-m-5">
-      {/* KPI Charts */}
+      {/* Header + KPI Charts */}
       <div className="border-b border-[var(--color-border)] px-6 py-3">
+        {/* Tabs */}
+        <div className="mb-3 flex items-center gap-0 border-b border-gray-200 -mx-6 px-6">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id as 'vulnerabilities' | 'departments' | 'sla')}
+              className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === id
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'vulnerabilities' && (
+        <>
         {/* Visual overview strip — three chart panels */}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
 
@@ -485,9 +749,13 @@ export default function VulnerabilitiesPage() {
           </div>
 
         </div>
+        </>
+        )}
       </div>
 
-      {/* Content Section */}
+      {/* Tab Content */}
+      {activeTab === 'vulnerabilities' && (
+      <>
       <div className="px-6 py-3 space-y-2  bg-[var(--color-subtle)]">
         {/* Toolbar: search + filters + add button on one row */}
         <div className="flex items-center gap-2">
@@ -674,12 +942,9 @@ export default function VulnerabilitiesPage() {
       </div>
 
       {/* Add Vulnerability Slide-over */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setIsModalOpen(false)} />
-      )}
-      <div className={`fixed inset-y-0 right-0 z-50 flex w-[540px] flex-col bg-white shadow-2xl transform transition-transform duration-300 ${isModalOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed inset-y-0 right-0 z-50 flex w-[680px] flex-col bg-white shadow-2xl border-l border-slate-200 transform transition-transform duration-300 ${isModalOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 flex-shrink-0">
-          <h2 className="text-lg font-semibold text-slate-900">Add New Vulnerability</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Add New Vulnerability</h2>
           <button
             onClick={() => setIsModalOpen(false)}
             className="text-slate-500 hover:text-slate-900 transition-colors"
@@ -695,115 +960,117 @@ export default function VulnerabilitiesPage() {
           }}
           className="flex flex-col flex-1 min-h-0"
         >
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-            {/* Title */}
-            <div>
-              <label className="block text-sm font-semibold cw-text mb-2">Title <span className="text-red-600">*</span></label>
-              <input 
-                  type="text" 
-                  name="title" 
-                  required 
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {/* Row 1: Title + Description */}
+            <div className="grid grid-cols-2 gap-x-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Title <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  name="title"
+                  required
                   placeholder="e.g., SQL Injection in Admin Panel"
-                  className="w-full cw-field px-4 py-2" 
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
               </div>
-
-              {/* Description */}
               <div>
-                <label className="block text-sm font-semibold cw-text mb-2">Description</label>
-                <textarea 
-                  name="description" 
-                  rows={3} 
-                  placeholder="Detailed description of the vulnerability..."
-                  className="w-full cw-field px-4 py-2" 
-                />
-              </div>
-
-              {/* Severity & CVSS Score */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold cw-text mb-2">Severity <span className="text-red-600">*</span></label>
-                  <select 
-                    name="severity" 
-                    required 
-                    className="w-full cw-field px-4 py-2"
-                  >
-                    <option value="">Select severity</option>
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                    <option value="info">Info</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold cw-text mb-2">CVSS Score</label>
-                  <input 
-                    type="number" 
-                    name="cvss_score" 
-                    step="0.1" 
-                    min="0" 
-                    max="10" 
-                    placeholder="0-10"
-                    className="w-full cw-field px-4 py-2" 
-                  />
-                </div>
-              </div>
-
-              {/* CVE & CWE IDs */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold cw-text mb-2">CVE ID</label>
-                  <input 
-                    type="text" 
-                    name="cve_id" 
-                    placeholder="CVE-2024-XXXXX"
-                    className="w-full cw-field px-4 py-2" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold cw-text mb-2">CWE ID</label>
-                  <input 
-                    type="text" 
-                    name="cwe_id" 
-                    placeholder="CWE-XXXX"
-                    className="w-full cw-field px-4 py-2" 
-                  />
-                </div>
-              </div>
-
-              {/* Affected Component & Host */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold cw-text mb-2">Affected Component</label>
-                  <input 
-                    type="text" 
-                    name="affected_component" 
-                    placeholder="e.g., API Gateway"
-                    className="w-full cw-field px-4 py-2" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold cw-text mb-2">Affected Host</label>
-                  <input 
-                    type="text" 
-                    name="affected_host" 
-                    placeholder="e.g., 192.168.1.10"
-                    className="w-full cw-field px-4 py-2" 
-                  />
-                </div>
-              </div>
-
-              {/* Due Date */}
-              <div>
-                <label className="block text-sm font-semibold cw-text mb-2">Due Date</label>
-                <input 
-                  type="date" 
-                  name="due_date"
-                  className="w-full cw-field px-4 py-2" 
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Description</label>
+                <input
+                  type="text"
+                  name="description"
+                  placeholder="Brief description of the vulnerability..."
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
               </div>
             </div>
+
+            {/* Row 2: Severity + CVSS Score */}
+            <div className="grid grid-cols-2 gap-x-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Severity <span className="text-red-500">*</span></label>
+                <select
+                  name="severity"
+                  required
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">Select severity</option>
+                  <option value="critical">Critical</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                  <option value="info">Info</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">CVSS Score</label>
+                <input
+                  type="number"
+                  name="cvss_score"
+                  step="0.1"
+                  min="0"
+                  max="10"
+                  placeholder="0-10"
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Row 3: CVE + CWE IDs */}
+            <div className="grid grid-cols-2 gap-x-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">CVE ID</label>
+                <input
+                  type="text"
+                  name="cve_id"
+                  placeholder="CVE-2024-XXXXX"
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">CWE ID</label>
+                <input
+                  type="text"
+                  name="cwe_id"
+                  placeholder="CWE-XXXX"
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Row 4: Affected Component + Host */}
+            <div className="grid grid-cols-2 gap-x-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Affected Component</label>
+                <input
+                  type="text"
+                  name="affected_component"
+                  placeholder="e.g., API Gateway"
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Affected Host</label>
+                <input
+                  type="text"
+                  name="affected_host"
+                  placeholder="e.g., 192.168.1.10"
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Row 5: Due Date (half row) */}
+            <div className="grid grid-cols-2 gap-x-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Due Date</label>
+                <input
+                  type="date"
+                  name="due_date"
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
 
             <div className="flex-shrink-0 flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button 
@@ -922,6 +1189,312 @@ export default function VulnerabilitiesPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+      </>
+      )}
+
+      {/* Departments Tab */}
+      {activeTab === 'departments' && (
+        <div className="space-y-3 px-6 py-3 bg-[var(--color-subtle)]">
+          <div className="flex items-center justify-between">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 cw-text-muted" />
+              <input
+                type="text"
+                value={deptSearchQuery}
+                onChange={(e) => setDeptSearchQuery(e.target.value)}
+                placeholder="Search departments..."
+                className="cw-field w-full py-2 pl-10 pr-4 text-sm"
+              />
+            </div>
+            <button onClick={() => setShowCreateDeptModal(true)} className="cw-btn-primary flex items-center gap-2 ml-4">
+              <Plus size={16} />
+              Create Department
+            </button>
+          </div>
+
+          {deptsLoading ? (
+            <div className="flex h-64 items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {(!filteredDepartments || filteredDepartments.length === 0) ? (
+                <div className="col-span-full cw-card p-8 text-center">
+                  <Building2 className="h-10 w-10 mx-auto cw-text-muted mb-3" />
+                  <h3 className="text-base font-medium cw-text mb-1">No departments found</h3>
+                  <p className="text-sm cw-text-muted mb-3">Create your first department to start assigning vulnerabilities</p>
+                  <button onClick={() => setShowCreateDeptModal(true)} className="cw-btn-primary inline-flex items-center gap-2">
+                    <Plus size={16} />
+                    Create Department
+                  </button>
+                </div>
+              ) : (
+                filteredDepartments.map((dept) => (
+                  <div key={dept.id} className="cw-card p-4 hover:shadow-md transition-colors">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50">
+                          <Building2 className="h-4 w-4 text-primary-600" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold cw-text">{dept.name}</h3>
+                            {dept.code && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--color-subtle)] cw-text-muted font-mono">{dept.code}</span>
+                            )}
+                          </div>
+                          {dept.description && <p className="text-sm cw-text-muted line-clamp-1">{dept.description}</p>}
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <button onClick={() => setActiveMenuId(activeMenuId === dept.id ? null : dept.id)} className="p-1 cw-text-muted hover:cw-text rounded">
+                          <MoreVertical size={16} />
+                        </button>
+                        {activeMenuId === dept.id && (
+                          <div className="absolute right-0 mt-1 w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl z-10">
+                            <button onClick={() => { setSelectedDepartment(dept); setShowEditDeptModal(true); setActiveMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-sm cw-text-muted hover:bg-[var(--color-hover)]">
+                              <Edit2 size={14} /> Edit
+                            </button>
+                            <button onClick={() => { setSelectedDepartment(dept); setShowMemberModal(true); setActiveMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-sm cw-text-muted hover:bg-[var(--color-hover)]">
+                              <UserPlus size={14} /> Members
+                            </button>
+                            <button onClick={() => { setSelectedDepartment(dept); setShowEscalationModal(true); setActiveMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-sm cw-text-muted hover:bg-[var(--color-hover)]">
+                              <Route size={14} /> Escalation Paths
+                            </button>
+                            <button onClick={() => { if (confirm('Delete this department?')) { deleteDepartmentMutation.mutate(dept.id); } }} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-[var(--color-hover)]">
+                              <Trash2 size={14} /> Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-sm mb-4">
+                      <div className="flex items-center gap-1.5 cw-text-muted"><Users size={14} /><span>{dept.member_count || 0} members</span></div>
+                      <div className="flex items-center gap-1.5 cw-text-muted"><Bug size={14} /><span>{dept.vulnerability_count || 0} vulnerabilities</span></div>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedDepartment(selectedDepartment?.id === dept.id ? null : dept)}
+                      className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+                    >
+                      {selectedDepartment?.id === dept.id ? 'Hide Assigned Vulnerabilities' : 'View Assigned Vulnerabilities'}
+                      <ChevronRight size={14} className={selectedDepartment?.id === dept.id ? 'rotate-90' : ''} />
+                    </button>
+
+                    {selectedDepartment?.id === dept.id && departmentVulnerabilities && (
+                      <div className="mt-4 space-y-2 border-t border-[var(--color-border)] pt-4">
+                        {departmentVulnerabilities.length === 0 ? (
+                          <p className="text-sm cw-text-muted">No vulnerabilities assigned</p>
+                        ) : (
+                          departmentVulnerabilities.slice(0, 5).map((vuln) => (
+                            <Link key={vuln.id} href={`/vulnerabilities/${vuln.vulnerability_id}`} className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-subtle)] hover:bg-[var(--color-hover)] transition-colors">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${deptSeverityStyles[vuln.severity] || deptSeverityStyles.info}`}>{vuln.severity}</span>
+                                <span className="text-sm cw-text truncate max-w-[150px]">{vuln.title}</span>
+                              </div>
+                              <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${deptPriorityStyles[vuln.priority] || 'bg-slate-50 text-slate-700'}`}>{vuln.priority}</span>
+                            </Link>
+                          ))
+                        )}
+                        {departmentVulnerabilities.length > 5 && (
+                          <p className="text-xs cw-text-muted text-center">+{departmentVulnerabilities.length - 5} more</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Create Department Modal */}
+          {showCreateDeptModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold cw-text">Create Department</h2>
+                  <button onClick={() => setShowCreateDeptModal(false)} className="cw-text-muted hover:cw-text"><X size={20} /></button>
+                </div>
+                <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); createDepartmentMutation.mutate({ name: fd.get('name') as string, code: fd.get('code') as string || undefined, description: fd.get('description') as string || undefined }); }} className="space-y-4">
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Name *</label><input type="text" name="name" required className="cw-field w-full" placeholder="e.g., Security Operations" /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Code</label><input type="text" name="code" className="cw-field w-full" placeholder="e.g., SEC-OPS" /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Description</label><textarea name="description" rows={3} className="cw-field w-full" placeholder="Department responsibilities..." /></div>
+                  <div className="flex justify-end gap-3">
+                    <button type="button" onClick={() => setShowCreateDeptModal(false)} className="cw-btn-secondary">Cancel</button>
+                    <button type="submit" disabled={createDepartmentMutation.isPending} className="cw-btn-primary">{createDepartmentMutation.isPending ? 'Creating...' : 'Create Department'}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Department Modal */}
+          {showEditDeptModal && selectedDepartment && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold cw-text">Edit Department</h2>
+                  <button onClick={() => { setShowEditDeptModal(false); setSelectedDepartment(null); }} className="cw-text-muted hover:cw-text"><X size={20} /></button>
+                </div>
+                <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); updateDepartmentMutation.mutate({ id: selectedDepartment.id, data: { name: fd.get('name') as string, code: fd.get('code') as string || undefined, description: fd.get('description') as string || undefined } }); }} className="space-y-4">
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Name *</label><input type="text" name="name" required defaultValue={selectedDepartment.name} className="cw-field w-full" /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Code</label><input type="text" name="code" defaultValue={selectedDepartment.code || ''} className="cw-field w-full" /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Description</label><textarea name="description" rows={3} defaultValue={selectedDepartment.description || ''} className="cw-field w-full" /></div>
+                  <div className="flex justify-end gap-3">
+                    <button type="button" onClick={() => { setShowEditDeptModal(false); setSelectedDepartment(null); }} className="cw-btn-secondary">Cancel</button>
+                    <button type="submit" disabled={updateDepartmentMutation.isPending} className="cw-btn-primary">{updateDepartmentMutation.isPending ? 'Saving...' : 'Save Changes'}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Members Modal */}
+          {showMemberModal && selectedDepartment && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold cw-text">Members — {selectedDepartment.name}</h2>
+                  <button onClick={() => { setShowMemberModal(false); setSelectedDepartment(null); }} className="cw-text-muted hover:cw-text"><X size={20} /></button>
+                </div>
+                <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const userId = parseInt(fd.get('user_id') as string); if (userId) { addMemberMutation.mutate({ deptId: selectedDepartment.id, data: { user_id: userId, role: fd.get('role') as string || 'member', email_notifications_enabled: fd.get('email_notifications') === 'on', escalation_order: parseInt(fd.get('escalation_order') as string) || undefined } }); (e.target as HTMLFormElement).reset(); } }} className="flex gap-2 mb-4 flex-wrap">
+                  <input type="number" name="user_id" placeholder="User ID" className="cw-field flex-1 min-w-[100px]" required />
+                  <select name="role" className="cw-field w-28"><option value="member">Member</option><option value="lead">Lead</option><option value="head">Head</option></select>
+                  <input type="number" name="escalation_order" placeholder="Order" className="cw-field w-20" />
+                  <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" name="email_notifications" defaultChecked className="rounded" />Email</label>
+                  <button type="submit" disabled={addMemberMutation.isPending} className="cw-btn-primary"><UserPlus size={16} /></button>
+                </form>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {(!departmentMembers || departmentMembers.length === 0) ? (
+                    <p className="text-sm cw-text-muted text-center py-4">No members</p>
+                  ) : departmentMembers.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-subtle)]">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-700 text-sm font-medium">{(member.user_name || 'U')[0].toUpperCase()}</div>
+                        <div><p className="text-sm font-medium cw-text">{member.user_name || `User #${member.user_id}`}</p><p className="text-xs cw-text-muted">{member.user_email || ''}</p></div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${member.role === 'head' ? 'bg-primary-50 text-primary-700' : member.role === 'lead' ? 'bg-blue-50 text-blue-700' : 'bg-slate-50 text-slate-700'}`}>{member.role}</span>
+                        <button onClick={() => removeMemberMutation.mutate({ deptId: selectedDepartment.id, memberId: member.id })} className="cw-text-muted hover:text-red-600"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end mt-4"><button onClick={() => { setShowMemberModal(false); setSelectedDepartment(null); }} className="cw-btn-secondary">Close</button></div>
+              </div>
+            </div>
+          )}
+
+          {/* Escalation Paths Modal */}
+          {showEscalationModal && selectedDepartment && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold cw-text">Escalation Paths — {selectedDepartment.name}</h2>
+                  <button onClick={() => { setShowEscalationModal(false); setSelectedDepartment(null); }} className="cw-text-muted hover:cw-text"><X size={20} /></button>
+                </div>
+                <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); createEscalationPathMutation.mutate({ deptId: selectedDepartment.id, data: { name: fd.get('name') as string, description: fd.get('description') as string || undefined, escalation_order: parseInt(fd.get('escalation_order') as string) || 1, target_role: fd.get('target_role') as string || undefined, time_threshold_hours: parseInt(fd.get('time_threshold_hours') as string) || undefined } }); (e.target as HTMLFormElement).reset(); }} className="space-y-3 mb-4 p-3 rounded-lg bg-[var(--color-subtle)]">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="text" name="name" placeholder="Path name *" className="cw-field" required />
+                    <select name="target_role" className="cw-field"><option value="">Target role</option><option value="head">Head</option><option value="lead">Lead</option><option value="member">Member</option></select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="number" name="escalation_order" placeholder="Order (1, 2, 3...)" className="cw-field" />
+                    <input type="number" name="time_threshold_hours" placeholder="Hours threshold" className="cw-field" />
+                  </div>
+                  <input type="text" name="description" placeholder="Description (optional)" className="cw-field w-full" />
+                  <button type="submit" disabled={createEscalationPathMutation.isPending} className="cw-btn-primary w-full">{createEscalationPathMutation.isPending ? 'Adding...' : 'Add Escalation Path'}</button>
+                </form>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {(!escalationPaths || escalationPaths.length === 0) ? (
+                    <p className="text-sm cw-text-muted text-center py-4">No escalation paths configured</p>
+                  ) : escalationPaths.map((path) => (
+                    <div key={path.id} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-subtle)]">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-700 text-sm font-medium">{path.escalation_order}</div>
+                      <div><p className="text-sm font-medium cw-text">{path.name}</p><p className="text-xs cw-text-muted">{path.target_role && `To: ${path.target_role}`}{path.time_threshold_hours && ` | After ${path.time_threshold_hours}h`}</p></div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end mt-4"><button onClick={() => { setShowEscalationModal(false); setSelectedDepartment(null); }} className="cw-btn-secondary">Close</button></div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SLA Tab */}
+      {activeTab === 'sla' && (
+        <div className="space-y-3 px-6 py-3 bg-[var(--color-subtle)]">
+          {slaLoading ? (
+            <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary-600" /></div>
+          ) : slaError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center"><AlertCircle className="mx-auto h-8 w-8 text-red-600" /><p className="mt-2 text-red-600">Failed to load SLA configuration</p></div>
+          ) : (
+            <>
+              <div className="cw-card overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-[var(--color-subtle)]">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Severity</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Remediation Days</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Notification Days</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Escalation Days</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider cw-text-muted">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-border)]">
+                    {SEVERITY_ORDER.map((severity) => {
+                      const config = getSLAForSeverity(severity);
+                      const style = SLA_SEVERITY_STYLES[severity];
+                      const isEditing = editingId === config?.id;
+                      return (
+                        <tr key={severity} className="hover:bg-[var(--color-hover)] transition-colors">
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${style.bg} ${style.text} capitalize`}>{severity}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            {config ? (isEditing ? <input type="number" value={editValues.remediation_days} onChange={(e) => setEditValues({ ...editValues, remediation_days: parseInt(e.target.value) || 0 })} className="cw-field w-24" min="1" /> : <span className="cw-text font-medium">{config.remediation_days} days</span>) : <span className="cw-text-muted">Not configured</span>}
+                          </td>
+                          <td className="px-3 py-2">
+                            {config ? (isEditing ? <input type="number" value={editValues.notification_days || ''} onChange={(e) => setEditValues({ ...editValues, notification_days: parseInt(e.target.value) || undefined })} className="cw-field w-24" min="1" placeholder="Days before" /> : <span className="cw-text-muted">{config.notification_days ? `${config.notification_days} days before` : '-'}</span>) : <span className="cw-text-muted">-</span>}
+                          </td>
+                          <td className="px-3 py-2">
+                            {config ? (isEditing ? <input type="number" value={editValues.escalation_days || ''} onChange={(e) => setEditValues({ ...editValues, escalation_days: parseInt(e.target.value) || undefined })} className="cw-field w-24" min="1" placeholder="Days after" /> : <span className="cw-text-muted">{config.escalation_days ? `${config.escalation_days} days after` : '-'}</span>) : <span className="cw-text-muted">-</span>}
+                          </td>
+                          <td className="px-3 py-2">
+                            {config ? (
+                              isEditing ? (
+                                <div className="flex items-center gap-2">
+                                  <button onClick={handleSlaSave} disabled={updateSlaMutation.isPending} className="p-1.5 rounded-lg text-green-600 hover:bg-[var(--color-hover)] transition-colors" title="Save"><Save size={16} /></button>
+                                  <button onClick={handleSlaCancel} className="p-1.5 rounded-lg cw-text-muted hover:bg-[var(--color-hover)] transition-colors" title="Cancel"><X size={16} /></button>
+                                </div>
+                              ) : (
+                                <button onClick={() => handleSlaEdit(config)} className="p-1.5 rounded-lg cw-text-muted hover:text-[var(--color-primary)] hover:bg-[var(--color-hover)] transition-colors" title="Edit"><Edit2 size={16} /></button>
+                              )
+                            ) : (
+                              <button onClick={() => handleCreateDefaultSla(severity)} disabled={createSlaMutation.isPending} className="text-sm text-primary-600 hover:text-primary-300">Set Default</button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="cw-card p-6">
+                <h2 className="text-lg font-semibold cw-text mb-4 flex items-center gap-2"><Clock className="h-5 w-5 text-primary-600" />SLA Guidelines</h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="p-4 rounded-lg bg-[var(--color-subtle)]"><h3 className="font-medium cw-text mb-2">Remediation Days</h3><p className="text-sm cw-text-muted">Maximum time allowed to remediate vulnerabilities of this severity before they are considered overdue.</p></div>
+                  <div className="p-4 rounded-lg bg-[var(--color-subtle)]"><h3 className="font-medium cw-text mb-2">Notification Days</h3><p className="text-sm cw-text-muted">Number of days before the due date to send reminder notifications to assignees.</p></div>
+                  <div className="p-4 rounded-lg bg-[var(--color-subtle)]"><h3 className="font-medium cw-text mb-2">Escalation Days</h3><p className="text-sm cw-text-muted">Number of days after the due date to escalate overdue vulnerabilities to management.</p></div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

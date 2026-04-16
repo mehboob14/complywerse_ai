@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { vendorRiskApi } from '@/lib/api';
 import {
@@ -16,19 +15,6 @@ import {
   Calendar,
 } from 'lucide-react';
 import Link from 'next/link';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts';
 
 interface VendorDashboard {
   total_vendors: number;
@@ -97,6 +83,21 @@ const getRatingBadge = (rating: string) => {
   return styles[rating?.toLowerCase()] || 'bg-gray-100 text-gray-700';
 };
 
+function DistributionRow({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium text-slate-700">{label}</span>
+        <span className="text-slate-500"><span className="font-semibold text-slate-900">{value}</span> • {percent}%</span>
+      </div>
+      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  );
+}
+
 export default function VendorRiskDashboardPage() {
   const { data: dashboard, isLoading, error } = useQuery({
     queryKey: ['vendor-dashboard'],
@@ -140,8 +141,12 @@ export default function VendorRiskDashboardPage() {
   // Compute high/critical count from by_tier
   const highCriticalCount = (dashboard?.by_tier?.critical ?? 0) + (dashboard?.by_tier?.high ?? 0);
 
+  const totalTierCount = tierDistribution.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  const totalStatusCount = statusDistribution.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  const leadTier = [...tierDistribution].sort((a, b) => Number(b.count) - Number(a.count))[0];
+
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="risk-workspace cw-dashboard p-4 space-y-4 max-w-none">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -246,54 +251,51 @@ export default function VendorRiskDashboardPage() {
         </div>
       )}
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Tier Distribution Pie */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Vendor Tier Distribution</h3>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-900">Tier Exposure Ladder</h3>
+            <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] text-gray-600">
+              {leadTier ? `${leadTier.tier} leads` : 'No data'}
+            </span>
+          </div>
           {tierDistribution.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-sm text-gray-400">No vendor data</div>
+            <div className="py-8 text-center text-sm text-gray-400">No vendor data</div>
           ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={tierDistribution}
-                    dataKey="count"
-                    nameKey="tier"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    label={({ name, value }: any) => `${name}: ${value}`}
-                  >
-                    {tierDistribution.map((entry, idx) => (
-                      <Cell key={idx} fill={TIER_COLORS[entry.tierKey?.toLowerCase()] || PIE_COLORS[idx % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="space-y-3">
+              {tierDistribution.map((item) => (
+                <DistributionRow
+                  key={item.tier}
+                  label={item.tier}
+                  value={Number(item.count || 0)}
+                  total={totalTierCount}
+                  color={TIER_COLORS[item.tierKey?.toLowerCase()] || '#64748b'}
+                />
+              ))}
             </div>
           )}
         </div>
 
-        {/* Status Distribution Bar */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Vendor Status Distribution</h3>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-900">Status Pipeline</h3>
+            <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] text-gray-600">
+              {totalStatusCount} vendors
+            </span>
+          </div>
           {statusDistribution.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-sm text-gray-400">No vendor data</div>
+            <div className="py-8 text-center text-sm text-gray-400">No vendor data</div>
           ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={statusDistribution}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="status" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]} name="Vendors" fill="#3b82f6" />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="space-y-3">
+              {statusDistribution.map((item, idx) => (
+                <DistributionRow
+                  key={item.status}
+                  label={item.status}
+                  value={Number(item.count || 0)}
+                  total={totalStatusCount}
+                  color={PIE_COLORS[idx % PIE_COLORS.length]}
+                />
+              ))}
             </div>
           )}
         </div>

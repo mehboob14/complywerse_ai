@@ -1,9 +1,11 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { assetsApi, controlsApi, evidenceApi, vulnManagementApi } from '@/lib/api';
+import { assetsApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
 import type { ITAsset } from '@/types';
 import { 
   ArrowLeft, Loader2, AlertCircle, Shield, DollarSign, 
@@ -37,6 +39,15 @@ interface LinkedControl {
   control_id: number;
   code: string;
   name: string;
+}
+
+interface LinkedInternalControl {
+  id: number;
+  internal_control_id: number;
+  code: string;
+  name: string;
+  category?: string;
+  coverage_status?: string;
 }
 
 interface LinkedFrameworkControl {
@@ -96,6 +107,7 @@ interface AssetDetailData {
   status: string;
   created_at: string;
   linked_controls: LinkedControl[];
+  linked_internal_controls: LinkedInternalControl[];
   linked_framework_controls: LinkedFrameworkControl[];
   linked_risks: Array<{ risk_id: number; title?: string; status?: string }>;
   linked_evidence: LinkedEvidence[];
@@ -151,10 +163,10 @@ export default function AssetDetailPage() {
   });
 
   const { data: allControls, isLoading: controlsLoading } = useQuery({
-    queryKey: ['all-normalized-controls'],
+    queryKey: ['asset-internal-controls'],
     queryFn: async () => {
-      const response = await controlsApi.getAll();
-      return response.data;
+      const response = await ermApi.internalControls.getAll();
+      return response.data as Array<{ id: number; control_id?: string; name: string; category?: string }>;
     },
     enabled: showLinkControlModal,
   });
@@ -192,10 +204,19 @@ export default function AssetDetailPage() {
     },
   });
 
-  const unlinkControlMutation = useMutation({
+  const unlinkInternalControlMutation = useMutation({
+    mutationFn: (linkId: number) => assetsApi.unlinkInternalControl(assetId, linkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
+    },
+  });
+
+  const unlinkFrameworkControlMutation = useMutation({
     mutationFn: (linkId: number) => assetsApi.unlinkFrameworkControl(assetId, linkId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
     },
   });
 
@@ -207,10 +228,11 @@ export default function AssetDetailPage() {
   });
 
   const linkControlMutation = useMutation({
-    mutationFn: (data: { normalized_control_id: number; coverage_status?: string }) => 
-      assetsApi.linkControl(assetId, data),
+    mutationFn: (data: { internal_control_id: number; coverage_status?: string }) => 
+      assetsApi.linkInternalControl(assetId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
       setShowLinkControlModal(false);
     },
   });
@@ -304,34 +326,34 @@ export default function AssetDetailPage() {
     const value = rating || 0;
     return (
       <div className="flex items-center gap-3">
-        <span className="w-32 text-sm text-slate-400">{label}</span>
+        <span className="w-32 text-xs text-slate-600">{label}</span>
         <div className="flex gap-1">
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className={`h-4 w-6 rounded ${i <= value ? color : 'bg-slate-700'}`}
+              className={`h-4 w-6 rounded ${i <= value ? color : 'bg-slate-200'}`}
             />
           ))}
         </div>
-        <span className="text-sm text-white">{value}/5</span>
+        <span className="text-xs text-slate-700">{value}/5</span>
       </div>
     );
   };
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+      <div className="flex h-64 items-center justify-center rounded-lg border border-slate-200 bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
   if (error || !asset) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load asset details</p>
-        <Link href="/assets" className="mt-4 text-primary-400 hover:underline">
+        <Link href="/assets" className="mt-4 text-blue-600 hover:underline">
           Back to Assets
         </Link>
       </div>
@@ -363,68 +385,70 @@ export default function AssetDetailPage() {
   ];
 
   return (
-    <div className="assets-light space-y-6">
-      <div className="flex items-center gap-4">
-        <Link
-          href="/assets"
-          className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-900/50 text-primary-400">
-              {getAssetIcon(asset.asset_type)}
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">{displayName}</h1>
-              <p className="text-slate-400">{asset.description || 'No description'}</p>
+    <div className="assets-light min-h-full space-y-4 bg-slate-50 p-4 md:p-6">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/assets"
+              className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                {getAssetIcon(asset.asset_type)}
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-slate-900">{displayName}</h1>
+                <p className="text-xs text-slate-600">{asset.description || 'No description'}</p>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="rounded-full bg-primary-900/50 px-3 py-1 text-sm text-primary-400">
-            {ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}
-          </span>
-          {getStatusBadge(asset.status)}
-          {getCriticalityBadge(asset.criticality)}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowEditModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-white hover:bg-slate-600"
-            title="Edit Asset"
-          >
-            <Edit className="h-4 w-4" />
-            Edit
-          </button>
-          <button
-            onClick={() => assessRiskMutation.mutate()}
-            disabled={assessRiskMutation.isPending}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
-            title="Assess Risk"
-          >
-            {assessRiskMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Assess Risk
-          </button>
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center gap-2 rounded-lg bg-red-900/50 px-4 py-2 text-red-400 hover:bg-red-900/80"
-            title="Delete Asset"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </button>
+          <div className="flex flex-1 flex-wrap items-center gap-2 xl:justify-end">
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700">
+              {ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}
+            </span>
+            {getStatusBadge(asset.status)}
+            {getCriticalityBadge(asset.criticality)}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+              title="Edit Asset"
+            >
+              <Edit className="h-4 w-4" />
+              Edit
+            </button>
+            <button
+              onClick={() => assessRiskMutation.mutate()}
+              disabled={assessRiskMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
+              title="Assess Risk"
+            >
+              {assessRiskMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Assess Risk
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-600 hover:bg-red-100"
+              title="Delete Asset"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-400">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-600">
             <Lock className="h-4 w-4" />
             <span className="text-sm font-medium">CIA Ratings</span>
           </div>
@@ -435,48 +459,48 @@ export default function AssetDetailPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-400">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-600">
             <DollarSign className="h-4 w-4" />
             <span className="text-sm font-medium">Valuation</span>
           </div>
-          <div className="text-3xl font-bold text-green-400">
+          <div className="text-3xl font-bold text-green-600">
             {formatCurrency(asset.valuation)}
           </div>
           <p className="mt-2 text-sm text-slate-500">Estimated asset value</p>
         </div>
 
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-400">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-600">
             <Target className="h-4 w-4" />
             <span className="text-sm font-medium">Control Coverage</span>
           </div>
-          <div className="text-3xl font-bold text-primary-400">
+          <div className="text-3xl font-bold text-blue-600">
             {coverage?.coverage_percentage ?? asset.coverage_percentage ?? 0}%
           </div>
           <div className="mt-2">
-            <div className="h-2 w-full rounded-full bg-slate-700">
+            <div className="h-2 w-full rounded-full bg-slate-200">
               <div 
-                className="h-2 rounded-full bg-primary-500 transition-all"
+                className="h-2 rounded-full bg-blue-500 transition-all"
                 style={{ width: `${coverage?.coverage_percentage ?? asset.coverage_percentage ?? 0}%` }}
               />
             </div>
           </div>
           <p className="mt-2 text-sm text-slate-500">
-            {(asset.linked_controls?.length || 0) + (asset.linked_framework_controls?.length || 0)} controls linked
+            {(asset.linked_controls?.length || 0) + (asset.linked_internal_controls?.length || 0) + (asset.linked_framework_controls?.length || 0)} controls linked
           </p>
         </div>
 
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-400">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-600">
             <TrendingUp className="h-4 w-4" />
             <span className="text-sm font-medium">Risk Score</span>
           </div>
           {latestAssessment ? (
             <>
               <div className={`text-3xl font-bold ${
-                latestAssessment.risk_score >= 7 ? 'text-red-400' :
-                latestAssessment.risk_score >= 4 ? 'text-yellow-400' : 'text-green-400'
+                latestAssessment.risk_score >= 7 ? 'text-red-600' :
+                latestAssessment.risk_score >= 4 ? 'text-yellow-600' : 'text-green-600'
               }`}>
                 {latestAssessment.risk_score.toFixed(1)}
               </div>
@@ -493,18 +517,18 @@ export default function AssetDetailPage() {
         </div>
       </div>
 
-      <div className="border-b border-slate-700">
-        <nav className="flex gap-1">
+      <div className="border-b border-slate-200 px-1">
+        <nav className="flex gap-1 overflow-x-auto">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'border-primary-500 text-primary-400'
-                    : 'border-transparent text-slate-400 hover:text-white'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-900'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -515,7 +539,7 @@ export default function AssetDetailPage() {
         </nav>
       </div>
 
-      <div className="rounded-lg border border-slate-700 bg-slate-800 p-6">
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
         {activeTab === 'details' && (
           <DetailsTab asset={asset} />
         )}
@@ -523,8 +547,10 @@ export default function AssetDetailPage() {
           <ControlsTab
             asset={asset}
             onLinkControl={() => setShowLinkControlModal(true)}
-            onUnlinkControl={(linkId) => unlinkControlMutation.mutate(linkId)}
-            isUnlinking={unlinkControlMutation.isPending}
+            onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
+            onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
+            isUnlinkingInternal={unlinkInternalControlMutation.isPending}
+            isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
           />
         )}
         {activeTab === 'evidence' && (
@@ -559,13 +585,18 @@ export default function AssetDetailPage() {
         <LinkControlModal
           onClose={() => setShowLinkControlModal(false)}
           onLink={(controlId, coverageStatus) => linkControlMutation.mutate({ 
-            normalized_control_id: controlId, 
+            internal_control_id: controlId, 
             coverage_status: coverageStatus 
           })}
           isLinking={linkControlMutation.isPending}
           isLoading={controlsLoading}
-          linkedControlIds={asset.linked_controls?.map(c => c.control_id) || []}
-          allControls={(allControls || []).map(c => ({ id: c.id, internal_id: (c as any).code, name: c.name, category: (c as any).control_owner }))}
+          linkedControlIds={asset.linked_internal_controls?.map((c) => c.internal_control_id) || []}
+          allControls={(allControls || []).map((c) => ({
+            id: c.id,
+            internal_id: (c as any).control_id,
+            name: c.name,
+            category: (c as any).category,
+          }))}
         />
       )}
 
@@ -658,62 +689,62 @@ function EditAssetModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
+      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Edit Asset</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-sm font-semibold text-slate-900">Edit Asset</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-400">Asset Name</label>
+            <label className="block text-xs font-medium text-slate-600">Asset Name</label>
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Description</label>
+            <label className="block text-xs font-medium text-slate-600">Description</label>
             <textarea
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               rows={3}
             />
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-sm text-slate-400">Primary Component</label>
+              <label className="block text-xs font-medium text-slate-600">Primary Component</label>
               <input
                 value={form.host_name}
                 onChange={(e) => setForm({ ...form, host_name: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400">IP Address</label>
+              <label className="block text-xs font-medium text-slate-600">IP Address</label>
               <input
                 value={form.ip_address}
                 onChange={(e) => setForm({ ...form, ip_address: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-sm text-slate-400">Criticality</label>
+              <label className="block text-xs font-medium text-slate-600">Criticality</label>
               <select
                 value={form.criticality}
                 onChange={(e) => setForm({ ...form, criticality: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -722,11 +753,11 @@ function EditAssetModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400">Status</label>
+              <label className="block text-xs font-medium text-slate-600">Status</label>
               <select
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -737,68 +768,68 @@ function EditAssetModal({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="block text-sm text-slate-400">Confidentiality (0-5)</label>
+              <label className="block text-xs font-medium text-slate-600">Confidentiality (0-5)</label>
               <input
                 type="number"
                 min={0}
                 max={5}
                 value={form.confidentiality_rating}
                 onChange={(e) => setForm({ ...form, confidentiality_rating: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400">Integrity (0-5)</label>
+              <label className="block text-xs font-medium text-slate-600">Integrity (0-5)</label>
               <input
                 type="number"
                 min={0}
                 max={5}
                 value={form.integrity_rating}
                 onChange={(e) => setForm({ ...form, integrity_rating: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400">Availability (0-5)</label>
+              <label className="block text-xs font-medium text-slate-600">Availability (0-5)</label>
               <input
                 type="number"
                 min={0}
                 max={5}
                 value={form.availability_rating}
                 onChange={(e) => setForm({ ...form, availability_rating: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-sm text-slate-400">Valuation</label>
+              <label className="block text-xs font-medium text-slate-600">Valuation</label>
               <input
                 type="number"
                 min={0}
                 step="0.01"
                 value={form.valuation}
                 onChange={(e) => setForm({ ...form, valuation: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400">Vendor</label>
+              <label className="block text-xs font-medium text-slate-600">Vendor</label>
               <input
                 value={form.vendor}
                 onChange={(e) => setForm({ ...form, vendor: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Location</label>
+            <label className="block text-xs font-medium text-slate-600">Location</label>
             <input
               value={form.location}
               onChange={(e) => setForm({ ...form, location: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
             />
           </div>
 
@@ -806,14 +837,14 @@ function EditAssetModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-800"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
               Save
@@ -827,78 +858,78 @@ function EditAssetModal({
 
 function DetailsTab({ asset }: { asset: AssetDetailData }) {
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <ClipboardList className="h-5 w-5 text-primary-400" />
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <ClipboardList className="h-4 w-4 text-blue-600" />
           Basic Information
         </h3>
         <div className="space-y-3">
           <div>
-            <span className="text-sm text-slate-400">Asset Name</span>
-            <p className="text-white">{asset.name}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Asset Name</span>
+            <p className="text-sm text-slate-900">{asset.name}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Description</span>
-            <p className="text-white">{asset.description || 'No description provided'}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Description</span>
+            <p className="text-sm text-slate-700">{asset.description || 'No description provided'}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Asset Type</span>
-            <p className="text-white">{ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Asset Type</span>
+            <p className="text-sm text-slate-700">{ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Primary Component</span>
-            <p className="text-white">{asset.host_name || 'Not specified'}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Primary Component</span>
+            <p className="text-sm text-slate-700">{asset.host_name || 'Not specified'}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Sub-components</span>
-            <p className="text-white">{asset.custodian || 'Not specified'}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Sub-components</span>
+            <p className="text-sm text-slate-700">{asset.custodian || 'Not specified'}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Criticality</span>
-            <p className="text-white capitalize">{asset.criticality}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Criticality</span>
+            <p className="text-sm capitalize text-slate-700">{asset.criticality}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Status</span>
-            <p className="text-white capitalize">{asset.status}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</span>
+            <p className="text-sm capitalize text-slate-700">{asset.status}</p>
           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <User className="h-5 w-5 text-primary-400" />
+      <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <User className="h-4 w-4 text-blue-600" />
           Ownership & Vendor
         </h3>
         <div className="space-y-3">
           <div>
-            <span className="text-sm text-slate-400">Owner</span>
-            <p className="text-white">{asset.owner_name || 'Not assigned'}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Owner</span>
+            <p className="text-sm text-slate-700">{asset.owner_name || 'Not assigned'}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Vendor</span>
-            <p className="text-white">{asset.vendor || 'N/A'}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Vendor</span>
+            <p className="text-sm text-slate-700">{asset.vendor || 'N/A'}</p>
           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <MapPin className="h-5 w-5 text-primary-400" />
+      <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <MapPin className="h-4 w-4 text-blue-600" />
           Location & Timestamps
         </h3>
         <div className="space-y-3">
           <div>
-            <span className="text-sm text-slate-400">Location</span>
-            <p className="text-white">{asset.location || 'Unknown'}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Location</span>
+            <p className="text-sm text-slate-700">{asset.location || 'Unknown'}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">IP Address</span>
-            <p className="text-white">{asset.ip_address || 'N/A'}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">IP Address</span>
+            <p className="text-sm text-slate-700">{asset.ip_address || 'N/A'}</p>
           </div>
           <div>
-            <span className="text-sm text-slate-400">Created</span>
-            <p className="text-white">
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Created</span>
+            <p className="text-sm text-slate-700">
               {new Date(asset.created_at).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
@@ -916,76 +947,69 @@ function DetailsTab({ asset }: { asset: AssetDetailData }) {
 
 function ControlsTab({ 
   asset, 
-  onLinkControl, 
-  onUnlinkControl,
-  isUnlinking 
+  onLinkControl,
+  onUnlinkInternalControl,
+  onUnlinkFrameworkControl,
+  isUnlinkingInternal,
+  isUnlinkingFramework,
 }: { 
   asset: AssetDetailData; 
   onLinkControl: () => void;
-  onUnlinkControl: (linkId: number) => void;
-  isUnlinking: boolean;
+  onUnlinkInternalControl: (linkId: number) => void;
+  onUnlinkFrameworkControl: (linkId: number) => void;
+  isUnlinkingInternal: boolean;
+  isUnlinkingFramework: boolean;
 }) {
-  const totalControls = (asset.linked_controls?.length || 0) + (asset.linked_framework_controls?.length || 0);
+  const totalControls =
+    (asset.linked_controls?.length || 0) +
+    (asset.linked_internal_controls?.length || 0) +
+    (asset.linked_framework_controls?.length || 0);
+
+  const coverageBadgeClass = (status?: string) => {
+    if (status === 'full') return 'border-green-200 bg-green-50 text-green-700';
+    if (status === 'partial') return 'border-yellow-200 bg-yellow-50 text-yellow-700';
+    return 'border-slate-200 bg-slate-100 text-slate-600';
+  };
   
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <Shield className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Shield className="h-4 w-4 text-blue-600" />
           Linked Controls ({totalControls})
         </h3>
         <button
           onClick={onLinkControl}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
         >
           <Plus className="h-4 w-4" />
           Link Control
         </button>
       </div>
 
-      {asset.linked_controls && asset.linked_controls.length > 0 && (
+      {asset.linked_internal_controls && asset.linked_internal_controls.length > 0 && (
         <div>
-          <h4 className="mb-3 text-sm font-medium text-slate-400">Normalized Controls</h4>
+          <h4 className="mb-3 text-sm font-medium text-slate-600">Risk Management Internal Controls</h4>
           <div className="space-y-2">
-            {asset.linked_controls.map((control) => (
-              <div key={control.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
+            {asset.linked_internal_controls.map((control) => (
+              <div key={control.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <div className="flex items-center gap-3">
-                  <ShieldCheck className="h-5 w-5 text-primary-400" />
+                  <ShieldCheck className="h-5 w-5 text-blue-600" />
                   <div>
-                    <span className="text-sm font-medium text-primary-400">{control.code}</span>
-                    <p className="text-white">{control.name}</p>
+                    <span className="text-xs font-medium text-blue-600">{control.code || `IC-${control.internal_control_id}`}</span>
+                    <p className="text-sm font-medium text-slate-900">{control.name}</p>
+                    {control.category && (
+                      <span className="text-xs text-slate-500">{control.category}</span>
+                    )}
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {asset.linked_framework_controls && asset.linked_framework_controls.length > 0 && (
-        <div>
-          <h4 className="mb-3 text-sm font-medium text-slate-400">Framework Controls</h4>
-          <div className="space-y-2">
-            {asset.linked_framework_controls.map((control) => (
-              <div key={control.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
-                <div className="flex items-center gap-3">
-                  <Shield className="h-5 w-5 text-blue-400" />
-                  <div>
-                    <span className="text-sm font-medium text-blue-400">{control.code}</span>
-                    <p className="text-white">{control.name}</p>
-                  </div>
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${
-                    control.coverage_status === 'full' ? 'bg-green-900/50 text-green-400' :
-                    control.coverage_status === 'partial' ? 'bg-yellow-900/50 text-yellow-400' :
-                    'bg-slate-700 text-slate-400'
-                  }`}>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs ${coverageBadgeClass(control.coverage_status)}`}>
                     {control.coverage_status || 'Not set'}
                   </span>
                 </div>
                 <button
-                  onClick={() => onUnlinkControl(control.id)}
-                  disabled={isUnlinking}
-                  className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-red-400 disabled:opacity-50"
+                  onClick={() => onUnlinkInternalControl(control.id)}
+                  disabled={isUnlinkingInternal}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
                   title="Unlink Control"
                 >
                   <X className="h-4 w-4" />
@@ -996,14 +1020,63 @@ function ControlsTab({
         </div>
       )}
 
+      {asset.linked_framework_controls && asset.linked_framework_controls.length > 0 && (
+        <div>
+          <h4 className="mb-3 text-sm font-medium text-slate-600">Framework Controls</h4>
+          <div className="space-y-2">
+            {asset.linked_framework_controls.map((control) => (
+              <div key={control.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center gap-3">
+                  <Shield className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <span className="text-xs font-medium text-blue-600">{control.code}</span>
+                    <p className="text-sm font-medium text-slate-900">{control.name}</p>
+                  </div>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs ${coverageBadgeClass(control.coverage_status)}`}>
+                    {control.coverage_status || 'Not set'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onUnlinkFrameworkControl(control.id)}
+                  disabled={isUnlinkingFramework}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
+                  title="Unlink Control"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {asset.linked_controls && asset.linked_controls.length > 0 && (
+        <div>
+          <h4 className="mb-3 text-sm font-medium text-slate-600">Legacy Normalized Controls</h4>
+          <div className="space-y-2">
+            {asset.linked_controls.map((control) => (
+              <div key={control.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <span className="text-xs font-medium text-blue-600">{control.code}</span>
+                    <p className="text-sm font-medium text-slate-900">{control.name}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {totalControls === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Shield className="mb-4 h-12 w-12 text-slate-600" />
-          <h4 className="text-lg font-medium text-white">No Controls Linked</h4>
-          <p className="mt-1 text-slate-400">Link controls to this asset for compliance tracking</p>
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
+          <Shield className="mb-4 h-12 w-12 text-slate-400" />
+          <h4 className="text-base font-medium text-slate-900">No Controls Linked</h4>
+          <p className="mt-1 text-sm text-slate-600">Link controls to this asset for compliance tracking</p>
           <button
             onClick={onLinkControl}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+            className="mt-4 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
             Link First Control
@@ -1026,21 +1099,21 @@ function EvidenceTab({
   isUnlinking: boolean;
 }) {
   const relationshipColors: Record<string, string> = {
-    supports: 'bg-green-900/50 text-green-400',
-    validates: 'bg-blue-900/50 text-blue-400',
-    documents: 'bg-purple-900/50 text-purple-400',
+    supports: 'border-green-200 bg-green-50 text-green-700',
+    validates: 'border-blue-200 bg-blue-50 text-blue-700',
+    documents: 'border-purple-200 bg-purple-50 text-purple-700',
   };
   
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <FileCheck className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <FileCheck className="h-4 w-4 text-blue-600" />
           Linked Evidence ({asset.linked_evidence?.length || 0})
         </h3>
         <button
           onClick={onLinkEvidence}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
         >
           <Plus className="h-4 w-4" />
           Link Evidence
@@ -1050,20 +1123,20 @@ function EvidenceTab({
       {asset.linked_evidence && asset.linked_evidence.length > 0 ? (
         <div className="space-y-2">
           {asset.linked_evidence.map((evidence) => (
-            <div key={evidence.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
+            <div key={evidence.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center gap-3">
-                <FileCheck className="h-5 w-5 text-emerald-400" />
+                <FileCheck className="h-5 w-5 text-emerald-600" />
                 <div>
-                  <p className="text-white">{evidence.name}</p>
+                  <p className="text-sm font-medium text-slate-900">{evidence.name}</p>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-xs ${relationshipColors[evidence.relationship_type] || 'bg-slate-700 text-slate-400'}`}>
+                <span className={`rounded-full border px-2 py-0.5 text-xs ${relationshipColors[evidence.relationship_type] || 'border-slate-200 bg-slate-100 text-slate-600'}`}>
                   {evidence.relationship_type}
                 </span>
               </div>
               <button
                 onClick={() => onUnlinkEvidence(evidence.id)}
                 disabled={isUnlinking}
-                className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-red-400 disabled:opacity-50"
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
                 title="Unlink Evidence"
               >
                 <X className="h-4 w-4" />
@@ -1072,13 +1145,13 @@ function EvidenceTab({
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <FileCheck className="mb-4 h-12 w-12 text-slate-600" />
-          <h4 className="text-lg font-medium text-white">No Evidence Linked</h4>
-          <p className="mt-1 text-slate-400">Link evidence items to document this asset</p>
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
+          <FileCheck className="mb-4 h-12 w-12 text-slate-400" />
+          <h4 className="text-base font-medium text-slate-900">No Evidence Linked</h4>
+          <p className="mt-1 text-sm text-slate-600">Link evidence items to document this asset</p>
           <button
             onClick={onLinkEvidence}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+            className="mt-4 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
             Link First Evidence
@@ -1101,31 +1174,31 @@ function VulnerabilitiesTab({
   isUnlinking: boolean;
 }) {
   const severityColors: Record<string, string> = {
-    critical: 'bg-red-900/50 text-red-400',
-    high: 'bg-orange-900/50 text-orange-400',
-    medium: 'bg-yellow-900/50 text-yellow-400',
-    low: 'bg-green-900/50 text-green-400',
-    info: 'bg-slate-700 text-slate-400',
+    critical: 'border-red-200 bg-red-50 text-red-600',
+    high: 'border-orange-200 bg-orange-50 text-orange-600',
+    medium: 'border-yellow-200 bg-yellow-50 text-yellow-700',
+    low: 'border-green-200 bg-green-50 text-green-600',
+    info: 'border-slate-200 bg-slate-100 text-slate-600',
   };
 
   const statusColors: Record<string, string> = {
-    open: 'bg-blue-900/50 text-blue-400',
-    in_progress: 'bg-purple-900/50 text-purple-400',
-    resolved: 'bg-green-900/50 text-green-400',
-    accepted: 'bg-slate-700 text-slate-400',
-    false_positive: 'bg-slate-700 text-slate-400',
+    open: 'border-blue-200 bg-blue-50 text-blue-600',
+    in_progress: 'border-purple-200 bg-purple-50 text-purple-600',
+    resolved: 'border-green-200 bg-green-50 text-green-600',
+    accepted: 'border-slate-200 bg-slate-100 text-slate-600',
+    false_positive: 'border-slate-200 bg-slate-100 text-slate-600',
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <Bug className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+          <Bug className="h-5 w-5 text-blue-600" />
           Linked Vulnerabilities ({asset.linked_vulnerabilities?.length || 0})
         </h3>
         <button
           onClick={onLinkVulnerability}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
         >
           <Plus className="h-4 w-4" />
           Link Vulnerability
@@ -1135,35 +1208,35 @@ function VulnerabilitiesTab({
       {asset.linked_vulnerabilities && asset.linked_vulnerabilities.length > 0 ? (
         <div className="space-y-2">
           {asset.linked_vulnerabilities.map((vuln) => (
-            <div key={`${vuln.vulnerability_id}-${vuln.link_id || 'link'}`} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
+            <div key={`${vuln.vulnerability_id}-${vuln.link_id || 'link'}`} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center gap-3">
-                <Bug className="h-5 w-5 text-red-400" />
+                <Bug className="h-5 w-5 text-red-500" />
                 <div>
-                  <p className="text-white">
+                  <p className="text-sm font-medium text-slate-900">
                     {vuln.title || `Vulnerability #${vuln.vulnerability_id}`}
                   </p>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     {vuln.vuln_id ? `${vuln.vuln_id} • ` : ''}{vuln.status || 'status unknown'}
                   </p>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-xs ${severityColors[(vuln.severity || '').toLowerCase()] || 'bg-slate-700 text-slate-400'}`}>
+                <span className={`rounded-full border px-2 py-0.5 text-xs ${severityColors[(vuln.severity || '').toLowerCase()] || 'border-slate-200 bg-slate-100 text-slate-600'}`}>
                   {vuln.severity || 'unknown'}
                 </span>
-                <span className={`rounded-full px-2 py-0.5 text-xs ${statusColors[(vuln.status || '').toLowerCase()] || 'bg-slate-700 text-slate-400'}`}>
+                <span className={`rounded-full border px-2 py-0.5 text-xs ${statusColors[(vuln.status || '').toLowerCase()] || 'border-slate-200 bg-slate-100 text-slate-600'}`}>
                   {(vuln.status || 'unknown').replace(/_/g, ' ')}
                 </span>
               </div>
               <div className="flex items-center gap-3">
                 <Link
                   href={`/vulnerabilities/${vuln.vulnerability_id}`}
-                  className="text-sm text-primary-400 hover:underline"
+                  className="text-sm text-blue-600 hover:underline"
                 >
                   View
                 </Link>
                 <button
                   onClick={() => onUnlinkVulnerability(vuln.vulnerability_id)}
                   disabled={isUnlinking}
-                  className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-red-400 disabled:opacity-50"
+                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
                   title="Unlink Vulnerability"
                 >
                   <X className="h-4 w-4" />
@@ -1173,13 +1246,13 @@ function VulnerabilitiesTab({
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Bug className="mb-4 h-12 w-12 text-slate-600" />
-          <h4 className="text-lg font-medium text-white">No Vulnerabilities Linked</h4>
-          <p className="mt-1 text-slate-400">Link vulnerabilities to track asset exposure</p>
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
+          <Bug className="mb-4 h-12 w-12 text-slate-400" />
+          <h4 className="text-base font-medium text-slate-900">No Vulnerabilities Linked</h4>
+          <p className="mt-1 text-sm text-slate-600">Link vulnerabilities to track asset exposure</p>
           <button
             onClick={onLinkVulnerability}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+            className="mt-4 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
             Link First Vulnerability
@@ -1194,8 +1267,8 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <AlertTriangle className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+          <AlertTriangle className="h-5 w-5 text-blue-600" />
           Associated Risks ({asset.linked_risks?.length || 0})
         </h3>
       </div>
@@ -1203,17 +1276,17 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
       {asset.linked_risks && asset.linked_risks.length > 0 ? (
         <div className="space-y-2">
           {asset.linked_risks.map((risk) => (
-            <div key={risk.risk_id} className="flex items-center justify-between rounded-lg bg-slate-900 p-3">
+            <div key={risk.risk_id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center gap-3">
-                <AlertTriangle className="h-5 w-5 text-orange-400" />
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
                 <div>
-                  <p className="text-white">{risk.title || `Risk #${risk.risk_id}`}</p>
-                  <p className="text-xs text-slate-400">Risk ID: {risk.risk_id}{risk.status ? ` • ${risk.status}` : ''}</p>
+                  <p className="text-sm font-medium text-slate-900">{risk.title || `Risk #${risk.risk_id}`}</p>
+                  <p className="text-xs text-slate-500">Risk ID: {risk.risk_id}{risk.status ? ` • ${risk.status}` : ''}</p>
                 </div>
               </div>
               <Link 
                 href={`/risks/${risk.risk_id}`}
-                className="text-sm text-primary-400 hover:underline"
+                className="text-sm text-blue-600 hover:underline"
               >
                 View Details
               </Link>
@@ -1221,10 +1294,10 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <AlertTriangle className="mb-4 h-12 w-12 text-slate-600" />
-          <h4 className="text-lg font-medium text-white">No Associated Risks</h4>
-          <p className="mt-1 text-slate-400">No risks have been linked to this asset</p>
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
+          <AlertTriangle className="mb-4 h-12 w-12 text-slate-400" />
+          <h4 className="text-base font-medium text-slate-900">No Associated Risks</h4>
+          <p className="mt-1 text-sm text-slate-600">No risks have been linked to this asset</p>
         </div>
       )}
     </div>
@@ -1243,14 +1316,14 @@ function AssessmentsTab({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <History className="h-5 w-5 text-primary-400" />
+        <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+          <History className="h-5 w-5 text-blue-600" />
           Risk Assessment History ({asset.risk_assessments?.length || 0})
         </h3>
         <button
           onClick={onAssess}
           disabled={isAssessing}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {isAssessing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1266,18 +1339,18 @@ function AssessmentsTab({
           {asset.risk_assessments
             .sort((a, b) => new Date(b.assessment_date).getTime() - new Date(a.assessment_date).getTime())
             .map((assessment) => (
-              <div key={assessment.id} className="rounded-lg bg-slate-900 p-4">
+              <div key={assessment.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${
-                      assessment.risk_score >= 7 ? 'bg-red-900/50 text-red-400' :
-                      assessment.risk_score >= 4 ? 'bg-yellow-900/50 text-yellow-400' : 
-                      'bg-green-900/50 text-green-400'
+                      assessment.risk_score >= 7 ? 'bg-red-50 text-red-600' :
+                      assessment.risk_score >= 4 ? 'bg-yellow-50 text-yellow-700' : 
+                      'bg-green-50 text-green-600'
                     }`}>
                       <span className="text-lg font-bold">{assessment.risk_score.toFixed(1)}</span>
                     </div>
                     <div>
-                      <p className="font-medium text-white">
+                      <p className="font-medium text-slate-900">
                         {new Date(assessment.assessment_date).toLocaleDateString('en-US', {
                           year: 'numeric',
                           month: 'long',
@@ -1286,26 +1359,26 @@ function AssessmentsTab({
                           minute: '2-digit',
                         })}
                       </p>
-                      <p className="text-sm text-slate-400">
+                      <p className="text-sm text-slate-500">
                         Coverage: {assessment.coverage_percentage.toFixed(0)}%
                       </p>
                     </div>
                   </div>
                   {assessment.gaps && (
                     <div className="text-right">
-                      <p className="text-sm text-slate-400">
+                      <p className="text-sm text-slate-500">
                         Missing Controls: {(assessment.gaps as Record<string, number>).missing_controls || 0}
                       </p>
                     </div>
                   )}
                 </div>
                 {assessment.gaps && (assessment.gaps as Record<string, string[]>).recommendations?.length > 0 && (
-                  <div className="mt-3 border-t border-slate-800 pt-3">
-                    <p className="mb-2 text-sm font-medium text-slate-400">Recommendations</p>
+                  <div className="mt-3 border-t border-slate-200 pt-3">
+                    <p className="mb-2 text-sm font-medium text-slate-600">Recommendations</p>
                     <ul className="space-y-1">
                       {((assessment.gaps as Record<string, string[]>).recommendations || []).map((rec: string, idx: number) => (
-                        <li key={idx} className="flex items-center gap-2 text-sm text-slate-300">
-                          <Zap className="h-3 w-3 text-yellow-400" />
+                        <li key={idx} className="flex items-center gap-2 text-sm text-slate-700">
+                          <Zap className="h-3 w-3 text-yellow-500" />
                           {rec}
                         </li>
                       ))}
@@ -1316,14 +1389,14 @@ function AssessmentsTab({
             ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <History className="mb-4 h-12 w-12 text-slate-600" />
-          <h4 className="text-lg font-medium text-white">No Assessments Yet</h4>
-          <p className="mt-1 text-slate-400">Run a risk assessment to evaluate this asset</p>
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
+          <History className="mb-4 h-12 w-12 text-slate-400" />
+          <h4 className="text-base font-medium text-slate-900">No Assessments Yet</h4>
+          <p className="mt-1 text-sm text-slate-600">Run a risk assessment to evaluate this asset</p>
           <button
             onClick={onAssess}
             disabled={isAssessing}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+            className="mt-4 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {isAssessing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1366,11 +1439,11 @@ function LinkControlModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
+      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Link Control</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-sm font-semibold text-slate-900">Link Internal Control</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1379,35 +1452,35 @@ function LinkControlModal({
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search controls..."
+            placeholder="Search internal controls..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
           />
         </div>
 
-        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-700">
+        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-200">
           {filteredControls.length > 0 ? (
             filteredControls.map((control) => (
               <button
                 key={control.id}
                 onClick={() => setSelectedControl(Number(control.id))}
-                className={`flex w-full items-center gap-3 border-b border-slate-700 p-3 text-left last:border-0 ${
-                  selectedControl === Number(control.id) ? 'bg-primary-900/30' : 'hover:bg-slate-800'
+                className={`flex w-full items-center gap-3 border-b border-slate-200 p-3 text-left last:border-0 ${
+                  selectedControl === Number(control.id) ? 'bg-blue-50' : 'hover:bg-slate-50'
                 }`}
               >
-                <Shield className={`h-5 w-5 ${selectedControl === Number(control.id) ? 'text-primary-400' : 'text-slate-400'}`} />
+                <Shield className={`h-5 w-5 ${selectedControl === Number(control.id) ? 'text-blue-600' : 'text-slate-400'}`} />
                 <div>
-                  <span className="text-sm font-medium text-primary-400">{control.internal_id || control.id}</span>
-                  <p className="text-white">{control.name}</p>
+                  <span className="text-xs font-medium text-blue-600">{control.internal_id || control.id}</span>
+                  <p className="text-sm font-medium text-slate-900">{control.name}</p>
                   {control.category && (
-                    <span className="text-xs text-slate-400">{control.category}</span>
+                    <span className="text-xs text-slate-500">{control.category}</span>
                   )}
                 </div>
               </button>
             ))
           ) : (
-            <div className="p-4 text-center text-slate-400">
+            <div className="p-4 text-center text-sm text-slate-500">
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading controls...</span>
               ) : allControls.length === 0 ? 'No controls available' : 'No controls found'}
@@ -1417,11 +1490,11 @@ function LinkControlModal({
 
         {selectedControl && (
           <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-slate-300">Coverage Status</label>
+            <label className="mb-2 block text-xs font-medium text-slate-600">Coverage Status</label>
             <select
               value={coverageStatus}
               onChange={(e) => setCoverageStatus(e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
             >
               <option value="full">Full Coverage</option>
               <option value="partial">Partial Coverage</option>
@@ -1433,14 +1506,14 @@ function LinkControlModal({
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-800"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
           >
             Cancel
           </button>
           <button
             onClick={() => selectedControl && onLink(selectedControl, coverageStatus)}
             disabled={!selectedControl || isLinking}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {isLinking ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1480,11 +1553,11 @@ function LinkEvidenceModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
+      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Link Evidence</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-sm font-semibold text-slate-900">Link Evidence</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1496,31 +1569,31 @@ function LinkEvidenceModal({
             placeholder="Search evidence..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
           />
         </div>
 
-        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-700">
+        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-200">
           {filteredEvidence.length > 0 ? (
             filteredEvidence.map((evidence) => (
               <button
                 key={evidence.id}
                 onClick={() => setSelectedEvidence(Number(evidence.id))}
-                className={`flex w-full items-center gap-3 border-b border-slate-700 p-3 text-left last:border-0 ${
-                  selectedEvidence === Number(evidence.id) ? 'bg-primary-900/30' : 'hover:bg-slate-800'
+                className={`flex w-full items-center gap-3 border-b border-slate-200 p-3 text-left last:border-0 ${
+                  selectedEvidence === Number(evidence.id) ? 'bg-blue-50' : 'hover:bg-slate-50'
                 }`}
               >
-                <FileCheck className={`h-5 w-5 ${selectedEvidence === Number(evidence.id) ? 'text-primary-400' : 'text-slate-400'}`} />
+                <FileCheck className={`h-5 w-5 ${selectedEvidence === Number(evidence.id) ? 'text-blue-600' : 'text-slate-400'}`} />
                 <div>
-                  <p className="text-white">{evidence.title || evidence.name}</p>
+                  <p className="text-sm font-medium text-slate-900">{evidence.title || evidence.name}</p>
                   {evidence.evidence_type && (
-                    <span className="text-xs text-slate-400">{evidence.evidence_type}</span>
+                    <span className="text-xs text-slate-500">{evidence.evidence_type}</span>
                   )}
                 </div>
               </button>
             ))
           ) : (
-            <div className="p-4 text-center text-slate-400">
+            <div className="p-4 text-center text-sm text-slate-500">
               {allEvidence.length === 0 ? 'Loading evidence...' : 'No evidence found'}
             </div>
           )}
@@ -1528,11 +1601,11 @@ function LinkEvidenceModal({
 
         {selectedEvidence && (
           <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-slate-300">Relationship Type</label>
+            <label className="mb-2 block text-xs font-medium text-slate-600">Relationship Type</label>
             <select
               value={relationshipType}
               onChange={(e) => setRelationshipType(e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
             >
               <option value="supports">Supports</option>
               <option value="validates">Validates</option>
@@ -1544,14 +1617,14 @@ function LinkEvidenceModal({
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-800"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
           >
             Cancel
           </button>
           <button
             onClick={() => selectedEvidence && onLink(selectedEvidence, relationshipType)}
             disabled={!selectedEvidence || isLinking}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {isLinking ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1598,11 +1671,11 @@ function LinkVulnerabilityModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
+      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Link Vulnerability</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <h2 className="text-sm font-semibold text-slate-900">Link Vulnerability</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1614,37 +1687,37 @@ function LinkVulnerabilityModal({
             placeholder="Search vulnerabilities..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
           />
         </div>
 
-        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-700">
+        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-200">
           {filteredVulns.length > 0 ? (
             filteredVulns.map((vuln) => (
               <button
                 key={vuln.id}
                 onClick={() => setSelectedVulnId(vuln.id)}
-                className={`flex w-full items-center gap-3 border-b border-slate-700 p-3 text-left last:border-0 ${
-                  selectedVulnId === vuln.id ? 'bg-primary-900/30' : 'hover:bg-slate-800'
+                className={`flex w-full items-center gap-3 border-b border-slate-200 p-3 text-left last:border-0 ${
+                  selectedVulnId === vuln.id ? 'bg-blue-50' : 'hover:bg-slate-50'
                 }`}
               >
-                <Bug className={`h-5 w-5 ${selectedVulnId === vuln.id ? 'text-primary-400' : 'text-slate-400'}`} />
+                <Bug className={`h-5 w-5 ${selectedVulnId === vuln.id ? 'text-blue-600' : 'text-slate-400'}`} />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-primary-400">{vuln.vuln_id || `VULN-${vuln.id}`}</span>
-                    <span className={`text-xs ${severityColors[(vuln.severity || '').toLowerCase()] || 'text-slate-400'}`}>
+                    <span className="text-xs font-medium text-blue-600">{vuln.vuln_id || `VULN-${vuln.id}`}</span>
+                    <span className={`text-xs ${severityColors[(vuln.severity || '').toLowerCase()] || 'text-slate-500'}`}>
                       {vuln.severity || 'unknown'}
                     </span>
                   </div>
-                  <p className="text-white">{vuln.title || 'Untitled vulnerability'}</p>
+                  <p className="text-sm font-medium text-slate-900">{vuln.title || 'Untitled vulnerability'}</p>
                   {vuln.status && (
-                    <span className="text-xs text-slate-400">{vuln.status.replace(/_/g, ' ')}</span>
+                    <span className="text-xs text-slate-500">{vuln.status.replace(/_/g, ' ')}</span>
                   )}
                 </div>
               </button>
             ))
           ) : (
-            <div className="p-4 text-center text-slate-400">
+            <div className="p-4 text-center text-sm text-slate-500">
               {allVulnerabilities.length === 0 ? 'Loading vulnerabilities...' : 'No vulnerabilities found'}
             </div>
           )}
@@ -1653,14 +1726,14 @@ function LinkVulnerabilityModal({
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-800"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
           >
             Cancel
           </button>
           <button
             onClick={() => selectedVulnId && onLink(selectedVulnId)}
             disabled={!selectedVulnId || isLinking}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {isLinking ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1687,30 +1760,30 @@ function DeleteConfirmModal({
   isDeleting: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
+      <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-900/50">
-            <AlertTriangle className="h-5 w-5 text-red-400" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
           </div>
-          <h2 className="text-xl font-bold text-white">Delete Asset</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Delete Asset</h2>
         </div>
 
-        <p className="mb-6 text-slate-300">
-          Are you sure you want to delete <strong className="text-white">{assetName}</strong>? This action cannot be undone. All linked controls, evidence, and assessments will be unlinked.
+        <p className="mb-6 text-sm text-slate-600">
+          Are you sure you want to delete <strong className="text-slate-900">{assetName}</strong>? This action cannot be undone. All linked controls, evidence, and assessments will be unlinked.
         </p>
 
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-300 hover:bg-slate-800"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={isDeleting}
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
           >
             {isDeleting ? (
               <Loader2 className="h-4 w-4 animate-spin" />

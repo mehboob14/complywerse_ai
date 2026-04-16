@@ -771,11 +771,11 @@ export default function GovernanceWorkflowsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="cw-text-default text-2xl font-bold">Approval Workflows</h1>
-          <p className="cw-text-muted mt-1 text-sm">
+          <h1 className="cw-text-default text-lg font-semibold">Approval Workflows</h1>
+          <p className="cw-text-muted mt-1 text-xs">
             Manage document approvals, workflow templates, and review pending requests
           </p>
         </div>
@@ -1198,7 +1198,7 @@ export default function GovernanceWorkflowsPage() {
             ) : (
               <div className="flex h-32 flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 text-gray-600">
                 <p className="text-sm">No steps configured</p>
-                <p className="text-xs">Click "Add Step" to create workflow steps</p>
+                <p className="text-xs">Click &ldquo;Add Step&rdquo; to create workflow steps</p>
               </div>
             )}
           </div>

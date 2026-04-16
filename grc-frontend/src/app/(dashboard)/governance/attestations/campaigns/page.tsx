@@ -134,12 +134,12 @@ export default function AttestationCampaignsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-black">Attestation Campaigns</h1>
-            <p className="text-gray-600 mt-1">Manage attestation and certification campaigns</p>
+            <h1 className="text-lg font-semibold text-black">Attestation Campaigns</h1>
+            <p className="mt-1 text-gray-600">Manage attestation and certification campaigns</p>
           </div>
           <button
             onClick={() => setIsModalOpen(true)}

@@ -106,6 +106,20 @@ const truncateText = (text: string | null | undefined, maxLen: number = 80) => {
   return text.substring(0, maxLen) + '...';
 };
 
+const sanitizeDocumentHtml = (html: string | null | undefined) => {
+  if (!html) return '';
+
+  return html.replace(/\sstyle=(['"])(.*?)\1/gi, (_match, quote, styleValue) => {
+    const cleanedStyle = String(styleValue)
+      .replace(/(^|;)\s*(color|background|background-color|opacity|-webkit-text-fill-color|text-fill-color|filter|mix-blend-mode|text-shadow)\s*:[^;]*;?/gi, '$1')
+      .replace(/;;+/g, ';')
+      .replace(/^\s*;|;\s*$/g, '')
+      .trim();
+
+    return cleanedStyle ? ` style=${quote}${cleanedStyle}${quote}` : '';
+  });
+};
+
 type TabKey = 'viewer' | 'statements' | 'controls' | 'gap-analysis' | 'review-history';
 
 export default function PolicyDetailPage() {
@@ -534,9 +548,9 @@ export default function PolicyDetailPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-4">
           <button
             onClick={() => router.push('/governance/documents')}
@@ -549,7 +563,7 @@ export default function PolicyDetailPage() {
               <div className={`rounded-lg ${docType.bgColor} p-2`}>
                 <TypeIcon className={`h-5 w-5 ${docType.color}`} />
               </div>
-              <h1 className="text-2xl font-bold text-black">{document.title}</h1>
+              <h1 className="text-lg font-semibold text-black">{document.title}</h1>
             </div>
             <div className="flex items-center gap-3 text-sm text-gray-600">
               {document.document_code && <span className="font-mono">{document.document_code}</span>}
@@ -1303,6 +1317,7 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
   // Detect if doc.content is markdown (AI-generated docs always are)
   const rawContent: string = doc?.content || '';
   const isMarkdown = /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(rawContent);
+  const renderedHtml = useMemo(() => sanitizeDocumentHtml(htmlContent?.html), [htmlContent?.html]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1343,12 +1358,42 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
             >
               {rawContent}
             </ReactMarkdown>
-          ) : htmlContent?.html ? (
-            <div
-              className="document-viewer-html text-black"
-              dangerouslySetInnerHTML={{ __html: htmlContent.html }}
-              style={{ color: '#000' }}
-            />
+          ) : renderedHtml ? (
+            <>
+              <style dangerouslySetInnerHTML={{ __html: `
+                .document-viewer-html,
+                .document-viewer-html * {
+                  color: #111827 !important;
+                  -webkit-text-fill-color: #111827 !important;
+                  opacity: 1 !important;
+                  filter: none !important;
+                  mix-blend-mode: normal !important;
+                  text-shadow: none !important;
+                  background: transparent !important;
+                }
+                .document-viewer-html h1,
+                .document-viewer-html h2,
+                .document-viewer-html h3,
+                .document-viewer-html h4,
+                .document-viewer-html h5,
+                .document-viewer-html h6,
+                .document-viewer-html strong,
+                .document-viewer-html b {
+                  color: #000000 !important;
+                  -webkit-text-fill-color: #000000 !important;
+                  font-weight: 700 !important;
+                }
+                .document-viewer-html a,
+                .document-viewer-html a * {
+                  color: #2563eb !important;
+                  -webkit-text-fill-color: #2563eb !important;
+                }
+              `}} />
+              <div
+                className="document-viewer-html text-[15px] leading-7 text-gray-900"
+                dangerouslySetInnerHTML={{ __html: renderedHtml }}
+              />
+            </>
           ) : (
             <div className="flex h-48 flex-col items-center justify-center gap-3 text-gray-600">
               <FileText className="h-12 w-12" />

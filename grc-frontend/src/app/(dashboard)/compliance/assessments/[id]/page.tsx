@@ -645,16 +645,21 @@ export default function AssessmentDetailPage() {
                   key={domain}
                   className="border border-gray-200 rounded-lg overflow-hidden"
                 >
-                  <button
-                    onClick={() => toggleDomain(domain)}
-                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
-                  >
+                  <div className="w-full flex items-center justify-between p-4 bg-gray-50">
                     <div className="flex items-center gap-3">
-                      {isExpanded ? (
-                        <ChevronDown className="h-5 w-5 text-gray-600" />
-                      ) : (
-                        <ChevronRight className="h-5 w-5 text-gray-600" />
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => toggleDomain(domain)}
+                        aria-expanded={isExpanded}
+                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${getDomainDisplayName(domain)}`}
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-black transition-colors"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-5 w-5" />
+                        ) : (
+                          <ChevronRight className="h-5 w-5" />
+                        )}
+                      </button>
                       <span className="font-medium text-black">{getDomainDisplayName(domain)}</span>
                       <span className="text-sm text-gray-500">({items.length} items)</span>
                     </div>
@@ -669,7 +674,7 @@ export default function AssessmentDetailPage() {
                         <span className="text-sm text-gray-600">{domainPercentage}%</span>
                       </div>
                     </div>
-                  </button>
+                  </div>
 
                   {isExpanded && (
                     <div className="divide-y divide-gray-200">
