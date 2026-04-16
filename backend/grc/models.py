@@ -2174,6 +2174,7 @@ class ITAsset(Base):
     tenant = relationship("Tenant", back_populates="it_assets")
     owner = relationship("GRCUser", back_populates="owned_assets")
     control_links = relationship("AssetControlLink", back_populates="asset", cascade="all, delete-orphan")
+    internal_control_links = relationship("AssetInternalControlLink", back_populates="asset", cascade="all, delete-orphan")
     risk_links = relationship("RiskAssetLink", back_populates="asset", cascade="all, delete-orphan")
     risk_assessments = relationship("AssetRiskAssessment", back_populates="asset", cascade="all, delete-orphan")
     framework_control_links = relationship("AssetFrameworkControlLink", back_populates="asset", cascade="all, delete-orphan")
@@ -2197,6 +2198,23 @@ class AssetControlLink(Base):
     
     __table_args__ = (
         Index("ix_asset_control_link", "asset_id", "normalized_control_id"),
+    )
+
+
+class AssetInternalControlLink(Base):
+    """Links assets to ERM internal controls"""
+    __tablename__ = "grc_asset_internal_control_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    internal_control_id = Column(Integer, ForeignKey("grc_internal_controls.id"), nullable=False, index=True)
+    coverage_status = Column(String(50), default="partial")
+    
+    asset = relationship("ITAsset", back_populates="internal_control_links")
+    internal_control = relationship("InternalControl")
+    
+    __table_args__ = (
+        UniqueConstraint("asset_id", "internal_control_id", name="uq_asset_internal_control"),
     )
 
 

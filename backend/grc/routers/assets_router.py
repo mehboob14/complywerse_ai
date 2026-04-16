@@ -11,8 +11,8 @@ from sqlalchemy import text
 from pydantic import BaseModel
 
 from ..models import (
-    ITAsset, AssetControlLink, AssetRiskAssessment, AssetFrameworkControlLink,
-    AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, Risk,
+    ITAsset, AssetControlLink, AssetInternalControlLink, AssetRiskAssessment, AssetFrameworkControlLink,
+    AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, Risk, InternalControl,
     Vulnerability, VulnerabilityAssetLink,
     GRCUser, Tenant, TenantUser, get_db
 )
@@ -862,7 +862,9 @@ def assess_asset(
     user_tenants = get_user_tenants(current_user, db)
     
     asset = db.query(ITAsset).options(
-        joinedload(ITAsset.control_links)
+        joinedload(ITAsset.control_links),
+        joinedload(ITAsset.internal_control_links),
+        joinedload(ITAsset.framework_control_links)
     ).filter(
         ITAsset.id == asset_id,
         ITAsset.tenant_id.in_(user_tenants)
@@ -874,7 +876,7 @@ def assess_asset(
             detail="Asset not found"
         )
     
-    num_controls = len(asset.control_links)
+    num_controls = len(asset.control_links) + len(asset.internal_control_links) + len(asset.framework_control_links)
     coverage = min(num_controls * 10, 100)
     
     base_risk = 5
@@ -950,6 +952,7 @@ def get_asset_detail(
     
     asset = db.query(ITAsset).options(
         joinedload(ITAsset.control_links),
+        joinedload(ITAsset.internal_control_links),
         joinedload(ITAsset.risk_links),
         joinedload(ITAsset.risk_assessments),
         joinedload(ITAsset.framework_control_links),
@@ -977,6 +980,19 @@ def get_asset_detail(
                 "name": control.name
             })
     
+    linked_internal_controls = []
+    for link in asset.internal_control_links:
+        ctrl = db.query(InternalControl).filter(InternalControl.id == link.internal_control_id).first()
+        if ctrl:
+            linked_internal_controls.append({
+                "id": link.id,
+                "internal_control_id": ctrl.id,
+                "code": ctrl.control_id,
+                "name": ctrl.name,
+                "category": ctrl.category,
+                "coverage_status": link.coverage_status
+            })
+
     linked_framework_controls = []
     for link in asset.framework_control_links:
         fc = db.query(FrameworkControl).filter(FrameworkControl.id == link.framework_control_id).first()
@@ -1048,7 +1064,7 @@ def get_asset_detail(
             "gaps": assessment.gaps
         })
     
-    total_controls = len(linked_controls) + len(linked_framework_controls)
+    total_controls = len(linked_controls) + len(linked_internal_controls) + len(linked_framework_controls)
     coverage = min(total_controls * 10, 100) if total_controls > 0 else 0
     
     return AssetDetailResponse(
@@ -1072,6 +1088,7 @@ def get_asset_detail(
         status=asset.status,
         created_at=asset.created_at,
         linked_controls=linked_controls,
+        linked_internal_controls=linked_internal_controls,
         linked_framework_controls=linked_framework_controls,
         linked_risks=linked_risks,
         linked_evidence=linked_evidence,
@@ -1259,6 +1276,7 @@ def get_asset_coverage_analysis(
     
     asset = db.query(ITAsset).options(
         joinedload(ITAsset.control_links),
+        joinedload(ITAsset.internal_control_links),
         joinedload(ITAsset.framework_control_links),
         joinedload(ITAsset.risk_assessments)
     ).filter(
@@ -1272,11 +1290,19 @@ def get_asset_coverage_analysis(
             detail="Asset not found"
         )
     
-    total_controls = len(asset.control_links) + len(asset.framework_control_links)
+    total_controls = len(asset.control_links) + len(asset.internal_control_links) + len(asset.framework_control_links)
     
-    full_coverage = sum(1 for link in asset.framework_control_links if link.coverage_status == "full")
-    partial_coverage = sum(1 for link in asset.framework_control_links if link.coverage_status == "partial")
-    covered_controls = len(asset.control_links) + full_coverage + (partial_coverage * 0.5)
+    full_framework_coverage = sum(1 for link in asset.framework_control_links if link.coverage_status == "full")
+    partial_framework_coverage = sum(1 for link in asset.framework_control_links if link.coverage_status == "partial")
+    full_internal_coverage = sum(1 for link in asset.internal_control_links if link.coverage_status == "full")
+    partial_internal_coverage = sum(1 for link in asset.internal_control_links if link.coverage_status == "partial")
+    covered_controls = (
+        len(asset.control_links)
+        + full_internal_coverage
+        + (partial_internal_coverage * 0.5)
+        + full_framework_coverage
+        + (partial_framework_coverage * 0.5)
+    )
     
     expected_controls = 10
     coverage_percentage = min((covered_controls / expected_controls) * 100, 100) if expected_controls > 0 else 0
@@ -1316,6 +1342,7 @@ def perform_risk_assessment(
     
     asset = db.query(ITAsset).options(
         joinedload(ITAsset.control_links),
+        joinedload(ITAsset.internal_control_links),
         joinedload(ITAsset.framework_control_links),
         joinedload(ITAsset.evidence_links)
     ).filter(
@@ -1330,10 +1357,11 @@ def perform_risk_assessment(
         )
     
     num_normalized_controls = len(asset.control_links)
+    num_internal_controls = len(asset.internal_control_links)
     num_framework_controls = len(asset.framework_control_links)
     num_evidence = len(asset.evidence_links)
     
-    total_controls = num_normalized_controls + num_framework_controls
+    total_controls = num_normalized_controls + num_internal_controls + num_framework_controls
     coverage = min(total_controls * 10, 100)
     
     base_risk = 5
@@ -1374,3 +1402,80 @@ def perform_risk_assessment(
     db.refresh(assessment)
     
     return assessment
+
+
+class AssetInternalControlLinkCreate(BaseModel):
+    internal_control_id: int
+    coverage_status: Optional[str] = "partial"
+
+
+@router.post("/{asset_id}/internal-controls", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def link_asset_to_internal_control(
+    asset_id: int,
+    link: AssetInternalControlLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Link an ERM internal control to an asset"""
+    user_tenants = get_user_tenants(current_user, db)
+
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+
+    ctrl = db.query(InternalControl).filter(
+        InternalControl.id == link.internal_control_id,
+        InternalControl.tenant_id.in_(user_tenants)
+    ).first()
+    if not ctrl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal control not found")
+
+    existing = db.query(AssetInternalControlLink).filter(
+        AssetInternalControlLink.asset_id == asset_id,
+        AssetInternalControlLink.internal_control_id == link.internal_control_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Link already exists")
+
+    db_link = AssetInternalControlLink(
+        asset_id=asset_id,
+        internal_control_id=link.internal_control_id,
+        coverage_status=link.coverage_status
+    )
+    db.add(db_link)
+    db.commit()
+    db.refresh(db_link)
+
+    return MessageResponse(message="Internal control linked successfully", id=db_link.id)
+
+
+@router.delete("/{asset_id}/internal-controls/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_asset_from_internal_control(
+    asset_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Unlink an ERM internal control from an asset"""
+    user_tenants = get_user_tenants(current_user, db)
+
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+
+    db_link = db.query(AssetInternalControlLink).filter(
+        AssetInternalControlLink.id == link_id,
+        AssetInternalControlLink.asset_id == asset_id
+    ).first()
+    if not db_link:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found")
+
+    db.delete(db_link)
+    db.commit()
+    return None

@@ -907,6 +907,7 @@ class AssetDetailResponse(BaseModel):
     status: str
     created_at: datetime
     linked_controls: List[dict] = []
+    linked_internal_controls: List[dict] = []
     linked_framework_controls: List[dict] = []
     linked_risks: List[dict] = []
     linked_evidence: List[dict] = []
