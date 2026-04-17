@@ -24,7 +24,15 @@ import {
   FileText,
   Sparkles,
   Trash2,
+  Search,
 } from 'lucide-react';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -45,19 +53,19 @@ const PRIORITY_OPTIONS = [
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
-  pending_approval: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Pending Approval' },
-  approved: { bg: 'bg-green-100', text: 'text-green-700', label: 'Approved' },
-  rejected: { bg: 'bg-red-100', text: 'text-red-700', label: 'Rejected' },
-  expired: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Expired' },
-  revoked: { bg: 'bg-gray-200', text: 'text-gray-700', label: 'Revoked' },
+  draft: { bg: 'bg-gray-100', text: 'text-black', label: 'Draft' },
+  pending_approval: { bg: 'bg-yellow-100', text: 'text-black', label: 'Pending Approval' },
+  approved: { bg: 'bg-green-100', text: 'text-black', label: 'Approved' },
+  rejected: { bg: 'bg-red-100', text: 'text-black', label: 'Rejected' },
+  expired: { bg: 'bg-orange-100', text: 'text-black', label: 'Expired' },
+  revoked: { bg: 'bg-gray-200', text: 'text-black', label: 'Revoked' },
 };
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  low: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Low' },
-  medium: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Medium' },
-  high: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'High' },
-  critical: { bg: 'bg-red-100', text: 'text-red-700', label: 'Critical' },
+  low: { bg: 'bg-gray-100', text: 'text-black', label: 'Low' },
+  medium: { bg: 'bg-blue-100', text: 'text-black', label: 'Medium' },
+  high: { bg: 'bg-amber-100', text: 'text-black', label: 'High' },
+  critical: { bg: 'bg-red-100', text: 'text-black', label: 'Critical' },
 };
 
 interface ExceptionItem {
@@ -73,6 +81,7 @@ interface ExceptionItem {
   compensating_controls: string;
   requested_by: string;
   requested_by_name?: string;
+  requester_name?: string;
   effective_date: string | null;
   expiry_date: string | null;
   created_at: string;
@@ -105,6 +114,7 @@ function formatDate(dateStr: string | null | undefined) {
 export default function PolicyExceptionsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingException, setEditingException] = useState<ExceptionItem | null>(null);
   const [viewingException, setViewingException] = useState<ExceptionItem | null>(null);
@@ -336,42 +346,165 @@ export default function PolicyExceptionsPage() {
     }
   };
 
-  const exceptionList = Array.isArray(exceptions) ? exceptions : [];
+  const allExceptions = Array.isArray(exceptions) ? exceptions : [];
+  const exceptionList = searchTerm.trim()
+    ? allExceptions.filter(
+        (e) =>
+          e.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (e.document_title || e.policy_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (e.requested_by_name || e.requested_by || '').toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : allExceptions;
   const selectedDocumentId = formData.document_id ? Number(formData.document_id) : 0;
   const normalizedTitle = formData.title.trim();
 
+  // Charts data
+  const statusChartData = Object.entries(
+    allExceptions.reduce((acc: Record<string, number>, e) => {
+      acc[e.status] = (acc[e.status] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([key, value]) => ({
+    name: STATUS_STYLES[key]?.label || key,
+    value,
+    color:
+      key === 'approved' ? '#10b981'
+      : key === 'pending_approval' ? '#f59e0b'
+      : key === 'draft' ? '#94a3b8'
+      : key === 'rejected' ? '#ef4444'
+      : key === 'expired' ? '#f97316'
+      : '#6b7280',
+  }));
+
+  const PRIORITY_WEIGHT: Record<string, number> = { low: 1, medium: 2, high: 3, critical: 4 };
+  const priorityCount = allExceptions.reduce((acc: Record<string, number>, e) => {
+    acc[e.priority] = (acc[e.priority] || 0) + 1;
+    return acc;
+  }, {});
+  const priorityScore = allExceptions.length
+    ? Math.round(
+        allExceptions.reduce((sum, e) => sum + (PRIORITY_WEIGHT[e.priority] || 1), 0) /
+          allExceptions.length / 4 * 100
+      )
+    : 0;
+  const gaugeColor =
+    priorityScore >= 75 ? '#ef4444' : priorityScore >= 50 ? '#f59e0b' : priorityScore >= 25 ? '#3b82f6' : '#10b981';
+  const gaugeData = [
+    { name: 'score', value: priorityScore, fill: gaugeColor },
+    { name: 'rest', value: 100 - priorityScore, fill: '#e5e7eb' },
+  ];
+
   return (
-    <div className="governance-exceptions space-y-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="governance-exceptions space-y-3 px-1 py-2">
+      {/* Header row */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-3 text-lg font-semibold text-black">
-            <Shield className="h-6 w-6 text-primary-400" />
-            Policy Exception Management
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Request, review, and manage policy exceptions
-          </p>
+          <h1 className="text-sm font-semibold text-black">Policy Exception Management</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Request, review, and manage policy exceptions</p>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowCreateModal(true); }}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          New Exception Request
-        </button>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        {(exceptionsError || documentsError) && (
-          <div className="w-full flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800 text-sm">
-            <AlertCircle className="h-4 w-4" />
-            Some governance data could not be loaded from the primary endpoint. Fallback data is shown when available.
+      {(exceptionsError || documentsError) && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800 text-xs">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          Some governance data could not be loaded from the primary endpoint.
+        </div>
+      )}
+
+      {/* Charts row */}
+      {allExceptions.length > 0 && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Speedometer — Priority Risk Level */}
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Priority Risk Level</p>
+            <div className="flex items-center gap-4">
+              <div className="relative h-[110px] w-[170px] flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={gaugeData}
+                      cx="50%"
+                      cy="88%"
+                      startAngle={180}
+                      endAngle={0}
+                      innerRadius={44}
+                      outerRadius={62}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {gaugeData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-end pb-1 pointer-events-none">
+                  <span className="text-lg font-bold" style={{ color: gaugeColor }}>{priorityScore}%</span>
+                  <span className="text-[9px] text-gray-500 leading-tight">risk score</span>
+                </div>
+              </div>
+              <div className="space-y-1.5 flex-1">
+                {(['critical','high','medium','low'] as const).map((p) => (
+                  <div key={p} className="flex items-center gap-2 text-xs">
+                    <span className={`inline-flex w-14 justify-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      p === 'critical' ? 'bg-red-100 text-red-700'
+                      : p === 'high' ? 'bg-amber-100 text-amber-700'
+                      : p === 'medium' ? 'bg-blue-100 text-blue-700'
+                      : 'bg-gray-100 text-gray-600'
+                    }`}>{p.charAt(0).toUpperCase() + p.slice(1)}</span>
+                    <span className="font-semibold text-black">{priorityCount[p] || 0}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* Pie chart — Status distribution */}
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Status Distribution</p>
+            <div className="flex items-center gap-3">
+              <div className="h-[110px] w-[110px] flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={statusChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={48} dataKey="value" paddingAngle={2}>
+                      {statusChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid #e5e7eb' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-1.5 flex-1">
+                {statusChartData.map((s) => (
+                  <div key={s.name} className="flex items-center gap-2 text-xs">
+                    <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                    <span className="flex-1 text-gray-600">{s.name}</span>
+                    <span className="font-semibold text-black">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search + Filters + Button row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search exceptions..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full rounded border border-gray-300 bg-white py-1.5 pl-8 pr-3 text-xs text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          />
+        </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="select min-w-[160px]"
+          className="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-black focus:border-primary-500 focus:outline-none"
         >
           {STATUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -380,12 +513,19 @@ export default function PolicyExceptionsPage() {
         <select
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value)}
-          className="select min-w-[140px]"
+          className="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-black focus:border-primary-500 focus:outline-none"
         >
           {PRIORITY_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+        <button
+          onClick={() => { resetForm(); setShowCreateModal(true); }}
+          className="btn-primary ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New Exception
+        </button>
       </div>
 
       <div className="table-container">
@@ -405,16 +545,16 @@ export default function PolicyExceptionsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={8} className="text-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary-400" />
+                <td colSpan={8} className="text-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin mx-auto text-primary-400" />
                 </td>
               </tr>
             ) : exceptionList.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12">
-                  <Shield className="h-12 w-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-700">No exceptions found</p>
-                  <p className="text-sm text-gray-600 mt-1">Create a new exception request to get started</p>
+                <td colSpan={8} className="text-center py-8">
+                  <Shield className="h-7 w-7 text-gray-400 mx-auto mb-2" />
+                  <p className="text-xs text-gray-600">No exceptions found</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">Create a new exception request to get started</p>
                 </td>
               </tr>
             ) : (
@@ -440,7 +580,7 @@ export default function PolicyExceptionsPage() {
                         {priorityStyle.label}
                       </span>
                     </td>
-                    <td className="text-gray-700">{exc.requested_by_name || exc.requested_by || '-'}</td>
+                    <td className="text-gray-700">{exc.requester_name || exc.requested_by_name || '-'}</td>
                     <td className="text-gray-700">{formatDate(exc.created_at)}</td>
                     <td className="text-gray-700">{formatDate(exc.expiry_date)}</td>
                     <td>
@@ -498,20 +638,18 @@ export default function PolicyExceptionsPage() {
                             <Ban className="h-4 w-4" />
                           </button>
                         )}
-                        {(exc.status === 'draft' || exc.status === 'revoked' || exc.status === 'rejected') && (
-                          <button
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this exception?')) {
-                                deleteMutation.mutate(exc.id);
-                              }
-                            }}
-                            disabled={deleteMutation.isPending}
-                            className="btn-ghost btn-sm text-red-600 hover:text-red-700 hover:bg-red-50"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
+                        <button
+                          onClick={() => {
+                            if (confirm('Are you sure you want to delete this exception?')) {
+                              deleteMutation.mutate(exc.id);
+                            }
+                          }}
+                          disabled={deleteMutation.isPending}
+                          className="btn-ghost btn-sm text-red-600 hover:text-red-700 hover:bg-red-50"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>

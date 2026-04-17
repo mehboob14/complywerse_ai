@@ -253,19 +253,19 @@ export default function GovernanceMappingsPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-black">Policy-Control Mappings</h2>
-          <p className="text-sm text-gray-600">Link governance documents to controls</p>
+          <h2 className="text-sm font-semibold text-black">Policy-Control Mappings</h2>
+          <p className="text-xs text-gray-600">Link governance documents to controls</p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-xs">
             <span className="text-gray-600">Documents:</span>
             <span className="font-semibold text-black">{coverageSummary.totalDocs}</span>
           </div>
           {selectedDocumentId && (
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-2 text-xs">
               <span className="text-gray-600">Linked Controls:</span>
               <span className="font-semibold text-primary-400">{mappingsData?.control_links?.length || 0}</span>
             </div>
@@ -280,14 +280,14 @@ export default function GovernanceMappingsPage() {
           return (
             <div
               key={type}
-              className="rounded-lg border border-gray-300/50 bg-white/50 p-3.5 hover:bg-gray-100/50 transition-all"
+              className="rounded-lg border border-gray-300/50 bg-white/50 p-2.5 hover:bg-gray-100/50 transition-all"
             >
-              <div className="flex items-center gap-3">
-                <div className={`rounded-lg ${style.bgColor} p-2`}>
-                  <Icon className={`h-5 w-5 ${style.color}`} />
+              <div className="flex items-center gap-2">
+                <div className={`rounded-md ${style.bgColor} p-1.5`}>
+                  <Icon className={`h-4 w-4 ${style.color}`} />
                 </div>
                 <div>
-                  <p className="text-lg font-semibold text-black">{count}</p>
+                  <p className="text-sm font-semibold text-black">{count}</p>
                   <p className="text-xs text-gray-600 capitalize">{type}s</p>
                 </div>
               </div>
@@ -296,7 +296,7 @@ export default function GovernanceMappingsPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card">
           <div className="card-header">
             <div>
@@ -331,10 +331,10 @@ export default function GovernanceMappingsPage() {
             </div>
           </div>
 
-          <div className="space-y-2 max-h-96 overflow-y-auto">
+          <div className="space-y-1.5 max-h-72 overflow-y-auto">
             {documents.length === 0 ? (
-              <div className="text-center py-8">
-                <FileText className="h-12 w-12 text-gray-700 mx-auto mb-3" />
+              <div className="text-center py-6">
+                <FileText className="h-7 w-7 text-gray-400 mx-auto mb-2" />
                 <p className="text-gray-600">No documents found</p>
               </div>
             ) : (
@@ -401,23 +401,23 @@ export default function GovernanceMappingsPage() {
           </div>
 
           {!selectedDocumentId ? (
-            <div className="text-center py-12">
-              <Link2 className="h-12 w-12 text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-600">Select a document from the left panel</p>
-              <p className="text-sm text-gray-700 mt-1">to view and manage control mappings</p>
+            <div className="text-center py-8">
+              <Link2 className="h-7 w-7 text-gray-400 mx-auto mb-2" />
+              <p className="text-xs text-gray-600">Select a document from the left panel</p>
+              <p className="text-xs text-gray-500 mt-0.5">to view and manage control mappings</p>
             </div>
           ) : mappingsLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
             </div>
           ) : mappingsData?.control_links?.length === 0 ? (
-            <div className="text-center py-12">
-              <AlertCircle className="h-12 w-12 text-gray-700 mx-auto mb-3" />
+            <div className="text-center py-8">
+              <AlertCircle className="h-7 w-7 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-600">No controls linked</p>
               <p className="text-sm text-gray-700 mt-1">Click &quot;Link Control&quot; to add mappings</p>
             </div>
           ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
+            <div className="space-y-1.5 max-h-72 overflow-y-auto">
               {mappingsData?.control_links?.map((link) => (
                 <div
                   key={link.id}

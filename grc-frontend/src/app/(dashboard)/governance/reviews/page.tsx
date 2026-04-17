@@ -288,20 +288,20 @@ export default function GovernanceReviewsPage() {
       <div className="space-y-5">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-black">My Reviews</h1>
-            <p className="text-gray-600">Track and manage your submitted actions requiring review</p>
+          <h1 className="text-sm font-semibold text-black">My Reviews</h1>
+          <p className="text-xs text-gray-500">Track and manage your submitted actions requiring review</p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => setReviewsSection('actions')}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-black"
+              className="flex items-center gap-1.5 rounded border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700"
             >
-              <Eye className="h-4 w-4" />
-              Actions {pendingActionsCount > 0 && <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs text-white">{pendingActionsCount}</span>}
+              <Eye className="h-3.5 w-3.5" />
+              Actions {pendingActionsCount > 0 && <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] text-white">{pendingActionsCount}</span>}
             </button>
             <button
               onClick={() => setReviewsSection('documents')}
-              className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-100"
+              className="flex items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
             >
               <FileCheck className="h-4 w-4" />
               Documents
@@ -309,43 +309,43 @@ export default function GovernanceReviewsPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-amber-500/30 bg-white p-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-amber-500/20 p-3">
-                <Clock className="h-6 w-6 text-amber-400" />
+        <div className="grid gap-2.5 md:grid-cols-3">
+          <div className="rounded-lg border border-amber-200 bg-white p-3">
+            <div className="flex items-center gap-2.5">
+              <div className="rounded bg-amber-50 p-1.5">
+                <Clock className="h-4 w-4 text-amber-500" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Pending Review</p>
-                <p className="text-3xl font-bold text-amber-400">
+                <p className="text-xs text-gray-500">Pending Review</p>
+                <p className="text-xl font-bold text-amber-500">
                   {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : pendingActionsCount}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-blue-500/30 bg-white p-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-500/20 p-3">
-                <Eye className="h-6 w-6 text-blue-400" />
+          <div className="rounded-lg border border-blue-200 bg-white p-3">
+            <div className="flex items-center gap-2.5">
+              <div className="rounded bg-blue-50 p-1.5">
+                <Eye className="h-4 w-4 text-blue-500" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">In Review</p>
-                <p className="text-3xl font-bold text-blue-400">
+                <p className="text-xs text-gray-500">In Review</p>
+                <p className="text-xl font-bold text-blue-500">
                   {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : governanceActions?.items?.filter(a => a.review_status === 'in_review').length || 0}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-green-500/30 bg-white p-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-green-500/20 p-3">
-                <CheckCircle2 className="h-6 w-6 text-green-400" />
+          <div className="rounded-lg border border-green-200 bg-white p-3">
+            <div className="flex items-center gap-2.5">
+              <div className="rounded bg-green-50 p-1.5">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-3xl font-bold text-green-400">
+                <p className="text-xs text-gray-500">Approved</p>
+                <p className="text-xl font-bold text-green-600">
                   {actionsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : governanceActions?.items?.filter(a => a.review_status === 'approved').length || 0}
                 </p>
               </div>
@@ -355,14 +355,14 @@ export default function GovernanceReviewsPage() {
 
         <div className="rounded-xl border border-gray-300 bg-white">
           <div className="flex flex-col gap-4 border-b border-gray-300 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="flex gap-1.5 overflow-x-auto">
               {['all', 'pending_review', 'in_review', 'approved', 'rejected'].map((status) => (
                 <button
                   key={status}
                   onClick={() => setActionStatusFilter(status)}
-                  className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${actionStatusFilter === status
-                      ? 'bg-primary-600 text-black'
-                      : 'bg-gray-100 text-gray-800 hover:bg-gray-100'
+                  className={`flex items-center gap-1.5 whitespace-nowrap rounded border px-2.5 py-1 text-xs font-medium transition-colors ${actionStatusFilter === status
+                      ? 'border-blue-600 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
                     }`}
                 >
                   {status === 'all' ? 'All Actions' : status.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
@@ -371,15 +371,15 @@ export default function GovernanceReviewsPage() {
             </div>
           </div>
 
-          <div className="p-4">
+          <div className="p-3">
             {actionsLoading ? (
-              <div className="flex h-64 items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+              <div className="flex h-32 items-center justify-center">
+                <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
               </div>
             ) : !governanceActions?.items || governanceActions.items.length === 0 ? (
-              <div className="flex h-64 flex-col items-center justify-center gap-4 text-gray-600">
-                <CheckCircle className="h-12 w-12" />
-                <p>No governance actions found</p>
+              <div className="flex h-32 flex-col items-center justify-center gap-2 text-gray-400">
+                <CheckCircle className="h-7 w-7" />
+                <p className="text-xs">No governance actions found</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -391,26 +391,26 @@ export default function GovernanceReviewsPage() {
                   return (
                     <div
                       key={action.id}
-                      className={`rounded-lg border p-4 transition-colors hover:bg-gray-100/50 ${action.review_status === 'pending_review'
-                          ? 'border-amber-500/50 bg-amber-500/5'
-                          : 'border-gray-300 bg-white/50'
+                      className={`rounded-lg border px-3 py-2 transition-colors hover:bg-gray-50 ${action.review_status === 'pending_review'
+                          ? 'border-amber-200 bg-amber-50/50'
+                          : 'border-gray-200 bg-white'
                         }`}
                     >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex items-start gap-4 flex-1 min-w-0">
-                          <div className={`rounded-lg p-2.5 ${actionColor.bgColor}`}>
-                            <ActionIcon className={`h-5 w-5 ${actionColor.textColor}`} />
+                          <div className={`rounded p-1.5 ${actionColor.bgColor}`}>
+                            <ActionIcon className={`h-4 w-4 ${actionColor.textColor}`} />
                           </div>
 
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-medium text-black">{action.action_description}</h3>
+                              <h3 className="text-xs font-medium text-black">{action.action_description}</h3>
                               <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusColor}`}>
                                 {action.review_status.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                               </span>
                             </div>
 
-                            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
                               <span className={`inline-flex items-center gap-1 ${actionColor.textColor}`}>
                                 <ActionIcon className="h-3.5 w-3.5" />
                                 {getActionTypeLabel(action.action_type)}
@@ -423,14 +423,14 @@ export default function GovernanceReviewsPage() {
                         </div>
 
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                          <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
-                              <p className="text-gray-700 text-xs">Action Date</p>
-                              <p className="text-gray-800">{formatDate(action.action_date)}</p>
+                              <p className="text-gray-400 text-[10px]">Action Date</p>
+                              <p className="text-gray-700">{formatDate(action.action_date)}</p>
                             </div>
                             <div>
-                              <p className="text-gray-700 text-xs">Entity Type</p>
-                              <p className="text-gray-800 capitalize">{action.entity_type.replace(/_/g, ' ')}</p>
+                              <p className="text-gray-400 text-[10px]">Entity Type</p>
+                              <p className="text-gray-700 capitalize">{action.entity_type.replace(/_/g, ' ')}</p>
                             </div>
                           </div>
                         </div>
@@ -447,11 +447,11 @@ export default function GovernanceReviewsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-black">Document Reviews</h1>
-          <p className="text-gray-600">Track and complete document review schedules</p>
+          <h1 className="text-sm font-semibold text-black">Document Reviews</h1>
+          <p className="text-xs text-gray-500">Track and complete document review schedules</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -470,7 +470,7 @@ export default function GovernanceReviewsPage() {
           </button>
           <a
             href="/governance/reviews/calendar"
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-black hover:bg-primary-700 transition-colors"
+            className="flex items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <CalendarDays className="h-4 w-4" />
             Calendar View
@@ -478,57 +478,57 @@ export default function GovernanceReviewsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-gray-300 bg-white p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary-500/20 p-3">
-              <Calendar className="h-6 w-6 text-primary-400" />
+      <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-3">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded bg-blue-50 p-1.5">
+              <Calendar className="h-4 w-4 text-blue-500" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Upcoming (30 days)</p>
-              <p className="text-3xl font-bold text-black">
+              <p className="text-xs text-gray-500">Upcoming (30 days)</p>
+              <p className="text-xl font-bold text-black">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.due_next_30_days || 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-red-500/30 bg-white p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-500/20 p-3">
-              <AlertTriangle className="h-6 w-6 text-red-400" />
+        <div className="rounded-lg border border-red-200 bg-white p-3">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded bg-red-50 p-1.5">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Overdue Reviews</p>
-              <p className="text-3xl font-bold text-red-400">
+              <p className="text-xs text-gray-500">Overdue Reviews</p>
+              <p className="text-xl font-bold text-red-500">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.overdue || 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-300 bg-white p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/20 p-3">
-              <CheckCircle className="h-6 w-6 text-green-400" />
+        <div className="rounded-lg border border-gray-200 bg-white p-3">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded bg-green-50 p-1.5">
+              <CheckCircle className="h-4 w-4 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Completed This Month</p>
-              <p className="text-3xl font-bold text-black">
+              <p className="text-xs text-gray-500">Completed This Month</p>
+              <p className="text-xl font-bold text-black">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.by_status?.on_track || 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-amber-500/30 bg-white p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-amber-500/20 p-3">
-              <Clock className="h-6 w-6 text-amber-400" />
+        <div className="rounded-lg border border-amber-200 bg-white p-3">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded bg-amber-50 p-1.5">
+              <Clock className="h-4 w-4 text-amber-500" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Due This Week</p>
-              <p className="text-3xl font-bold text-amber-400">
+              <p className="text-xs text-gray-500">Due This Week</p>
+              <p className="text-xl font-bold text-amber-500">
                 {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : statistics?.due_this_week || 0}
               </p>
             </div>
@@ -538,20 +538,22 @@ export default function GovernanceReviewsPage() {
 
       <div className="rounded-xl border border-gray-300 bg-white">
         <div className="flex flex-col gap-4 border-b border-gray-300 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-2 overflow-x-auto">
+          <div className="flex gap-1.5 overflow-x-auto">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as TabType)}
-                className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === tab.key
-                    ? 'bg-primary-600 text-black'
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-100'
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded border px-2.5 py-1 text-xs font-medium transition-colors ${activeTab === tab.key
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
                   }`}
               >
                 {tab.label}
                 {tab.count > 0 && (
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${activeTab === tab.key ? 'bg-primary-500' : 'bg-gray-100'
-                    } ${tab.key === 'overdue' && activeTab !== tab.key ? 'bg-red-500/30 text-red-400' : ''}`}>
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] ${activeTab === tab.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+                    } ${tab.key === 'overdue' && activeTab !== tab.key ? 'bg-red-100 text-red-500' : ''}`}
+                  >
                     {tab.count}
                   </span>
                 )}
@@ -564,7 +566,7 @@ export default function GovernanceReviewsPage() {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {DOCUMENT_TYPES.map(type => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -573,20 +575,20 @@ export default function GovernanceReviewsPage() {
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="p-3">
           {isLoading ? (
-            <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+            <div className="flex h-32 items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
             </div>
           ) : activeTab === 'completed' ? (
-            <div className="flex h-64 flex-col items-center justify-center gap-4 text-gray-600">
-              <CheckCircle className="h-12 w-12" />
-              <p>Completed reviews will appear here</p>
+            <div className="flex h-32 flex-col items-center justify-center gap-2 text-gray-400">
+              <CheckCircle className="h-7 w-7" />
+              <p className="text-xs">Completed reviews will appear here</p>
             </div>
           ) : getDisplayedDocuments().length === 0 ? (
-            <div className="flex h-64 flex-col items-center justify-center gap-4 text-gray-600">
-              <CalendarDays className="h-12 w-12" />
-              <p>No documents found for this filter</p>
+            <div className="flex h-32 flex-col items-center justify-center gap-2 text-gray-400">
+              <CalendarDays className="h-7 w-7" />
+              <p className="text-xs">No documents found for this filter</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -598,20 +600,20 @@ export default function GovernanceReviewsPage() {
                 return (
                   <div
                     key={doc.id}
-                    className={`rounded-lg border p-4 transition-colors hover:bg-gray-100/50 ${doc.is_overdue
-                        ? 'border-red-500/50 bg-red-500/5'
-                        : 'border-gray-300 bg-white/50'
+                    className={`rounded-lg border px-3 py-2 transition-colors hover:bg-gray-50 ${doc.is_overdue
+                        ? 'border-red-200 bg-red-50/50'
+                        : 'border-gray-200 bg-white'
                       }`}
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex items-start gap-4 flex-1 min-w-0">
-                        <div className={`rounded-lg p-2.5 ${typeStyle.bgColor}`}>
-                          <TypeIcon className={`h-5 w-5 ${typeStyle.color}`} />
+                        <div className={`rounded p-1.5 ${typeStyle.bgColor}`}>
+                          <TypeIcon className={`h-4 w-4 ${typeStyle.color}`} />
                         </div>
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-medium text-black truncate">{doc.title}</h3>
+                            <h3 className="text-xs font-medium text-black truncate">{doc.title}</h3>
                             {doc.is_overdue && (
                               <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400">
                                 Overdue
@@ -657,9 +659,9 @@ export default function GovernanceReviewsPage() {
                         <button
                           onClick={() => handleCompleteReview(doc.id)}
                           disabled={completingId === doc.id}
-                          className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 font-medium transition-colors ${doc.is_overdue
-                              ? 'bg-red-600 text-black hover:bg-red-700'
-                              : 'bg-primary-600 text-black hover:bg-primary-700'
+                          className={`flex items-center gap-1 whitespace-nowrap rounded px-2.5 py-1 text-xs font-medium transition-colors ${doc.is_overdue
+                              ? 'border border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
+                              : 'border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
                             } disabled:opacity-50`}
                         >
                           {completingId === doc.id ? (
@@ -680,9 +682,9 @@ export default function GovernanceReviewsPage() {
       </div>
 
       {statistics && Object.keys(statistics.by_doc_type).length > 0 && (
-        <div className="rounded-xl border border-gray-300 bg-white p-5">
-          <h3 className="mb-4 text-lg font-semibold text-black">Reviews by Document Type</h3>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-lg border border-gray-200 bg-white p-3">
+          <h3 className="mb-2 text-xs font-semibold text-black">Reviews by Document Type</h3>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {Object.entries(statistics.by_doc_type).map(([docType, data]) => {
               const typeStyle = getTypeStyle(docType);
               const TypeIcon = typeStyle.icon || FileText;
@@ -690,29 +692,29 @@ export default function GovernanceReviewsPage() {
               return (
                 <div
                   key={docType}
-                  className="rounded-lg border border-gray-300 bg-white/50 p-4"
+                  className="rounded-lg border border-gray-200 bg-white p-2.5"
                 >
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`rounded-lg p-2 ${typeStyle.bgColor}`}>
-                      <TypeIcon className={`h-4 w-4 ${typeStyle.color}`} />
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`rounded p-1 ${typeStyle.bgColor}`}>
+                      <TypeIcon className={`h-3 w-3 ${typeStyle.color}`} />
                     </div>
-                    <span className="font-medium text-black">{typeStyle.label}</span>
+                    <span className="text-xs font-medium text-black">{typeStyle.label}</span>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Total</span>
-                      <span className="text-sm font-medium text-black">{data.total}</span>
+                      <span className="text-[10px] text-gray-500">Total</span>
+                      <span className="text-[10px] font-semibold text-black">{data.total}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Overdue</span>
-                      <span className={`text-sm font-medium ${data.overdue > 0 ? 'text-red-400' : 'text-gray-600'}`}>
+                      <span className="text-[10px] text-gray-500">Overdue</span>
+                      <span className={`text-[10px] font-semibold ${data.overdue > 0 ? 'text-red-500' : 'text-gray-500'}`}>
                         {data.overdue}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Due Soon</span>
-                      <span className={`text-sm font-medium ${data.due_soon > 0 ? 'text-amber-400' : 'text-gray-600'}`}>
+                      <span className="text-[10px] text-gray-500">Due Soon</span>
+                      <span className={`text-[10px] font-semibold ${data.due_soon > 0 ? 'text-amber-500' : 'text-gray-500'}`}>
                         {data.due_soon}
                       </span>
                     </div>

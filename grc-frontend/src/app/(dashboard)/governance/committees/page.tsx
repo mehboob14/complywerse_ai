@@ -160,21 +160,9 @@ export default function CommitteesPage() {
   return (
     <div className="space-y-5">
       <div className="page-header">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Board & Committee Management</h1>
-            <p className="mt-1 text-slate-600">Manage committees, meetings, and oversight actions</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/governance/committees/actions" className="btn-secondary flex items-center gap-2">
-              <CheckSquare className="h-4 w-4" />
-              View All Actions
-            </Link>
-            <button onClick={() => setIsModalOpen(true)} className="btn-primary flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              New Committee
-            </button>
-          </div>
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">Board & Committee Management</h1>
+          <p className="mt-1 text-slate-600">Manage committees, meetings, and oversight actions</p>
         </div>
       </div>
 
@@ -228,15 +216,15 @@ export default function CommitteesPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[200px] max-w-xs flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
           <input
             type="text"
             placeholder="Search committees..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10 w-full"
+            className="input pl-9 w-full"
           />
         </div>
         <select
@@ -249,6 +237,16 @@ export default function CommitteesPage() {
             <option key={value} value={value}>{label}</option>
           ))}
         </select>
+        <div className="ml-auto flex items-center gap-2">
+          <Link href="/governance/committees/actions" className="btn-secondary flex items-center gap-2">
+            <CheckSquare className="h-4 w-4" />
+            View All Actions
+          </Link>
+          <button onClick={() => setIsModalOpen(true)} className="btn-primary flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            New Committee
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

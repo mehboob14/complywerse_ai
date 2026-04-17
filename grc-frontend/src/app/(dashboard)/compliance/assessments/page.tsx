@@ -86,10 +86,10 @@ const TYPE_OPTIONS = [
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-[var(--color-subtle)]', text: 'text-[var(--color-status-draft)]', label: 'Draft' },
-  in_progress: { bg: 'bg-[var(--color-base-soft)]', text: 'text-[var(--color-status-review)]', label: 'In Progress' },
-  completed: { bg: 'bg-[var(--color-success-soft)]', text: 'text-[var(--color-status-published)]', label: 'Completed' },
-  archived: { bg: 'bg-[var(--color-subtle)]', text: 'text-[var(--color-status-archived)]', label: 'Archived' },
+  draft: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Draft' },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'In Progress' },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Completed' },
+  archived: { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Archived' },
 };
 
 const STATUS_CHART_COLORS: Record<string, string> = {
@@ -100,17 +100,17 @@ const STATUS_CHART_COLORS: Record<string, string> = {
 };
 
 function getScoreColor(score: number | null): { bg: string; text: string } {
-  if (score === null) return { bg: 'bg-[var(--color-subtle)]', text: 'text-[var(--color-muted)]' };
-  if (score >= 80) return { bg: 'bg-[var(--color-success-soft)]', text: 'text-[var(--color-success)]' };
-  if (score >= 50) return { bg: 'bg-[var(--color-warning-soft)]', text: 'text-[var(--color-warning)]' };
-  return { bg: 'bg-[var(--color-danger-soft)]', text: 'text-[var(--color-danger)]' };
+  if (score === null) return { bg: 'bg-gray-100', text: 'text-gray-500' };
+  if (score >= 80) return { bg: 'bg-emerald-50', text: 'text-emerald-700' };
+  if (score >= 50) return { bg: 'bg-amber-50', text: 'text-amber-700' };
+  return { bg: 'bg-red-50', text: 'text-red-700' };
 }
 
 function getScoreBarColor(score: number | null): string {
-  if (score === null) return 'bg-[var(--color-border)]';
-  if (score >= 80) return 'bg-[var(--color-success)]';
-  if (score >= 50) return 'bg-[var(--color-warning)]';
-  return 'bg-[var(--color-danger)]';
+  if (score === null) return 'bg-gray-200';
+  if (score >= 80) return 'bg-emerald-500';
+  if (score >= 50) return 'bg-amber-500';
+  return 'bg-red-500';
 }
 
 export default function AssessmentsPage() {
@@ -291,26 +291,6 @@ export default function AssessmentsPage() {
     }))
     .sort((a, b) => b.value - a.value);
 
-  const progressByStatusData = Object.entries(
-    filteredAssessments.reduce<Record<string, { totalScore: number; count: number }>>((acc, assessment) => {
-      if (assessment.overall_score === null) {
-        return acc;
-      }
-      const existing = acc[assessment.status] || { totalScore: 0, count: 0 };
-      acc[assessment.status] = {
-        totalScore: existing.totalScore + assessment.overall_score,
-        count: existing.count + 1,
-      };
-      return acc;
-    }, {})
-  )
-    .map(([status, metric]) => ({
-      name: STATUS_STYLES[status]?.label || status.replace(/_/g, ' '),
-      status,
-      averageScore: Math.round(metric.totalScore / metric.count),
-    }))
-    .sort((a, b) => b.averageScore - a.averageScore);
-
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -443,63 +423,130 @@ export default function AssessmentsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="mb-3">
+        {/* Status Distribution Donut with inline legend */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="mb-4">
             <h3 className="text-sm font-semibold text-black">Assessment Status Distribution</h3>
-            <p className="text-xs text-gray-600">Based on currently loaded assessments</p>
+            <p className="text-xs text-gray-500">Breakdown of assessments by current status</p>
           </div>
-          <div className="h-64">
-            {statusChartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                No status data available
+          {statusChartData.length === 0 ? (
+            <div className="flex h-52 items-center justify-center text-sm text-gray-400">
+              No assessments loaded yet
+            </div>
+          ) : (
+            <div className="flex items-center gap-6">
+              <div className="h-44 w-44 flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusChartData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={44}
+                      outerRadius={66}
+                      stroke="none"
+                      paddingAngle={2}
+                    >
+                      {statusChartData.map((entry) => (
+                        <Cell key={entry.status} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#fff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        color: '#111827',
+                        fontSize: 12,
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusChartData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={82}
-                    innerRadius={48}
-                    label
-                  >
-                    {statusChartData.map((entry) => (
-                      <Cell key={entry.status} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+              <div className="flex-1 space-y-2.5">
+                {statusChartData.map((item) => (
+                  <div key={item.status} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-sm text-gray-700">{item.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold text-black">{item.value}</span>
+                      <span className="text-xs text-gray-400">
+                        {statusChartData.reduce((s, d) => s + d.value, 0) > 0
+                          ? Math.round((item.value / statusChartData.reduce((s, d) => s + d.value, 0)) * 100)
+                          : 0}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="mb-3">
-            <h3 className="text-sm font-semibold text-black">Average Progress by Status</h3>
-            <p className="text-xs text-gray-600">Average assessment completion score (%)</p>
-          </div>
-          <div className="h-64">
-            {progressByStatusData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                No progress data available
+        {/* Compliance Items Breakdown – stacked bar */}
+        {(() => {
+          const totalComplied = filteredAssessments.reduce((s, a) => s + (a.complied_count || 0), 0);
+          const totalPartial = filteredAssessments.reduce((s, a) => s + (a.partially_complied_count || 0), 0);
+          const totalNotComplied = filteredAssessments.reduce((s, a) => s + (a.not_complied_count || 0), 0);
+          const totalNA = filteredAssessments.reduce((s, a) => s + (a.na_count || 0), 0);
+          const grandTotal = totalComplied + totalPartial + totalNotComplied + totalNA;
+          const breakdownData = [
+            { name: 'Complied', value: totalComplied, color: '#22c55e' },
+            { name: 'Partial', value: totalPartial, color: '#eab308' },
+            { name: 'Not Complied', value: totalNotComplied, color: '#ef4444' },
+            { name: 'N/A', value: totalNA, color: '#94a3b8' },
+          ].filter((d) => d.value > 0);
+
+          return (
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-black">Compliance Items Breakdown</h3>
+                <p className="text-xs text-gray-500">Total items by compliance outcome across all assessments</p>
               </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={progressByStatusData} margin={{ top: 8, right: 8, left: 0, bottom: 6 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#4B5563' }} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#4B5563' }} />
-                  <Tooltip formatter={(value) => [`${value}%`, 'Average Progress']} />
-                  <Bar dataKey="averageScore" fill="#2563EB" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
+              {grandTotal === 0 ? (
+                <div className="flex h-52 items-center justify-center text-sm text-gray-400">
+                  No items data available
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {/* Stacked proportion bar */}
+                  <div>
+                    <div className="flex h-6 w-full overflow-hidden rounded-lg">
+                      {breakdownData.map((d) => (
+                        <div
+                          key={d.name}
+                          style={{ width: `${(d.value / grandTotal) * 100}%`, backgroundColor: d.color }}
+                          title={`${d.name}: ${d.value}`}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-1 flex justify-between text-[10px] text-gray-400">
+                      <span>0</span>
+                      <span>{grandTotal.toLocaleString()} items</span>
+                    </div>
+                  </div>
+                  {/* Legend with counts */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {breakdownData.map((d) => (
+                      <div key={d.name} className="flex items-center gap-2.5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
+                        <span className="h-3 w-3 flex-shrink-0 rounded-sm" style={{ backgroundColor: d.color }} />
+                        <div>
+                          <p className="text-xs text-gray-500">{d.name}</p>
+                          <p className="text-sm font-bold text-black">{d.value.toLocaleString()}</p>
+                          <p className="text-[10px] text-gray-400">{Math.round((d.value / grandTotal) * 100)}%</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

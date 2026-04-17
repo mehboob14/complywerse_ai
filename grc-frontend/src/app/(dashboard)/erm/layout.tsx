@@ -44,11 +44,6 @@ export default function ERMLayout({
 
   return (
     <div className="cw-dashboard risk-workspace min-h-full space-y-4 px-1 pb-2">
-      <div className="space-y-0.5">
-        <h1 className="text-[15px] font-semibold text-slate-900">Enterprise Risk Management</h1>
-        <p className="text-[11px] text-slate-500">Comprehensive risk identification, assessment, and monitoring</p>
-      </div>
-
       {!isOverview && (
         <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-[3px]">
           {ermNavigation.map((item) => {

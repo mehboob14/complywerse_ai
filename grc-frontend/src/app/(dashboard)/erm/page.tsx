@@ -40,13 +40,13 @@ import {
 } from 'recharts';
 
 const CATEGORY_COLORS: Record<string, string> = {
-  strategic: 'var(--color-base)',
-  operational: 'var(--color-base)',
-  financial: 'var(--color-success)',
-  compliance: 'var(--color-warning)',
-  technology: 'var(--color-base)',
-  reputational: 'var(--color-danger)',
-  third_party: 'var(--color-warning)',
+  strategic: '#6366f1',
+  operational: '#3b82f6',
+  financial: '#22c55e',
+  compliance: '#f59e0b',
+  technology: '#8b5cf6',
+  reputational: '#ef4444',
+  third_party: '#f97316',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -60,24 +60,25 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const TREATMENT_COLORS: Record<string, string> = {
-  mitigate: 'var(--color-base)',
-  accept: 'var(--color-success)',
-  transfer: 'var(--color-warning)',
-  avoid: 'var(--color-danger)',
+  mitigate: '#3b82f6',
+  accept: '#22c55e',
+  transfer: '#f59e0b',
+  avoid: '#ef4444',
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'var(--color-danger)',
-  high: 'var(--color-warning)',
-  medium: 'var(--color-warning)',
-  low: 'var(--color-success)',
+  critical: '#ef4444',
+  high: '#f97316',
+  medium: '#eab308',
+  low: '#22c55e',
 };
 
 const tooltipStyle = {
-  backgroundColor: 'var(--color-surface)',
-  border: '1px solid var(--color-border)',
+  backgroundColor: '#ffffff',
+  border: '1px solid #e5e7eb',
   borderRadius: '8px',
-  color: 'var(--color-text)',
+  color: '#111827',
+  fontSize: '12px',
 };
 
 const LIKELIHOOD_LABELS = ['Rare', 'Unlikely', 'Possible', 'Likely', 'Almost Certain'];
@@ -121,11 +122,11 @@ function RiskSpeedometer({
   ];
 
   return (
-    <div className="card">
-      <div className="card-header">
+    <div className="bg-white border border-gray-200 rounded-xl p-4">
+      <div className="flex items-start justify-between mb-4">
         <div>
-          <h2 className="card-title">Risk Pulse Speedometer</h2>
-          <p className="card-description">Blended view of exposure, KRIs, and response capacity</p>
+          <h2 className="text-sm font-semibold text-black">Risk Pulse Speedometer</h2>
+          <p className="text-[11px] text-gray-400 mt-0.5">Blended view of exposure, KRIs, and response capacity</p>
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-[220px_1fr] lg:items-center">
@@ -150,15 +151,15 @@ function RiskSpeedometer({
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pt-7">
-            <span className="text-3xl font-semibold" style={{ color: gaugeColor }}>{safeScore}%</span>
-            <span className="mt-1 text-xs text-slate-500">overall posture</span>
+            <span className="text-3xl font-bold" style={{ color: gaugeColor }}>{safeScore}%</span>
+            <span className="mt-1 text-xs text-gray-500">overall posture</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           {signals.map((signal) => (
-            <div key={signal.label} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{signal.label}</p>
-              <p className={`mt-1 text-sm font-semibold ${signal.tone || 'text-slate-900'}`}>{signal.value}</p>
+            <div key={signal.label} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{signal.label}</p>
+              <p className={`mt-1 text-sm font-bold ${signal.tone || 'text-black'}`}>{signal.value}</p>
             </div>
           ))}
         </div>
@@ -263,20 +264,20 @@ function RiskSunburst({
   ];
 
   return (
-    <div className="card">
-      <div className="card-header">
+    <div className="bg-white border border-gray-200 rounded-xl p-4">
+      <div className="flex items-start justify-between mb-4">
         <div>
-          <h2 className="card-title">Risk Universe Sunburst</h2>
-          <p className="card-description">Exposure layers across score, treatment, and signal status</p>
+          <h2 className="text-sm font-semibold text-black">Risk Universe Sunburst</h2>
+          <p className="text-[11px] text-gray-400 mt-0.5">Exposure layers across score, treatment, and signal status</p>
         </div>
       </div>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-        <div className="relative mx-auto h-[240px] w-[240px] flex-shrink-0">
+        <div className="relative mx-auto h-[220px] w-[220px] flex-shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               {rings.map((ring, ringIndex) => {
                 const data = ring.items.filter((item) => item.value > 0);
-                const chartData = data.length ? data : [{ name: 'None', value: 1, color: '#e2e8f0' }];
+                const chartData = data.length ? data : [{ name: 'None', value: 1, color: '#e5e7eb' }];
                 return (
                   <Pie
                     key={ring.label}
@@ -300,20 +301,20 @@ function RiskSunburst({
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-2xl font-semibold text-slate-900">{centerValue}</span>
-            <span className="text-xs text-slate-500">{centerLabel}</span>
+            <span className="text-2xl font-bold text-black">{centerValue}</span>
+            <span className="text-xs text-gray-500">{centerLabel}</span>
           </div>
         </div>
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 space-y-2">
           {rings.map((ring) => (
-            <div key={ring.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{ring.label}</p>
-              <div className="space-y-1.5">
+            <div key={ring.label} className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">{ring.label}</p>
+              <div className="space-y-1">
                 {ring.items.filter((item) => item.value > 0).map((item) => (
                   <div key={item.name} className="flex items-center gap-2 text-xs">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                    <span className="flex-1 text-slate-600">{item.name}</span>
-                    <span className="font-semibold text-slate-900">{item.value}</span>
+                    <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="flex-1 text-gray-600 capitalize">{item.name}</span>
+                    <span className="font-semibold text-black">{item.value}</span>
                   </div>
                 ))}
               </div>
@@ -710,7 +711,7 @@ export default function ERMOverviewPage() {
           variant="danger"
           onClick={() => window.location.href = '/erm/risks'}
         />
-        <div className="rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-500/50 hover:shadow-glow-sm transition-all">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 hover:border-blue-300 transition-all">
           <div className="flex items-center gap-4">
             <ProgressRing
               percentage={avgRiskScore.percentage}
@@ -720,13 +721,13 @@ export default function ERMOverviewPage() {
               showPercentage={false}
             />
             <div>
-              <p className="text-sm font-medium text-slate-600">Avg Risk Score</p>
-              <p className="text-2xl font-bold text-slate-900">{avgRiskScore.value.toFixed(1)}</p>
-              <p className="text-xs text-slate-500">out of 25</p>
+              <p className="text-sm font-medium text-gray-600">Avg Risk Score</p>
+              <p className="text-2xl font-bold text-black">{avgRiskScore.value.toFixed(1)}</p>
+              <p className="text-xs text-gray-400">out of 25</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 hover:border-success-500/50 hover:shadow-[0_0_10px_-3px_rgba(34,197,94,0.3)] transition-all">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 hover:border-green-300 transition-all">
           <div className="flex items-center gap-4">
             <ProgressRing
               percentage={mitigationProgress.percentage}
@@ -735,9 +736,9 @@ export default function ERMOverviewPage() {
               color={mitigationProgress.percentage >= 70 ? 'success' : mitigationProgress.percentage >= 40 ? 'warning' : 'danger'}
             />
             <div>
-              <p className="text-sm font-medium text-slate-600">Mitigation Progress</p>
-              <p className="text-2xl font-bold text-slate-900">{mitigationProgress.percentage}%</p>
-              <p className="text-xs text-slate-500">{mitigationProgress.completed}/{mitigationProgress.total} complete</p>
+              <p className="text-sm font-medium text-gray-600">Mitigation Progress</p>
+              <p className="text-2xl font-bold text-black">{mitigationProgress.percentage}%</p>
+              <p className="text-xs text-gray-400">{mitigationProgress.completed}/{mitigationProgress.total} complete</p>
             </div>
           </div>
         </div>
@@ -968,11 +969,62 @@ export default function ERMOverviewPage() {
         <div className="card">
           <div className="card-header">
             <div>
-              <h2 className="card-title">Category Exposure Ladder</h2>
-              <p className="card-description">Average residual score with risk count by category</p>
+              <h2 className="card-title">Risks by Category</h2>
+              <p className="card-description">Distribution and average scores</p>
             </div>
           </div>
-          <ExposureLollipop items={categoryExposureItems} maxValue={25} />
+          
+          {categoryData.length > 0 ? (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryData} layout="vertical" margin={{ left: 0, right: 20 }}>
+                  <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={100}
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      color: '#111827',
+                    }}
+                  />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={24}>
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="empty-state py-8">
+              <div className="empty-state-icon">
+                <BarChart3 className="h-8 w-8 text-gray-400" />
+              </div>
+              <p className="empty-state-title">No Category Data</p>
+              <p className="empty-state-description text-sm">Add risks to see category distribution</p>
+            </div>
+          )}
+          
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex flex-wrap gap-3">
+              {categoryData.slice(0, 5).map((cat) => (
+                <div key={cat.category} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: cat.color }} />
+                  <span className="text-xs text-gray-600">
+                    {cat.label}: <span className="text-black font-medium">{cat.count}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="card">
@@ -1177,137 +1229,14 @@ export default function ERMOverviewPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h2 className="card-title">Risks by Category</h2>
-              <p className="card-description">Distribution and average scores</p>
-            </div>
-          </div>
-          
-          {categoryData.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryData} layout="vertical" margin={{ left: 0, right: 20 }}>
-                  <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    type="category"
-                    dataKey="label"
-                    width={100}
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e293b',
-                      border: '1px solid #475569',
-                      borderRadius: '8px',
-                      color: '#f1f5f9',
-                    }}
-                  />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={24}>
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="empty-state py-8">
-              <div className="empty-state-icon">
-                <BarChart3 className="h-8 w-8 text-slate-500" />
-              </div>
-              <p className="empty-state-title">No Category Data</p>
-              <p className="empty-state-description text-sm">Add risks to see category distribution</p>
-            </div>
-          )}
-          
-          <div className="mt-4 pt-4 border-t border-slate-200">
-            <div className="flex flex-wrap gap-3">
-              {categoryData.slice(0, 5).map((cat) => (
-                <div key={cat.category} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: cat.color }} />
-                  <span className="text-xs text-slate-600">
-                    {cat.label}: <span className="text-slate-900 font-medium">{cat.count}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">Category Exposure Ladder</h2>
+            <p className="card-description">Average residual score with risk count by category</p>
           </div>
         </div>
-
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h2 className="card-title">Mitigation Actions</h2>
-              <p className="card-description">Pending and overdue actions</p>
-            </div>
-            <Link href="/erm/mitigation-actions" className="btn-ghost btn-sm">
-              View All
-            </Link>
-          </div>
-          
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-slate-600">Overall Progress</span>
-              <span className="text-sm font-medium text-slate-900">{mitigationProgress.completed}/{mitigationProgress.total}</span>
-            </div>
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-primary-500 to-primary-400 rounded-full transition-all duration-500"
-                style={{ width: `${mitigationProgress.percentage}%` }}
-              />
-            </div>
-          </div>
-          
-          {overdueActions && overdueActions.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-rose-400 flex items-center gap-1.5 mb-3">
-                <AlertCircle className="h-3.5 w-3.5" />
-                {overdueActions.length} Overdue Actions
-              </p>
-              {overdueActions.slice(0, 4).map((action: any) => (
-                <div
-                  key={action.id}
-                  className="flex items-center gap-3 rounded-lg bg-rose-500/5 border border-rose-500/20 p-3 hover:border-rose-500/40 transition-all"
-                >
-                  <div className="flex-shrink-0">
-                    <Clock className="h-4 w-4 text-rose-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">{action.title}</p>
-                    <div className="flex items-center gap-2 text-xs text-slate-600">
-                      {action.owner_name && (
-                        <span className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {action.owner_name}
-                        </span>
-                      )}
-                      {action.due_date && (
-                        <span className="flex items-center gap-1 text-rose-400">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(action.due_date).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="badge-danger text-xs">Overdue</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state py-6">
-              <div className="empty-state-icon bg-emerald-500/10">
-                <CheckCircle className="h-6 w-6 text-emerald-400" />
-              </div>
-              <p className="empty-state-title text-sm">No Overdue Actions</p>
-              <p className="empty-state-description text-xs">All actions are on track</p>
-            </div>
-          )}
-        </div>
+        <ExposureLollipop items={categoryExposureItems} maxValue={25} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

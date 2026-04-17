@@ -764,18 +764,18 @@ export default function GovernanceWorkflowsPage() {
 
   if (isLoading && mainTab === 'approvals') {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+      <div className="flex h-32 items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="cw-text-default text-lg font-semibold">Approval Workflows</h1>
-          <p className="cw-text-muted mt-1 text-xs">
+          <h1 className="cw-text-default text-sm font-semibold">Approval Workflows</h1>
+          <p className="cw-text-muted text-xs">
             Manage document approvals, workflow templates, and review pending requests
           </p>
         </div>
@@ -784,75 +784,75 @@ export default function GovernanceWorkflowsPage() {
       <div className="flex gap-2 border-b border-[var(--color-border)] pb-2">
         <button
           onClick={() => { setMainTab('approvals'); setSelectedTemplate(null); }}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
             mainTab === 'approvals'
-              ? 'cw-btn-primary'
-              : 'cw-text-muted hover:bg-[var(--color-subtle)] hover:cw-text-default'
+              ? 'border-blue-600 bg-blue-50 text-blue-700'
+              : 'text-[var(--color-muted)] border-transparent hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]'
           }`}
         >
-          <FileCheck size={18} />
+          <FileCheck size={13} />
           Approvals
         </button>
         <button
           onClick={() => setMainTab('templates')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
             mainTab === 'templates'
-              ? 'cw-btn-primary'
-              : 'cw-text-muted hover:bg-[var(--color-subtle)] hover:cw-text-default'
+              ? 'border-blue-600 bg-blue-50 text-blue-700'
+              : 'text-[var(--color-muted)] border-transparent hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]'
           }`}
         >
-          <Settings size={18} />
+          <Settings size={13} />
           Workflow Templates
         </button>
       </div>
 
       {mainTab === 'approvals' && (
         <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-gray-300 bg-white p-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-yellow-500/20 p-2">
-                  <Clock className="h-5 w-5 text-yellow-400" />
+          <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded bg-yellow-50 p-1.5">
+                  <Clock className="h-4 w-4 text-yellow-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Pending Approvals</p>
-                  <p className="text-2xl font-bold text-black">{dashboard?.pending_my_approval || 0}</p>
+                  <p className="text-xs text-gray-500">Pending Approvals</p>
+                  <p className="text-xl font-bold text-black">{dashboard?.pending_my_approval || 0}</p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-300 bg-white p-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-green-500/20 p-2">
-                  <CheckCircle className="h-5 w-5 text-green-400" />
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded bg-green-50 p-1.5">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Approved Today</p>
-                  <p className="text-2xl font-bold text-black">{dashboard?.approved_today || 0}</p>
+                  <p className="text-xs text-gray-500">Approved Today</p>
+                  <p className="text-xl font-bold text-black">{dashboard?.approved_today || 0}</p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-300 bg-white p-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-red-500/20 p-2">
-                  <XCircle className="h-5 w-5 text-red-400" />
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded bg-red-50 p-1.5">
+                  <XCircle className="h-4 w-4 text-red-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Rejected Today</p>
-                  <p className="text-2xl font-bold text-black">{dashboard?.rejected_today || 0}</p>
+                  <p className="text-xs text-gray-500">Rejected Today</p>
+                  <p className="text-xl font-bold text-black">{dashboard?.rejected_today || 0}</p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-300 bg-white p-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-orange-500/20 p-2">
-                  <AlertTriangle className="h-5 w-5 text-orange-400" />
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded bg-orange-50 p-1.5">
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Overdue</p>
-                  <p className="text-2xl font-bold text-black">{dashboard?.overdue || 0}</p>
+                  <p className="text-xs text-gray-500">Overdue</p>
+                  <p className="text-xl font-bold text-black">{dashboard?.overdue || 0}</p>
                 </div>
               </div>
             </div>
@@ -865,15 +865,15 @@ export default function GovernanceWorkflowsPage() {
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
                       activeTab === tab
-                        ? 'bg-primary-600 text-black'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-black'
+                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                        : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-black'
                     }`}
                   >
                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
                     {tab === 'pending' && pendingApprovals.length > 0 && (
-                      <span className="ml-2 rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-400">
+                      <span className="ml-1 rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] text-yellow-600">
                         {pendingApprovals.length}
                       </span>
                     )}

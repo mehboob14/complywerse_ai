@@ -605,7 +605,6 @@ export default function GovernanceDocumentsPage() {
               <table className="w-full">
                 <thead className="bg-[var(--color-surface)]">
                   <tr>
-                    <SortableHeader field="document_code">Code</SortableHeader>
                     <SortableHeader field="title">Title</SortableHeader>
                     <SortableHeader field="doc_type">Type</SortableHeader>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">File</th>
@@ -624,9 +623,6 @@ export default function GovernanceDocumentsPage() {
                     
                     return (
                       <tr key={doc.id} className="hover:bg-[var(--color-hover)] transition-colors">
-                        <td className="whitespace-nowrap px-4 py-4 text-sm font-mono cw-text-default">
-                          {doc.document_code || '-'}
-                        </td>
                         <td className="px-4 py-4">
                           <div className="max-w-xs">
                             <p className="font-medium cw-text-default truncate">{doc.title}</p>
@@ -636,7 +632,7 @@ export default function GovernanceDocumentsPage() {
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-4">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${typeStyle.bgColor} ${typeStyle.color}`}>
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${typeStyle.bgColor} text-gray-800`}>
                             <TypeIcon className="h-3 w-3" />
                             {typeStyle.label}
                           </span>
@@ -645,9 +641,8 @@ export default function GovernanceDocumentsPage() {
                           {doc.file_name ? (
                             <div className="flex items-center gap-2">
                               <FileIcon className={`h-4 w-4 ${getFileTypeColor(doc.file_type)}`} />
-                              <div className="max-w-[150px]">
+                              <div className="max-w-[140px]">
                                 <p className="text-sm cw-text-default truncate" title={doc.file_name}>{doc.file_name}</p>
-                                <p className="text-xs cw-text-muted">{formatFileSize(doc.file_size)}</p>
                               </div>
                             </div>
                           ) : (

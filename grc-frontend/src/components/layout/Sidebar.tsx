@@ -100,13 +100,10 @@ const navigation: NavEntry[] = [
     requiredModules: ['governance'],
     items: [
       { name: 'Policies', href: '/governance', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
-      { name: 'Documents', href: '/governance/documents', icon: FileText, requiredPermissions: ['governance:policies:*'] },
       { name: 'Attestations', href: '/governance/attestations', icon: ClipboardCheck, requiredPermissions: ['governance:attestations:*'] },
       { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
       { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
-      { name: 'Exceptions', href: '/governance/exceptions', icon: AlertTriangle, requiredPermissions: ['governance:policy_exceptions:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
-      { name: 'Reviews', href: '/governance/reviews', icon: ClipboardList, requiredPermissions: ['governance:policies:*'] },
     ],
   },
   {

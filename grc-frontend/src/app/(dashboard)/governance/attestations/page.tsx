@@ -165,17 +165,17 @@ export default function AttestationsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-4">
         <div className="page-header">
-          <div className="skeleton h-8 w-64 mb-2" />
-          <div className="skeleton h-5 w-96" />
+          <div className="skeleton h-5 w-48 mb-1" />
+          <div className="skeleton h-4 w-64" />
         </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="card p-6">
-              <div className="skeleton h-12 w-12 rounded-xl mb-4" />
-              <div className="skeleton h-8 w-16 mb-1" />
-              <div className="skeleton h-4 w-24" />
+            <div key={i} className="card p-3">
+              <div className="skeleton h-8 w-8 rounded mb-2" />
+              <div className="skeleton h-5 w-12 mb-1" />
+              <div className="skeleton h-3 w-20" />
             </div>
           ))}
         </div>
@@ -227,12 +227,12 @@ export default function AttestationsPage() {
   const unlinkedCompletedCount = completedAttestations.filter(a => !a.linked_to_evidence).length;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-black">Attestations & Certifications</h1>
-            <p className="mt-1 text-gray-600">Manage attestation campaigns and track compliance certifications</p>
+            <h1 className="text-sm font-semibold text-black">Attestations & Certifications</h1>
+            <p className="mt-0.5 text-xs text-gray-500">Manage attestation campaigns and track compliance certifications</p>
           </div>
           <div className="flex items-center gap-3">
             <Link href="/governance/attestations/campaigns" className="btn-secondary flex items-center gap-2">
@@ -247,73 +247,73 @@ export default function AttestationsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="card p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-500/20">
-              <ClipboardCheck className="h-6 w-6 text-primary-400" />
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="card p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-primary-500/10">
+              <ClipboardCheck className="h-4 w-4 text-primary-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-black">{dashboard?.total_campaigns || 0}</p>
-              <p className="text-sm text-gray-600">Total Campaigns</p>
+              <p className="text-xl font-bold text-black">{dashboard?.total_campaigns || 0}</p>
+              <p className="text-xs text-gray-500">Total Campaigns</p>
             </div>
           </div>
         </div>
 
-        <div className="card p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20">
-              <Clock className="h-6 w-6 text-amber-400" />
+        <div className="card p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-amber-500/10">
+              <Clock className="h-4 w-4 text-amber-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-black">{dashboard?.pending_attestations || 0}</p>
-              <p className="text-sm text-gray-600">Pending Attestations</p>
+              <p className="text-xl font-bold text-black">{dashboard?.pending_attestations || 0}</p>
+              <p className="text-xs text-gray-500">Pending Attestations</p>
             </div>
           </div>
         </div>
 
-        <div className="card p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/20">
-              <AlertTriangle className="h-6 w-6 text-rose-400" />
+        <div className="card p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-rose-500/10">
+              <AlertTriangle className="h-4 w-4 text-rose-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-black">{dashboard?.overdue_attestations || 0}</p>
-              <p className="text-sm text-gray-600">Overdue</p>
+              <p className="text-xl font-bold text-black">{dashboard?.overdue_attestations || 0}</p>
+              <p className="text-xs text-gray-500">Overdue</p>
             </div>
           </div>
         </div>
 
-        <div className="card p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">
-              <TrendingUp className="h-6 w-6 text-emerald-400" />
+        <div className="card p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-emerald-500/10">
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-black">{dashboard?.completion_rate || 0}%</p>
-              <p className="text-sm text-gray-600">Completion Rate</p>
+              <p className="text-xl font-bold text-black">{dashboard?.completion_rate || 0}%</p>
+              <p className="text-xs text-gray-500">Completion Rate</p>
             </div>
           </div>
         </div>
       </div>
 
       {pendingAttestations.length > 0 && (
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-black flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-400" />
+        <div className="card p-3">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-black flex items-center gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
               My Pending Attestations
             </h3>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-2">
             {pendingAttestations.map((attestation) => {
               const statusStyle = STATUS_COLORS[attestation.status] || STATUS_COLORS.pending;
               const StatusIcon = statusStyle.icon;
               const isOverdue = attestation.status === 'overdue';
 
               return (
-                <div key={attestation.id} className={`p-4 rounded-lg border ${isOverdue ? 'bg-rose-500/5 border-rose-500/30' : 'bg-white/50 border-gray-300'}`}>
+                <div key={attestation.id} className={`px-3 py-2 rounded border ${isOverdue ? 'bg-rose-50 border-rose-200' : 'bg-white border-gray-200'}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
@@ -323,8 +323,8 @@ export default function AttestationsPage() {
                           {attestation.status}
                         </span>
                       </div>
-                      <p className="text-gray-600 text-sm line-clamp-2 mb-2">{attestation.attestation_text}</p>
-                      <div className="flex items-center gap-4 text-sm text-gray-700">
+                      <p className="text-gray-500 text-xs line-clamp-1 mb-1">{attestation.attestation_text}</p>
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
                         <span className="flex items-center gap-1.5">
                           <Calendar className="h-4 w-4" />
                           Due: {new Date(attestation.due_date).toLocaleDateString()}
@@ -348,10 +348,10 @@ export default function AttestationsPage() {
       )}
 
       {completedAttestations.length > 0 && (
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-black flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-emerald-400" />
+        <div className="card p-3">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-black flex items-center gap-1.5">
+              <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
               Completed Attestations
             </h3>
             <div className="flex items-center gap-3">

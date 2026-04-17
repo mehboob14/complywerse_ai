@@ -681,17 +681,17 @@ export default function GovernanceDashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-4">
         <div className="page-header">
-          <div className="skeleton h-8 w-56 mb-2" />
-          <div className="skeleton h-5 w-80" />
+          <div className="skeleton h-5 w-56 mb-1" />
+          <div className="skeleton h-4 w-80" />
         </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="stat-card">
-              <div className="skeleton h-12 w-12 rounded-xl mb-4" />
-              <div className="skeleton h-8 w-20 mb-2" />
-              <div className="skeleton h-4 w-32" />
+              <div className="skeleton h-8 w-8 rounded-lg mb-3" />
+              <div className="skeleton h-6 w-16 mb-1" />
+              <div className="skeleton h-3 w-24" />
             </div>
           ))}
         </div>
@@ -904,44 +904,44 @@ export default function GovernanceDashboardPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Governance Overview</h1>
+          <h1 className="text-sm font-semibold text-slate-900">Governance Overview</h1>
           <p className="text-xs text-slate-500">Real-time policy, framework, review, and oversight posture</p>
         </div>
         <Link href="/governance/documents" className="btn-primary">
-          <FileText size={18} />
+          <FileText size={14} />
           Manage Documents
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200 border-l-4 border-l-blue-500 bg-white p-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Documents</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">{totalDocuments}</p>
+          <p className="mt-1 text-xl font-bold text-slate-900">{totalDocuments}</p>
           <p className="mt-1 text-[11px] text-slate-400">governed portfolio</p>
         </div>
         <div className="rounded-xl border border-slate-200 border-l-4 border-l-emerald-500 bg-white p-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Published</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-600">{publishedCount}</p>
+          <p className="mt-1 text-xl font-bold text-emerald-600">{publishedCount}</p>
           <p className="mt-1 text-[11px] text-slate-400">{publishedPct}% live</p>
         </div>
         <div className="rounded-xl border border-slate-200 border-l-4 border-l-amber-500 bg-white p-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Pending Flow</p>
-          <p className="mt-1 text-2xl font-bold text-amber-600">{workflowPendingAll}</p>
+          <p className="mt-1 text-xl font-bold text-amber-600">{workflowPendingAll}</p>
           <p className="mt-1 text-[11px] text-slate-400">reviews and approvals</p>
         </div>
         <div className="rounded-xl border border-slate-200 border-l-4 border-l-violet-500 bg-white p-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Coverage</p>
-          <p className="mt-1 text-2xl font-bold text-violet-600">{Math.round(complianceRate)}%</p>
+          <p className="mt-1 text-xl font-bold text-violet-600">{Math.round(complianceRate)}%</p>
           <p className="mt-1 text-[11px] text-slate-400">framework mapping</p>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+      <div className="grid gap-3 xl:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Document Status</h2>
               <p className="text-[11px] text-slate-500">Live vs in workflow</p>
@@ -951,8 +951,8 @@ export default function GovernanceDashboardPage() {
           <DonutChart data={statusChartData} total={totalDocuments} />
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Portfolio Mix</h2>
               <p className="text-[11px] text-slate-500">Policies, standards, and frameworks</p>
@@ -962,8 +962,8 @@ export default function GovernanceDashboardPage() {
           <DonutChart data={typeChartData} total={totalDocuments} />
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Attention Queue</h2>
               <p className="text-[11px] text-slate-500">Items needing action</p>
@@ -974,9 +974,9 @@ export default function GovernanceDashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+      <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Governance Posture Radar</h2>
               <p className="text-[11px] text-slate-500">Current score against target</p>
@@ -986,8 +986,8 @@ export default function GovernanceDashboardPage() {
           <GovernanceHealthRadar data={healthRadarData} />
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Health Snapshot</h2>
               <p className="text-[11px] text-slate-500">Compact KPI rings</p>
@@ -1003,9 +1003,9 @@ export default function GovernanceDashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+      <div className="grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Oversight Hotspots</h2>
               <p className="text-[11px] text-slate-500">Workflow, committee, attestation, and regulation load</p>
@@ -1015,26 +1015,26 @@ export default function GovernanceDashboardPage() {
           <LollipopChart items={oversightItems} />
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Content Throughput</h2>
               <p className="text-[11px] text-slate-500">Created vs published trend</p>
             </div>
             <TrendingUp className="h-4 w-4 text-emerald-500" />
           </div>
-          <div className="mb-4 grid grid-cols-3 gap-2">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-center">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">Created</p>
-              <p className="text-lg font-semibold text-slate-900">{createdTotal}</p>
+              <p className="text-sm font-semibold text-slate-900">{createdTotal}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-center">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">Published</p>
-              <p className="text-lg font-semibold text-emerald-600">{publishedTotalInPeriod}</p>
+              <p className="text-sm font-semibold text-emerald-600">{publishedTotalInPeriod}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-center">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">Live rate</p>
-              <p className="text-lg font-semibold text-blue-600">{publishRate}%</p>
+              <p className="text-sm font-semibold text-blue-600">{publishRate}%</p>
             </div>
           </div>
           {trendData.length > 0 ? (
@@ -1048,31 +1048,31 @@ export default function GovernanceDashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+      <div className="grid gap-3 xl:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Framework Mapping Results</h2>
               <p className="text-[11px] text-slate-500">Mapped controls and outcomes</p>
             </div>
             <Shield className="h-4 w-4 text-indigo-600" />
           </div>
-          <div className="mb-4 grid grid-cols-2 gap-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+          <div className="mb-3 grid grid-cols-2 gap-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-center">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">Frameworks</p>
-              <p className="text-lg font-semibold text-slate-900">{frameworkCount}</p>
+              <p className="text-sm font-semibold text-slate-900">{frameworkCount}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-center">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">Mapped</p>
-              <p className="text-lg font-semibold text-slate-900">{mappedFrameworkCount}</p>
+              <p className="text-sm font-semibold text-slate-900">{mappedFrameworkCount}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-center">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">Results</p>
-              <p className="text-lg font-semibold text-slate-900">{mappedClauseTotal}/{totalClauseUniverse}</p>
+              <p className="text-sm font-semibold text-slate-900">{mappedClauseTotal}/{totalClauseUniverse}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-center">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">Strong</p>
-              <p className="text-lg font-semibold text-emerald-600">{strongFrameworkCount}</p>
+              <p className="text-sm font-semibold text-emerald-600">{strongFrameworkCount}</p>
             </div>
           </div>
           {frameworkItems.length > 0 ? (
@@ -1088,8 +1088,8 @@ export default function GovernanceDashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Lifecycle Bottlenecks</h2>
               <p className="text-[11px] text-slate-500">Where content is stacking up</p>

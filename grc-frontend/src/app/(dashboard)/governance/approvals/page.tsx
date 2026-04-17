@@ -418,48 +418,48 @@ export default function ApprovalsPage() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center h-32">
         <div className="text-center">
-          <AlertTriangle className="mx-auto h-12 w-12 text-red-400" />
-          <h3 className="mt-4 text-lg font-medium text-black">Error loading approvals</h3>
-          <p className="mt-2 text-sm text-gray-600">Please try again later</p>
+          <AlertTriangle className="mx-auto h-7 w-7 text-red-400" />
+          <h3 className="mt-2 text-xs font-medium text-black">Error loading approvals</h3>
+          <p className="mt-1 text-xs text-gray-600">Please try again later</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-black">My Approvals</h2>
-          <p className="text-sm text-gray-600">Documents waiting for your approval</p>
+          <h2 className="text-sm font-semibold text-black">My Approvals</h2>
+          <p className="text-xs text-gray-600">Documents waiting for your approval</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-3 py-1 text-sm font-medium text-amber-400">
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
             <Clock size={14} />
             {items.length} Pending
           </span>
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
           <input
             type="text"
             placeholder="Search documents..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full rounded border border-gray-300 bg-white py-1.5 pl-8 pr-3 text-xs text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Filter size={16} className="text-gray-600" />
+        <div className="flex items-center gap-1.5">
+          <Filter size={13} className="text-gray-500" />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+            className="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-black focus:border-primary-500 focus:outline-none"
           >
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
@@ -470,13 +470,13 @@ export default function ApprovalsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+        <div className="flex items-center justify-center h-32">
+          <Loader2 className="h-5 w-5 animate-spin text-primary-500" />
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="rounded-xl border border-gray-300 bg-white/50 p-12 text-center">
-          <FileText className="mx-auto h-12 w-12 text-gray-700" />
-          <h3 className="mt-4 text-lg font-medium text-black">No pending approvals</h3>
+        <div className="rounded-lg border border-gray-300 bg-white/50 py-10 text-center">
+          <FileText className="mx-auto h-7 w-7 text-gray-400" />
+          <h3 className="mt-2 text-xs font-medium text-black">No pending approvals</h3>
           <p className="mt-2 text-sm text-gray-600">
             {searchQuery
               ? 'No documents match your search criteria'
@@ -484,32 +484,32 @@ export default function ApprovalsPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border border-gray-300 bg-white/50 overflow-hidden">
+        <div className="rounded-lg border border-gray-300 bg-white overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-300 bg-white/50">
-                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-gray-600">
+                <tr className="border-b border-gray-200 bg-slate-50">
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                     Action
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-gray-600">
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                     Type
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-gray-600">
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                     Submitted By
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-gray-600">
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                     Date
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-gray-600">
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                     Status
                   </th>
-                  <th className="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-gray-600">
+                  <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700">
+              <tbody className="divide-y divide-gray-100">
                 {filteredItems.map((item: GovernanceActionReviewItem) => {
                   const docTypeStyle = getDocTypeStyle(item.doc_type || 'other');
                   const actionDate = new Date(item.action_date);
@@ -521,66 +521,66 @@ export default function ApprovalsPage() {
                       className="hover:bg-gray-100/50 cursor-pointer transition-colors"
                       onClick={() => handleRowClick(item)}
                     >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-primary-500/20 p-2">
-                            <FileText className="h-5 w-5 text-primary-400" />
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="rounded bg-primary-500/10 p-1">
+                            <FileText className="h-3.5 w-3.5 text-primary-500" />
                           </div>
                           <div>
-                            <p className="font-medium text-black">{item.document_title || item.action_description}</p>
-                            <p className="text-xs text-gray-600">{item.document_code || `Action #${item.id}`}</p>
+                            <p className="text-xs font-medium text-black">{item.document_title || item.action_description}</p>
+                            <p className="text-[10px] text-gray-500">{item.document_code || `Action #${item.id}`}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm text-gray-800 capitalize">
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-gray-700 capitalize">
                           {item.action_type.replace(/_/g, ' ')}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm text-gray-800">{item.action_user_name || 'Unknown'}</span>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-gray-700">{item.action_user_name || 'Unknown'}</span>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          {isRecent && <Clock size={14} className="text-amber-400" />}
-                          <span className="text-sm text-gray-800">{formatDate(item.action_date)}</span>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1.5">
+                          {isRecent && <Clock size={12} className="text-amber-500" />}
+                          <span className="text-xs text-gray-700">{formatDate(item.action_date)}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                          item.review_status === 'pending_review' ? 'bg-amber-500/20 text-amber-400' :
-                          item.review_status === 'approved' ? 'bg-green-500/20 text-green-400' :
-                          item.review_status === 'rejected' ? 'bg-red-500/20 text-red-400' :
-                          'bg-gray-500/20 text-gray-400'
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium ${
+                          item.review_status === 'pending_review' ? 'bg-amber-100 text-amber-700' :
+                          item.review_status === 'approved' ? 'bg-green-100 text-green-700' :
+                          item.review_status === 'rejected' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-600'
                         }`}>
                           {item.review_status.replace(/_/g, ' ').toUpperCase()}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => handleDelegate(item)}
-                            className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors"
+                            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-black transition-colors"
                             title="Delegate"
                             disabled
                           >
-                            <Forward size={16} />
+                            <Forward size={13} />
                           </button>
                           <button
                             onClick={() => handleReject(item)}
-                            className="rounded-lg p-2 text-red-400 hover:bg-red-500/20 transition-colors"
+                            className="rounded p-1 text-red-500 hover:bg-red-50 transition-colors"
                             title="Reject"
                           >
-                            <XCircle size={16} />
+                            <XCircle size={13} />
                           </button>
                           <button
                             onClick={() => handleApprove(item)}
-                            className="rounded-lg p-2 text-green-400 hover:bg-green-500/20 transition-colors"
+                            className="rounded p-1 text-green-600 hover:bg-green-50 transition-colors"
                             title="Approve"
                           >
-                            <CheckCircle size={16} />
+                            <CheckCircle size={13} />
                           </button>
-                          <ChevronRight size={16} className="text-gray-700" />
+                          <ChevronRight size={13} className="text-gray-400" />
                         </div>
                       </td>
                     </tr>
