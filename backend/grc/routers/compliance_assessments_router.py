@@ -23,7 +23,8 @@ from ..models import (
     ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem,
     AssessmentEvidenceApprovalWorkflow, AssessmentEvidenceApprovalTier,
     AssessmentItemEvidence, AssessmentEvidenceApprovalHistory,
-    Evidence, GRCUser, Tenant, get_db
+    Evidence, GRCUser, Tenant, get_db,
+    EvidenceControlMapping, ParsedFrameworkControl
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -2334,27 +2335,82 @@ def get_item_evidence(
     ).filter(
         AssessmentItemEvidence.assessment_item_id == item_id
     ).all()
-    
+
+    # Track evidence IDs already covered by AssessmentItemEvidence to avoid duplicates
+    linked_evidence_ids = {link.evidence_id for link in evidence_links if link.evidence_id}
+
+    result = [
+        {
+            "id": link.id,
+            "evidence_id": link.evidence_id,
+            "evidence_name": link.evidence.name if link.evidence else None,
+            "evidence_file_name": link.evidence.file_name if link.evidence else None,
+            "evidence_file_type": link.evidence.file_type if link.evidence else None,
+            "evidence_status": link.evidence.status if link.evidence else None,
+            "evidence_uploaded_at": link.evidence.uploaded_at.isoformat() if link.evidence and link.evidence.uploaded_at else None,
+            "workflow_id": link.workflow_id,
+            "workflow_name": link.workflow.name if link.workflow else None,
+            "current_tier": link.current_tier,
+            "approval_status": link.status,
+            "submitted_at": link.submitted_at.isoformat() if link.submitted_at else None,
+            "created_at": link.created_at.isoformat(),
+            "source": "assessment_upload",
+        }
+        for link in evidence_links
+    ]
+
+    # Also pull evidence linked via the Evidence module's AI "Link to Requirement" feature.
+    # That feature creates EvidenceControlMapping entries (ParsedFrameworkControl → Evidence)
+    # which are separate from AssessmentItemEvidence. We match them here by comparing the
+    # assessment item's item_number against the parsed control's control_id / original_reference.
+    if item.item_number:
+        item_number_lower = item.item_number.strip().lower()
+        framework_links = (
+            db.query(EvidenceControlMapping)
+            .join(ParsedFrameworkControl, EvidenceControlMapping.parsed_control_id == ParsedFrameworkControl.id)
+            .join(Evidence, EvidenceControlMapping.evidence_id == Evidence.id)
+            .filter(
+                Evidence.tenant_id == item.tenant_id,
+                or_(
+                    func.lower(ParsedFrameworkControl.control_id) == item_number_lower,
+                    func.lower(ParsedFrameworkControl.original_reference) == item_number_lower,
+                )
+            )
+            .all()
+        )
+
+        for mapping in framework_links:
+            if mapping.evidence_id in linked_evidence_ids:
+                continue  # Already included via AssessmentItemEvidence
+            if not mapping.evidence:
+                continue
+            ev = mapping.evidence
+            linked_evidence_ids.add(ev.id)
+            result.append({
+                "id": f"ecm-{mapping.id}",  # Synthetic ID to distinguish from AssessmentItemEvidence
+                "evidence_id": ev.id,
+                "evidence_name": ev.name,
+                "evidence_file_name": ev.file_name,
+                "evidence_file_type": ev.file_type,
+                "evidence_status": ev.status,
+                "evidence_uploaded_at": ev.uploaded_at.isoformat() if ev.uploaded_at else None,
+                "workflow_id": None,
+                "workflow_name": None,
+                "current_tier": 0,
+                "approval_status": "framework_linked",
+                "submitted_at": None,
+                "created_at": mapping.created_at.isoformat() if mapping.created_at else "",
+                "source": "framework_link",
+                "framework_name": mapping.framework_name,
+                "control_code": mapping.control_code,
+                "confidence_score": mapping.confidence_score,
+                "matching_rationale": mapping.matching_rationale,
+            })
+
     return {
         "item_id": item_id,
         "assessment_id": assessment_id,
-        "evidence": [
-            {
-                "id": link.id,
-                "evidence_id": link.evidence_id,
-                "evidence_name": link.evidence.name if link.evidence else None,
-                "evidence_file_name": link.evidence.file_name if link.evidence else None,
-                "evidence_file_type": link.evidence.file_type if link.evidence else None,
-                "evidence_status": link.evidence.status if link.evidence else None,
-                "workflow_id": link.workflow_id,
-                "workflow_name": link.workflow.name if link.workflow else None,
-                "current_tier": link.current_tier,
-                "approval_status": link.status,
-                "submitted_at": link.submitted_at.isoformat() if link.submitted_at else None,
-                "created_at": link.created_at.isoformat()
-            }
-            for link in evidence_links
-        ]
+        "evidence": result,
     }
 
 

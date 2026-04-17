@@ -945,13 +945,13 @@ def rollback_statement(
         user_id=current_user.id,
         action="statement_rollback",
         resource_type="PolicyStatement",
-        resource_id=str(statement.id),
-        details=json.dumps({
+        resource_id=int(statement.id),
+        changes={
             "document_id": document_id,
             "statement_code": statement.statement_code,
             "rolled_back_to_version": target_version.version_number,
             "target_version_id": target_version_id,
-        })
+        }
     )
     db.add(audit)
     db.commit()
@@ -1150,12 +1150,12 @@ def apply_reparse_proposals(
         user_id=current_user.id,
         action="reparse_proposals_applied",
         resource_type="GovernanceDocument",
-        resource_id=str(document_id),
-        details=json.dumps({
+        resource_id=int(document_id),
+        changes={
             "accepted": accepted,
             "rejected": rejected,
             "total_proposals": len(decisions),
-        })
+        }
     )
     db.add(audit)
     db.commit()
@@ -1247,13 +1247,30 @@ def convert_statements_to_controls(
             detail="No valid statements found for conversion"
         )
     
-    existing_count = db.query(InternalControl).filter(
+    # Determine the next safe numeric suffix by scanning all existing control_ids
+    # for this tenant so we never reuse a number even if rows were deleted.
+    import re as _re
+    existing_ids = db.query(InternalControl.control_id).filter(
         InternalControl.tenant_id == document.tenant_id
-    ).count()
-    
+    ).all()
+    prefix = f"IC-{document.tenant_id}-"
+    max_num = 0
+    for (cid,) in existing_ids:
+        if cid and cid.startswith(prefix):
+            tail = cid[len(prefix):]
+            m = _re.match(r"^(\d+)$", tail)
+            if m:
+                max_num = max(max_num, int(m.group(1)))
+
     created_controls = []
     for idx, statement in enumerate(statements):
-        control_num = existing_count + idx + 1
+        control_num = max_num + idx + 1
+        # Each candidate ID must be unique; skip any that already exist (defensive).
+        while db.query(InternalControl.id).filter(
+            InternalControl.tenant_id == document.tenant_id,
+            InternalControl.control_id == f"IC-{document.tenant_id}-{control_num:04d}"
+        ).first():
+            control_num += 1
         control_id = f"IC-{document.tenant_id}-{control_num:04d}"
         
         name = (statement.statement_summary or statement.statement_text)[:200]

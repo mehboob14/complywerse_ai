@@ -402,6 +402,16 @@ def create_certification(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Framework not found"
         )
+
+    # Prevent duplicate journeys for the same framework + tenant
+    existing_journey = db.query(CertificationJourney).filter(
+        CertificationJourney.tenant_id == tenant_id,
+        CertificationJourney.uploaded_framework_id == journey_data.framework_id,
+        CertificationJourney.status.in_(["in_progress", "not_started"]),
+    ).first()
+    if existing_journey:
+        existing_journey.progress = calculate_progress_summary(existing_journey, db)
+        return existing_journey
     
     journey = CertificationJourney(
         tenant_id=tenant_id,
@@ -439,6 +449,55 @@ def create_certification(
         db.add(implementation)
     
     db.commit()
+
+    # Seed existing evidence mappings into the new journey's implementations.
+    # If evidence was linked to this framework's controls before the journey was started,
+    # create ImplementationEvidence records so evidence appears immediately.
+    try:
+        impl_map = {}
+        for control in selected_controls.values():
+            impl = db.query(ControlImplementation).filter(
+                ControlImplementation.journey_id == journey.id,
+                ControlImplementation.parsed_control_id == control.id,
+            ).first()
+            if impl:
+                impl_map[control.id] = impl
+
+        ecm_records = db.query(EvidenceControlMapping).filter(
+            EvidenceControlMapping.uploaded_framework_id == journey_data.framework_id,
+            EvidenceControlMapping.parsed_control_id.isnot(None),
+        ).all()
+
+        seeded = 0
+        for ecm in ecm_records:
+            impl = impl_map.get(ecm.parsed_control_id)
+            if not impl:
+                continue
+            exists = db.query(ImplementationEvidence).filter(
+                ImplementationEvidence.implementation_id == impl.id,
+                ImplementationEvidence.evidence_id == ecm.evidence_id,
+            ).first()
+            if exists:
+                continue
+            ev = db.query(Evidence).filter(Evidence.id == ecm.evidence_id).first()
+            if not ev or ev.tenant_id != tenant_id:
+                continue
+            db.add(ImplementationEvidence(
+                implementation_id=impl.id,
+                evidence_id=ecm.evidence_id,
+                file_name=ev.name,
+                uploaded_by=current_user.id,
+                review_status="pending",
+            ))
+            seeded += 1
+
+        if seeded:
+            db.commit()
+            logger.info("Seeded %d evidence records into new journey %d", seeded, journey.id)
+    except Exception:
+        logger.warning("Failed to seed evidence into journey %d", journey.id, exc_info=True)
+        db.rollback()
+
     db.refresh(journey)
     return journey
 
@@ -660,6 +719,7 @@ def list_journey_controls(
     mapped_evidence_by_framework = {}
 
     if parsed_control_ids or framework_control_ids:
+        # Primary lookup: match by direct foreign-key IDs.
         mapping_rows = db.query(EvidenceControlMapping, Evidence).join(
             Evidence,
             Evidence.id == EvidenceControlMapping.evidence_id
@@ -670,6 +730,55 @@ def list_journey_controls(
                 EvidenceControlMapping.framework_control_id.in_(framework_control_ids) if framework_control_ids else False
             )
         ).all()
+
+        # Text-based fallback: when duplicate ParsedFrameworkControl rows exist (e.g. after
+        # re-uploads) the journey may reference a different row-ID than the one stored in
+        # EvidenceControlMapping.  Expand the search to ALL ParsedFrameworkControl records
+        # that share the same (uploaded_framework_id, control_id) text pair as the
+        # journey's controls, then collect any additional mappings that matched those sibling IDs.
+        if parsed_control_ids:
+            # Fetch the text identifiers for the journey's parsed controls.
+            journey_pcs = db.query(ParsedFrameworkControl).filter(
+                ParsedFrameworkControl.id.in_(parsed_control_ids)
+            ).all()
+            # Build a lookup: impl_parsed_control_id → set of sibling parsed_control row IDs
+            pc_sibling_map: dict = {}  # sibling_id → impl_pc_id(s)
+            for pc in journey_pcs:
+                if not (pc.uploaded_framework_id and pc.control_id):
+                    continue
+                sibling_rows = db.query(ParsedFrameworkControl.id).filter(
+                    ParsedFrameworkControl.uploaded_framework_id == pc.uploaded_framework_id,
+                    ParsedFrameworkControl.control_id == pc.control_id,
+                    ParsedFrameworkControl.id.notin_(parsed_control_ids)
+                ).all()
+                for (sib_id,) in sibling_rows:
+                    pc_sibling_map.setdefault(sib_id, set()).add(pc.id)
+
+            if pc_sibling_map:
+                sibling_ids = list(pc_sibling_map.keys())
+                extra_rows = db.query(EvidenceControlMapping, Evidence).join(
+                    Evidence,
+                    Evidence.id == EvidenceControlMapping.evidence_id
+                ).filter(
+                    Evidence.tenant_id == journey.tenant_id,
+                    EvidenceControlMapping.parsed_control_id.in_(sibling_ids)
+                ).all()
+                # Translate each extra mapping back to its journey impl_pc_id
+                for mapping, linked_evidence in extra_rows:
+                    for impl_pc_id in pc_sibling_map.get(mapping.parsed_control_id, []):
+                        payload = {
+                            "id": mapping.id,
+                            "item_type": "ecm",
+                            "file_name": linked_evidence.file_name or linked_evidence.name,
+                            "file_size": getattr(linked_evidence, "file_size", None),
+                            "uploaded_at": linked_evidence.uploaded_at.isoformat() if linked_evidence.uploaded_at else None,
+                            "ai_confidence_score": mapping.confidence_score,
+                            "review_status": "linked",
+                            "linked_evidence_id": linked_evidence.id,
+                            "ai_assessment_status": "linked",
+                            "ai_assessment_summary": None
+                        }
+                        mapped_evidence_by_parsed.setdefault(impl_pc_id, []).append(payload)
 
         logger.info(
             "[JourneyTrace] evidence mappings fetched journey_id=%s rows=%s parsed_ids=%s framework_ids=%s",
@@ -682,6 +791,7 @@ def list_journey_controls(
         for mapping, linked_evidence in mapping_rows:
             mapped_payload = {
                 "id": mapping.id,
+                "item_type": "ecm",
                 "file_name": linked_evidence.file_name or linked_evidence.name,
                 "file_size": getattr(linked_evidence, "file_size", None),
                 "uploaded_at": linked_evidence.uploaded_at.isoformat() if linked_evidence.uploaded_at else None,
@@ -839,7 +949,9 @@ def list_journey_controls(
         for ev in impl.evidence_attachments:
             ai_assessment_status = None
             ai_assessment_summary = None
-            linked_ev_id = getattr(ev, 'linked_evidence_id', None)
+            # evidence_id is the FK to the Evidence library record (populated when linked
+            # from the evidence library via link-from-ai or manual linking)
+            linked_ev_id = ev.evidence_id
             
             if linked_ev_id:
                 linked_evidence = db.query(Evidence).filter(Evidence.id == linked_ev_id).first()
@@ -873,6 +985,13 @@ def list_journey_controls(
         existing_linked_ids = {
             ev_item.get("linked_evidence_id") for ev_item in evidence_list if ev_item.get("linked_evidence_id")
         }
+        # Fallback dedup by normalized file_name for ImplementationEvidence records
+        # that were uploaded directly to the journey (evidence_id=NULL).
+        existing_file_names = {
+            (ev_item.get("file_name") or "").lower().strip()
+            for ev_item in evidence_list
+            if not ev_item.get("linked_evidence_id") and ev_item.get("file_name")
+        }
         mapped_items = []
         if impl.parsed_control_id:
             mapped_items.extend(mapped_evidence_by_parsed.get(impl.parsed_control_id, []))
@@ -881,11 +1000,16 @@ def list_journey_controls(
 
         for mapped in mapped_items:
             linked_id = mapped.get("linked_evidence_id")
+            mapped_file = (mapped.get("file_name") or "").lower().strip()
             if linked_id and linked_id in existing_linked_ids:
+                continue
+            if mapped_file and mapped_file in existing_file_names:
                 continue
             evidence_list.append(mapped)
             if linked_id:
                 existing_linked_ids.add(linked_id)
+            if mapped_file:
+                existing_file_names.add(mapped_file)
         
         evidence_recommendations = [ev.get("title", "") for ev in evidence_requirements if isinstance(ev, dict) and ev.get("title")]
         if not evidence_recommendations:
@@ -1561,7 +1685,7 @@ def download_certification_report(
     })
 
     reviewers = sorted({
-        (ev.reviewer.full_name or ev.reviewer.username or ev.reviewer.email)
+        (ev.reviewer.display_name or ev.reviewer.username or ev.reviewer.email)
         for _, ev in evidence_records if ev.reviewer
     })
 
@@ -2284,12 +2408,16 @@ def review_implementation_evidence(
 
 
 @router.delete("/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_implementation_evidence(
+def unlink_implementation_evidence(
     evidence_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Delete an ImplementationEvidence record by ID."""
+    """Unlink an ImplementationEvidence record from a journey control.
+    
+    The underlying Evidence record in the evidence library is preserved.
+    Evidence is only permanently deleted from the evidence library itself.
+    """
     user_tenants = get_user_tenants(current_user, db)
     
     evidence = db.query(ImplementationEvidence).filter(
@@ -2316,24 +2444,27 @@ def delete_implementation_evidence(
                 detail="Access denied"
             )
     
-    if evidence.file_path and os.path.exists(evidence.file_path):
-        try:
-            os.remove(evidence.file_path)
-        except Exception:
-            pass
-    
-    if evidence.evidence_id:
-        linked_evidence = db.query(Evidence).filter(
-            Evidence.id == evidence.evidence_id
+    # Also remove all EvidenceControlMapping records for this evidence + the control's
+    # parsed_control_id so no orphaned "linked" entries remain visible after unlinking.
+    if evidence.evidence_id and impl and impl.parsed_control_id:
+        # Collect sibling PC IDs (same control_id in same framework) to handle duplicates.
+        pc = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.id == impl.parsed_control_id
         ).first()
-        if linked_evidence:
-            if linked_evidence.file_path and os.path.exists(linked_evidence.file_path):
-                try:
-                    os.remove(linked_evidence.file_path)
-                except Exception:
-                    pass
-            db.delete(linked_evidence)
-    
+        if pc:
+            sibling_pc_ids = [
+                row[0] for row in db.query(ParsedFrameworkControl.id).filter(
+                    ParsedFrameworkControl.uploaded_framework_id == pc.uploaded_framework_id,
+                    ParsedFrameworkControl.control_id == pc.control_id,
+                ).all()
+            ]
+            ecm_to_delete = db.query(EvidenceControlMapping).filter(
+                EvidenceControlMapping.evidence_id == evidence.evidence_id,
+                EvidenceControlMapping.parsed_control_id.in_(sibling_pc_ids),
+            ).all()
+            for ecm in ecm_to_delete:
+                db.delete(ecm)
+
     db.delete(evidence)
     db.commit()
     

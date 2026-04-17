@@ -18,7 +18,8 @@ except ImportError:
 from ....models import (
     InternalControl, InternalControlTest, InternalControlRiskLink,
     InternalControlFrameworkLink, InternalControlEscalation,
-    InternalControlWorkflowAction, Risk, FrameworkControl,
+    InternalControlWorkflowAction, InternalControlEvidence,
+    Risk, FrameworkControl, Evidence,
     NormalizedControl, GovernanceDocument, GRCUser, Tenant, BusinessUnit, get_db
 )
 from ....schemas import (
@@ -1607,6 +1608,134 @@ def delete_framework_link(
             detail="Framework link not found"
         )
     
+    db.delete(link)
+    db.commit()
+    return None
+
+
+# ─── Evidence Linking ────────────────────────────────────────────────────────
+
+class ICEvidenceLinkCreate(BaseModel):
+    evidence_id: int
+    notes: Optional[str] = None
+
+
+class ICEvidenceLinkResponse(BaseModel):
+    id: int
+    evidence_id: int
+    title: str
+    description: Optional[str]
+    evidence_type: Optional[str]
+    status: Optional[str]
+    file_name: Optional[str]
+    file_url: Optional[str]
+    notes: Optional[str]
+    linked_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/{control_id}/evidence", response_model=List[ICEvidenceLinkResponse])
+def list_control_evidence(
+    control_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    control = get_control_or_404(control_id, user_tenants, db)
+
+    links = (
+        db.query(InternalControlEvidence)
+        .filter(InternalControlEvidence.internal_control_id == control.id)
+        .all()
+    )
+    result = []
+    for lnk in links:
+        ev = lnk.evidence
+        if ev is None:
+            continue
+        result.append(ICEvidenceLinkResponse(
+            id=lnk.id,
+            evidence_id=ev.id,
+            title=getattr(ev, "title", ev.file_name or ""),
+            description=getattr(ev, "description", None),
+            evidence_type=getattr(ev, "evidence_type", None),
+            status=getattr(ev, "status", None),
+            file_name=ev.file_name,
+            file_url=getattr(ev, "file_url", None),
+            notes=lnk.notes,
+            linked_at=lnk.linked_at,
+        ))
+    return result
+
+
+@router.post("/{control_id}/evidence", response_model=ICEvidenceLinkResponse, status_code=status.HTTP_201_CREATED)
+def link_evidence_to_control(
+    control_id: int,
+    data: ICEvidenceLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    control = get_control_or_404(control_id, user_tenants, db)
+
+    ev = db.query(Evidence).filter(
+        Evidence.id == data.evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+
+    existing = db.query(InternalControlEvidence).filter(
+        InternalControlEvidence.internal_control_id == control.id,
+        InternalControlEvidence.evidence_id == ev.id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Evidence already linked")
+
+    link = InternalControlEvidence(
+        internal_control_id=control.id,
+        evidence_id=ev.id,
+        tenant_id=get_user_primary_tenant(current_user, db),
+        linked_by=current_user.id,
+        notes=data.notes,
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+
+    return ICEvidenceLinkResponse(
+        id=link.id,
+        evidence_id=ev.id,
+        title=getattr(ev, "title", ev.file_name or ""),
+        description=getattr(ev, "description", None),
+        evidence_type=getattr(ev, "evidence_type", None),
+        status=getattr(ev, "status", None),
+        file_name=ev.file_name,
+        file_url=getattr(ev, "file_url", None),
+        notes=link.notes,
+        linked_at=link.linked_at,
+    )
+
+
+@router.delete("/{control_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_evidence_from_control(
+    control_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    control = get_control_or_404(control_id, user_tenants, db)
+
+    link = db.query(InternalControlEvidence).filter(
+        InternalControlEvidence.id == link_id,
+        InternalControlEvidence.internal_control_id == control.id,
+    ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Evidence link not found")
+
     db.delete(link)
     db.commit()
     return None

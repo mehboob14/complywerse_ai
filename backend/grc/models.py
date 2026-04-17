@@ -3425,12 +3425,34 @@ class InternalControl(Base):
     framework_links = relationship("InternalControlFrameworkLink", back_populates="internal_control", cascade="all, delete-orphan")
     escalations = relationship("InternalControlEscalation", back_populates="control", cascade="all, delete-orphan")
     workflow_actions = relationship("InternalControlWorkflowAction", back_populates="control", cascade="all, delete-orphan")
+    evidence_links = relationship("InternalControlEvidence", back_populates="control", cascade="all, delete-orphan")
     
     __table_args__ = (
         UniqueConstraint("tenant_id", "control_id", name="uq_internal_control_tenant_id"),
         Index("ix_internal_control_tenant", "tenant_id"),
         Index("ix_internal_control_status", "status"),
         Index("ix_internal_control_department", "department_id"),
+    )
+
+
+class InternalControlEvidence(Base):
+    """Evidence linked to an internal control"""
+    __tablename__ = "grc_internal_control_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    internal_control_id = Column(Integer, ForeignKey("grc_internal_controls.id"), nullable=False, index=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    linked_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    linked_at = Column(DateTime, default=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+
+    control = relationship("InternalControl", back_populates="evidence_links")
+    evidence = relationship("Evidence")
+    linker = relationship("GRCUser", foreign_keys=[linked_by])
+
+    __table_args__ = (
+        UniqueConstraint("internal_control_id", "evidence_id", name="uq_ic_evidence_link"),
     )
 
 

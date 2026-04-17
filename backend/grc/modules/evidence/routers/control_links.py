@@ -1,16 +1,21 @@
 from typing import List, Optional
 import re
+import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
+
 from ....models import (
     Evidence, EvidenceControlMapping, NormalizedControl, FrameworkControl,
     ControlObjective, FrameworkDomain, Framework, GRCUser, get_db,
     ParsedFrameworkControl, UploadedFramework, ControlImplementation,
-    ImplementationEvidence, CertificationJourney
+    ImplementationEvidence, CertificationJourney,
+    ComplianceAssessmentDocumentItem, AssessmentItemEvidence,
+    AssessmentEvidenceApprovalWorkflow
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -556,7 +561,28 @@ def link_evidence_from_ai_suggestion(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Framework '{link_data.framework_name}' was not found in your tenant uploaded compliance frameworks"
         )
-    
+
+    # CRITICAL: Prefer a framework copy that has an active CertificationJourney for this
+    # evidence's tenant.  Shared/global frameworks (tenant_id=None, or a different tenant)
+    # have different ParsedFrameworkControl row-IDs than the tenant-specific copies used
+    # when creating CertificationJourneys.  If we link to the wrong copy, the evidence will
+    # never appear on the framework detail page.
+    journey_framework = (
+        db.query(UploadedFramework)
+        .join(CertificationJourney, CertificationJourney.uploaded_framework_id == UploadedFramework.id)
+        .filter(
+            CertificationJourney.tenant_id == evidence.tenant_id,
+            func.lower(UploadedFramework.name) == func.lower(framework.name),
+        )
+        .first()
+    )
+    if journey_framework and journey_framework.id != framework.id:
+        logger.info(
+            "link-from-ai: switching framework from id=%s to journey framework id=%s (%s) for tenant %s",
+            framework.id, journey_framework.id, journey_framework.name, evidence.tenant_id,
+        )
+        framework = journey_framework
+
     # Find the control by control_id within this framework
     # First pass: strict direct match
     control = db.query(ParsedFrameworkControl).filter(
@@ -632,12 +658,48 @@ def link_evidence_from_ai_suggestion(
                 f"in framework '{framework.name}'. Please verify the framework upload and run AI assessment again."
             )
         )
-    
-    # Check if mapping already exists
+
+    # Prefer the ParsedFrameworkControl that is already referenced by a ControlImplementation.
+    # When duplicate parsed controls exist in the DB (e.g. from re-uploads), the journey creation
+    # picks one ID while a plain .first() query may return a different ID, causing the
+    # EvidenceControlMapping to never match in list_journey_controls.
+    preferred_control = (
+        db.query(ParsedFrameworkControl)
+        .join(ControlImplementation, ControlImplementation.parsed_control_id == ParsedFrameworkControl.id)
+        .filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework.id,
+            or_(
+                ParsedFrameworkControl.control_id == control.control_id,
+                ParsedFrameworkControl.original_reference == (control.original_reference or control.control_id),
+            )
+        )
+        .order_by(ParsedFrameworkControl.id.asc())
+        .first()
+    )
+    if preferred_control:
+        control = preferred_control
+
+    # Check if mapping already exists - check by exact parsed_control_id first
     existing = db.query(EvidenceControlMapping).filter(
         EvidenceControlMapping.evidence_id == evidence_id,
         EvidenceControlMapping.parsed_control_id == control.id
     ).first()
+
+    # Broader fallback: check ALL ParsedFrameworkControl rows with the same control_id in
+    # this framework. This handles the case where preferred_control picks different row IDs
+    # across calls (e.g., from duplicate journeys or re-uploads).
+    if not existing:
+        sibling_pc_ids = [
+            row[0] for row in db.query(ParsedFrameworkControl.id).filter(
+                ParsedFrameworkControl.uploaded_framework_id == framework.id,
+                ParsedFrameworkControl.control_id == control.control_id,
+            ).all()
+        ]
+        if sibling_pc_ids:
+            existing = db.query(EvidenceControlMapping).filter(
+                EvidenceControlMapping.evidence_id == evidence_id,
+                EvidenceControlMapping.parsed_control_id.in_(sibling_pc_ids),
+            ).first()
     
     if existing:
         return {
@@ -667,11 +729,20 @@ def link_evidence_from_ai_suggestion(
     db.flush()
     
     # Also create ImplementationEvidence records for any certification journeys 
-    # that include this control, so it appears on the certification controls page
+    # that include this control, so it appears on the certification controls page.
+    # Include ALL sibling parsed_control_ids (same control_id in same framework) to handle
+    # duplicate ParsedFrameworkControl rows from re-uploads or multiple journeys.
+    sibling_pc_ids_for_impl = [
+        row[0] for row in db.query(ParsedFrameworkControl.id).filter(
+            ParsedFrameworkControl.uploaded_framework_id == framework.id,
+            ParsedFrameworkControl.control_id == control.control_id,
+        ).all()
+    ] or [control.id]
+
     control_implementations = db.query(ControlImplementation).filter(
-        ControlImplementation.parsed_control_id == control.id
+        ControlImplementation.parsed_control_id.in_(sibling_pc_ids_for_impl)
     ).all()
-    
+
     impl_evidence_created = 0
     for impl in control_implementations:
         # Check if this evidence is already linked to this implementation
@@ -695,7 +766,55 @@ def link_evidence_from_ai_suggestion(
     
     db.commit()
     db.refresh(mapping)
-    
+
+    # Sync to ComplianceAssessmentDocumentItem: find any assessment items in this tenant
+    # whose item_number matches the control's ID, and create AssessmentItemEvidence links
+    # so the evidence shows up immediately in the compliance assessment views.
+    assessment_items_synced = 0
+    try:
+        control_id_lower = (control.control_id or "").strip().lower()
+        original_ref_lower = (control.original_reference or "").strip().lower()
+
+        # Match by item_number == control_id OR item_number == original_reference
+        matching_items = db.query(ComplianceAssessmentDocumentItem).filter(
+            ComplianceAssessmentDocumentItem.tenant_id == evidence.tenant_id,
+            or_(
+                func.lower(ComplianceAssessmentDocumentItem.item_number) == control_id_lower,
+                func.lower(ComplianceAssessmentDocumentItem.item_number) == original_ref_lower,
+            ) if control_id_lower or original_ref_lower else False
+        ).all()
+
+        # Determine the default approval workflow for this tenant (if any)
+        default_workflow = db.query(AssessmentEvidenceApprovalWorkflow).filter(
+            AssessmentEvidenceApprovalWorkflow.tenant_id == evidence.tenant_id,
+            AssessmentEvidenceApprovalWorkflow.is_default == True,
+            AssessmentEvidenceApprovalWorkflow.is_active == True,
+        ).first()
+
+        for assessment_item in matching_items:
+            existing_link = db.query(AssessmentItemEvidence).filter(
+                AssessmentItemEvidence.assessment_item_id == assessment_item.id,
+                AssessmentItemEvidence.evidence_id == evidence_id,
+            ).first()
+
+            if not existing_link:
+                assessment_link = AssessmentItemEvidence(
+                    assessment_item_id=assessment_item.id,
+                    evidence_id=evidence_id,
+                    tenant_id=evidence.tenant_id,
+                    workflow_id=default_workflow.id if default_workflow else None,
+                    current_tier=0,
+                    status="draft",
+                )
+                db.add(assessment_link)
+                assessment_items_synced += 1
+
+        if assessment_items_synced:
+            db.commit()
+    except Exception as sync_err:
+        logger.warning(f"Assessment item sync failed for evidence {evidence_id}: {sync_err}")
+        db.rollback()
+
     return {
         "message": "Evidence linked to control successfully",
         "already_linked": False,
@@ -705,7 +824,8 @@ def link_evidence_from_ai_suggestion(
         "control_id": control.control_id,
         "control_title": control.title,
         "original_reference": control.original_reference,
-        "implementation_evidence_created": impl_evidence_created
+        "implementation_evidence_created": impl_evidence_created,
+        "assessment_items_synced": assessment_items_synced,
     }
 
 
@@ -751,13 +871,32 @@ def get_ai_link_status(
                     UploadedFramework.id == control.uploaded_framework_id
                 ).first()
                 if framework:
-                    key = f"{framework.name}:{control.control_id}"
-                    linked_controls[key] = {
+                    entry = {
                         "mapping_id": mapping.id,
                         "control_id": control.control_id,
                         "original_reference": control.original_reference,
                         "framework_name": framework.name
                     }
+                    # Emit multiple candidate keys so the frontend can match regardless of
+                    # whether it uses the DB framework name, the AI-suggested name, the
+                    # original_reference, or the clause_reference.
+                    candidate_keys = {
+                        f"{framework.name}:{control.control_id}",
+                    }
+                    if control.original_reference:
+                        candidate_keys.add(f"{framework.name}:{control.original_reference}")
+                    if mapping.framework_name and mapping.control_code:
+                        candidate_keys.add(f"{mapping.framework_name}:{mapping.control_code}")
+                    if mapping.framework_name and control.control_id:
+                        candidate_keys.add(f"{mapping.framework_name}:{control.control_id}")
+                    if mapping.framework_name and control.original_reference:
+                        candidate_keys.add(f"{mapping.framework_name}:{control.original_reference}")
+                    if mapping.clause_reference:
+                        candidate_keys.add(f"{framework.name}:{mapping.clause_reference}")
+                        if mapping.framework_name:
+                            candidate_keys.add(f"{mapping.framework_name}:{mapping.clause_reference}")
+                    for key in candidate_keys:
+                        linked_controls[key] = entry
     
     return {
         "evidence_id": evidence_id,

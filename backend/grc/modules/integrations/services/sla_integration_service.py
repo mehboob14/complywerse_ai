@@ -143,7 +143,7 @@ class SLAIntegrationService:
                     if assignee.email:
                         EmailService.send_sla_breach(
                             to_email=assignee.email,
-                            user_name=assignee.full_name or assignee.username,
+                            user_name=assignee.display_name or assignee.username,
                             vuln_id=vuln.vuln_id,
                             title=vuln.title or "Untitled",
                             severity=vuln.compliverse_severity or vuln.severity or "medium",
@@ -160,7 +160,7 @@ class SLAIntegrationService:
                     if assignee.email:
                         EmailService.send_sla_warning(
                             to_email=assignee.email,
-                            user_name=assignee.full_name or assignee.username,
+                            user_name=assignee.display_name or assignee.username,
                             vuln_id=vuln.vuln_id,
                             title=vuln.title or "Untitled",
                             severity=vuln.compliverse_severity or vuln.severity or "medium",
