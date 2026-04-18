@@ -134,6 +134,12 @@ class CharterCompareRequest(BaseModel):
     charter_text: Optional[str] = None
 
 
+class AutoPopulateRequest(BaseModel):
+    include_documents: bool = True
+    include_exceptions: bool = True
+    include_regulatory_changes: bool = True
+
+
 class ManualOversightActionCreate(BaseModel):
     committee_id: int
     meeting_id: Optional[int] = None
@@ -778,7 +784,6 @@ def get_meeting_agenda(
 def add_agenda_item(
     meeting_id: int,
     item: MeetingAgendaItemCreate,
-    auto_populate_approvals: bool = False,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -792,10 +797,22 @@ def add_agenda_item(
     if not meeting:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
     
+    # Auto-assign item_number if not provided
+    if item.item_number is None:
+        max_num = db.query(func.max(MeetingAgendaItem.item_number)).filter(
+            MeetingAgendaItem.meeting_id == meeting_id
+        ).scalar() or 0
+        item_number = max_num + 1
+    else:
+        item_number = item.item_number
+
+    # Support duration_minutes as alias for time_allocated_minutes
+    allocated_minutes = item.time_allocated_minutes or item.duration_minutes
+
     db_item = MeetingAgendaItem(
         tenant_id=meeting.tenant_id,
         meeting_id=meeting_id,
-        item_number=item.item_number,
+        item_number=item_number,
         title=item.title,
         description=item.description,
         item_type=item.item_type,
@@ -803,39 +820,13 @@ def add_agenda_item(
         linked_document_id=item.linked_document_id,
         linked_risk_id=item.linked_risk_id,
         linked_regulatory_change_id=item.linked_regulatory_change_id,
-        time_allocated_minutes=item.time_allocated_minutes,
+        time_allocated_minutes=allocated_minutes,
     )
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
     
-    result = [serialize_agenda_item(db_item)]
-    
-    if auto_populate_approvals:
-        pending_docs = db.query(GovernanceDocument).filter(
-            GovernanceDocument.tenant_id == meeting.tenant_id,
-            GovernanceDocument.status == "pending_approval"
-        ).all()
-        
-        max_item = db.query(func.max(MeetingAgendaItem.item_number)).filter(
-            MeetingAgendaItem.meeting_id == meeting_id
-        ).scalar() or 0
-        
-        for i, doc in enumerate(pending_docs):
-            new_item = MeetingAgendaItem(
-                tenant_id=meeting.tenant_id,
-                meeting_id=meeting_id,
-                item_number=max_item + i + 1,
-                title=f"Approval: {doc.title}",
-                description=f"Review and approve: {doc.description or doc.title}",
-                item_type="approval",
-                linked_document_id=doc.id,
-            )
-            db.add(new_item)
-        
-        db.commit()
-    
-    return result[0]
+    return serialize_agenda_item(db_item)
 
 @router.put("/meetings/agenda/{item_id}")
 def update_agenda_item(
@@ -890,7 +881,7 @@ def get_suggested_agenda_items(
     
     pending_documents = db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id == meeting.tenant_id,
-        GovernanceDocument.status == "pending_approval"
+        GovernanceDocument.status.in_(["pending_review", "pending_approval"])
     ).all()
     
     for doc in pending_documents:
@@ -960,13 +951,13 @@ def get_suggested_agenda_items(
 @router.post("/meetings/{meeting_id}/auto-populate-agenda", status_code=status.HTTP_201_CREATED)
 def auto_populate_agenda_from_pending_approvals(
     meeting_id: int,
-    include_documents: bool = True,
-    include_exceptions: bool = True,
-    include_regulatory_changes: bool = True,
+    body: AutoPopulateRequest = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     """Auto-populate meeting agenda from pending governance approvals"""
+    # Support both body and query param for include_* flags
+    opts = body or AutoPopulateRequest()
     user_tenants = get_user_tenants(current_user, db)
     
     meeting = db.query(CommitteeMeeting).filter(
@@ -984,10 +975,10 @@ def auto_populate_agenda_from_pending_approvals(
     created_items = []
     current_item_number = max_item_number
     
-    if include_documents:
+    if opts.include_documents:
         pending_documents = db.query(GovernanceDocument).filter(
             GovernanceDocument.tenant_id == meeting.tenant_id,
-            GovernanceDocument.status == "pending_approval"
+            GovernanceDocument.status.in_(["pending_review", "pending_approval"])
         ).all()
         
         for doc in pending_documents:
@@ -1005,7 +996,7 @@ def auto_populate_agenda_from_pending_approvals(
             db.add(agenda_item)
             created_items.append(agenda_item)
     
-    if include_exceptions:
+    if opts.include_exceptions:
         pending_exceptions = db.query(Exception).filter(
             Exception.tenant_id == meeting.tenant_id,
             Exception.status == "pending"
@@ -1026,7 +1017,7 @@ def auto_populate_agenda_from_pending_approvals(
             db.add(agenda_item)
             created_items.append(agenda_item)
     
-    if include_regulatory_changes:
+    if opts.include_regulatory_changes:
         pending_regulatory_changes = db.query(RegulatoryChange).filter(
             RegulatoryChange.tenant_id == meeting.tenant_id,
             RegulatoryChange.status == "under_assessment"
@@ -1054,6 +1045,7 @@ def auto_populate_agenda_from_pending_approvals(
     
     return {
         "meeting_id": meeting_id,
+        "items_added": len(created_items),
         "created_items": [serialize_agenda_item(item) for item in created_items],
         "total_created": len(created_items),
         "by_type": {

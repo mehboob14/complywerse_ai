@@ -197,6 +197,43 @@ def get_overdue_reviews(
     }
 
 
+@router.post("/{document_id}/start", status_code=status.HTTP_201_CREATED)
+def start_document_review(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Mark a periodic document review as started; logs an audit entry."""
+    user_tenants = get_user_tenants(current_user, db)
+
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    create_audit_log(
+        db=db,
+        document_id=document_id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="reviewed",
+        action_details="Review cycle started.",
+    )
+    db.commit()
+
+    return {
+        "message": "Review started",
+        "document_id": document_id,
+        "review_status": "in_progress",
+    }
+
+
 @router.post("/{document_id}/complete")
 def complete_review(
     document_id: int,

@@ -156,12 +156,24 @@ def get_campaign(
     """Get a specific attestation campaign with escalation chains"""
     user_tenants = get_user_tenants(current_user, db)
     
-    campaign = db.query(AttestationCampaign).options(
+    # Try tenant-scoped lookup first
+    query = db.query(AttestationCampaign).options(
         joinedload(AttestationCampaign.escalation_chains)
-    ).filter(
-        AttestationCampaign.id == campaign_id,
-        AttestationCampaign.tenant_id.in_(user_tenants)
-    ).first()
+    ).filter(AttestationCampaign.id == campaign_id)
+    
+    if user_tenants:
+        campaign = query.filter(AttestationCampaign.tenant_id.in_(user_tenants)).first()
+    else:
+        campaign = None
+    
+    # Fallback: allow the creator to access their own campaign
+    if not campaign:
+        campaign = db.query(AttestationCampaign).options(
+            joinedload(AttestationCampaign.escalation_chains)
+        ).filter(
+            AttestationCampaign.id == campaign_id,
+            AttestationCampaign.created_by == current_user.id
+        ).first()
     
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
@@ -492,10 +504,21 @@ def complete_attestation(
     """Complete an attestation request"""
     user_tenants = get_user_tenants(current_user, db)
     
-    att_req = db.query(AttestationRequest).filter(
-        AttestationRequest.id == request_id,
-        AttestationRequest.tenant_id.in_(user_tenants)
-    ).first()
+    # Try tenant-scoped lookup first
+    if user_tenants:
+        att_req = db.query(AttestationRequest).filter(
+            AttestationRequest.id == request_id,
+            AttestationRequest.tenant_id.in_(user_tenants)
+        ).first()
+    else:
+        att_req = None
+    
+    # Fallback: allow the assigned user to access their own request
+    if not att_req:
+        att_req = db.query(AttestationRequest).filter(
+            AttestationRequest.id == request_id,
+            AttestationRequest.user_id == current_user.id
+        ).first()
     
     if not att_req:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attestation request not found")

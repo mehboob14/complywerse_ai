@@ -3653,7 +3653,7 @@ class CommitteeMeetingResponse(BaseModel):
 
 
 class MeetingAgendaItemCreate(BaseModel):
-    item_number: int
+    item_number: Optional[int] = None  # auto-assigned if omitted
     title: str
     description: Optional[str] = None
     item_type: str = "discussion"  # approval, discussion, information, action_review
@@ -3662,6 +3662,7 @@ class MeetingAgendaItemCreate(BaseModel):
     linked_risk_id: Optional[int] = None
     linked_regulatory_change_id: Optional[int] = None
     time_allocated_minutes: Optional[int] = None
+    duration_minutes: Optional[int] = None  # frontend alias for time_allocated_minutes
 
 
 class MeetingAgendaItemUpdate(BaseModel):
