@@ -28,7 +28,7 @@ import { ConfigPanel } from './components/ConfigPanel';
 import { nodeTypes } from './components/CustomNodes';
 import { NodePalette } from './components/NodePalette';
 import { SchedulesTab } from './components/SchedulesTab';
-import { SYSTEM_TEMPLATES, TemplatesModal } from './components/TemplatesModal';
+import { TemplatesModal } from './components/TemplatesModal';
 import { TopToolbar } from './components/TopToolbar';
 import { VersionDrawer } from './components/VersionDrawer';
 import {
@@ -734,36 +734,27 @@ function WorkflowEngineContent() {
 
   // ─── Template actions ─────────────────────────────────────────────────────────
   const handleUseTemplate = useCallback(async (templateId: number) => {
-    if (templateId < 0) {
-      // System template — load full workflow graph into canvas
-      const tpl = SYSTEM_TEMPLATES.find((t) => t.id === templateId);
-      if (tpl && tpl.nodes_json && tpl.edges_json) {
-        setSelectedId(null);
-        setName(tpl.name);
-        setDescription(tpl.description || '');
-        setTriggerEvent(tpl.trigger_event || 'manual.trigger');
-        setIsActive(true);
-        setSelectedNodeId(null);
-        setSelectedEdgeId(null);
-        setNodes(toFlowNodes(tpl.nodes_json, {}));
-        setEdges(toFlowEdges(tpl.edges_json));
-        setTimeout(() => fitView({ padding: 0.15 }), 120);
-      } else {
-        resetDraft();
-      }
+    const savedWorkflow = definitions.find((d) => d.id === templateId);
+    if (savedWorkflow) {
+      setSelectedId(savedWorkflow.id);
+      setActiveTab('builder');
       setShowTemplates(false);
       return;
     }
+
     try {
       const res = await workflowEngineApi.templates.instantiate(templateId, 'New from Template');
       await loadAll();
       const newId = res.data?.id;
-      if (newId) setSelectedId(newId);
+      if (newId) {
+        setSelectedId(newId);
+        setActiveTab('builder');
+      }
     } catch (e) {
       alert('Failed to use template: ' + extractApiErrorMessage(e));
     }
     setShowTemplates(false);
-  }, [loadAll, resetDraft]);
+  }, [definitions, loadAll]);
 
   // ─── AI operations ────────────────────────────────────────────────────────────
   const generateFromNaturalLanguage = useCallback(async () => {
@@ -1125,6 +1116,24 @@ function WorkflowEngineContent() {
     (new Date(b.updated_at || '').getTime() || 0) - (new Date(a.updated_at || '').getTime() || 0)
   );
 
+  const savedWorkflowTemplates: WorkflowTemplate[] = sortedDefinitions.map((d) => ({
+    id: d.id,
+    name: d.name,
+    category: d.trigger_event?.includes('vulnerability')
+      ? 'Vulnerability Management'
+      : d.trigger_event?.includes('risk')
+        ? 'Risk Management'
+        : d.trigger_event?.includes('policy')
+          ? 'Policy'
+          : d.trigger_event?.includes('asset')
+            ? 'Asset Management'
+            : 'Saved Workflows',
+    description: d.description || `Trigger: ${d.trigger_event || 'manual.trigger'}`,
+    trigger_event: d.trigger_event,
+    nodes_json: (d.nodes || []) as BackendNode[],
+    edges_json: (d.edges || []) as BackendEdge[],
+  }));
+
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
       {/* Page header */}
@@ -1427,7 +1436,7 @@ function WorkflowEngineContent() {
       {/* Templates modal */}
       {showTemplates && (
         <TemplatesModal
-          templates={templates}
+          templates={savedWorkflowTemplates}
           onClose={() => setShowTemplates(false)}
           onUse={handleUseTemplate}
         />

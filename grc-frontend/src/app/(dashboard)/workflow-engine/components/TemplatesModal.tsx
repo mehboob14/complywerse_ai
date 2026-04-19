@@ -360,10 +360,7 @@ export function TemplatesModal({ templates, onClose, onUse }: Props) {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
 
-  const allTemplates = [
-    ...SYSTEM_TEMPLATES,
-    ...templates.filter((t) => t.id > 0),
-  ];
+  const allTemplates = templates.filter((t) => t.id > 0);
 
   const categories = Array.from(new Set(allTemplates.map((t) => t.category)));
 
@@ -382,9 +379,9 @@ export function TemplatesModal({ templates, onClose, onUse }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Workflow Templates</h2>
+            <h2 className="text-base font-bold text-gray-900">Saved Workflow Templates</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Start from a prebuilt template or browse the library
+              Open any saved workflow from here and reuse it anytime
             </p>
           </div>
           <button
@@ -460,7 +457,7 @@ export function TemplatesModal({ templates, onClose, onUse }: Props) {
                     onClick={() => onUse(template.id)}
                     className="mt-auto w-full text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded-md transition-colors"
                   >
-                    Use Template
+                    Open Workflow
                   </button>
                 </div>
               );
