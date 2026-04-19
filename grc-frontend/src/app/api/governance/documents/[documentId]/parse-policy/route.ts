@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: { documentId: string } }
 ) {
   const documentId = params.documentId;
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:4000';
+  const backendUrl = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:4000').replace(/\/$/, '');
   
   console.log(`[Parse Policy API Route] Starting for document ${documentId}`);
   

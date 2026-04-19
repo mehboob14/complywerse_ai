@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const maxDuration = 300;
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:4000';
+const BACKEND_URL = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:4000').replace(/\/$/, '');
 
 export async function POST(request: NextRequest) {
   try {

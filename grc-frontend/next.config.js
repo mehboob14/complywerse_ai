@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const BACKEND_URL = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:4000').replace(/\/$/, '');
+
 const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
@@ -34,7 +36,7 @@ const nextConfig = {
       fallback: [
         {
           source: '/api/:path*',
-          destination: 'http://127.0.0.1:4000/grc/:path*',
+          destination: `${BACKEND_URL}/grc/:path*`,
         },
       ],
     }
