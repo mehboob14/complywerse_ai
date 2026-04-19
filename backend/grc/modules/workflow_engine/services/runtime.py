@@ -38,7 +38,7 @@ def _node_runtime_type(node: WorkflowNode) -> str:
     if node.is_terminal:
         return "end"
     node_type = (node.node_type or "").lower()
-    if node_type in {"start", "end", "action", "condition", "approval", "timer", "subworkflow"}:
+    if node_type in {"start", "end", "action", "notification", "email", "condition", "approval", "timer", "escalation", "subworkflow", "blocked"}:
         return node_type
     cfg = node.config or {}
     if cfg.get("trigger_type"):
@@ -160,6 +160,30 @@ class WorkflowRuntime:
                 definition.id,
             )
             return
+
+        # Deduplication guard: prevent duplicate instance when both the
+        # embedded runtime and the standalone watcher are running at the
+        # same time, or after a process restart that reuses audit log ids.
+        correlation_id = item.get("correlation_id")
+        if correlation_id:
+            existing = (
+                db.query(WorkflowInstance)
+                .filter(
+                    WorkflowInstance.workflow_definition_id == definition.id,
+                    WorkflowInstance.correlation_id == correlation_id,
+                    WorkflowInstance.tenant_id == item.get("tenant_id"),
+                )
+                .first()
+            )
+            if existing:
+                logger.debug(
+                    "workflow.runtime.start_instance.deduplicated "
+                    "workflow_definition_id=%s correlation_id=%s existing_instance_id=%s",
+                    definition.id,
+                    correlation_id,
+                    existing.id,
+                )
+                return
 
         instance = WorkflowInstance(
             workflow_definition_id=definition.id,

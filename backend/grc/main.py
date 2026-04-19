@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import Request
@@ -123,7 +124,9 @@ app.include_router(integrations_router)
 @app.on_event("startup")
 def on_startup():
     init_grc_db()
-    start_workflow_engine_runtime()
+    _disable_embedded = os.getenv("DISABLE_EMBEDDED_WORKFLOW_RUNTIME", "").strip().lower()
+    if _disable_embedded not in ("1", "true", "yes", "on"):
+        start_workflow_engine_runtime()
 
 
 @app.on_event("shutdown")

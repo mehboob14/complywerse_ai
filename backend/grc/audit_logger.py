@@ -45,16 +45,56 @@ def _sanitize_value(value: Any) -> Any:
     return str(value)
 
 
+# Modules whose URL structure is /<module>/<entity>/[id]/...
+# These use their second path segment as the resource_type.
+_MODULE_SUB_ENTITY_PREFIXES = {
+    "erm",
+    "evidence-mgmt",
+    "vuln-management",
+    "audit-management",
+    "control-library",
+}
+
+# Map module path slugs → canonical resource type names
+_MODULE_RESOURCE_ALIASES: dict[str, str] = {
+    "erm": "risks",
+    "evidence-mgmt": "evidence",
+    "vuln-management": "vulnerabilities",
+    "framework-upload": "frameworks",
+    "governance": "governance",
+    "compliance": "compliance",
+    "audit-management": "audits",
+    "control-library": "controls",
+    "vendor-risk": "vendor_risk",
+    "chatbot": "chatbot",
+    "integrations": "integrations",
+    "workflow-engine": "workflow",
+}
+
+
 def _extract_resource(path: str) -> tuple[str, Optional[int]]:
     normalized = path.replace("/grc", "", 1).strip("/")
     if not normalized:
         return "system", None
 
     parts = [part for part in normalized.split("/") if part]
-    resource_type = parts[0]
-    resource_id = None
-    if len(parts) > 1 and parts[1].isdigit():
-        resource_id = int(parts[1])
+    if not parts:
+        return "system", None
+
+    module = parts[0]
+    resource_id: Optional[int] = None
+
+    # Sub-entity modules: /erm/risks/5  →  resource_type="risks", resource_id=5
+    if module in _MODULE_SUB_ENTITY_PREFIXES and len(parts) >= 2:
+        resource_type = parts[1]
+        # ID is the third segment when it is numeric
+        if len(parts) > 2 and parts[2].isdigit():
+            resource_id = int(parts[2])
+    else:
+        # Standard modules: /governance/12/status  →  resource_type="governance", resource_id=12
+        resource_type = _MODULE_RESOURCE_ALIASES.get(module, module)
+        if len(parts) > 1 and parts[1].isdigit():
+            resource_id = int(parts[1])
 
     return resource_type, resource_id
 

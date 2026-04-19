@@ -84,6 +84,16 @@ def get_node_config_options(
         "risk_statuses": ["open", "in_progress", "mitigated", "accepted", "closed"],
         "risk_levels": ["critical", "high", "medium", "low"],
         "risk_treatment_types": ["mitigate", "accept", "transfer", "avoid"],
+        "risk_register_types": [
+            "operational", "strategic", "financial", "technology",
+            "compliance", "third_party", "project_change",
+        ],
+        "risk_sub_categories": [
+            "cybersecurity", "data_privacy", "business_continuity", "fraud",
+            "regulatory", "reputational", "supply_chain", "human_error",
+            "natural_disaster", "financial_reporting", "market", "credit",
+            "liquidity", "concentration", "it_infrastructure", "change_management",
+        ],
         "compliance_statuses": [
             "not_started", "in_progress", "submitted_for_review",
             "approved", "certified", "expired", "rejected",
@@ -120,6 +130,11 @@ def get_node_config_options(
             "strategic", "technology",
         ],
         "remediation_priorities": ["critical", "high", "medium", "low"],
+        "asset_types": [
+            "server", "workstation", "network_device", "database", "application",
+            "cloud_service", "storage", "endpoint", "iot_device", "virtual_machine",
+        ],
+        "asset_criticality_levels": ["critical", "high", "medium", "low"],
     }
 
 

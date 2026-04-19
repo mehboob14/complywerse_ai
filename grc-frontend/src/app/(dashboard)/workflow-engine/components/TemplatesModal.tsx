@@ -18,6 +18,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Vendor Onboarding': 'bg-teal-100 text-teal-700',
   'Compliance': 'bg-green-100 text-green-700',
   'Audit': 'bg-yellow-100 text-yellow-700',
+  'Vulnerability Management': 'bg-red-100 text-red-800',
+  'Asset Management': 'bg-slate-100 text-slate-700',
 };
 
 // ─── System Template Graphs ──────────────────────────────────────────────────
@@ -197,6 +199,68 @@ const annualAuditEdges: BackendEdge[] = [
   { source_node_key: 'final_notify', target_node_key: 'end' },
 ];
 
+// ─── New trigger templates ────────────────────────────────────────────────────
+
+const policySubmittedNodes: BackendNode[] = [
+  { node_key: 'start', node_type: 'start', name: 'Policy Submitted for Review', config: { trigger_type: 'policy_submitted_for_review', module: 'Governance', domains: ['governance'] }, is_start: true, position_x: 350, position_y: 30 },
+  { node_key: 'notify_reviewers', node_type: 'action', name: 'Notify Policy Reviewers', config: { action_name: 'send_notification_email', subject: 'Policy Submitted for Review: {{title}}', body: 'A policy has been submitted for your review.\n\nTitle: {{title}}\nStatus: {{status}}\nSubmitted by: {{created_by_name}}', module: 'Workflow Engine', domains: ['shared'] }, position_x: 350, position_y: 160 },
+  { node_key: 'approval', node_type: 'approval', name: 'Reviewer Approval', config: { approval_type: 'single', timeout_seconds: 259200, on_timeout: 'escalate', module: 'Workflow Engine', domains: ['workflow'] }, position_x: 350, position_y: 290 },
+  { node_key: 'check_result', node_type: 'condition', name: 'Check Approval Outcome', config: { condition_kind: 'check_approval_status', module: 'Workflow Engine', domains: ['workflow'] }, position_x: 350, position_y: 420 },
+  { node_key: 'notify_approved', node_type: 'action', name: 'Notify — Policy Approved', config: { action_name: 'send_notification_email', subject: 'Policy Approved: {{title}}', body: 'The policy "{{title}}" has been approved and will be published.', module: 'Workflow Engine', domains: ['shared'] }, position_x: 100, position_y: 560 },
+  { node_key: 'notify_rejected', node_type: 'action', name: 'Notify — Revision Required', config: { action_name: 'send_notification_email', subject: 'Policy Needs Revision: {{title}}', body: 'The policy "{{title}}" requires revision before it can be approved.', module: 'Workflow Engine', domains: ['shared'] }, position_x: 600, position_y: 560 },
+  { node_key: 'end', node_type: 'end', name: 'End', config: { module: 'Workflow Engine', domains: ['workflow'] }, is_terminal: true, position_x: 350, position_y: 700 },
+];
+
+const policySubmittedEdges: BackendEdge[] = [
+  { source_node_key: 'start', target_node_key: 'notify_reviewers', condition: {}, priority: 1 },
+  { source_node_key: 'notify_reviewers', target_node_key: 'approval', condition: {}, priority: 1 },
+  { source_node_key: 'approval', target_node_key: 'check_result', condition: {}, priority: 1 },
+  { source_node_key: 'check_result', target_node_key: 'notify_approved', condition: { _label: 'Approved', _handle: 'condition-true' }, priority: 1 },
+  { source_node_key: 'check_result', target_node_key: 'notify_rejected', condition: { _label: 'Rejected', _handle: 'condition-false' }, priority: 2 },
+  { source_node_key: 'notify_approved', target_node_key: 'end', condition: {}, priority: 1 },
+  { source_node_key: 'notify_rejected', target_node_key: 'end', condition: {}, priority: 1 },
+];
+
+const vulnerabilityCreatedNodes: BackendNode[] = [
+  { node_key: 'start', node_type: 'start', name: 'Vulnerability Created', config: { trigger_type: 'vulnerability_created', module: 'Vulnerability Management', domains: ['vulnerability'] }, is_start: true, position_x: 350, position_y: 30 },
+  { node_key: 'check_severity', node_type: 'condition', name: 'Check Severity', config: { condition_kind: 'check_vulnerability_severity', severity: 'high', operator: 'at_least', module: 'Vulnerability Management', domains: ['vulnerability'] }, position_x: 350, position_y: 160 },
+  { node_key: 'alert_critical', node_type: 'action', name: 'Alert Security Team', config: { action_name: 'escalate_to_management', escalation_levels: [{ level: 1, subject: 'Critical/High Vulnerability: {{title}}', message: 'Severity: {{severity}}\nCVSS: {{cvss_score}}\nAffected: {{affected_component}}\nBy: {{created_by_name}}', user_ids: [], role_ids: [], timeout_value: 24, timeout_unit: 'hours', escalation_mode: 'always' }], module: 'Workflow Engine', domains: ['shared'] }, position_x: 100, position_y: 300 },
+  { node_key: 'assign_owner', node_type: 'action', name: 'Assign Vulnerability Owner', config: { action_name: 'assign_vulnerability_owner', module: 'Vulnerability Management', domains: ['vulnerability'] }, position_x: 600, position_y: 300 },
+  { node_key: 'notify_email', node_type: 'action', name: 'Send Notification', config: { action_name: 'send_notification_email', subject: 'New Vulnerability: {{title}}', body: 'A new vulnerability has been detected.\n\nTitle: {{title}}\nSeverity: {{severity}}\nAffected: {{affected_component}}\nVuln ID: {{vuln_id}}', module: 'Workflow Engine', domains: ['shared'] }, position_x: 350, position_y: 440 },
+  { node_key: 'sla_timer', node_type: 'timer', name: 'Remediation SLA', config: { timer_kind: 'sla_countdown', wait_seconds: 604800, module: 'Workflow Engine', domains: ['workflow'] }, position_x: 350, position_y: 570 },
+  { node_key: 'end', node_type: 'end', name: 'End', config: { module: 'Workflow Engine', domains: ['workflow'] }, is_terminal: true, position_x: 350, position_y: 700 },
+];
+
+const vulnerabilityCreatedEdges: BackendEdge[] = [
+  { source_node_key: 'start', target_node_key: 'check_severity', condition: {}, priority: 1 },
+  { source_node_key: 'check_severity', target_node_key: 'alert_critical', condition: { _label: 'High / Critical', _handle: 'condition-true' }, priority: 1 },
+  { source_node_key: 'check_severity', target_node_key: 'assign_owner', condition: { _label: 'Medium / Low', _handle: 'condition-false' }, priority: 2 },
+  { source_node_key: 'alert_critical', target_node_key: 'notify_email', condition: {}, priority: 1 },
+  { source_node_key: 'assign_owner', target_node_key: 'notify_email', condition: {}, priority: 1 },
+  { source_node_key: 'notify_email', target_node_key: 'sla_timer', condition: {}, priority: 1 },
+  { source_node_key: 'sla_timer', target_node_key: 'end', condition: {}, priority: 1 },
+];
+
+const assetCreatedNodes: BackendNode[] = [
+  { node_key: 'start', node_type: 'start', name: 'IT Asset Created', config: { trigger_type: 'asset_created', module: 'IT Assets', domains: ['shared'] }, is_start: true, position_x: 350, position_y: 30 },
+  { node_key: 'notify_owner', node_type: 'action', name: 'Notify Asset Owner', config: { action_name: 'send_notification_email', subject: 'New Asset Registered: {{name}}', body: 'A new IT asset has been registered.\n\nName: {{name}}\nType: {{asset_type}}\nCriticality: {{criticality}}\nHost: {{host_name}}\nIP: {{ip_address}}\nOwner: {{owner_name}}', module: 'Workflow Engine', domains: ['shared'] }, position_x: 350, position_y: 160 },
+  { node_key: 'check_criticality', node_type: 'condition', name: 'Check Criticality', config: { condition_kind: 'check_risk_level', risk_level: 'high', operator: 'at_least', module: 'Risk Management', domains: ['risk'] }, position_x: 350, position_y: 290 },
+  { node_key: 'request_evidence', node_type: 'action', name: 'Request Baseline Evidence', config: { action_name: 'request_evidence_upload', message: 'Please provide security baseline documentation for the newly registered critical/high asset: {{name}}', module: 'Evidence', domains: ['evidence', 'compliance'] }, position_x: 100, position_y: 430 },
+  { node_key: 'assign_risk', node_type: 'action', name: 'Create Asset Risk Entry', config: { action_name: 'create_risk_entry', risk_category: 'operational', title_template: 'Asset risk: {{name}}', module: 'Risk Management', domains: ['risk'] }, position_x: 600, position_y: 430 },
+  { node_key: 'notify_complete', node_type: 'action', name: 'Asset Registration Complete', config: { action_name: 'send_notification_email', subject: 'Asset Registration Processed: {{name}}', body: 'The asset "{{name}}" has been registered and processed by the workflow.', module: 'Workflow Engine', domains: ['shared'] }, position_x: 350, position_y: 570 },
+  { node_key: 'end', node_type: 'end', name: 'End', config: { module: 'Workflow Engine', domains: ['workflow'] }, is_terminal: true, position_x: 350, position_y: 700 },
+];
+
+const assetCreatedEdges: BackendEdge[] = [
+  { source_node_key: 'start', target_node_key: 'notify_owner', condition: {}, priority: 1 },
+  { source_node_key: 'notify_owner', target_node_key: 'check_criticality', condition: {}, priority: 1 },
+  { source_node_key: 'check_criticality', target_node_key: 'request_evidence', condition: { _label: 'Critical / High', _handle: 'condition-true' }, priority: 1 },
+  { source_node_key: 'check_criticality', target_node_key: 'assign_risk', condition: { _label: 'Medium / Low', _handle: 'condition-false' }, priority: 2 },
+  { source_node_key: 'request_evidence', target_node_key: 'notify_complete', condition: {}, priority: 1 },
+  { source_node_key: 'assign_risk', target_node_key: 'notify_complete', condition: {}, priority: 1 },
+  { source_node_key: 'notify_complete', target_node_key: 'end', condition: {}, priority: 1 },
+];
+
 // ─── Exported System Templates ───────────────────────────────────────────────
 
 export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
@@ -262,6 +326,33 @@ export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
     trigger_event: 'scheduler.recurring',
     nodes_json: annualAuditNodes,
     edges_json: annualAuditEdges,
+  },
+  {
+    id: -8,
+    name: 'Policy Review & Approval',
+    category: 'Policy',
+    description: 'Automatically routes a submitted policy through reviewer approval with notification on both approval and rejection outcomes.',
+    trigger_event: 'policy_submitted_for_review',
+    nodes_json: policySubmittedNodes,
+    edges_json: policySubmittedEdges,
+  },
+  {
+    id: -9,
+    name: 'Vulnerability Triage & Remediation',
+    category: 'Vulnerability Management',
+    description: 'Triages newly created vulnerabilities by severity, escalates critical/high findings, assigns ownership, and starts a remediation SLA timer.',
+    trigger_event: 'vulnerability_created',
+    nodes_json: vulnerabilityCreatedNodes,
+    edges_json: vulnerabilityCreatedEdges,
+  },
+  {
+    id: -10,
+    name: 'IT Asset Onboarding',
+    category: 'Asset Management',
+    description: 'Processes newly registered IT assets — notifies the asset owner, requests baseline evidence for critical assets, and creates a risk entry.',
+    trigger_event: 'asset_created',
+    nodes_json: assetCreatedNodes,
+    edges_json: assetCreatedEdges,
   },
 ];
 

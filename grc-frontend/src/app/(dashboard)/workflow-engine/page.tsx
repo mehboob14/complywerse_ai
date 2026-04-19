@@ -410,6 +410,18 @@ function WorkflowEngineContent() {
   const [showVersions, setShowVersions] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showAI, setShowAI] = useState(false);
+  const [showSmtpModal, setShowSmtpModal] = useState(false);
+  const [smtpForm, setSmtpForm] = useState({
+    config_name: 'default',
+    smtp_host: 'smtp.gmail.com',
+    smtp_port: '587',
+    smtp_username: '',
+    smtp_password: '',
+    from_email: '',
+    from_name: 'ComplyVerse',
+    use_tls: true,
+  });
+  const [smtpSaving, setSmtpSaving] = useState(false);
 
   // ─── Derived values ─────────────────────────────────────────────────────────
   const palette = useMemo(() => buildPalette(catalog), [catalog]);
@@ -627,37 +639,31 @@ function WorkflowEngineContent() {
     resetDraft();
   }, [selectedId, loadAll, resetDraft]);
 
-  const configureEmailSettings = useCallback(async () => {
-    const configName = window.prompt('Email config name', 'default');
-    if (!configName) return;
-    const smtpHost = window.prompt('SMTP host', 'smtp.gmail.com');
-    if (!smtpHost) return;
-    const smtpPortRaw = window.prompt('SMTP port', '587');
-    const smtpUsername = window.prompt('SMTP username', '');
-    if (!smtpUsername) return;
-    const smtpPassword = window.prompt('SMTP password', '');
-    if (!smtpPassword) return;
-    const fromEmail = window.prompt('From email', smtpUsername);
-    if (!fromEmail) return;
-    const fromName = window.prompt('From name', 'ComplyVerse') || 'ComplyVerse';
+  const configureEmailSettings = useCallback(() => {
+    setShowSmtpModal(true);
+  }, []);
 
+  const handleSmtpSubmit = useCallback(async () => {
+    setSmtpSaving(true);
     try {
       await workflowEngineApi.notifications.createEmailConfig({
-        config_name: configName,
-        smtp_host: smtpHost,
-        smtp_port: Number(smtpPortRaw || '587') || 587,
-        smtp_username: smtpUsername,
-        smtp_password: smtpPassword,
-        from_email: fromEmail,
-        from_name: fromName,
-        use_tls: true,
+        config_name: smtpForm.config_name || 'default',
+        smtp_host: smtpForm.smtp_host,
+        smtp_port: Number(smtpForm.smtp_port) || 587,
+        smtp_username: smtpForm.smtp_username,
+        smtp_password: smtpForm.smtp_password,
+        from_email: smtpForm.from_email || smtpForm.smtp_username,
+        from_name: smtpForm.from_name || 'ComplyVerse',
+        use_tls: smtpForm.use_tls,
       });
       await loadAll();
-      alert('Email configuration saved');
+      setShowSmtpModal(false);
     } catch (e) {
       alert('Email setup failed: ' + extractApiErrorMessage(e));
+    } finally {
+      setSmtpSaving(false);
     }
-  }, [loadAll]);
+  }, [smtpForm, loadAll]);
 
   const testEmailSettings = useCallback(async () => {
     try {
@@ -1427,6 +1433,116 @@ function WorkflowEngineContent() {
         />
       )}
       </div>{/* end builder tab wrapper */}
+
+      {/* SMTP Configuration Modal */}
+      {showSmtpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-200">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-semibold text-gray-900">Configure SMTP Email</h2>
+              <button onClick={() => setShowSmtpModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Config Name</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
+                  value={smtpForm.config_name}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, config_name: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">SMTP Host</label>
+                  <input
+                    type="text"
+                    placeholder="smtp.gmail.com"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
+                    value={smtpForm.smtp_host}
+                    onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_host: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Port</label>
+                  <input
+                    type="number"
+                    placeholder="587"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
+                    value={smtpForm.smtp_port}
+                    onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_port: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">SMTP Username</label>
+                <input
+                  type="text"
+                  placeholder="you@gmail.com"
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
+                  value={smtpForm.smtp_username}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_username: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">SMTP Password / App Password</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
+                  value={smtpForm.smtp_password}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_password: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">From Email</label>
+                <input
+                  type="email"
+                  placeholder="noreply@yourcompany.com"
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
+                  value={smtpForm.from_email}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, from_email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">From Name</label>
+                <input
+                  type="text"
+                  placeholder="ComplyVerse"
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
+                  value={smtpForm.from_name}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, from_name: e.target.value }))}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="use_tls"
+                  checked={smtpForm.use_tls}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, use_tls: e.target.checked }))}
+                  className="rounded border-gray-300"
+                />
+                <label htmlFor="use_tls" className="text-xs text-gray-700">Use TLS (recommended for port 587)</label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setShowSmtpModal(false)}
+                className="px-4 py-1.5 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSmtpSubmit}
+                disabled={smtpSaving || !smtpForm.smtp_host || !smtpForm.smtp_username || !smtpForm.smtp_password}
+                className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {smtpSaving ? 'Saving…' : 'Save Configuration'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

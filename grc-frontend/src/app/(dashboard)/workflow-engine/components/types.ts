@@ -61,6 +61,7 @@ export type WorkflowDomain =
   | 'governance'
   | 'audit'
   | 'control'
+  | 'assets'
   | 'workflow'
   | 'shared';
 
@@ -151,6 +152,8 @@ export type NodeConfigOptions = {
   risk_statuses: string[];
   risk_levels: string[];
   risk_treatment_types: string[];
+  risk_register_types: string[];
+  risk_sub_categories: string[];
   compliance_statuses: string[];
   vulnerability_severities: string[];
   vulnerability_statuses: string[];
@@ -164,6 +167,8 @@ export type NodeConfigOptions = {
   report_types: string[];
   kri_categories: string[];
   remediation_priorities: string[];
+  asset_types: string[];
+  asset_criticality_levels: string[];
 };
 
 export const EMPTY_NODE_CONFIG_OPTIONS: NodeConfigOptions = {
@@ -172,6 +177,8 @@ export const EMPTY_NODE_CONFIG_OPTIONS: NodeConfigOptions = {
   risk_statuses: [],
   risk_levels: [],
   risk_treatment_types: [],
+  risk_register_types: ['operational', 'strategic', 'financial', 'technology', 'compliance', 'third_party', 'project_change'],
+  risk_sub_categories: ['cybersecurity', 'data_privacy', 'business_continuity', 'fraud', 'regulatory', 'reputational', 'supply_chain', 'human_error', 'natural_disaster', 'financial_reporting', 'market', 'credit', 'liquidity', 'it_infrastructure', 'change_management'],
   compliance_statuses: [],
   vulnerability_severities: [],
   vulnerability_statuses: [],
@@ -185,6 +192,8 @@ export const EMPTY_NODE_CONFIG_OPTIONS: NodeConfigOptions = {
   report_types: [],
   kri_categories: [],
   remediation_priorities: [],
+  asset_types: ['server', 'workstation', 'network_device', 'database', 'application', 'cloud_service', 'storage', 'endpoint', 'iot_device', 'virtual_machine'],
+  asset_criticality_levels: ['critical', 'high', 'medium', 'low'],
 };
 
 // Node group colors
@@ -251,18 +260,31 @@ export const TRIGGER_KEYS = new Set([
   'new_vulnerability_detected',
   'vulnerability_sla_breach',
   'vulnerability_sla_warning',
+  // Risk (additional)
+  'risk_updated',
+  'risk_deleted',
+  // Vulnerability (additional)
+  'vulnerability_created',
+  'vulnerability_updated',
+  'vulnerability_deleted',
   // Governance & policy
+  'policy_submitted_for_review',
   'policy_review_due',
   'policy_approved',
   'control_review_due',
   'attestation_overdue',
   // Audit
   'audit_finding_created',
+  // IT Assets
+  'asset_created',
+  'asset_updated',
+  'asset_deleted',
 ]);
 
 export const ACTION_KEYS = new Set([
   // Notifications
   'send_notification_email',
+  'send_in_app_alert',
   'escalate_to_management',
   'call_webhook_api',
   'generate_report',
@@ -344,12 +366,22 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   new_vulnerability_detected: { domains: ['vulnerability'], module: 'Vulnerability Management' },
   vulnerability_sla_breach: { domains: ['vulnerability'], module: 'Vulnerability Management' },
   vulnerability_sla_warning: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  risk_updated: { domains: ['risk'], module: 'Risk Management' },
+  risk_deleted: { domains: ['risk'], module: 'Risk Management' },
+  vulnerability_created: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  vulnerability_updated: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  vulnerability_deleted: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  policy_submitted_for_review: { domains: ['governance'], module: 'Governance' },
   policy_review_due: { domains: ['governance'], module: 'Governance' },
   policy_approved: { domains: ['governance'], module: 'Governance' },
   control_review_due: { domains: ['governance', 'control'], module: 'Governance' },
   attestation_overdue: { domains: ['governance'], module: 'Governance' },
   audit_finding_created: { domains: ['audit'], module: 'Audit Management' },
+  asset_created: { domains: ['assets'], module: 'IT Asset Management' },
+  asset_updated: { domains: ['assets'], module: 'IT Asset Management' },
+  asset_deleted: { domains: ['assets'], module: 'IT Asset Management' },
   send_notification_email: { domains: ['shared'], module: 'Workflow Engine' },
+  send_in_app_alert: { domains: ['shared'], module: 'Workflow Engine' },
   escalate_to_management: { domains: ['shared'], module: 'Workflow Engine' },
   call_webhook_api: { domains: ['shared'], module: 'Workflow Engine' },
   generate_report: { domains: ['shared'], module: 'Workflow Engine' },
@@ -405,6 +437,7 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
 
 const SHARED_ACTION_KEYS = new Set([
   'send_notification_email',
+  'send_in_app_alert',
   'escalate_to_management',
   'call_webhook_api',
   'generate_report',
@@ -455,6 +488,7 @@ export function inferWorkflowDomainsFromModuleName(moduleName?: string): Workflo
   if (lower.includes('governance') || lower.includes('policy') || lower.includes('attestation')) return ['governance'];
   if (lower.includes('audit')) return ['audit'];
   if (lower.includes('control')) return ['control'];
+  if (lower.includes('asset')) return ['assets'];
   return ['workflow'];
 }
 
@@ -605,31 +639,41 @@ export const TRIGGER_EVENT_MAP: Record<string, string> = {
   schedule_recurring: 'scheduler.recurring',
   webhook: 'workflow.webhook',
   // Evidence & compliance
-  evidence_uploaded: 'evidence.uploaded',
-  evidence_approved: 'evidence.approved',
-  evidence_expires: 'evidence.expires',
-  framework_deadline_approaching: 'frameworks.deadline_approaching',
-  framework_evidence_complete: 'frameworks.evidence_complete',
-  assessment_status_change: 'compliance.assessment_status_change',
-  compliance_gap_detected: 'compliance.gap_detected',
-  certification_expiry_approaching: 'compliance.certification_expiry_approaching',
+  evidence_uploaded: 'evidence_uploaded',
+  evidence_approved: 'evidence_approved',
+  evidence_expires: 'evidence_expires',
+  framework_deadline_approaching: 'framework_deadline_approaching',
+  framework_evidence_complete: 'framework_evidence_complete',
+  assessment_status_change: 'assessment_status_change',
+  compliance_gap_detected: 'compliance_gap_detected',
+  certification_expiry_approaching: 'certification_expiry_approaching',
   // Risk
-  risk_created: 'risks.created',
-  risk_status_changed: 'risks.status_changed',
-  risk_score_exceeds_threshold: 'risks.score_threshold_exceeded',
-  kri_breach: 'erm.kri_breach',
-  incident_reported: 'erm.incident_reported',
+  risk_created: 'risk_created',
+  risk_updated: 'risk_updated',
+  risk_deleted: 'risk_deleted',
+  risk_status_changed: 'risk_status_changed',
+  risk_score_exceeds_threshold: 'risk_score_exceeds_threshold',
+  kri_breach: 'kri_breach',
+  incident_reported: 'incident_reported',
   // Vulnerability
-  new_vulnerability_detected: 'vulnerabilities.detected',
-  vulnerability_sla_breach: 'vulnerabilities.sla_breach',
-  vulnerability_sla_warning: 'vulnerabilities.sla_warning',
+  vulnerability_created: 'vulnerability_created',
+  vulnerability_updated: 'vulnerability_updated',
+  vulnerability_deleted: 'vulnerability_deleted',
+  new_vulnerability_detected: 'new_vulnerability_detected',
+  vulnerability_sla_breach: 'vulnerability_sla_breach',
+  vulnerability_sla_warning: 'vulnerability_sla_warning',
   // Governance & policy
-  policy_review_due: 'governance.policy_review_due',
-  policy_approved: 'governance.policy_approved',
-  control_review_due: 'governance.control_review_due',
-  attestation_overdue: 'governance.attestation_overdue',
+  policy_submitted_for_review: 'policy_submitted_for_review',
+  policy_review_due: 'policy_review_due',
+  policy_approved: 'policy_approved',
+  control_review_due: 'control_review_due',
+  attestation_overdue: 'attestation_overdue',
   // Audit
-  audit_finding_created: 'audit.finding_created',
+  audit_finding_created: 'audit_finding_created',
+  // IT Assets
+  asset_created: 'asset_created',
+  asset_updated: 'asset_updated',
+  asset_deleted: 'asset_deleted',
 };
 
 export const NODE_TYPE_LABELS: Record<string, string> = {
@@ -648,23 +692,34 @@ export const NODE_TYPE_LABELS: Record<string, string> = {
   certification_expiry_approaching: 'Cert. Expiry',
   // Risk triggers
   risk_created: 'Risk Created',
+  risk_updated: 'Risk Updated',
+  risk_deleted: 'Risk Deleted',
   risk_status_changed: 'Risk Status Changed',
   risk_score_exceeds_threshold: 'Risk Threshold',
   kri_breach: 'KRI Breach',
   incident_reported: 'Incident Reported',
   // Vulnerability triggers
+  vulnerability_created: 'Vulnerability Created',
+  vulnerability_updated: 'Vulnerability Updated',
+  vulnerability_deleted: 'Vulnerability Deleted',
   new_vulnerability_detected: 'New Vulnerability',
   vulnerability_sla_breach: 'SLA Breached',
   vulnerability_sla_warning: 'SLA Warning',
   // Governance triggers
+  policy_submitted_for_review: 'Policy Submitted for Review',
   policy_review_due: 'Policy Review Due',
   policy_approved: 'Policy Approved',
   control_review_due: 'Control Review Due',
   attestation_overdue: 'Attestation Overdue',
   // Audit triggers
   audit_finding_created: 'Audit Finding Created',
+  // IT Asset triggers
+  asset_created: 'Asset Created',
+  asset_updated: 'Asset Updated',
+  asset_deleted: 'Asset Deleted',
   // Actions - notifications
   send_notification_email: 'Send Email',
+  send_in_app_alert: 'In-System Alert',
   escalate_to_management: 'Escalate',
   call_webhook_api: 'Call Webhook',
   generate_report: 'Generate Report',
@@ -744,23 +799,34 @@ export const PALETTE_DESCRIPTIONS: Record<string, string> = {
   certification_expiry_approaching: 'Fires when a compliance certification is nearing expiry',
   // Risk triggers
   risk_created: 'Fires when a new risk entry is added to the risk register',
+  risk_updated: 'Fires when an existing risk entry is updated',
+  risk_deleted: 'Fires when a risk entry is deleted from the register',
   risk_status_changed: 'Fires when a risk\'s status or treatment changes',
   risk_score_exceeds_threshold: 'Fires when a risk score exceeds a defined threshold',
   kri_breach: 'Fires when a KRI breaches its threshold',
   incident_reported: 'Fires when an incident is reported',
   // Vulnerability triggers
+  vulnerability_created: 'Fires when a new vulnerability is created',
+  vulnerability_updated: 'Fires when an existing vulnerability is updated',
+  vulnerability_deleted: 'Fires when a vulnerability is deleted',
   new_vulnerability_detected: 'Fires when a new vulnerability is detected',
   vulnerability_sla_breach: 'Fires when a vulnerability SLA deadline has been breached',
   vulnerability_sla_warning: 'Fires when a vulnerability SLA deadline is approaching',
   // Governance triggers
+  policy_submitted_for_review: 'Fires when a policy is submitted for review',
   policy_review_due: 'Fires when a policy is due for review',
   policy_approved: 'Fires when a policy is approved or published',
   control_review_due: 'Fires when a control effectiveness review is due',
   attestation_overdue: 'Fires when an attestation campaign response is overdue',
   // Audit triggers
   audit_finding_created: 'Fires when a new audit finding is recorded',
+  // IT Asset triggers
+  asset_created: 'Fires when a new IT asset is added to the inventory',
+  asset_updated: 'Fires when an IT asset record is updated',
+  asset_deleted: 'Fires when an IT asset is removed from the inventory',
   // Actions - notifications
   send_notification_email: 'Sends a notification email to specified recipients',
+  send_in_app_alert: 'Sends an in-system alert to selected users or roles — appears in their navbar notification bell',
   escalate_to_management: 'Escalates an issue through configurable escalation levels',
   call_webhook_api: 'Calls an external webhook or API endpoint',
   generate_report: 'Generates a compliance or risk report and optionally sends it',
@@ -821,4 +887,159 @@ export const PALETTE_DESCRIPTIONS: Record<string, string> = {
   // Control
   subworkflow: 'Embeds and executes a reusable sub-workflow',
   end: 'Marks the end of the workflow',
+};
+
+// ─── TRIGGER_TEMPLATE_VARS ───────────────────────────────────────────────────
+// Maps each trigger key → ordered sections of template variables that can be
+// used in email subjects, bodies, and in-app alert messages.
+
+export type TemplateVar = {
+  key: string;
+  label: string;
+};
+
+export type TemplateSections = {
+  section: string;
+  vars: TemplateVar[];
+};
+
+const _COMMON: TemplateVar[] = [
+  { key: 'workflow_name',    label: 'Workflow Name'      },
+  { key: 'event_timestamp',  label: 'Event Timestamp'    },
+  { key: 'resource_type',    label: 'Resource Type'      },
+  { key: 'resource_id',      label: 'Record ID'          },
+  { key: 'action',           label: 'Event Action'       },
+  { key: 'created_by_name',  label: 'Created By (Name)'  },
+  { key: 'created_by_email', label: 'Created By (Email)' },
+];
+
+const _RISK: TemplateVar[] = [
+  { key: 'title',             label: 'Risk Title'         },
+  { key: 'description',       label: 'Description'        },
+  { key: 'category',          label: 'Category'           },
+  { key: 'status',            label: 'Status'             },
+  { key: 'severity',          label: 'Severity'           },
+  { key: 'inherent_score',    label: 'Inherent Score'     },
+  { key: 'residual_score',    label: 'Residual Score'     },
+  { key: 'risk_appetite',     label: 'Risk Appetite'      },
+  { key: 'due_date',          label: 'Due Date'           },
+  { key: 'register_type',     label: 'Register Type'      },
+  { key: 'risk_sub_category', label: 'Sub-Category'       },
+  { key: 'owner_name',        label: 'Risk Owner (Name)'  },
+  { key: 'owner_email',       label: 'Risk Owner (Email)' },
+];
+
+const _VULN: TemplateVar[] = [
+  { key: 'title',                label: 'Vulnerability Title' },
+  { key: 'description',          label: 'Description' },
+  { key: 'severity',             label: 'Severity' },
+  { key: 'cvss_score',           label: 'CVSS Score' },
+  { key: 'status',               label: 'Status' },
+  { key: 'cve_id',               label: 'CVE ID' },
+  { key: 'cwe_id',               label: 'CWE ID' },
+  { key: 'affected_component',   label: 'Affected Component' },
+  { key: 'affected_host',        label: 'Affected Host' },
+  { key: 'affected_url',         label: 'Affected URL' },
+  { key: 'due_date',             label: 'Due Date' },
+  { key: 'vuln_id',              label: 'Vuln ID'                  },
+  { key: 'recommendation',       label: 'Recommendation'           },
+  { key: 'remediation_plan',     label: 'Remediation Plan'         },
+  { key: 'sla_remediation_days', label: 'SLA Remediation Days'     },
+  { key: 'sla_due_date',         label: 'SLA Due Date'             },
+  { key: 'assignee_name',        label: 'Assignee (Name)'          },
+  { key: 'assignee_email',       label: 'Assignee (Email)'         },
+  { key: 'owner_name',           label: 'Owner (Name)'             },
+  { key: 'owner_email',          label: 'Owner (Email)'            },
+];
+
+const _POLICY: TemplateVar[] = [
+  { key: 'title',            label: 'Policy Title' },
+  { key: 'description',      label: 'Description' },
+  { key: 'doc_type',         label: 'Document Type' },
+  { key: 'status',           label: 'Status' },
+  { key: 'current_version',  label: 'Current Version' },
+  { key: 'next_review_date', label: 'Next Review Date' },
+  { key: 'expiry_date',      label: 'Expiry Date' },
+];
+
+const _EVIDENCE: TemplateVar[] = [
+  { key: 'name',          label: 'Evidence Name' },
+  { key: 'description',   label: 'Description' },
+  { key: 'status',        label: 'Status' },
+  { key: 'evidence_type', label: 'Evidence Type' },
+  { key: 'file_name',     label: 'File Name' },
+  { key: 'expiry_date',   label: 'Expiry Date' },
+  { key: 'quality_score', label: 'Quality Score' },
+  { key: 'version',       label: 'Version' },
+];
+
+const _AUDIT: TemplateVar[] = [
+  { key: 'title',          label: 'Finding Title' },
+  { key: 'condition',      label: 'Condition' },
+  { key: 'severity',       label: 'Severity' },
+  { key: 'status',         label: 'Status' },
+  { key: 'finding_number', label: 'Finding Number' },
+  { key: 'due_date',       label: 'Due Date' },
+];
+
+const _ASSET: TemplateVar[] = [
+  { key: 'name',                   label: 'Asset Name' },
+  { key: 'description',            label: 'Description' },
+  { key: 'asset_type',             label: 'Asset Type' },
+  { key: 'criticality',            label: 'Criticality' },
+  { key: 'status',                 label: 'Status' },
+  { key: 'host_name',              label: 'Hostname' },
+  { key: 'ip_address',             label: 'IP Address' },
+  { key: 'vendor',                 label: 'Vendor' },
+  { key: 'location',               label: 'Location' },
+  { key: 'valuation',              label: 'Valuation' },
+  { key: 'custodian',              label: 'Custodian' },
+  { key: 'confidentiality_rating', label: 'Confidentiality (CIA)' },
+  { key: 'integrity_rating',       label: 'Integrity (CIA)' },
+  { key: 'availability_rating',    label: 'Availability (CIA)' },
+  { key: 'owner_name',             label: 'Asset Owner (Name)' },
+  { key: 'owner_email',            label: 'Asset Owner (Email)' },
+];
+
+export const TRIGGER_TEMPLATE_VARS: Record<string, TemplateSections[]> = {
+  // Core
+  manual_trigger:   [{ section: 'Common', vars: _COMMON }],
+  schedule_recurring: [{ section: 'Common', vars: _COMMON }],
+  webhook:          [{ section: 'Common', vars: _COMMON }],
+  // Evidence & compliance
+  evidence_uploaded: [{ section: 'Evidence Fields', vars: _EVIDENCE }, { section: 'Common', vars: _COMMON }],
+  evidence_approved: [{ section: 'Evidence Fields', vars: _EVIDENCE }, { section: 'Common', vars: _COMMON }],
+  evidence_expires:  [{ section: 'Evidence Fields', vars: _EVIDENCE }, { section: 'Common', vars: _COMMON }],
+  framework_deadline_approaching:  [{ section: 'Common', vars: _COMMON }],
+  framework_evidence_complete:     [{ section: 'Common', vars: _COMMON }],
+  assessment_status_change:        [{ section: 'Common', vars: _COMMON }],
+  compliance_gap_detected:         [{ section: 'Common', vars: _COMMON }],
+  certification_expiry_approaching:[{ section: 'Common', vars: _COMMON }],
+  // Risk
+  risk_created:               [{ section: 'Risk Fields', vars: _RISK }, { section: 'Common', vars: _COMMON }],
+  risk_updated:               [{ section: 'Risk Fields', vars: _RISK }, { section: 'Common', vars: _COMMON }],
+  risk_deleted:               [{ section: 'Risk Fields', vars: _RISK }, { section: 'Common', vars: _COMMON }],
+  risk_status_changed:        [{ section: 'Risk Fields', vars: _RISK }, { section: 'Common', vars: _COMMON }],
+  risk_score_exceeds_threshold:[{ section: 'Risk Fields', vars: _RISK }, { section: 'Common', vars: _COMMON }],
+  kri_breach:       [{ section: 'Common', vars: _COMMON }],
+  incident_reported:[{ section: 'Common', vars: _COMMON }],
+  // Vulnerability
+  vulnerability_created:      [{ section: 'Vulnerability Fields', vars: _VULN }, { section: 'Common', vars: _COMMON }],
+  vulnerability_updated:      [{ section: 'Vulnerability Fields', vars: _VULN }, { section: 'Common', vars: _COMMON }],
+  vulnerability_deleted:      [{ section: 'Vulnerability Fields', vars: _VULN }, { section: 'Common', vars: _COMMON }],
+  new_vulnerability_detected: [{ section: 'Vulnerability Fields', vars: _VULN }, { section: 'Common', vars: _COMMON }],
+  vulnerability_sla_breach:   [{ section: 'Vulnerability Fields', vars: _VULN }, { section: 'Common', vars: _COMMON }],
+  vulnerability_sla_warning:  [{ section: 'Vulnerability Fields', vars: _VULN }, { section: 'Common', vars: _COMMON }],
+  // Governance & policy
+  policy_submitted_for_review: [{ section: 'Policy Fields', vars: _POLICY }, { section: 'Common', vars: _COMMON }],
+  policy_review_due:           [{ section: 'Policy Fields', vars: _POLICY }, { section: 'Common', vars: _COMMON }],
+  policy_approved:             [{ section: 'Policy Fields', vars: _POLICY }, { section: 'Common', vars: _COMMON }],
+  control_review_due:          [{ section: 'Common', vars: _COMMON }],
+  attestation_overdue:         [{ section: 'Common', vars: _COMMON }],
+  // Audit
+  audit_finding_created: [{ section: 'Audit Fields', vars: _AUDIT }, { section: 'Common', vars: _COMMON }],
+  // IT Assets
+  asset_created: [{ section: 'Asset Fields', vars: _ASSET }, { section: 'Common', vars: _COMMON }],
+  asset_updated: [{ section: 'Asset Fields', vars: _ASSET }, { section: 'Common', vars: _COMMON }],
+  asset_deleted: [{ section: 'Asset Fields', vars: _ASSET }, { section: 'Common', vars: _COMMON }],
 };

@@ -19,26 +19,35 @@ TRIGGER_NODE_TYPES = [
     {"key": "certification_expiry_approaching", "label": "Certification expiry approaching"},
     # ── Risk triggers ─────────────────────────────────────────────────────────
     {"key": "risk_created", "label": "Risk entry created"},
+    {"key": "risk_updated", "label": "Risk entry updated"},
+    {"key": "risk_deleted", "label": "Risk entry deleted"},
     {"key": "risk_status_changed", "label": "Risk status changed"},
     {"key": "risk_score_exceeds_threshold", "label": "Risk score exceeds threshold"},
     {"key": "kri_breach", "label": "KRI breach"},
     {"key": "incident_reported", "label": "Incident reported"},
     # ── Vulnerability triggers ────────────────────────────────────────────────
-    {"key": "new_vulnerability_detected", "label": "New vulnerability detected"},
+    {"key": "vulnerability_created",      "label": "Vulnerability created"},
+    {"key": "vulnerability_updated",      "label": "Vulnerability updated"},
+    {"key": "vulnerability_deleted",      "label": "Vulnerability deleted"},
+    {"key": "new_vulnerability_detected",  "label": "New vulnerability detected"},
     {"key": "vulnerability_sla_breach", "label": "Vulnerability SLA breached"},
     {"key": "vulnerability_sla_warning", "label": "Vulnerability SLA warning (approaching)"},
     # ── Governance & policy triggers ──────────────────────────────────────────
+    {"key": "policy_submitted_for_review", "label": "Policy submitted for review"},
     {"key": "policy_review_due", "label": "Policy review due"},
     {"key": "policy_approved", "label": "Policy approved / published"},
     {"key": "control_review_due", "label": "Control effectiveness review due"},
     {"key": "attestation_overdue", "label": "Attestation campaign overdue"},
     # ── Audit triggers ────────────────────────────────────────────────────────
-    {"key": "audit_finding_created", "label": "Audit finding created"},
-]
+    {"key": "audit_finding_created", "label": "Audit finding created"},    # ── IT Asset triggers ─────────────────────────────────────────
+    {"key": "asset_created", "label": "IT asset created"},
+    {"key": "asset_updated", "label": "IT asset updated"},
+    {"key": "asset_deleted", "label": "IT asset deleted"},]
 
 ACTION_NODE_TYPES = [
     # ── Notifications & communication ─────────────────────────────────────────
     {"key": "send_notification_email", "label": "Send notification / email"},
+    {"key": "send_in_app_alert", "label": "Send in-app alert / notification"},
     {"key": "escalate_to_management", "label": "Escalate to management"},
     {"key": "call_webhook_api", "label": "Call webhook / API"},
     {"key": "generate_report", "label": "Generate report"},

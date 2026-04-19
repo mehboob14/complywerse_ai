@@ -618,6 +618,8 @@ function TriggerSubConfig({
     risk_categories,
     risk_statuses,
     risk_levels,
+    risk_register_types,
+    risk_sub_categories,
     compliance_statuses,
     vulnerability_severities,
     policy_categories,
@@ -625,6 +627,8 @@ function TriggerSubConfig({
     finding_severities,
     kri_categories,
     evidence_categories,
+    asset_types,
+    asset_criticality_levels,
   } = nodeConfigOptions;
 
   const FwSelect = ({
@@ -767,7 +771,7 @@ function TriggerSubConfig({
       </>
     );
   }
-  if (['risk_created', 'risk_status_changed', 'risk_score_exceeds_threshold'].includes(tt)) {
+  if (['risk_created', 'risk_updated', 'risk_status_changed', 'risk_score_exceeds_threshold'].includes(tt)) {
     return (
       <>
         <Field label="Risk category (optional filter)">
@@ -780,6 +784,34 @@ function TriggerSubConfig({
             {risk_categories.map((c) => (
               <option key={c} value={c}>
                 {toLabel(c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Register type (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.register_type as string) || ''}
+            onChange={(e) => onUpdate('register_type', e.target.value)}
+          >
+            <option value="">-- Any register type --</option>
+            {(risk_register_types || []).map((r) => (
+              <option key={r} value={r}>
+                {toLabel(r)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Sub-category (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.risk_sub_category as string) || ''}
+            onChange={(e) => onUpdate('risk_sub_category', e.target.value)}
+          >
+            <option value="">-- Any sub-category --</option>
+            {(risk_sub_categories || []).map((s) => (
+              <option key={s} value={s}>
+                {toLabel(s)}
               </option>
             ))}
           </select>
@@ -845,7 +877,7 @@ function TriggerSubConfig({
       </>
     );
   }
-  if (['new_vulnerability_detected', 'vulnerability_sla_breach', 'vulnerability_sla_warning'].includes(tt)) {
+  if (['vulnerability_created', 'vulnerability_updated', 'new_vulnerability_detected', 'vulnerability_sla_breach', 'vulnerability_sla_warning'].includes(tt)) {
     return (
       <>
         <Field label="Minimum severity">
@@ -868,7 +900,7 @@ function TriggerSubConfig({
       </>
     );
   }
-  if (['policy_review_due', 'policy_approved'].includes(tt)) {
+  if (['policy_submitted_for_review', 'policy_review_due', 'policy_approved'].includes(tt)) {
     return (
       <>
         <Field label="Policy category (optional filter)">
@@ -975,6 +1007,47 @@ function TriggerSubConfig({
   if (tt === 'attestation_overdue') {
     return (
       <DaysInput field="overdue_threshold_days" label="Overdue threshold (days)" placeholder="1" />
+    );
+  }
+  if (['asset_created', 'asset_updated', 'asset_deleted'].includes(tt)) {
+    if (tt === 'asset_deleted') return null;
+    return (
+      <>
+        <Field label="Asset type (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.asset_type as string) || ''}
+            onChange={(e) => onUpdate('asset_type', e.target.value)}
+          >
+            <option value="">-- Any type --</option>
+            {(asset_types && asset_types.length > 0
+              ? asset_types
+              : ['server', 'workstation', 'network_device', 'database', 'application', 'cloud_service', 'storage', 'endpoint', 'iot_device', 'virtual_machine']
+            ).map((t) => (
+              <option key={t} value={t}>
+                {toLabel(t)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Minimum criticality (optional filter)">
+          <select
+            className={selectCls}
+            value={(config?.min_criticality as string) || ''}
+            onChange={(e) => onUpdate('min_criticality', e.target.value)}
+          >
+            <option value="">-- Any criticality --</option>
+            {(asset_criticality_levels && asset_criticality_levels.length > 0
+              ? asset_criticality_levels
+              : ['critical', 'high', 'medium', 'low']
+            ).map((c) => (
+              <option key={c} value={c}>
+                {toLabel(c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </>
     );
   }
   if (tt === 'schedule_recurring') {
@@ -2069,6 +2142,59 @@ function ActionSubConfig({
         </Field>
         <UserMulti field="approval_user_ids" label="Approval users" />
         <RoleMulti field="approval_role_ids" label="Approval roles" />
+      </>
+    );
+  }
+
+  if (actionName === 'send_in_app_alert') {
+    return (
+      <>
+        <Field label="Recipient Users">
+          <CheckboxMultiSelect
+            options={actorUsers.map((u) => ({ value: u.id, label: u.display_name, subtitle: u.email }))}
+            selectedValues={selectedRecipientUserIds.map(Number)}
+            onChange={(vals) => onUpdate('recipient_user_ids', vals)}
+            placeholder="Select users"
+            emptyMessage="No tenant users found"
+          />
+        </Field>
+        <Field label="Recipient Roles">
+          <CheckboxMultiSelect
+            options={actorRoles.map((r) => ({ value: r.id, label: r.name }))}
+            selectedValues={selectedRecipientRoleIds.map(Number)}
+            onChange={(vals) => onUpdate('recipient_role_ids', vals)}
+            placeholder="Select roles"
+            emptyMessage="No tenant roles found"
+          />
+        </Field>
+        <Field label="Alert type">
+          <select
+            className={selectCls}
+            value={(config?.notification_type as string) || 'info'}
+            onChange={(e) => onUpdate('notification_type', e.target.value)}
+          >
+            <option value="info">Info</option>
+            <option value="success">Success</option>
+            <option value="warning">Warning</option>
+            <option value="error">Error / Urgent</option>
+          </select>
+        </Field>
+        <Field label="Subject">
+          <input
+            className={inputCls}
+            value={(config?.subject as string) || ''}
+            onChange={(e) => onUpdate('subject', e.target.value)}
+            placeholder="Workflow alert: {{workflow_name}}"
+          />
+        </Field>
+        <Field label="Message">
+          <textarea
+            className={`${inputCls} h-16 resize-none`}
+            value={(config?.message as string) || ''}
+            onChange={(e) => onUpdate('message', e.target.value)}
+            placeholder="Alert details..."
+          />
+        </Field>
       </>
     );
   }

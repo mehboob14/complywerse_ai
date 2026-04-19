@@ -26,44 +26,55 @@ def _env_bool(name: str, default: bool) -> bool:
 
 _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
     "incidents": {
-        "create": ["incident_reported", "incidents.create"],
+        "create": ["incident_reported", "incidents.create", "erm.incident_reported"],
         "update": ["incidents.update"],
     },
     "risks": {
-        "create": ["risks.create"],
-        "update": ["risk_score_exceeds_threshold", "risks.update"],
+        "create": ["risk_created", "risks.create", "risks.created"],
+        "update": ["risk_updated", "risk_score_exceeds_threshold", "risk_status_changed", "risks.update",
+                   "risks.status_changed", "risks.score_threshold_exceeded"],
+        "delete": ["risk_deleted", "risks.delete"],
     },
     "evidence": {
-        "create": ["evidence.create"],
-        "update": ["evidence_expires", "evidence.update"],
+        "create": ["evidence_uploaded", "evidence.create", "evidence.uploaded"],
+        "update": ["evidence_approved", "evidence_expires", "evidence.update",
+                   "evidence.approved", "evidence.expires"],
         "delete": ["evidence.delete"],
     },
     "vulnerabilities": {
-        "create": ["new_vulnerability_detected", "vulnerabilities.create"],
-        "update": ["vulnerabilities.update"],
+        "create": ["vulnerability_created", "new_vulnerability_detected", "vulnerabilities.create", "vulnerabilities.detected"],
+        "update": ["vulnerability_updated", "vulnerability_sla_breach", "vulnerability_sla_warning", "vulnerabilities.update",
+                   "vulnerabilities.sla_breach", "vulnerabilities.sla_warning"],
+        "delete": ["vulnerability_deleted", "vulnerabilities.delete"],
     },
     "kri": {
-        "create": ["kri_breach", "kri.create"],
-        "update": ["kri_breach", "kri.update"],
+        "create": ["kri_breach", "kri.create", "erm.kri_breach"],
+        "update": ["kri_breach", "kri.update", "erm.kri_breach"],
     },
     "policies": {
-        "create": ["policy_review_due", "policies.create"],
-        "update": ["policy_review_due", "policies.update"],
+        "create": ["policies.create"],
+        "update": ["policy_approved", "policies.update", "governance.policy_approved"],
+        "submit_for_review": ["policy_submitted_for_review"],
     },
     "governance": {
         "create": ["governance.create"],
-        "update": ["assessment_status_change", "governance.update"],
+        "update": ["assessment_status_change", "control_review_due", "attestation_overdue",
+                   "governance.update", "compliance.assessment_status_change",
+                   "governance.control_review_due", "governance.attestation_overdue"],
     },
     "compliance": {
-        "create": ["compliance.create"],
-        "update": ["assessment_status_change", "compliance.update"],
+        "create": ["compliance.create", "compliance_gap_detected", "compliance.gap_detected"],
+        "update": ["assessment_status_change", "compliance.update",
+                   "compliance.assessment_status_change", "compliance_gap_detected",
+                   "compliance.certification_expiry_approaching"],
     },
     "assets": {
-        "create": ["assets.create"],
-        "update": ["assets.update"],
+        "create": ["asset_created", "assets.create"],
+        "update": ["asset_updated", "assets.update"],
+        "delete": ["asset_deleted", "assets.delete"],
     },
     "audits": {
-        "create": ["audits.create"],
+        "create": ["audit_finding_created", "audits.create", "audit.finding_created"],
         "update": ["audits.update"],
     },
 }
@@ -160,6 +171,15 @@ class TriggerDispatcher:
             if mapped_event not in event_names:
                 event_names.append(mapped_event)
 
+        # Special: governance document submitted for review
+        # Fires when PUT /{doc_id}/status is called with {"status": "pending_review"}
+        if resource_type == "governance" and action == "update":
+            changes_inner = (log.changes or {}) if isinstance(log.changes, dict) else {}
+            requested = changes_inner.get("request") or {}
+            if isinstance(requested, dict) and requested.get("status") == "pending_review":
+                if "policy_submitted_for_review" not in event_names:
+                    event_names.append("policy_submitted_for_review")
+
         # Path-based enrichment
         changes = (log.changes or {}) if isinstance(log.changes, dict) else {}
         path = str(changes.get("path") or "").strip()
@@ -171,7 +191,10 @@ class TriggerDispatcher:
 
                 # Normalise module name
                 canonical = _MODULE_ALIASES.get(module, module)
-                if not entity.isdigit():
+                # Only add a generic compound event when the entity is distinct
+                # from the canonical type.  Skipping when they are equal prevents
+                # spurious events like 'risks.risks.create'.
+                if not entity.isdigit() and canonical != entity:
                     generic = f"{canonical}.{entity}.{action}"
                     if generic not in event_names:
                         event_names.append(generic)
@@ -291,11 +314,11 @@ class TriggerDispatcher:
                 triggered,
             )
         else:
-            logger.debug(
-                "workflow.dispatcher.dispatch_event.done event_name=%s tenant_id=%s triggered=%s",
+            logger.info(
+                "workflow.dispatcher.dispatch_event.no_match event_name=%s tenant_id=%s "
+                "— no active workflow definition found for this trigger event",
                 event_name,
                 tenant_id,
-                triggered,
             )
 
         return triggered

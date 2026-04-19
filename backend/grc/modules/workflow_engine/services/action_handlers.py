@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 import json
+import logging
 import urllib.request
+
+logger = logging.getLogger(__name__)
 
 from ....models import (
     AuditFinding,
@@ -10,15 +13,336 @@ from ....models import (
     FrameworkControl,
     GovernanceDocument,
     GRCUser,
+    ITAsset,
     Risk,
+    RiskIncident,
     Role,
     TenantUser,
     UserRole,
     Vulnerability,
+    VulnerabilitySLAConfig,
     WorkflowAuditLog,
+    WorkflowNotification,
 )
 from .condition_evaluator import ConditionEvaluator
 from .email_service import send_email
+
+
+# ---------------------------------------------------------------------------
+# Dynamic email template helpers
+# ---------------------------------------------------------------------------
+
+import re as _re
+
+
+def _resolve_template(text: str, context: Dict[str, Any]) -> str:
+    """Replace {{key}} placeholders with values from context dict."""
+    def _sub(m: "_re.Match") -> str:
+        key = m.group(1).strip()
+        val = context.get(key)
+        # Return the value if found, otherwise blank (never keep {{placeholder}} text)
+        return str(val) if val is not None else ""
+    return _re.sub(r'\{\{([^}]+)\}\}', _sub, text)
+
+
+def _build_template_context(db, instance, definition) -> Dict[str, Any]:
+    """Build a flat template-variable context from the workflow trigger payload."""
+    payload: Dict[str, Any] = instance.trigger_payload or {}
+    resource_type = str(payload.get("resource_type") or "").lower()
+    resource_id = payload.get("resource_id")
+
+    ctx: Dict[str, Any] = {
+        "workflow_name":    definition.name or "",
+        "event_timestamp":  payload.get("timestamp", datetime.utcnow().isoformat()),
+        "resource_type":    resource_type,
+        "resource_id":      str(resource_id or ""),
+        "action":           payload.get("action", ""),
+        "tenant_id":        str(instance.tenant_id),
+        "severity":         str(payload.get("severity") or ""),
+        "status":           str(payload.get("status") or ""),
+        "created_by_name":  "",
+        "created_by_email": "",
+    }
+
+    # Resolve the user who triggered the event
+    triggered_by_id = payload.get("user_id")
+    if triggered_by_id:
+        try:
+            actor: Any = db.query(GRCUser).filter(GRCUser.id == int(triggered_by_id)).first()
+            if actor:
+                ctx["created_by_name"]  = actor.display_name or actor.username or ""
+                ctx["created_by_email"] = actor.email or ""
+        except Exception:
+            pass
+
+    # Merge flat keys from the audit-log changes dict (top-level, e.g. severity/status)
+    changes = payload.get("changes") or {}
+    if isinstance(changes, dict):
+        for k, v in changes.items():
+            if k not in ("request", "query") and v is not None and k not in ctx:
+                ctx[k] = str(v)
+
+    # Also unpack the stored request body (populated on create where resource_id
+    # is absent from the URL, e.g. POST /grc/erm/risks).
+    # This gives us title, description, category, due_date, owner_id, etc.
+    request_body: Dict[str, Any] = {}
+    if isinstance(changes, dict):
+        request_body = changes.get("request") or {}
+    if isinstance(request_body, dict):
+        # Use request_body values even if key already exists in ctx (pre-initialized as "")
+        # so that real values like status="open" overwrite the empty-string defaults.
+        for k, v in request_body.items():
+            if v is not None and (k not in ctx or ctx.get(k) == ""):
+                ctx[k] = str(v)
+
+    # For create events resource_id is None (POST URL has no ID), but the record
+    # was already committed before the audit log fired.  Find it by title/name so
+    # the full DB enrichment block below can run.
+    if not resource_id:
+        _lookup_title = request_body.get("title") or ctx.get("title")
+        _lookup_name  = request_body.get("name")  or ctx.get("name")
+        try:
+            if resource_type == "risks" and _lookup_title:
+                _found = db.query(Risk).filter(
+                    Risk.tenant_id == instance.tenant_id,
+                    Risk.title == _lookup_title,
+                ).order_by(Risk.id.desc()).first()
+                if _found:
+                    resource_id = _found.id
+            elif resource_type == "vulnerabilities" and _lookup_title:
+                _found = db.query(Vulnerability).filter(
+                    Vulnerability.tenant_id == instance.tenant_id,
+                    Vulnerability.title == _lookup_title,
+                ).order_by(Vulnerability.id.desc()).first()
+                if _found:
+                    resource_id = _found.id
+            elif resource_type == "evidence" and _lookup_name:
+                _found = db.query(Evidence).filter(
+                    Evidence.tenant_id == instance.tenant_id,
+                    Evidence.name == _lookup_name,
+                ).order_by(Evidence.id.desc()).first()
+                if _found:
+                    resource_id = _found.id
+        except Exception:
+            pass
+
+    # If we still have no resource_id, do best-effort enrichment from request
+    # body field aliases and bail out (no DB enrichment possible).
+    if not resource_id:
+        # risk_category → category  (frontend field name differs from DB column)
+        if not ctx.get("category") and request_body.get("risk_category"):
+            ctx["category"] = str(request_body["risk_category"])
+        # owner lookup: frontend may send business_owner_id or owner_id
+        owner_id_raw = request_body.get("owner_id") or request_body.get("business_owner_id")
+        if owner_id_raw:
+            try:
+                owner_user: Any = db.query(GRCUser).filter(GRCUser.id == int(owner_id_raw)).first()
+                if owner_user:
+                    ctx["owner_name"]  = owner_user.display_name or owner_user.username or ""
+                    ctx["owner_email"] = owner_user.email or ""
+            except Exception:
+                pass
+        return ctx
+
+    # DB enrichment — fetch the full record for authoritative values.
+
+    try:
+        rid = int(resource_id)
+        tid = instance.tenant_id
+
+        if resource_type == "risks":
+            obj: Any = db.query(Risk).filter(Risk.id == rid, Risk.tenant_id == tid).first()
+            if obj:
+                ctx.update({
+                    "title":          obj.title or "",
+                    "description":    obj.description or "",
+                    "category":       obj.category or "",
+                    "status":         obj.status or "",
+                    "inherent_score": str(obj.inherent_score or ""),
+                    "residual_score": str(obj.residual_score or ""),
+                    "risk_appetite":  obj.risk_appetite or "",
+                    "due_date":       obj.due_date.strftime("%Y-%m-%d") if obj.due_date else "",
+                    "register_type":  obj.register_type or "",
+                    "risk_sub_category": obj.risk_sub_category or "",
+                })
+                # Risk owner — check owner_id first, fall back to business_owner_id
+                resolved_owner_id = obj.owner_id or getattr(obj, 'business_owner_id', None)
+                if resolved_owner_id:
+                    owner_user = db.query(GRCUser).filter(GRCUser.id == resolved_owner_id).first()
+                    if owner_user:
+                        ctx["owner_name"]  = owner_user.display_name or owner_user.username or ""
+                        ctx["owner_email"] = owner_user.email or ""
+            else:
+                # Record was deleted — populate from request body or path context
+                ctx["deleted_resource_id"] = str(rid)
+                if not ctx.get("title"):
+                    ctx["title"] = request_body.get("title") or f"Risk #{rid}"
+                if not ctx.get("category") and request_body.get("risk_category"):
+                    ctx["category"] = str(request_body["risk_category"])
+
+        elif resource_type == "evidence":
+            obj = db.query(Evidence).filter(Evidence.id == rid, Evidence.tenant_id == tid).first()
+            if obj:
+                ctx.update({
+                    "name":          obj.name or "",
+                    "description":   obj.description or "",
+                    "status":        obj.status or "",
+                    "evidence_type": obj.evidence_type or "",
+                    "file_name":     obj.file_name or "",
+                    "expiry_date":   obj.expiry_date.strftime("%Y-%m-%d") if obj.expiry_date else "",
+                    "quality_score": str(obj.quality_score or ""),
+                    "version":       str(obj.version or ""),
+                })
+
+        elif resource_type == "vulnerabilities":
+            obj = db.query(Vulnerability).filter(Vulnerability.id == rid, Vulnerability.tenant_id == tid).first()
+            if obj:
+                ctx.update({
+                    "title":              obj.title or "",
+                    "description":        obj.description or "",
+                    "severity":           obj.severity or "",
+                    "cvss_score":         str(obj.cvss_score or ""),
+                    "status":             obj.status or "",
+                    "cve_id":             obj.cve_id or "",
+                    "cwe_id":             obj.cwe_id or "",
+                    "affected_component": obj.affected_component or "",
+                    "affected_host":      obj.affected_host or "",
+                    "affected_url":       obj.affected_url or "",
+                    "due_date":           obj.due_date.strftime("%Y-%m-%d") if obj.due_date else "",
+                    "vuln_id":            obj.vuln_id or "",
+                    "recommendation":     obj.recommendation or obj.ai_recommendation or "",
+                    "remediation_plan":   obj.recommendation or obj.ai_recommendation or "",
+                })
+                # SLA config: look up remediation_days by severity
+                if obj.severity:
+                    try:
+                        sla = db.query(VulnerabilitySLAConfig).filter(
+                            VulnerabilitySLAConfig.tenant_id == tid,
+                            VulnerabilitySLAConfig.severity == obj.severity.lower(),
+                            VulnerabilitySLAConfig.is_active.is_(True),
+                        ).first()
+                        if sla:
+                            ctx["sla_remediation_days"] = str(sla.remediation_days)
+                            # Compute SLA due date from discovered_at if not already set
+                            if not ctx.get("due_date") or ctx["due_date"] == "":
+                                discovered = obj.discovered_at or obj.created_at or datetime.utcnow()
+                                ctx["sla_due_date"] = (discovered + timedelta(days=sla.remediation_days)).strftime("%Y-%m-%d")
+                            else:
+                                ctx["sla_due_date"] = ctx["due_date"]
+                    except Exception:
+                        pass
+                # Assignee (owner)
+                resolved_assignee_id = obj.assigned_to
+                if resolved_assignee_id:
+                    try:
+                        assignee = db.query(GRCUser).filter(GRCUser.id == resolved_assignee_id).first()
+                        if assignee:
+                            ctx["assignee_name"]  = assignee.display_name or assignee.username or ""
+                            ctx["assignee_email"] = assignee.email or ""
+                            ctx["owner_name"]     = ctx["assignee_name"]
+                            ctx["owner_email"]    = ctx["assignee_email"]
+                    except Exception:
+                        pass
+
+            else:
+                # Record was deleted — populate from context
+                ctx["deleted_resource_id"] = str(rid)
+                if not ctx.get("title"):
+                    ctx["title"] = request_body.get("title") or f"Vulnerability #{rid}"
+
+        elif resource_type == "incidents":
+            obj = db.query(RiskIncident).filter(RiskIncident.id == rid, RiskIncident.tenant_id == tid).first()
+            if obj:
+                ctx.update({
+                    "title":            obj.title or "",
+                    "description":      obj.description or "",
+                    "severity":         obj.severity or "",
+                    "status":           obj.status or "",
+                    "financial_impact": str(obj.financial_impact or ""),
+                    "incident_date":    obj.incident_date.strftime("%Y-%m-%d") if obj.incident_date else "",
+                })
+
+        elif resource_type in ("governance", "policies"):
+            obj = db.query(GovernanceDocument).filter(GovernanceDocument.id == rid, GovernanceDocument.tenant_id == tid).first()
+            if obj:
+                ctx.update({
+                    "title":            obj.title or "",
+                    "description":      getattr(obj, 'description', '') or "",
+                    "doc_type":         obj.doc_type or "",
+                    "status":           obj.status or "",
+                    "current_version":  obj.current_version or "",
+                    "next_review_date": obj.next_review_date.strftime("%Y-%m-%d") if obj.next_review_date else "",
+                    "expiry_date":      obj.expiry_date.strftime("%Y-%m-%d") if obj.expiry_date else "",
+                })
+
+        elif resource_type == "audits":
+            obj = db.query(AuditFinding).filter(AuditFinding.id == rid, AuditFinding.tenant_id == tid).first()
+            if obj:
+                ctx.update({
+                    "title":          obj.title or "",
+                    "condition":      obj.condition or "",
+                    "severity":       obj.severity or "",
+                    "status":         obj.status or "",
+                    "finding_number": obj.finding_number or "",
+                    "due_date":       obj.due_date.strftime("%Y-%m-%d") if obj.due_date else "",
+                })
+
+        elif resource_type == "assets":
+            obj = db.query(ITAsset).filter(ITAsset.id == rid, ITAsset.tenant_id == tid).first()
+            if obj:
+                ctx.update({
+                    "name":           obj.name or "",
+                    "description":    obj.description or "",
+                    "asset_type":     obj.asset_type or "",
+                    "criticality":    obj.criticality or "",
+                    "status":         obj.status or "",
+                    "host_name":      obj.host_name or "",
+                    "ip_address":     obj.ip_address or "",
+                    "vendor":         obj.vendor or "",
+                    "location":       obj.location or "",
+                    "valuation":      str(obj.valuation or ""),
+                    "custodian":      obj.custodian or "",
+                    "confidentiality_rating": str(obj.confidentiality_rating or ""),
+                    "integrity_rating":       str(obj.integrity_rating or ""),
+                    "availability_rating":    str(obj.availability_rating or ""),
+                })
+                # Resolve asset owner
+                if obj.owner_id:
+                    try:
+                        asset_owner = db.query(GRCUser).filter(GRCUser.id == obj.owner_id).first()
+                        if asset_owner:
+                            ctx["owner_name"]  = asset_owner.display_name or asset_owner.username or ""
+                            ctx["owner_email"] = asset_owner.email or ""
+                    except Exception:
+                        pass
+            else:
+                # Asset was deleted — populate from request body
+                ctx["deleted_resource_id"] = str(rid)
+                if not ctx.get("name"):
+                    ctx["name"] = request_body.get("name") or f"Asset #{rid}"
+
+    except Exception:
+        pass  # enrichment failure must not prevent email delivery
+
+    # Post-enrichment fallback: if owner is still blank, try business_owner_id
+    # from the request body (covers risks created before this fix was deployed).
+    if not ctx.get("owner_name") and not ctx.get("owner_email"):
+        owner_id_raw = request_body.get("owner_id") or request_body.get("business_owner_id")
+        if owner_id_raw:
+            try:
+                _owner = db.query(GRCUser).filter(GRCUser.id == int(owner_id_raw)).first()
+                if _owner:
+                    ctx["owner_name"]  = _owner.display_name or _owner.username or ""
+                    ctx["owner_email"] = _owner.email or ""
+            except Exception:
+                pass
+
+    # Final fallback: if owner is STILL blank, use the triggering user as owner.
+    if not ctx.get("owner_name"):
+        ctx["owner_name"]  = ctx.get("created_by_name", "")
+        ctx["owner_email"] = ctx.get("created_by_email", "")
+
+    return ctx
 
 
 # ---------------------------------------------------------------------------
@@ -26,6 +350,9 @@ from .email_service import send_email
 # ---------------------------------------------------------------------------
 
 def _notification_html(subject: str, body: str, cta_url: str = "", cta_label: str = "") -> str:
+    import html as _html
+    # Escape HTML special chars, then restore line breaks as <br> tags
+    body_html = _html.escape(body).replace("\n", "<br>\n")
     cta = (
         f'<p style="margin:24px 0"><a href="{cta_url}" style="background:#2563eb;color:#fff;'
         f'padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">{cta_label}</a></p>'
@@ -33,8 +360,8 @@ def _notification_html(subject: str, body: str, cta_url: str = "", cta_label: st
     )
     return f"""
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px">
-      <h2 style="color:#1e293b">{subject}</h2>
-      <p style="color:#475569;line-height:1.6">{body}</p>
+      <h2 style="color:#1e293b">{_html.escape(subject)}</h2>
+      <p style="color:#475569;line-height:1.8">{body_html}</p>
       {cta}
       <hr style="border:none;border-top:1px solid #e2e8f0;margin-top:32px"/>
       <p style="font-size:12px;color:#94a3b8">Sent by ComplyVerse Workflow Engine</p>
@@ -150,12 +477,14 @@ class WorkflowActionHandlers:
             "assign_control_owner": WorkflowActionHandlers._assign_control_owner,
             "generate_report": WorkflowActionHandlers._generate_report,
             "escalate_to_management": WorkflowActionHandlers._escalate_to_management,
-            "call_webhook_api": WorkflowActionHandlers._call_webhook_api,
+            # NOTE: call_webhook_api removed — outbound HTTP to user-supplied URLs
+            # is an SSRF risk.  Use a dedicated integration node if webhooks are needed.
             # Cross-module integration actions
             "update_risk_status": WorkflowActionHandlers._update_risk_status,
             "trigger_policy_review": WorkflowActionHandlers._trigger_policy_review,
             "update_vuln_status": WorkflowActionHandlers._update_vuln_status,
             "update_asset_classification": WorkflowActionHandlers._update_asset_classification,
+            "send_in_app_alert": WorkflowActionHandlers._send_in_app_alert,
         }
 
         handler = dispatch.get(action_name)
@@ -233,14 +562,49 @@ class WorkflowActionHandlers:
         subject = payload.get("subject") or f"Workflow Notification: {definition.name}"
         body = payload.get("body") or payload.get("message") or "A workflow action has been triggered."
 
+        logger.info(
+            "workflow.email.prepare instance_id=%s definition_id=%s to=%r user_ids=%s role_ids=%s",
+            instance.id, definition.id, to, user_ids, role_ids,
+        )
+
+        # Resolve {{variable}} placeholders using the trigger event context
+        ctx = _build_template_context(db, instance, definition)
+        subject = _resolve_template(subject, ctx)
+        body = _resolve_template(body, ctx)
+
         recipients = []
         if to:
             recipients.extend([to] if isinstance(to, str) else to)
         recipients.extend(_emails_for_user_ids(db, user_ids))
         recipients.extend(_emails_for_role_ids(db, instance.tenant_id, role_ids))
         if not recipients:
+            logger.info(
+                "workflow.email.no_direct_recipients — falling back to manager emails instance_id=%s",
+                instance.id,
+            )
             recipients = _get_manager_emails(db, instance.tenant_id)
         recipients = list(dict.fromkeys([r for r in recipients if r]))
+
+        if not recipients:
+            logger.warning(
+                "workflow.email.skipped no_recipients instance_id=%s definition_id=%s — "
+                "no 'to' address, no user/role IDs, and no manager emails found for tenant_id=%s",
+                instance.id, definition.id, instance.tenant_id,
+            )
+            db.add(WorkflowAuditLog(
+                tenant_id=instance.tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                event_type="action.send_notification_email",
+                message="Email skipped: no recipients resolved",
+                payload={"subject": subject, "to_raw": str(to), "user_ids": user_ids, "role_ids": role_ids},
+            ))
+            return {"action": "send_notification_email", "results": [], "warning": "no_recipients"}
+
+        logger.info(
+            "workflow.email.sending instance_id=%s recipients=%s subject=%r",
+            instance.id, recipients, subject,
+        )
 
         results = []
         for recipient in recipients:
@@ -253,14 +617,19 @@ class WorkflowActionHandlers:
                 body_text=body,
             )
             results.append({"to": recipient, **result})
+            if not result.get("success"):
+                logger.warning(
+                    "workflow.email.send_failed instance_id=%s to=%s reason=%s",
+                    instance.id, recipient, result.get("message"),
+                )
 
         db.add(WorkflowAuditLog(
             tenant_id=instance.tenant_id,
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.send_notification_email",
-            message=f"Notification email sent to {len(results)} recipient(s)",
-            payload={"recipients": [r["to"] for r in results], "subject": subject},
+            message=f"Notification email attempted for {len(results)} recipient(s)",
+            payload={"recipients": [r["to"] for r in results], "subject": subject, "results": results},
         ))
 
         return {"action": "send_notification_email", "results": results}
@@ -829,6 +1198,62 @@ class WorkflowActionHandlers:
             payload={"vulnerability_id": vuln_id, "status": new_status},
         ))
         return {"action": "update_vuln_status", "vulnerability_id": vuln_id, "status": new_status}
+
+    # ------------------------------------------------------------------
+    # send_in_app_alert — creates WorkflowNotification in-app records
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _send_in_app_alert(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        user_ids = _normalize_ids(payload.get("recipient_user_ids") or payload.get("user_ids") or [])
+        role_ids = _normalize_ids(payload.get("recipient_role_ids") or payload.get("role_ids") or [])
+        notification_type = str(payload.get("notification_type") or payload.get("alert_type") or "info")
+        subject = payload.get("subject") or f"Workflow Alert: {definition.name}"
+        message = payload.get("message") or payload.get("body") or "A workflow action has been triggered."
+
+        # Resolve {{variable}} placeholders
+        ctx = _build_template_context(db, instance, definition)
+        subject = _resolve_template(subject, ctx)
+        message = _resolve_template(message, ctx)
+
+        # Collect target user IDs
+        target_user_ids: List[int] = list(user_ids)
+        for role_id in role_ids:
+            rows = (
+                db.query(GRCUser.id)
+                .join(UserRole, UserRole.user_id == GRCUser.id)
+                .filter(
+                    UserRole.tenant_id == instance.tenant_id,
+                    UserRole.role_id == role_id,
+                    GRCUser.is_active.is_(True),
+                )
+                .all()
+            )
+            target_user_ids.extend([r[0] for r in rows])
+        # Deduplicate
+        target_user_ids = list(dict.fromkeys(target_user_ids))
+
+        created_count = 0
+        for uid in target_user_ids:
+            db.add(WorkflowNotification(
+                tenant_id=instance.tenant_id,
+                user_id=uid,
+                workflow_instance_id=instance.id,
+                notification_type=notification_type,
+                subject=subject,
+                message=message,
+                is_read=False,
+            ))
+            created_count += 1
+
+        db.add(WorkflowAuditLog(
+            tenant_id=instance.tenant_id,
+            workflow_definition_id=definition.id,
+            workflow_instance_id=instance.id,
+            event_type="action.send_in_app_alert",
+            message=f"In-app alert created for {created_count} user(s)",
+            payload={"user_ids": target_user_ids, "subject": subject, "notification_type": notification_type},
+        ))
+        return {"action": "send_in_app_alert", "created": created_count, "user_ids": target_user_ids}
 
     @staticmethod
     def _update_asset_classification(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:

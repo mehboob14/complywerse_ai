@@ -250,7 +250,6 @@ def list_in_app_notifications(
     limit: int = 100,
     current_user: GRCUser = Depends(require_auth),
     db: Session = Depends(get_db),
-    _: bool = Depends(require_tenant_permission("workflow_engine:executions:view")),
 ):
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
@@ -288,7 +287,6 @@ def mark_in_app_notification_read(
     notification_id: int,
     current_user: GRCUser = Depends(require_auth),
     db: Session = Depends(get_db),
-    _: bool = Depends(require_tenant_permission("workflow_engine:executions:view")),
 ):
     tenant_ids = get_user_tenants(current_user, db)
     notification = db.query(WorkflowNotification).filter(
@@ -312,7 +310,6 @@ def mark_in_app_notification_read(
 def mark_all_in_app_notifications_read(
     current_user: GRCUser = Depends(require_auth),
     db: Session = Depends(get_db),
-    _: bool = Depends(require_tenant_permission("workflow_engine:executions:view")),
 ):
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
@@ -332,3 +329,20 @@ def mark_all_in_app_notifications_read(
 
     db.commit()
     return {"status": "ok", "updated": len(rows)}
+
+
+@router.get("/in-app/unread-count")
+def get_unread_notification_count(
+    current_user: GRCUser = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    """Fast endpoint polled by the navbar bell badge."""
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        return {"count": 0}
+    count = db.query(WorkflowNotification).filter(
+        WorkflowNotification.tenant_id.in_(tenant_ids),
+        WorkflowNotification.user_id == current_user.id,
+        WorkflowNotification.is_read.is_(False),
+    ).count()
+    return {"count": count}

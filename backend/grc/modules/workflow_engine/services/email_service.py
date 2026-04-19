@@ -1,5 +1,6 @@
 """SMTP email helper for workflow engine notifications."""
 import logging
+import os
 import smtplib
 import ssl
 from email.mime.multipart import MIMEMultipart
@@ -62,12 +63,36 @@ def send_email(
     )
 
     if not settings:
-        logger.warning(
-            "workflow.email.send.skipped no_active_smtp_config tenant_id=%s to=%s",
-            tenant_id,
-            _mask_email(to),
-        )
-        return {"success": False, "message": "Email settings not configured for this tenant"}
+        # Fall back to environment variables (SMTP_HOST, SMTP_USER, SMTP_PASSWORD, etc.)
+        env_host = os.environ.get("SMTP_HOST", "")
+        env_user = os.environ.get("SMTP_USER", "")
+        env_pass = os.environ.get("SMTP_PASSWORD", "")
+        env_from = os.environ.get("SMTP_FROM_EMAIL", env_user)
+        env_port = int(os.environ.get("SMTP_PORT", "587") or "587")
+
+        if env_host and env_user and env_pass:
+            logger.info(
+                "workflow.email.send.using_env_fallback tenant_id=%s to=%s",
+                tenant_id,
+                _mask_email(to),
+            )
+            # Build a temporary settings-like object from env vars
+            class _EnvSettings:
+                smtp_host = env_host
+                smtp_port = env_port
+                smtp_username = env_user
+                smtp_password = env_pass
+                from_email = env_from
+                from_name = "ComplyVerse"
+                use_tls = env_port != 465
+            settings = _EnvSettings()  # type: ignore[assignment]
+        else:
+            logger.warning(
+                "workflow.email.send.skipped no_active_smtp_config tenant_id=%s to=%s",
+                tenant_id,
+                _mask_email(to),
+            )
+            return {"success": False, "message": "Email settings not configured for this tenant"}
 
     from_addr = settings.from_email or "noreply@complyverse.app"
     from_name = settings.from_name or "ComplyVerse"

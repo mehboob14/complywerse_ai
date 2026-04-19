@@ -11,12 +11,37 @@ from .notification_service import send_workflow_notification
 logger = logging.getLogger(__name__)
 
 
+# Allowed node types for the workflow watcher's dynamic execution.
+# Any node_type not in this set (or any action_name not in _SAFE_ACTIONS)
+# is returned as "blocked" and skipped safely rather than executing
+# arbitrary code or making outbound HTTP calls.
+_ALLOWED_NODE_TYPES = {
+    "start",
+    "notification",  # standalone in-app + email notification node
+    "email",         # SMTP email node
+    "condition",     # boolean branch
+    "approval",      # human gate with approve / reject paths
+    "timer",         # wait / schedule
+    "escalation",    # escalate to managers / designated users
+    "end",
+}
+# Only these action_names are permitted inside legacy "action" nodes.
+_SAFE_ACTIONS = {"send_notification_email", "escalate_to_management", "send_in_app_alert"}
+
+
 class StepExecutor:
     @staticmethod
     def _resolve_node_type(node) -> str:
         node_type = (getattr(node, "node_type", None) or "").lower()
-        if node_type in {"start", "action", "condition", "approval", "timer", "subworkflow", "end"}:
+        # 1. Direct match against whitelist
+        if node_type in _ALLOWED_NODE_TYPES:
             return node_type
+        # 2. Legacy "action" type — allow only safe action names
+        if node_type == "action":
+            cfg = getattr(node, "config", {}) or {}
+            action_name = (cfg.get("action_name") or "").strip().lower()
+            return "action" if action_name in _SAFE_ACTIONS else "blocked"
+        # 3. Config-based type inference for nodes without explicit node_type
         cfg = getattr(node, "config", {}) or {}
         if cfg.get("trigger_type"):
             return "start"
@@ -26,9 +51,12 @@ class StepExecutor:
             return "timer"
         if cfg.get("condition_kind") or cfg.get("condition"):
             return "condition"
+        if cfg.get("escalation_type") or cfg.get("escalate_to_user_ids") or cfg.get("escalation_level"):
+            return "escalation"
         if cfg.get("action_name"):
-            return "action"
-        return "action"
+            action_name = (cfg.get("action_name") or "").strip().lower()
+            return "action" if action_name in _SAFE_ACTIONS else "blocked"
+        return "blocked"
 
     @staticmethod
     def _normalize_user_ids(values) -> list[int]:
@@ -85,6 +113,73 @@ class StepExecutor:
         if node_type in {"start", "noop"}:
             return {"status": "completed", "output": {"started": True}}
 
+        # ── Blocked / unsupported node type ─────────────────────────────────
+        if node_type == "blocked":
+            original_type = (getattr(node, "node_type", None) or "unknown")
+            action_name = (node.config or {}).get("action_name", "")
+            reason = (
+                f"Action '{action_name}' is not in the allowed action list"
+                if action_name
+                else f"Node type '{original_type}' is not supported"
+            )
+            logger.warning(
+                "workflow.step.blocked instance_id=%s step_id=%s node_key=%s reason=%s",
+                instance.id, step.id, step.node_key, reason,
+            )
+            db.add(
+                WorkflowAuditLog(
+                    tenant_id=instance.tenant_id,
+                    workflow_definition_id=definition.id,
+                    workflow_instance_id=instance.id,
+                    workflow_step_id=step.id,
+                    event_type="step.blocked",
+                    message=f"Step blocked: {reason}",
+                    payload={"node_type": original_type, "action_name": action_name},
+                )
+            )
+            return {"status": "completed", "output": {"blocked": True, "reason": reason}}
+
+        # ── Notification node (in-app + optional email) ──────────────────────
+        if node_type == "notification":
+            user_ids = self._normalize_user_ids(
+                config.get("user_ids") or config.get("recipient_user_ids") or []
+            )
+            role_ids = self._normalize_role_ids(
+                config.get("role_ids") or config.get("recipient_role_ids") or []
+            )
+            channels = self._notification_channels(config)
+            subject = config.get("subject") or f"Workflow Notification: {definition.name}"
+            message = (
+                config.get("message") or config.get("body")
+                or "A workflow notification has been triggered."
+            )
+            send_workflow_notification(
+                db,
+                tenant_id=instance.tenant_id,
+                user_ids=user_ids,
+                role_ids=role_ids,
+                channels=channels,
+                workflow_instance_id=instance.id,
+                notification_type=config.get("notification_type") or "info",
+                subject=subject,
+                message=message,
+            )
+            logger.info(
+                "workflow.step.execute.notification instance_id=%s step_id=%s node_key=%s",
+                instance.id, step.id, step.node_key,
+            )
+            return {"status": "completed", "output": {"notified": True, "user_count": len(user_ids)}}
+
+        # ── Email node (SMTP via send_notification_email action) ─────────────
+        if node_type == "email":
+            email_config = {**config, "action_name": "send_notification_email"}
+            email_output = WorkflowActionHandlers.execute(db, instance, definition, node, email_config)
+            logger.info(
+                "workflow.step.execute.email instance_id=%s step_id=%s node_key=%s",
+                instance.id, step.id, step.node_key,
+            )
+            return {"status": "completed", "output": email_output}
+
         if node_type == "condition":
             condition = config.get("condition", {})
             eval_data = {
@@ -130,6 +225,14 @@ class StepExecutor:
             )
             return self._execute_approval_node(db, instance, definition, step, config)
 
+        # ── Standalone escalation node ────────────────────────────────────────
+        if node_type == "escalation":
+            logger.info(
+                "workflow.step.execute.escalation instance_id=%s step_id=%s node_key=%s",
+                instance.id, step.id, step.node_key,
+            )
+            return self._execute_escalation_node(db, instance, definition, step, config)
+
         if node_type == "subworkflow":
             logger.info(
                 "workflow.step.execute.subworkflow instance_id=%s step_id=%s node_key=%s",
@@ -140,6 +243,33 @@ class StepExecutor:
             return self._execute_subworkflow_node(db, instance, config)
 
         if node_type == "action":
+            # ── In-app alert (no email, in-system only) ──────────────────────
+            if config.get("action_name") == "send_in_app_alert":
+                user_ids = self._normalize_user_ids(
+                    config.get("recipient_user_ids") or []
+                )
+                role_ids = self._normalize_role_ids(
+                    config.get("recipient_role_ids") or []
+                )
+                subject = config.get("subject") or f"Alert: {definition.name}"
+                message = config.get("message") or "You have a new workflow alert."
+                send_workflow_notification(
+                    db,
+                    tenant_id=instance.tenant_id,
+                    user_ids=user_ids,
+                    role_ids=role_ids,
+                    channels=["in_app"],
+                    workflow_instance_id=instance.id,
+                    notification_type=config.get("alert_type") or "info",
+                    subject=subject,
+                    message=message,
+                )
+                logger.info(
+                    "workflow.step.execute.in_app_alert instance_id=%s step_id=%s node_key=%s users=%s roles=%s",
+                    instance.id, step.id, step.node_key, user_ids, role_ids,
+                )
+                return {"status": "completed", "output": {"notified": True, "user_count": len(user_ids)}}
+
             action_output = WorkflowActionHandlers.execute(db, instance, definition, node, config)
             updated_context = dict(instance.context or {})
             updated_context.setdefault("actions", []).append(
@@ -422,10 +552,12 @@ class StepExecutor:
                 step.id,
                 len(rejected),
             )
+            # Return "completed" so the runtime follows the rejection edge
+            # (edge condition: step.approved == false) rather than failing
+            # the whole workflow instance.
             return {
-                "status": "failed",
-                "error": "Approval rejected",
-                "output": {"approved": False, "rejected_count": len(rejected)},
+                "status": "completed",
+                "output": {"approved": False, "rejected": True, "rejected_count": len(rejected)},
             }
 
         if approval_type == "multi_level":
@@ -615,3 +747,83 @@ class StepExecutor:
             return {"status": "failed", "error": f"Subworkflow failed: {child.error_message or 'unknown'}"}
 
         return {"status": "waiting_subworkflow", "output": {"subworkflow_instance_id": child.id, "state": child.status}}
+
+    # ------------------------------------------------------------------
+    # Escalation node
+    # ------------------------------------------------------------------
+    def _execute_escalation_node(self, db, instance, definition, step: WorkflowEngineStep, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Standalone escalation node.
+
+        Sends an in-app notification (and optionally email) to the designated
+        escalation targets.  Configure in the workflow UI:
+          user_ids            : list of user IDs to notify
+          role_ids            : list of role IDs whose members are notified
+          subject             : notification / email subject
+          message             : body text
+          channels            : ["in_app", "email"]  (default: both)
+          escalation_level    : informational label, e.g. "1", "2", "manager"
+
+        Outgoing edges can branch on ``step.escalated == true`` or
+        ``step.level == "2"`` to chain multi-level escalations.
+        """
+        user_ids = self._normalize_user_ids(
+            config.get("user_ids") or config.get("escalate_to_user_ids") or []
+        )
+        role_ids = self._normalize_role_ids(
+            config.get("role_ids") or config.get("escalate_to_role_ids") or []
+        )
+        subject = config.get("subject") or f"Escalation Required: {definition.name}"
+        message = (
+            config.get("message") or config.get("body")
+            or f"Workflow '{definition.name}' has reached an escalation point and requires your attention."
+        )
+        channels = self._notification_channels(config)
+        level = str(config.get("escalation_level") or config.get("level") or "1")
+
+        # Resolve role members into user IDs
+        role_user_ids = self._resolve_role_user_ids(db, instance.tenant_id, role_ids)
+        all_user_ids = list(dict.fromkeys([*user_ids, *role_user_ids]))
+
+        if all_user_ids:
+            send_workflow_notification(
+                db,
+                tenant_id=instance.tenant_id,
+                user_ids=all_user_ids,
+                role_ids=[],
+                channels=channels,
+                workflow_instance_id=instance.id,
+                notification_type="error",
+                subject=subject,
+                message=message,
+            )
+        else:
+            logger.warning(
+                "workflow.step.escalation.no_targets instance_id=%s step_id=%s node_key=%s "
+                "— add 'user_ids' or 'role_ids' to this escalation node's config",
+                instance.id,
+                step.id,
+                step.node_key,
+            )
+
+        db.add(
+            WorkflowAuditLog(
+                tenant_id=instance.tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                workflow_step_id=step.id,
+                event_type="step.escalation",
+                message=f"Escalation triggered at node {step.node_key} (level {level})",
+                payload={"escalated_to": all_user_ids, "level": level},
+            )
+        )
+        logger.info(
+            "workflow.step.escalation instance_id=%s step_id=%s escalated_to=%s level=%s",
+            instance.id,
+            step.id,
+            all_user_ids,
+            level,
+        )
+        return {
+            "status": "completed",
+            "output": {"escalated": True, "escalated_to": all_user_ids, "level": level},
+        }
