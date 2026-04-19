@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,7 +7,6 @@ import { committeeApi, apiClient } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
   Calendar,
-  Clock,
   MapPin,
   Users,
   FileText,
@@ -24,64 +23,67 @@ import {
   Scale,
   Lightbulb,
   Link as LinkIcon,
+  ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface Meeting {
   id: number;
   committee_id: number;
-  committee_name: string;
+  committee_name?: string;
   title: string;
-  meeting_type: 'regular' | 'special' | 'emergency';
+  meeting_type: string;
   scheduled_date: string;
-  start_time?: string;
-  end_time?: string;
   location?: string;
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
-  attendee_count: number;
-  quorum_required: number;
-  created_at: string;
+  virtual_link?: string;
+  status: string;
+  quorum_required?: number;
+  quorum_present?: number;
+  agenda_item_count?: number;
+  action_count?: number;
+  has_minutes?: boolean;
+  minutes?: {
+    id?: number;
+    content?: string;
+    status?: string;
+    drafter_name?: string;
+    drafted_at?: string;
+  } | null;
 }
 
 interface AgendaItem {
   id: number;
   meeting_id: number;
-  sequence: number;
+  item_number: number;
   title: string;
   description?: string;
-  presenter?: string;
-  duration_minutes?: number;
+  presenter_name?: string;
+  time_allocated_minutes?: number;
   item_type: string;
-  status: 'pending' | 'discussed' | 'deferred';
-  source_type?: 'document' | 'exception' | 'regulatory_change' | 'manual';
+  status: string;
+  source_type?: string;
   linked_document_id?: number;
   linked_document_title?: string;
   linked_risk_id?: number;
   linked_risk_title?: string;
-  linked_exception_id?: number;
-  linked_exception_title?: string;
   linked_regulatory_change_id?: number;
   linked_regulatory_change_title?: string;
+  outcome?: string;
+  decision_made?: string;
 }
 
-interface SuggestedAgendaItem {
-  id: number;
+interface SuggestedItem {
+  source_type: string;
+  source_id: number;
   title: string;
   description?: string;
-  type: 'document' | 'exception' | 'regulatory_change';
-  source_id: number;
-  source_title: string;
-  priority?: string;
-  due_date?: string;
-}
-
-interface Minutes {
-  id: number;
-  meeting_id: number;
-  content: string;
-  status: 'draft' | 'approved';
-  approved_by?: string;
-  approved_at?: string;
+  item_type: string;
+  linked_document_id?: number;
+  linked_risk_id?: number;
+  linked_regulatory_change_id?: number;
+  effective_date?: string;
 }
 
 interface Action {
@@ -89,9 +91,12 @@ interface Action {
   title: string;
   description?: string;
   action_type: string;
-  status: 'open' | 'in_progress' | 'completed' | 'overdue';
-  due_date: string;
-  assigned_to_name?: string;
+  action_number?: string;
+  meeting_id?: number;
+  status: string;
+  due_date?: string;
+  assignee_name?: string;
+  is_overdue?: boolean;
 }
 
 interface TenantUser {
@@ -100,149 +105,141 @@ interface TenantUser {
   display_name?: string;
   username?: string;
   email?: string;
-  user?: {
-    id?: number;
-    display_name?: string;
-    username?: string;
-    email?: string;
-  };
+  user?: { id?: number; display_name?: string; username?: string; email?: string };
 }
 
-const MEETING_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  regular: { label: 'Regular', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  special: { label: 'Special', bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  emergency: { label: 'Emergency', bg: 'bg-rose-500/20', text: 'text-rose-400' },
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const MEETING_TYPE_STYLES: Record<string, { label: string; bg: string; text: string }> = {
+  regular:   { label: 'Regular',   bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  special:   { label: 'Special',   bg: 'bg-amber-100',   text: 'text-amber-700'   },
+  emergency: { label: 'Emergency', bg: 'bg-red-100',     text: 'text-red-700'     },
 };
 
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  scheduled: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  in_progress: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  cancelled: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  open: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  pending: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  discussed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  deferred: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+const MEETING_STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
+  scheduled:   { label: 'Scheduled',   bg: 'bg-blue-100',   text: 'text-blue-700'   },
+  in_progress: { label: 'In Progress', bg: 'bg-amber-100',  text: 'text-amber-700'  },
+  completed:   { label: 'Completed',   bg: 'bg-emerald-100',text: 'text-emerald-700'},
+  cancelled:   { label: 'Cancelled',   bg: 'bg-gray-100',   text: 'text-gray-600'   },
 };
 
-const SOURCE_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; text: string }> = {
-  document: { label: 'Document', icon: FileCheck, bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  exception: { label: 'Exception', icon: Shield, bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  regulatory_change: { label: 'Regulatory Change', icon: Scale, bg: 'bg-purple-500/20', text: 'text-purple-400' },
-  manual: { label: 'Manual', icon: FileText, bg: 'bg-slate-500/20', text: 'text-slate-400' },
+const AGENDA_STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
+  pending:   { label: 'Pending',   bg: 'bg-gray-100',   text: 'text-gray-600'   },
+  discussed: { label: 'Discussed', bg: 'bg-emerald-100',text: 'text-emerald-700'},
+  deferred:  { label: 'Deferred',  bg: 'bg-amber-100',  text: 'text-amber-700'  },
+};
+
+const ACTION_STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
+  open:        { label: 'Open',        bg: 'bg-amber-100',  text: 'text-amber-700'  },
+  in_progress: { label: 'In Progress', bg: 'bg-blue-100',   text: 'text-blue-700'   },
+  completed:   { label: 'Completed',   bg: 'bg-emerald-100',text: 'text-emerald-700'},
+  overdue:     { label: 'Overdue',     bg: 'bg-red-100',    text: 'text-red-700'    },
+};
+
+const SOURCE_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; text: string; border: string }> = {
+  document:          { label: 'Document',           icon: FileCheck, bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200'   },
+  exception:         { label: 'Exception',          icon: Shield,    bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200'  },
+  regulatory_change: { label: 'Regulatory Change',  icon: Scale,     bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  manual:            { label: 'Manual',             icon: FileText,  bg: 'bg-gray-50',   text: 'text-gray-600',   border: 'border-gray-200'   },
 };
 
 const ACTION_TYPES = [
-  { value: 'follow_up', label: 'Follow Up' },
-  { value: 'policy_approval', label: 'Policy Approval' },
-  { value: 'risk_review', label: 'Risk Review' },
+  { value: 'follow_up',      label: 'Follow Up'      },
+  { value: 'policy_approval',label: 'Policy Approval'},
+  { value: 'risk_review',    label: 'Risk Review'    },
   { value: 'audit_response', label: 'Audit Response' },
 ];
+
+const ITEM_TYPES = [
+  { value: 'procedural', label: 'Procedural' },
+  { value: 'approval',   label: 'Approval'   },
+  { value: 'discussion', label: 'Discussion' },
+  { value: 'information',label: 'Information'},
+  { value: 'decision',   label: 'Decision'   },
+];
+
+function formatDate(d?: string | null) {
+  if (!d) return '—';
+  try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
+  catch { return d; }
+}
+
+function Badge({ label, bg, text }: { label: string; bg: string; text: string }) {
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${bg} ${text}`}>
+      {label}
+    </span>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function MeetingDetailPage() {
   const params = useParams();
   const meetingId = parseInt(params.id as string);
   const { toast } = useToast();
-  const [isAddAgendaModalOpen, setIsAddAgendaModalOpen] = useState(false);
-  const [isAddActionModalOpen, setIsAddActionModalOpen] = useState(false);
-  const [isAutoPopulateModalOpen, setIsAutoPopulateModalOpen] = useState(false);
-  const [isEditMinutesOpen, setIsEditMinutesOpen] = useState(false);
-  const [minutesContent, setMinutesContent] = useState('');
+  const queryClient = useQueryClient();
+
+  const [isAddAgendaOpen,    setIsAddAgendaOpen]    = useState(false);
+  const [isAddActionOpen,    setIsAddActionOpen]    = useState(false);
+  const [isAutoPopulateOpen, setIsAutoPopulateOpen] = useState(false);
+  const [isEditMinutesOpen,  setIsEditMinutesOpen]  = useState(false);
+  const [minutesContent,     setMinutesContent]     = useState('');
+
   const [autoPopulateOptions, setAutoPopulateOptions] = useState({
     include_documents: true,
     include_exceptions: true,
     include_regulatory_changes: true,
   });
-  const [newAgendaItem, setNewAgendaItem] = useState({
-    title: '',
-    description: '',
-    presenter: '',
-    duration_minutes: 15,
-    item_type: 'discussion',
-  });
-  const [newAction, setNewAction] = useState({
-    title: '',
-    description: '',
-    action_type: 'follow_up',
-    due_date: '',
-    assigned_to_id: '',
-  });
-  const queryClient = useQueryClient();
 
-  const { data: meeting, isLoading: meetingLoading } = useQuery({
+  const [newAgendaItem, setNewAgendaItem] = useState({
+    title: '', description: '', duration_minutes: 15, item_type: 'discussion',
+  });
+
+  const [newAction, setNewAction] = useState({
+    title: '', description: '', action_type: 'follow_up', due_date: '', assigned_to: '',
+  });
+
+  // ─── Queries ──────────────────────────────────────────────────────────────
+
+  const { data: meeting, isLoading: meetingLoading, error: meetingError } = useQuery({
     queryKey: ['meeting', meetingId],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getMeeting(meetingId);
-        return response.data as Meeting;
-      } catch {
-        return {
-          id: meetingId,
-          committee_id: 2,
-          committee_name: 'Risk Management Committee',
-          title: 'Q1 2025 Risk Review',
-          meeting_type: 'regular',
-          scheduled_date: '2025-02-15',
-          start_time: '10:00',
-          end_time: '12:00',
-          location: 'Boardroom A',
-          status: 'scheduled',
-          attendee_count: 7,
-          quorum_required: 4,
-          created_at: '2025-01-15',
-        } as Meeting;
-      }
+      const res = await committeeApi.getMeeting(meetingId);
+      return res.data as Meeting;
     },
   });
 
-  const { data: agenda, refetch: refetchAgenda } = useQuery({
+  const { data: agenda = [] } = useQuery<AgendaItem[]>({
     queryKey: ['meeting-agenda', meetingId],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getAgenda(meetingId);
-        return response.data as AgendaItem[];
-      } catch {
-        return [
-          { id: 1, meeting_id: meetingId, sequence: 1, title: 'Call to Order', description: 'Chair opens the meeting', presenter: 'Chair', duration_minutes: 5, item_type: 'procedural', status: 'pending', source_type: 'manual' },
-          { id: 2, meeting_id: meetingId, sequence: 2, title: 'Approval of Previous Minutes', description: 'Review and approve minutes from last meeting', presenter: 'Secretary', duration_minutes: 10, item_type: 'approval', status: 'pending', source_type: 'manual' },
-          { id: 3, meeting_id: meetingId, sequence: 3, title: 'Enterprise Risk Register Review', description: 'Review top 10 risks and mitigation progress', presenter: 'CRO', duration_minutes: 30, item_type: 'discussion', status: 'pending', source_type: 'manual' },
-          { id: 4, meeting_id: meetingId, sequence: 4, title: 'Cyber Risk Update', description: 'Update on cybersecurity posture', presenter: 'CISO', duration_minutes: 20, item_type: 'discussion', status: 'pending', source_type: 'manual' },
-          { id: 5, meeting_id: meetingId, sequence: 5, title: 'New Business', description: 'Any new items for discussion', presenter: 'All', duration_minutes: 15, item_type: 'discussion', status: 'pending', source_type: 'manual' },
-          { id: 6, meeting_id: meetingId, sequence: 6, title: 'Adjournment', description: 'Close of meeting', presenter: 'Chair', duration_minutes: 5, item_type: 'procedural', status: 'pending', source_type: 'manual' },
-        ] as AgendaItem[];
-      }
+      const res = await committeeApi.getAgenda(meetingId);
+      return Array.isArray(res.data) ? res.data : [];
     },
+    enabled: !!meeting,
   });
 
-  const { data: suggestedItems, isLoading: suggestedLoading } = useQuery({
-    queryKey: ['suggested-agenda-items', meetingId],
+  const { data: suggestedItems = [], isLoading: suggestionsLoading } = useQuery<SuggestedItem[]>({
+    queryKey: ['meeting-suggested', meetingId],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getSuggestedAgendaItems(meetingId);
-        return response.data as SuggestedAgendaItem[];
-      } catch {
-        return [
-          { id: 1, title: 'Information Security Policy Review', description: 'Annual review due', type: 'document', source_id: 1, source_title: 'Information Security Policy', priority: 'high', due_date: '2025-02-28' },
-          { id: 2, title: 'Critical Vulnerability Exception', description: 'Exception request for CVE-2024-1234', type: 'exception', source_id: 5, source_title: 'Patching Exception Request', priority: 'critical' },
-          { id: 3, title: 'GDPR Amendment Impact', description: 'New data residency requirements', type: 'regulatory_change', source_id: 3, source_title: 'EU GDPR Amendment 2025', priority: 'medium' },
-        ] as SuggestedAgendaItem[];
-      }
+      const res = await committeeApi.getSuggestedAgendaItems(meetingId);
+      const data = res.data as any;
+      // Backend returns { suggested_items: [...], total_count, ... }
+      return Array.isArray(data) ? data : (data?.suggested_items ?? []);
     },
+    enabled: !!meeting,
   });
 
-  const { data: minutes } = useQuery({
-    queryKey: ['meeting-minutes', meetingId],
+  const { data: actions = [] } = useQuery<Action[]>({
+    queryKey: ['meeting-actions', meetingId],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getMeeting(meetingId);
-        return (response.data as any).minutes as Minutes | null;
-      } catch {
-        return null;
-      }
+      if (!meeting?.committee_id) return [];
+      const res = await committeeApi.getActions({ committee_id: meeting.committee_id });
+      const data = res.data as any;
+      const items: Action[] = Array.isArray(data) ? data : (data?.items ?? []);
+      return items.filter((a) => a.meeting_id === meetingId);
     },
+    enabled: !!meeting,
   });
 
   const { data: currentUser } = useQuery({
@@ -252,536 +249,673 @@ export default function MeetingDetailPage() {
 
   const tenantId = currentUser?.user?.primary_tenant_id || currentUser?.primary_tenant_id;
 
-  const { data: tenantUsers } = useQuery({
-    queryKey: ['tenant-users-for-meeting-actions', tenantId],
+  const { data: tenantUsers = [] } = useQuery<TenantUser[]>({
+    queryKey: ['tenant-users', tenantId],
     queryFn: async () => {
-      const response = await apiClient.get(`/tenants/${tenantId}/users`);
-      const payload = response.data as unknown;
-      if (Array.isArray(payload)) return payload as TenantUser[];
-      const data = payload as { users?: TenantUser[]; items?: TenantUser[] };
-      return data.users || data.items || [];
+      const res = await apiClient.get(`/tenants/${tenantId}/users`);
+      const d = res.data as any;
+      return Array.isArray(d) ? d : (d?.users ?? d?.items ?? []);
     },
     enabled: !!tenantId,
   });
 
-  const normalizedTenantUsers = Array.from(
+  const normalizedUsers = Array.from(
     new Map(
-      ((tenantUsers || []) as TenantUser[])
-        .map((tenantUser) => {
-          const userId = tenantUser.user?.id || tenantUser.id || tenantUser.user_id;
-          const userName = tenantUser.user?.display_name || tenantUser.user?.username || tenantUser.display_name || tenantUser.username || tenantUser.user?.email || tenantUser.email || 'User';
-          if (!userId) return null;
-          return { id: userId, name: userName };
+      tenantUsers
+        .map((u) => {
+          const id = u.user?.id || u.id || u.user_id;
+          const name = u.user?.display_name || u.display_name || u.user?.email || u.email || 'User';
+          if (!id) return null;
+          return { id, name };
         })
-        .filter((user): user is { id: number; name: string } => !!user)
-        .map((user) => [user.id, user])
+        .filter((u): u is { id: number; name: string } => !!u)
+        .map((u) => [u.id, u])
     ).values()
   );
 
-  const { data: actions } = useQuery({
-    queryKey: ['meeting-actions', meetingId],
-    queryFn: async () => {
-      try {
-        const response = await committeeApi.getActions({ committee_id: meeting?.committee_id });
-        return (response.data as Action[]).filter((a: any) => a.meeting_id === meetingId);
-      } catch {
-        return [
-          { id: 1, title: 'Update Risk Register for Q1', description: 'Review and update the enterprise risk register', action_type: 'risk_review', status: 'open', due_date: '2025-02-28', assigned_to_name: 'David Lee' },
-          { id: 2, title: 'Prepare Cyber Risk Report', description: 'Detailed report on current cyber threats', action_type: 'follow_up', status: 'open', due_date: '2025-03-01', assigned_to_name: 'CISO' },
-        ] as Action[];
-      }
-    },
-    enabled: !!meeting,
-  });
+  // ─── Mutations ────────────────────────────────────────────────────────────
 
   const addAgendaMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => committeeApi.addAgendaItem(meetingId, data),
+    mutationFn: (data: any) => committeeApi.addAgendaItem(meetingId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
-      setIsAddAgendaModalOpen(false);
-      setNewAgendaItem({ title: '', description: '', presenter: '', duration_minutes: 15, item_type: 'discussion' });
+      setIsAddAgendaOpen(false);
+      setNewAgendaItem({ title: '', description: '', duration_minutes: 15, item_type: 'discussion' });
       toast({ title: 'Agenda item added', type: 'success' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to add agenda item', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
     },
   });
 
   const createActionMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => committeeApi.createAction(meetingId, data),
+    mutationFn: (data: any) => committeeApi.createAction(meetingId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meeting-actions', meetingId] });
-      setIsAddActionModalOpen(false);
-      setNewAction({ title: '', description: '', action_type: 'follow_up', due_date: '', assigned_to_id: '' });
+      setIsAddActionOpen(false);
+      setNewAction({ title: '', description: '', action_type: 'follow_up', due_date: '', assigned_to: '' });
       toast({ title: 'Action created', type: 'success' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to create action', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
     },
   });
 
-  const createMinutesMutation = useMutation({
-    mutationFn: (data: { content: string }) => committeeApi.createMinutes(meetingId, data),
+  const saveMinutesMutation = useMutation({
+    mutationFn: (data: any) => committeeApi.createMinutes(meetingId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meeting-minutes', meetingId] });
+      queryClient.invalidateQueries({ queryKey: ['meeting', meetingId] });
       setIsEditMinutesOpen(false);
       toast({ title: 'Minutes saved', type: 'success' });
+    },    onError: (err: any) => {
+      toast({ title: 'Failed to save minutes', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
     },
   });
 
   const autoPopulateMutation = useMutation({
-    mutationFn: async (options: { include_documents: boolean; include_exceptions: boolean; include_regulatory_changes: boolean }) => {
-      const response = await committeeApi.autoPopulateAgenda(meetingId, options);
-      return response.data as { items_added: number; items: any[] };
-    },
-    onSuccess: (data) => {
+    mutationFn: (opts: typeof autoPopulateOptions) => committeeApi.autoPopulateAgenda(meetingId, opts),
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
-      queryClient.invalidateQueries({ queryKey: ['suggested-agenda-items', meetingId] });
-      setIsAutoPopulateModalOpen(false);
-      toast({
-        title: 'Agenda Populated',
-        message: `${data.items_added || 0} item${(data.items_added || 0) !== 1 ? 's' : ''} added to the agenda`,
-        type: 'success',
-      });
+      queryClient.invalidateQueries({ queryKey: ['meeting-suggested', meetingId] });
+      setIsAutoPopulateOpen(false);
+      const added = res.data?.items_added ?? res.data?.total_created ?? 0;
+      toast({ title: `${added} item${added !== 1 ? 's' : ''} added to agenda`, type: 'success' });
     },
-    onError: () => {
-      toast({
-        title: 'Error',
-        message: 'Failed to auto-populate agenda',
-        type: 'error',
-      });
+    onError: (err: any) => {
+      toast({ title: 'Failed to auto-populate agenda', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
     },
   });
 
-  const getLinkedItemInfo = (item: AgendaItem) => {
-    const links = [];
-    if (item.linked_document_title) {
-      links.push({ type: 'Document', title: item.linked_document_title, icon: FileCheck });
-    }
-    if (item.linked_risk_title) {
-      links.push({ type: 'Risk', title: item.linked_risk_title, icon: AlertCircle });
-    }
-    if (item.linked_exception_title) {
-      links.push({ type: 'Exception', title: item.linked_exception_title, icon: Shield });
-    }
-    if (item.linked_regulatory_change_title) {
-      links.push({ type: 'Regulatory Change', title: item.linked_regulatory_change_title, icon: Scale });
-    }
-    return links;
-  };
+  // ─── Loading / Error States ───────────────────────────────────────────────
 
   if (meetingLoading) {
     return (
-      <div className="space-y-8">
-        <div className="skeleton h-8 w-64 mb-4" />
-        <div className="skeleton h-5 w-96" />
+      <div className="space-y-4 p-6">
+        <div className="h-8 w-64 animate-pulse rounded bg-gray-200" />
+        <div className="h-5 w-96 animate-pulse rounded bg-gray-200" />
+        <div className="h-48 animate-pulse rounded bg-gray-100" />
       </div>
     );
   }
 
-  const meetingTypeStyle = MEETING_TYPE_LABELS[meeting?.meeting_type || 'regular'];
-  const statusStyle = STATUS_COLORS[meeting?.status || 'scheduled'];
+  if (meetingError || !meeting) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
+        <p className="text-gray-700 font-medium">Meeting not found</p>
+        <Link href="/governance/committees" className="mt-4 text-blue-600 hover:underline text-sm">
+          Back to committees
+        </Link>
+      </div>
+    );
+  }
+
+  const meetingTypeStyle  = MEETING_TYPE_STYLES[meeting.meeting_type]  ?? MEETING_TYPE_STYLES.regular;
+  const meetingStatusStyle = MEETING_STATUS_STYLES[meeting.status]     ?? MEETING_STATUS_STYLES.scheduled;
+  const sortedAgenda = [...agenda].sort((a, b) => a.item_number - b.item_number);
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+
+      {/* ── Header ── */}
       <div>
-        <Link href={`/governance/committees/${meeting?.committee_id}`} className="flex items-center gap-2 text-slate-400 hover:text-white mb-4">
+        <Link
+          href={`/governance/committees/${meeting.committee_id}`}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-4"
+        >
           <ArrowLeft className="h-4 w-4" />
-          Back to {meeting?.committee_name}
+          Back to {meeting.committee_name || 'Committee'}
         </Link>
 
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-cyan-500/20">
-              <Calendar className="h-7 w-7 text-cyan-400" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-white">{meeting?.title}</h1>
-              <div className="flex items-center gap-3 mt-1">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${meetingTypeStyle?.bg} ${meetingTypeStyle?.text}`}>
-                  {meetingTypeStyle?.label}
-                </span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle?.bg} ${statusStyle?.text}`}>
-                  {meeting?.status.replace('_', ' ')}
-                </span>
-              </div>
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan-100 border border-cyan-200">
+            <Calendar className="h-6 w-6 text-cyan-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold text-black">{meeting.title}</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge {...meetingTypeStyle} />
+              <Badge {...meetingStatusStyle} />
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-slate-400">
+        <div className="flex flex-wrap gap-5 mt-4 text-sm text-gray-600">
           <span className="flex items-center gap-1.5">
-            <Calendar className="h-4 w-4" />
-            {new Date(meeting?.scheduled_date || '').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            <Calendar className="h-4 w-4 text-gray-400" />
+            {new Date(meeting.scheduled_date).toLocaleDateString('en-US', {
+              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+            })}
           </span>
-          {meeting?.start_time && (
+          {meeting.location && (
             <span className="flex items-center gap-1.5">
-              <Clock className="h-4 w-4" />
-              {meeting.start_time} - {meeting.end_time}
-            </span>
-          )}
-          {meeting?.location && (
-            <span className="flex items-center gap-1.5">
-              <MapPin className="h-4 w-4" />
+              <MapPin className="h-4 w-4 text-gray-400" />
               {meeting.location}
             </span>
           )}
-          <span className="flex items-center gap-1.5">
-            <Users className="h-4 w-4" />
-            {meeting?.attendee_count} attendees (Quorum: {meeting?.quorum_required})
-          </span>
+          {meeting.quorum_required != null && (
+            <span className="flex items-center gap-1.5">
+              <Users className="h-4 w-4 text-gray-400" />
+              Quorum: {meeting.quorum_required}
+              {meeting.quorum_present != null && ` / ${meeting.quorum_present} present`}
+            </span>
+          )}
+          {meeting.virtual_link && (
+            <a href={meeting.virtual_link} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-blue-600 hover:underline">
+              <LinkIcon className="h-4 w-4" />
+              Virtual Link
+            </a>
+          )}
         </div>
       </div>
 
+      {/* ── Summary Cards ── */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: 'Agenda Items',    value: sortedAgenda.length,    icon: ListOrdered, color: 'text-blue-600',   bg: 'bg-blue-50'   },
+          { label: 'Actions',         value: actions.length,          icon: CheckSquare, color: 'text-amber-600',  bg: 'bg-amber-50'  },
+          { label: 'Suggested Items', value: suggestedItems.length,   icon: Lightbulb,   color: 'text-purple-600', bg: 'bg-purple-50' },
+        ].map(({ label, value, icon: Icon, color, bg }) => (
+          <div key={label} className="rounded-xl border border-gray-200 bg-white p-4 flex items-center gap-4">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${bg}`}>
+              <Icon className={`h-5 w-5 ${color}`} />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-black">{value}</p>
+              <p className="text-sm text-gray-500">{label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ── Main Column ── */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white flex items-center gap-2">
-                <Lightbulb className="h-5 w-5 text-amber-400" />
+
+          {/* Suggested Agenda Items */}
+          <div className="rounded-xl border border-gray-200 bg-white">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 className="font-medium text-black flex items-center gap-2">
+                <Lightbulb className="h-5 w-5 text-amber-500" />
                 Suggested Agenda Items
+                {suggestedItems.length > 0 && (
+                  <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                    {suggestedItems.length}
+                  </span>
+                )}
               </h3>
               <button
-                onClick={() => setIsAutoPopulateModalOpen(true)}
-                className="btn-primary flex items-center gap-2 text-sm"
+                onClick={() => setIsAutoPopulateOpen(true)}
+                className="flex items-center gap-2 rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
               >
                 <Sparkles className="h-4 w-4" />
                 Auto-Populate Agenda
               </button>
             </div>
 
-            {suggestedLoading ? (
-              <div className="space-y-3">
-                <div className="skeleton h-16 w-full" />
-                <div className="skeleton h-16 w-full" />
-              </div>
-            ) : (suggestedItems || []).length > 0 ? (
-              <div className="space-y-3">
-                {(suggestedItems || []).map((item) => {
-                  const typeConfig = SOURCE_TYPE_CONFIG[item.type] || SOURCE_TYPE_CONFIG.manual;
-                  const TypeIcon = typeConfig.icon;
-                  return (
-                    <div key={`${item.type}-${item.id}`} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-slate-600 transition-colors">
-                      <div className="flex items-start justify-between">
+            <div className="p-4">
+              {suggestionsLoading ? (
+                <div className="space-y-2">
+                  {[1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded bg-gray-100" />)}
+                </div>
+              ) : suggestedItems.length === 0 ? (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <Lightbulb className="h-9 w-9 text-gray-300 mb-2" />
+                  <p className="text-gray-600 font-medium">No suggested items right now</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Items appear when there are pending documents, exceptions, or regulatory changes
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {suggestedItems.map((item, idx) => {
+                    const cfg = SOURCE_TYPE_CONFIG[item.source_type] ?? SOURCE_TYPE_CONFIG.manual;
+                    const TypeIcon = cfg.icon;
+                    return (
+                      <div key={`${item.source_type}-${item.source_id}-${idx}`}
+                        className={`rounded-lg border ${cfg.border} ${cfg.bg} p-3`}>
                         <div className="flex items-start gap-3">
-                          <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${typeConfig.bg}`}>
-                            <TypeIcon className={`h-4 w-4 ${typeConfig.text}`} />
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-200">
+                            <TypeIcon className={`h-4 w-4 ${cfg.text}`} />
                           </div>
-                          <div>
-                            <h4 className="text-white font-medium">{item.title}</h4>
-                            {item.description && <p className="text-slate-400 text-sm mt-1">{item.description}</p>}
-                            <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
-                              <span className={`px-2 py-0.5 rounded-full ${typeConfig.bg} ${typeConfig.text}`}>
-                                {typeConfig.label}
-                              </span>
-                              <span>Source: {item.source_title}</span>
-                              {item.priority && (
-                                <span className={`capitalize ${item.priority === 'critical' ? 'text-rose-400' : item.priority === 'high' ? 'text-amber-400' : 'text-slate-400'}`}>
-                                  {item.priority} priority
-                                </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-black">{item.title}</p>
+                            {item.description && <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{item.description}</p>}
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <span className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</span>
+                              {item.effective_date && (
+                                <span className="text-xs text-gray-500">Effective: {formatDate(item.effective_date)}</span>
                               )}
-                              {item.due_date && <span>Due: {new Date(item.due_date).toLocaleDateString()}</span>}
                             </div>
                           </div>
+                          <ChevronRight className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Lightbulb className="h-10 w-10 text-slate-500 mx-auto mb-3" />
-                <p className="text-slate-400">No suggested items at this time</p>
-                <p className="text-slate-500 text-sm mt-1">Items will appear when there are pending documents, exceptions, or regulatory changes</p>
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white flex items-center gap-2">
-                <ListOrdered className="h-5 w-5 text-primary-400" />
+          {/* Agenda */}
+          <div className="rounded-xl border border-gray-200 bg-white">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 className="font-medium text-black flex items-center gap-2">
+                <ListOrdered className="h-5 w-5 text-blue-500" />
                 Agenda
               </h3>
               <button
-                onClick={() => setIsAddAgendaModalOpen(true)}
-                className="btn-primary flex items-center gap-2 text-sm"
+                onClick={() => setIsAddAgendaOpen(true)}
+                className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
               >
                 <Plus className="h-4 w-4" />
                 Add Item
               </button>
             </div>
 
-            <div className="space-y-3">
-              {(agenda || []).sort((a, b) => a.sequence - b.sequence).map((item) => {
-                const sourceConfig = SOURCE_TYPE_CONFIG[item.source_type || 'manual'] || SOURCE_TYPE_CONFIG.manual;
-                const linkedItems = getLinkedItemInfo(item);
+            <div className="divide-y divide-gray-100">
+              {sortedAgenda.length === 0 ? (
+                <div className="flex flex-col items-center py-10 text-center">
+                  <ListOrdered className="h-9 w-9 text-gray-300 mb-2" />
+                  <p className="text-gray-600 font-medium">No agenda items yet</p>
+                  <button
+                    onClick={() => setIsAddAgendaOpen(true)}
+                    className="mt-2 text-sm text-blue-600 hover:underline"
+                  >
+                    Add the first item
+                  </button>
+                </div>
+              ) : sortedAgenda.map((item) => {
+                const statusStyle  = AGENDA_STATUS_STYLES[item.status] ?? AGENDA_STATUS_STYLES.pending;
+                const sourceConfig = SOURCE_TYPE_CONFIG[item.source_type ?? 'manual'];
+                const links = [
+                  item.linked_document_title         && { type: 'Document',           title: item.linked_document_title,          icon: FileCheck },
+                  item.linked_risk_title             && { type: 'Risk Exception',      title: item.linked_risk_title,              icon: Shield    },
+                  item.linked_regulatory_change_title && { type: 'Regulatory Change', title: item.linked_regulatory_change_title, icon: Scale     },
+                ].filter(Boolean) as { type: string; title: string; icon: React.ElementType }[];
+
                 return (
-                  <div key={item.id} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-500/20 text-primary-400 text-sm font-medium">
-                          {item.sequence}
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="text-white font-medium">{item.title}</h4>
-                          {item.description && <p className="text-slate-400 text-sm mt-1">{item.description}</p>}
-                          <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-slate-500">
-                            {item.presenter && <span>Presenter: {item.presenter}</span>}
-                            {item.duration_minutes && <span>{item.duration_minutes} min</span>}
-                            <span className="capitalize">{item.item_type}</span>
-                            {item.source_type && item.source_type !== 'manual' && (
-                              <span className={`px-2 py-0.5 rounded-full ${sourceConfig.bg} ${sourceConfig.text}`}>
-                                {sourceConfig.label}
-                              </span>
-                            )}
-                          </div>
-                          {linkedItems.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-700">
-                              <LinkIcon className="h-3 w-3 text-slate-500" />
-                              {linkedItems.map((link, idx) => {
-                                const Icon = link.icon;
-                                return (
-                                  <span key={idx} className="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-700/50 px-2 py-1 rounded">
-                                    <Icon className="h-3 w-3" />
-                                    <span className="text-slate-500">{link.type}:</span> {link.title}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
+                  <div key={item.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600">
+                        {item.item_number}
                       </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status]?.bg} ${STATUS_COLORS[item.status]?.text}`}>
-                        {item.status}
-                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <h4 className="text-sm font-medium text-black">{item.title}</h4>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {item.source_type && item.source_type !== 'manual' && (
+                              <span className={`text-xs font-medium ${sourceConfig?.text}`}>{sourceConfig?.label}</span>
+                            )}
+                            <Badge {...statusStyle} />
+                          </div>
+                        </div>
+                        {item.description && (
+                          <p className="text-xs text-gray-500 mt-1">{item.description}</p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-4 mt-1.5 text-xs text-gray-500">
+                          {item.presenter_name         && <span>Presenter: {item.presenter_name}</span>}
+                          {item.time_allocated_minutes && <span>{item.time_allocated_minutes} min</span>}
+                          <span className="capitalize">{item.item_type.replace('_', ' ')}</span>
+                        </div>
+                        {links.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {links.map((link, i) => {
+                              const Icon = link.icon;
+                              return (
+                                <span key={i} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+                                  <Icon className="h-3 w-3" />
+                                  {link.type}: {link.title}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {item.decision_made && (
+                          <div className="mt-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs text-emerald-800">
+                            <span className="font-medium">Decision:</span> {item.decision_made}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
               })}
-
-              {(agenda || []).length === 0 && (
-                <div className="text-center py-8">
-                  <ListOrdered className="h-10 w-10 text-slate-500 mx-auto mb-3" />
-                  <p className="text-slate-400">No agenda items yet</p>
-                  <button onClick={() => setIsAddAgendaModalOpen(true)} className="text-primary-400 hover:text-primary-300 text-sm mt-2">
-                    Add first item
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white flex items-center gap-2">
-                <FileText className="h-5 w-5 text-emerald-400" />
-                Minutes
+          <div className="rounded-xl border border-gray-200 bg-white">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 className="font-medium text-black flex items-center gap-2">
+                <FileText className="h-5 w-5 text-emerald-500" />
+                Meeting Minutes
               </h3>
-              {!minutes && (
-                <button onClick={() => setIsEditMinutesOpen(true)} className="btn-primary flex items-center gap-2 text-sm">
+              {(meeting.has_minutes || meeting.minutes) && !isEditMinutesOpen && (
+                <button
+                  onClick={() => {
+                    setMinutesContent(meeting.minutes?.content ?? '');
+                    setIsEditMinutesOpen(true);
+                  }}
+                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
+                >
+                  <Save className="h-4 w-4" />
+                  Edit Minutes
+                </button>
+              )}
+              {!meeting.has_minutes && !meeting.minutes && !isEditMinutesOpen && (
+                <button
+                  onClick={() => setIsEditMinutesOpen(true)}
+                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
+                >
                   <Plus className="h-4 w-4" />
                   Draft Minutes
                 </button>
               )}
             </div>
 
-            {minutes ? (
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[minutes.status]?.bg} ${STATUS_COLORS[minutes.status]?.text}`}>
-                    {minutes.status}
-                  </span>
-                  {minutes.approved_by && (
-                    <span className="text-sm text-slate-400">Approved by {minutes.approved_by}</span>
-                  )}
-                </div>
-                <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
-                  <p className="text-slate-300 whitespace-pre-wrap">{minutes.content}</p>
-                </div>
-              </div>
-            ) : isEditMinutesOpen ? (
-              <div className="space-y-4">
-                <textarea
-                  value={minutesContent}
-                  onChange={(e) => setMinutesContent(e.target.value)}
-                  className="input w-full h-48"
-                  placeholder="Enter meeting minutes..."
-                />
-                <div className="flex justify-end gap-3">
-                  <button onClick={() => setIsEditMinutesOpen(false)} className="btn-secondary">Cancel</button>
-                  <button
-                    onClick={() => createMinutesMutation.mutate({ content: minutesContent })}
-                    disabled={createMinutesMutation.isPending}
-                    className="btn-primary flex items-center gap-2"
-                  >
-                    <Save className="h-4 w-4" />
-                    {createMinutesMutation.isPending ? 'Saving...' : 'Save Draft'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <FileText className="h-10 w-10 text-slate-500 mx-auto mb-3" />
-                <p className="text-slate-400">No minutes recorded yet</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-white flex items-center gap-2">
-                <CheckSquare className="h-5 w-5 text-amber-400" />
-                Actions
-              </h3>
-              <button onClick={() => setIsAddActionModalOpen(true)} className="text-primary-400 hover:text-primary-300 text-sm">
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {(actions || []).map((action) => (
-                <div key={action.id} className="p-3 rounded-lg bg-slate-800/50 border border-slate-700">
-                  <div className="flex items-start justify-between">
-                    <h4 className="text-white font-medium text-sm">{action.title}</h4>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[action.status]?.bg} ${STATUS_COLORS[action.status]?.text}`}>
-                      {action.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-2">
-                    <div>Due: {new Date(action.due_date).toLocaleDateString()}</div>
-                    <div>Assigned: {action.assigned_to_name || 'Pending Assignment'}</div>
+            <div className="p-6">
+              {isEditMinutesOpen ? (
+                <div className="space-y-4">
+                  <textarea
+                    value={minutesContent}
+                    onChange={(e) => setMinutesContent(e.target.value)}
+                    rows={8}
+                    placeholder="Record meeting minutes here…"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                  />
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => setIsEditMinutesOpen(false)}
+                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => saveMinutesMutation.mutate({ content: minutesContent })}
+                      disabled={!minutesContent.trim() || saveMinutesMutation.isPending}
+                      className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                    >
+                      <Save className="h-4 w-4" />
+                      {saveMinutesMutation.isPending ? 'Saving…' : 'Save Draft'}
+                    </button>
                   </div>
                 </div>
-              ))}
-
-              {(actions || []).length === 0 && (
+              ) : (meeting.has_minutes || meeting.minutes) && meeting.minutes?.content ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    {meeting.minutes.drafter_name && <span>Drafted by {meeting.minutes.drafter_name}</span>}
+                    {meeting.minutes.drafted_at && <span>· {formatDate(meeting.minutes.drafted_at)}</span>}
+                    {meeting.minutes.status && (
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
+                        meeting.minutes.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {meeting.minutes.status === 'draft' ? 'Draft' : meeting.minutes.status === 'approved' ? 'Approved' : meeting.minutes.status}
+                      </span>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-black whitespace-pre-wrap">
+                    {meeting.minutes.content}
+                  </div>
+                </div>
+              ) : (meeting.has_minutes || meeting.minutes) ? (
                 <div className="text-center py-6">
-                  <CheckSquare className="h-8 w-8 text-slate-500 mx-auto mb-2" />
-                  <p className="text-slate-400 text-sm">No actions from this meeting</p>
+                  <FileText className="h-9 w-9 text-emerald-400 mx-auto mb-2" />
+                  <p className="text-gray-700 font-medium">Minutes recorded</p>
+                  <p className="text-sm text-gray-500 mt-1">Minutes have been saved for this meeting</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <FileText className="h-9 w-9 text-gray-300 mb-2" />
+                  <p className="text-gray-600 font-medium">No minutes yet</p>
+                  <button
+                    onClick={() => setIsEditMinutesOpen(true)}
+                    className="mt-2 text-sm text-blue-600 hover:underline"
+                  >
+                    Draft minutes
+                  </button>
                 </div>
               )}
             </div>
           </div>
         </div>
+
+        {/* ── Sidebar ── */}
+        <div className="space-y-6">
+
+          {/* Actions */}
+          <div className="rounded-xl border border-gray-200 bg-white">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <h3 className="font-medium text-black flex items-center gap-2">
+                <CheckSquare className="h-5 w-5 text-amber-500" />
+                Actions
+              </h3>
+              <button
+                onClick={() => setIsAddActionOpen(true)}
+                className="rounded-lg border border-gray-300 p-1.5 hover:bg-gray-50"
+                title="Create action"
+              >
+                <Plus className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {actions.length === 0 ? (
+                <div className="flex flex-col items-center py-8 text-center px-4">
+                  <CheckSquare className="h-8 w-8 text-gray-300 mb-2" />
+                  <p className="text-gray-600 text-sm font-medium">No actions yet</p>
+                  <button
+                    onClick={() => setIsAddActionOpen(true)}
+                    className="mt-2 text-xs text-blue-600 hover:underline"
+                  >
+                    Create first action
+                  </button>
+                </div>
+              ) : actions.map((action) => {
+                const statusStyle = action.is_overdue
+                  ? ACTION_STATUS_STYLES.overdue
+                  : ACTION_STATUS_STYLES[action.status] ?? ACTION_STATUS_STYLES.open;
+                return (
+                  <div key={action.id} className="px-5 py-3 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium text-black leading-snug">{action.title}</p>
+                      <Badge {...statusStyle} />
+                    </div>
+                    <div className="mt-1.5 space-y-0.5 text-xs text-gray-500">
+                      {action.due_date   && <p>Due: {formatDate(action.due_date)}</p>}
+                      <p>{action.assignee_name || 'Unassigned'}</p>
+                      {action.action_number && <p className="font-mono text-gray-400">{action.action_number}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Meeting Info */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+            <h3 className="font-medium text-black text-sm">Meeting Details</h3>
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Type</dt>
+                <dd className="text-black capitalize">{meeting.meeting_type.replace('_', ' ')}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Status</dt>
+                <dd><Badge {...meetingStatusStyle} /></dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Date</dt>
+                <dd className="text-black">{formatDate(meeting.scheduled_date)}</dd>
+              </div>
+              {meeting.quorum_required != null && (
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">Quorum</dt>
+                  <dd className="text-black">{meeting.quorum_required}</dd>
+                </div>
+              )}
+              {meeting.location && (
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">Location</dt>
+                  <dd className="text-black truncate max-w-[140px]" title={meeting.location}>{meeting.location}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        </div>
       </div>
 
-      {isAutoPopulateModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-700">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-amber-400" />
+      {/* ── Modals ── */}
+
+      {/* Auto-Populate Modal */}
+      {isAutoPopulateOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-black flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-500" />
                 Auto-Populate Agenda
               </h2>
-              <button onClick={() => setIsAutoPopulateModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsAutoPopulateOpen(false)} className="text-gray-400 hover:text-black">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <p className="text-slate-400 mb-6">
-              Select which types of items to include in the agenda. The system will automatically add relevant pending items.
-            </p>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-600">
+                Automatically add relevant pending items to the agenda. Select which types to include:
+              </p>
 
-            <div className="space-y-4 mb-6">
-              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600 cursor-pointer hover:bg-slate-700/80 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={autoPopulateOptions.include_documents}
-                  onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_documents: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-primary-500 focus:ring-primary-500"
-                />
-                <FileCheck className="h-5 w-5 text-blue-400" />
-                <div>
-                  <span className="text-white font-medium">Documents</span>
-                  <p className="text-sm text-slate-400">Pending document approvals and reviews</p>
-                </div>
-              </label>
-
-              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600 cursor-pointer hover:bg-slate-700/80 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={autoPopulateOptions.include_exceptions}
-                  onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_exceptions: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-primary-500 focus:ring-primary-500"
-                />
-                <Shield className="h-5 w-5 text-amber-400" />
-                <div>
-                  <span className="text-white font-medium">Exceptions</span>
-                  <p className="text-sm text-slate-400">Risk and control exceptions requiring approval</p>
-                </div>
-              </label>
-
-              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600 cursor-pointer hover:bg-slate-700/80 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={autoPopulateOptions.include_regulatory_changes}
-                  onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, include_regulatory_changes: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-primary-500 focus:ring-primary-500"
-                />
-                <Scale className="h-5 w-5 text-purple-400" />
-                <div>
-                  <span className="text-white font-medium">Regulatory Changes</span>
-                  <p className="text-sm text-slate-400">Pending regulatory updates and impact assessments</p>
-                </div>
-              </label>
+              {([
+                { key: 'include_documents'          as const, label: 'Pending Document Approvals', desc: 'Documents awaiting committee approval', Icon: FileCheck, color: 'text-blue-600',   bg: 'bg-blue-50'   },
+                { key: 'include_exceptions'         as const, label: 'Risk Exceptions',             desc: 'Exceptions pending review',             Icon: Shield,    color: 'text-amber-600',  bg: 'bg-amber-50'  },
+                { key: 'include_regulatory_changes' as const, label: 'Regulatory Changes',          desc: 'Updates under assessment',              Icon: Scale,     color: 'text-purple-600', bg: 'bg-purple-50' },
+              ] as const).map(({ key, label, desc, Icon, color, bg }) => (
+                <label key={key}
+                  className="flex items-center gap-4 cursor-pointer rounded-xl border border-gray-200 p-4 hover:border-gray-300 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={autoPopulateOptions[key]}
+                    onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, [key]: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                  />
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${bg}`}>
+                    <Icon className={`h-5 w-5 ${color}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-black">{label}</p>
+                    <p className="text-xs text-gray-500">{desc}</p>
+                  </div>
+                </label>
+              ))}
             </div>
 
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setIsAutoPopulateModalOpen(false)} className="btn-secondary">
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
+              <button
+                onClick={() => setIsAutoPopulateOpen(false)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
+              >
                 Cancel
               </button>
               <button
                 onClick={() => autoPopulateMutation.mutate(autoPopulateOptions)}
-                disabled={autoPopulateMutation.isPending || (!autoPopulateOptions.include_documents && !autoPopulateOptions.include_exceptions && !autoPopulateOptions.include_regulatory_changes)}
-                className="btn-primary flex items-center gap-2"
+                disabled={
+                  autoPopulateMutation.isPending ||
+                  (!autoPopulateOptions.include_documents && !autoPopulateOptions.include_exceptions && !autoPopulateOptions.include_regulatory_changes)
+                }
+                className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
               >
                 <Sparkles className="h-4 w-4" />
-                {autoPopulateMutation.isPending ? 'Populating...' : 'Populate Agenda'}
+                {autoPopulateMutation.isPending ? 'Populating…' : 'Populate Agenda'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {isAddAgendaModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-700">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Add Agenda Item</h2>
-              <button onClick={() => setIsAddAgendaModalOpen(false)} className="text-slate-400 hover:text-white">
+      {/* Add Agenda Item Modal */}
+      {isAddAgendaOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-black">Add Agenda Item</h2>
+              <button onClick={() => setIsAddAgendaOpen(false)} className="text-gray-400 hover:text-black">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={(e) => { e.preventDefault(); addAgendaMutation.mutate(newAgendaItem); }} className="space-y-4">
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                addAgendaMutation.mutate({
+                  title: newAgendaItem.title,
+                  description: newAgendaItem.description || undefined,
+                  duration_minutes: newAgendaItem.duration_minutes,
+                  item_type: newAgendaItem.item_type,
+                });
+              }}
+              className="px-6 py-5 space-y-4"
+            >
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Title *</label>
-                <input type="text" value={newAgendaItem.title} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, title: e.target.value })} className="input w-full" required />
+                <label className="block text-sm font-medium text-black mb-1">Title <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={newAgendaItem.title}
+                  onChange={(e) => setNewAgendaItem({ ...newAgendaItem, title: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Agenda item title"
+                  required
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
-                <textarea value={newAgendaItem.description} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, description: e.target.value })} className="input w-full" rows={2} />
+                <label className="block text-sm font-medium text-black mb-1">Description</label>
+                <textarea
+                  value={newAgendaItem.description}
+                  onChange={(e) => setNewAgendaItem({ ...newAgendaItem, description: e.target.value })}
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                  placeholder="Optional description"
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Presenter</label>
-                  <input type="text" value={newAgendaItem.presenter} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, presenter: e.target.value })} className="input w-full" />
+                  <label className="block text-sm font-medium text-black mb-1">Type</label>
+                  <select
+                    value={newAgendaItem.item_type}
+                    onChange={(e) => setNewAgendaItem({ ...newAgendaItem, item_type: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    {ITEM_TYPES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Duration (min)</label>
-                  <input type="number" value={newAgendaItem.duration_minutes} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, duration_minutes: parseInt(e.target.value) })} className="input w-full" />
+                  <label className="block text-sm font-medium text-black mb-1">Duration (min)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newAgendaItem.duration_minutes}
+                    onChange={(e) => setNewAgendaItem({ ...newAgendaItem, duration_minutes: parseInt(e.target.value) || 15 })}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Item Type</label>
-                <select value={newAgendaItem.item_type} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, item_type: e.target.value })} className="input w-full">
-                  <option value="procedural">Procedural</option>
-                  <option value="approval">Approval</option>
-                  <option value="discussion">Discussion</option>
-                  <option value="information">Information</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setIsAddAgendaModalOpen(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={addAgendaMutation.isPending} className="btn-primary">
-                  {addAgendaMutation.isPending ? 'Adding...' : 'Add Item'}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddAgendaOpen(false)}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newAgendaItem.title.trim() || addAgendaMutation.isPending}
+                  className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {addAgendaMutation.isPending ? 'Adding…' : 'Add Item'}
                 </button>
               </div>
             </form>
@@ -789,59 +923,99 @@ export default function MeetingDetailPage() {
         </div>
       )}
 
-      {isAddActionModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-700">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Create Action</h2>
-              <button onClick={() => setIsAddActionModalOpen(false)} className="text-slate-400 hover:text-white">
+      {/* Create Action Modal */}
+      {isAddActionOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-black">Create Action</h2>
+              <button onClick={() => setIsAddActionOpen(false)} className="text-gray-400 hover:text-black">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={(e) => { e.preventDefault(); createActionMutation.mutate({ ...newAction, assigned_to_id: newAction.assigned_to_id ? parseInt(newAction.assigned_to_id) : null }); }} className="space-y-4">
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                createActionMutation.mutate({
+                  title: newAction.title,
+                  description: newAction.description || undefined,
+                  action_type: newAction.action_type,
+                  due_date: newAction.due_date || undefined,
+                  assigned_to: newAction.assigned_to ? parseInt(newAction.assigned_to as string) : null,
+                });
+              }}
+              className="px-6 py-5 space-y-4"
+            >
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Title *</label>
-                <input type="text" value={newAction.title} onChange={(e) => setNewAction({ ...newAction, title: e.target.value })} className="input w-full" required />
+                <label className="block text-sm font-medium text-black mb-1">Title <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={newAction.title}
+                  onChange={(e) => setNewAction({ ...newAction, title: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Action title"
+                  required
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
-                <textarea value={newAction.description} onChange={(e) => setNewAction({ ...newAction, description: e.target.value })} className="input w-full" rows={2} />
+                <label className="block text-sm font-medium text-black mb-1">Description</label>
+                <textarea
+                  value={newAction.description}
+                  onChange={(e) => setNewAction({ ...newAction, description: e.target.value })}
+                  rows={2}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Action Type</label>
-                <select value={newAction.action_type} onChange={(e) => setNewAction({ ...newAction, action_type: e.target.value })} className="input w-full">
-                  {ACTION_TYPES.map(({ value, label }) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
+                <label className="block text-sm font-medium text-black mb-1">Action Type</label>
+                <select
+                  value={newAction.action_type}
+                  onChange={(e) => setNewAction({ ...newAction, action_type: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {ACTION_TYPES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Due Date *</label>
-                  <input type="date" value={newAction.due_date} onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })} className="input w-full" required />
+                  <label className="block text-sm font-medium text-black mb-1">Due Date <span className="text-red-500">*</span></label>
+                  <input
+                    type="date"
+                    value={newAction.due_date}
+                    onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    required
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Assigned To</label>
+                  <label className="block text-sm font-medium text-black mb-1">Assign To</label>
                   <select
-                    value={newAction.assigned_to_id}
-                    onChange={(e) => setNewAction({ ...newAction, assigned_to_id: e.target.value })}
-                    className="input w-full"
+                    value={newAction.assigned_to}
+                    onChange={(e) => setNewAction({ ...newAction, assigned_to: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="">Leave Unassigned (Pending)</option>
-                    {normalizedTenantUsers.map((tenantUser) => {
-                      return (
-                        <option key={tenantUser.id} value={tenantUser.id}>
-                          {tenantUser.name}
-                        </option>
-                      );
-                    })}
+                    <option value="">Unassigned</option>
+                    {normalizedUsers.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setIsAddActionModalOpen(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={createActionMutation.isPending} className="btn-primary">
-                  {createActionMutation.isPending ? 'Creating...' : 'Create Action'}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddActionOpen(false)}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newAction.title.trim() || !newAction.due_date || createActionMutation.isPending}
+                  className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {createActionMutation.isPending ? 'Creating…' : 'Create Action'}
                 </button>
               </div>
             </form>

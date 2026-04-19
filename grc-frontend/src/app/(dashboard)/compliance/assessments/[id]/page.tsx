@@ -35,14 +35,19 @@ import {
 } from 'lucide-react';
 
 interface EvidenceUpload {
-  id: number;
-  assessment_item_id: number;
+  id: number | string;
+  assessment_item_id?: number;
   evidence_id: number | null;
   status: string;
   current_tier: number;
   ai_recommendation: string | null;
   submitted_at: string | null;
   created_at: string;
+  source?: string;  // 'assessment_upload' | 'framework_link'
+  framework_name?: string;
+  control_code?: string;
+  confidence_score?: number;
+  matching_rationale?: string;
   evidence?: {
     id: number;
     name: string;
@@ -145,6 +150,7 @@ const EVIDENCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: 
   approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
   rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
   returned: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Returned' },
+  framework_linked: { bg: 'bg-purple-50', text: 'text-purple-700', label: 'Framework Linked' },
 };
 
 function getScoreColor(score: number | null): { bg: string; text: string } {
@@ -222,6 +228,11 @@ export default function AssessmentDetailPage() {
             submitted_at: ev.submitted_at || null,
             workflow_id: ev.workflow_id,
             created_at: ev.created_at,
+            source: ev.source || 'assessment_upload',
+            framework_name: ev.framework_name || null,
+            control_code: ev.control_code || null,
+            confidence_score: ev.confidence_score ?? null,
+            matching_rationale: ev.matching_rationale || null,
             evidence: ev.evidence_id ? {
               id: ev.evidence_id,
               name: ev.evidence_name,
@@ -878,33 +889,46 @@ export default function AssessmentDetailPage() {
                                     </h4>
                                     <div className="space-y-2">
                                       {currentItemEvidence.map((ev) => {
+                                        const isFrameworkLink = ev.source === 'framework_link';
                                         const evStatusStyle = EVIDENCE_STATUS_STYLES[ev.status] || EVIDENCE_STATUS_STYLES.draft;
                                         return (
-                                          <div key={ev.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                          <div key={ev.id} className={`border rounded-lg p-3 ${isFrameworkLink ? 'bg-purple-50 border-purple-200' : 'bg-gray-50 border-gray-200'}`}>
                                             <div className="flex items-start justify-between">
                                               <div className="flex-1">
                                                 <div className="flex items-center gap-2">
-                                                  <FileText className="h-4 w-4 text-gray-600" />
+                                                  <FileText className={`h-4 w-4 ${isFrameworkLink ? 'text-purple-600' : 'text-gray-600'}`} />
                                                   <span className="text-sm font-medium text-black">
                                                     {ev.evidence?.name || 'Evidence'}
                                                   </span>
-                                                  <span className={`badge ${evStatusStyle.bg} ${evStatusStyle.text} text-xs`}>
+                                                  <span className={`px-2 py-0.5 text-xs rounded ${evStatusStyle.bg} ${evStatusStyle.text}`}>
                                                     {evStatusStyle.label}
                                                   </span>
+                                                  {isFrameworkLink && (
+                                                    <span className="px-2 py-0.5 text-xs rounded bg-purple-100 text-purple-700 flex items-center gap-1">
+                                                      <Sparkles className="h-3 w-3" />
+                                                      Linked from Evidence Module
+                                                    </span>
+                                                  )}
                                                 </div>
                                                 {ev.evidence && (
                                                   <p className="text-xs text-gray-500 mt-1">
                                                     {ev.evidence.file_name} • {ev.evidence.file_type}
                                                   </p>
                                                 )}
+                                                {isFrameworkLink && ev.framework_name && (
+                                                  <p className="text-xs text-purple-600 mt-1">
+                                                    {ev.framework_name}{ev.control_code ? ` · ${ev.control_code}` : ''}
+                                                    {ev.confidence_score ? ` · ${Math.round(ev.confidence_score)}% confidence` : ''}
+                                                  </p>
+                                                )}
                                                 <p className="text-xs text-gray-500">
-                                                  Uploaded {formatDateTime(ev.created_at)}
+                                                  Linked {formatDateTime(ev.created_at)}
                                                 </p>
                                               </div>
-                                              {ev.status === 'draft' && (
+                                              {!isFrameworkLink && ev.status === 'draft' && (
                                                 <button
                                                   onClick={() => approvalActionMutation.mutate({
-                                                    evidenceLinkId: ev.id,
+                                                    evidenceLinkId: ev.id as number,
                                                     action: 'submit',
                                                     comments: ''
                                                   })}
@@ -919,17 +943,17 @@ export default function AssessmentDetailPage() {
                                                   Submit for Review
                                                 </button>
                                               )}
-                                              {(ev.status === 'pending_review' || ev.status === 'in_approval') && (
+                                              {!isFrameworkLink && (ev.status === 'pending_review' || ev.status === 'in_approval') && (
                                                 <div className="flex items-center gap-2 ml-4">
                                                   <input
                                                     type="text"
                                                     placeholder="Comments (optional)"
-                                                    value={approvalComments[ev.id] || ''}
-                                                    onChange={(e) => setApprovalComments({ ...approvalComments, [ev.id]: e.target.value })}
+                                                    value={approvalComments[ev.id as number] || ''}
+                                                    onChange={(e) => setApprovalComments({ ...approvalComments, [ev.id as number]: e.target.value })}
                                                     className="input text-xs py-1 px-2 w-32"
                                                   />
                                                   <button
-                                                    onClick={() => handleApprovalAction(ev.id, 'approve')}
+                                                    onClick={() => handleApprovalAction(ev.id as number, 'approve')}
                                                     disabled={approvalActionMutation.isPending}
                                                     className="btn-ghost btn-sm text-emerald-400 hover:bg-emerald-500/20"
                                                     title="Approve"
@@ -937,7 +961,7 @@ export default function AssessmentDetailPage() {
                                                     <ThumbsUp className="h-4 w-4" />
                                                   </button>
                                                   <button
-                                                    onClick={() => handleApprovalAction(ev.id, 'reject')}
+                                                    onClick={() => handleApprovalAction(ev.id as number, 'reject')}
                                                     disabled={approvalActionMutation.isPending}
                                                     className="btn-ghost btn-sm text-rose-400 hover:bg-rose-500/20"
                                                     title="Reject"
@@ -945,7 +969,7 @@ export default function AssessmentDetailPage() {
                                                     <ThumbsDown className="h-4 w-4" />
                                                   </button>
                                                   <button
-                                                    onClick={() => handleApprovalAction(ev.id, 'return')}
+                                                    onClick={() => handleApprovalAction(ev.id as number, 'return')}
                                                     disabled={approvalActionMutation.isPending}
                                                     className="btn-ghost btn-sm text-orange-400 hover:bg-orange-500/20"
                                                     title="Return for revision"

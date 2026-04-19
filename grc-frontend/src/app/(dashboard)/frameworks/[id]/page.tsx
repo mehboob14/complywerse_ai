@@ -51,7 +51,8 @@ import {
   Paperclip,
   Sparkles,
   Trash2,
-  CheckCircle
+  CheckCircle,
+  Unlink
 } from 'lucide-react';
 
 const EVIDENCE_TYPE_MAP: Record<string, { label: string; color: string }> = {
@@ -263,8 +264,13 @@ export default function CertificationJourneyPage() {
   const [deletingEvidenceId, setDeletingEvidenceId] = useState<number | null>(null);
 
   const deleteEvidenceMutation = useMutation({
-    mutationFn: async (evidenceId: number) => {
-      return apiClient.delete(`/certifications/evidence/${evidenceId}`);
+    mutationFn: async (ev: { id: number; item_type?: string; linked_evidence_id?: number }) => {
+      if (ev.item_type === 'ecm' && ev.linked_evidence_id) {
+        // ECM-sourced item: unlink via the evidence-mgmt endpoint
+        return apiClient.delete(`/evidence-mgmt/links/${ev.linked_evidence_id}/controls/${ev.id}`);
+      }
+      // ImplementationEvidence item: unlink via the certifications endpoint
+      return apiClient.delete(`/certifications/evidence/${ev.id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
@@ -1598,21 +1604,21 @@ export default function CertificationJourneyPage() {
                             )}
                             <button
                               onClick={() => {
-                                if (window.confirm('Are you sure you want to delete this evidence?')) {
+                                if (window.confirm('Unlink this evidence from the control? The evidence will remain in your evidence library.')) {
                                   setDeletingEvidenceId(ev.id);
-                                  deleteEvidenceMutation.mutate(ev.id);
+                                  deleteEvidenceMutation.mutate(ev);
                                 }
                               }}
                               disabled={deletingEvidenceId === ev.id}
                               className="flex items-center gap-1 rounded bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-                              title="Delete evidence"
+                              title="Unlink evidence from this control"
                             >
                               {deletingEvidenceId === ev.id ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
-                                <Trash2 className="h-3 w-3" />
+                                <Unlink className="h-3 w-3" />
                               )}
-                              Delete
+                              Unlink
                             </button>
                           </div>
                         </div>

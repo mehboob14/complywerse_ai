@@ -130,17 +130,17 @@ function RiskSpeedometer({
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-[220px_1fr] lg:items-center">
-        <div className="relative mx-auto h-[190px] w-full max-w-[220px]">
+        <div className="relative mx-auto h-[180px] w-full max-w-[220px]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={data}
                 cx="50%"
-                cy="78%"
+                cy="70%"
                 startAngle={180}
                 endAngle={0}
-                innerRadius={56}
-                outerRadius={80}
+                innerRadius={52}
+                outerRadius={76}
                 dataKey="value"
                 stroke="none"
               >
@@ -150,9 +150,9 @@ function RiskSpeedometer({
               </Pie>
             </PieChart>
           </ResponsiveContainer>
-          <div className="absolute inset-0 flex flex-col items-center justify-center pt-7">
-            <span className="text-3xl font-bold" style={{ color: gaugeColor }}>{safeScore}%</span>
-            <span className="mt-1 text-xs text-gray-500">overall posture</span>
+          <div className="absolute inset-x-0 flex flex-col items-center z-10" style={{ bottom: '16%' }}>
+            <span className="text-2xl font-bold leading-none" style={{ color: gaugeColor }}>{safeScore}%</span>
+            <span className="mt-0.5 text-[11px] text-gray-500">overall posture</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
@@ -258,9 +258,9 @@ function RiskSunburst({
   centerLabel: string;
 }) {
   const radii = [
-    { inner: 30, outer: 48 },
-    { inner: 54, outer: 72 },
-    { inner: 78, outer: 96 },
+    { inner: 36, outer: 56 },
+    { inner: 62, outer: 80 },
+    { inner: 86, outer: 104 },
   ];
 
   return (
@@ -272,7 +272,7 @@ function RiskSunburst({
         </div>
       </div>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-        <div className="relative mx-auto h-[220px] w-[220px] flex-shrink-0">
+        <div className="relative mx-auto h-[240px] w-[240px] flex-shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               {rings.map((ring, ringIndex) => {
@@ -300,9 +300,9 @@ function RiskSunburst({
               <Tooltip contentStyle={tooltipStyle} />
             </PieChart>
           </ResponsiveContainer>
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-2xl font-bold text-black">{centerValue}</span>
-            <span className="text-xs text-gray-500">{centerLabel}</span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+            <span className="text-xl font-bold text-black leading-none">{centerValue}</span>
+            <span className="text-[11px] text-gray-500 mt-0.5">{centerLabel}</span>
           </div>
         </div>
         <div className="flex-1 space-y-2">
@@ -672,7 +672,7 @@ export default function ERMOverviewPage() {
             </div>
           ))}
         </div>
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2 card">
             <div className="skeleton h-6 w-48 mb-4" />
             <div className="skeleton h-80 w-full rounded-lg" />
@@ -692,9 +692,9 @@ export default function ERMOverviewPage() {
 
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Risks"
           value={totalRisks}
@@ -744,7 +744,7 @@ export default function ERMOverviewPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 card">
           <div className="card-header">
             <div>
@@ -948,7 +948,7 @@ export default function ERMOverviewPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
         <RiskSpeedometer
           score={ermHealthScore}
           signals={[
@@ -965,7 +965,7 @@ export default function ERMOverviewPage() {
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-3 xl:grid-cols-2">
         <div className="card">
           <div className="card-header">
             <div>
@@ -1123,7 +1123,7 @@ export default function ERMOverviewPage() {
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <div className="card">
           <div className="card-header">
             <div>
@@ -1239,7 +1239,7 @@ export default function ERMOverviewPage() {
         <ExposureLollipop items={categoryExposureItems} maxValue={25} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <div className="card">
           <div className="card-header">
             <div>
@@ -1348,7 +1348,7 @@ export default function ERMOverviewPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-5">
         <Link
           href="/erm/risks"
           className="card group hover:border-primary-500/30 transition-all duration-200"

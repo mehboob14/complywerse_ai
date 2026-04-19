@@ -11,3 +11,4 @@ export { PageHeader, type PageHeaderProps } from './PageHeader';
 export { DataTable, type DataTableProps, type ColumnDef, type BulkAction, type SortDirection } from './DataTable';
 export { Toast, ToastContainer, type ToastProps, type ToastData, type ToastType, type ToastContainerProps } from './Toast';
 export { ToastProvider, useToast, type ToastProviderProps } from './ToastProvider';
+export { RightSlidePanel, type RightSlidePanelProps } from './RightSlidePanel';

@@ -521,17 +521,17 @@ export default function ERMRisksPage() {
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
               {uploadResult.errors.length > 0 ? (
-                <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+                <AlertCircle className="h-5 w-5 text-red-700 mt-0.5" />
               ) : (
-                <CheckCircle className="h-5 w-5 text-green-400 mt-0.5" />
+                <CheckCircle className="h-5 w-5 text-green-700 mt-0.5" />
               )}
               <div>
                 <p className="font-medium text-slate-900">{uploadResult.message}</p>
                 <div className="mt-1 flex gap-4 text-sm">
-                  <span className="text-green-400">Created: {uploadResult.created}</span>
-                  <span className="text-yellow-400">Skipped: {uploadResult.skipped}</span>
+                  <span className="text-green-700">Created: {uploadResult.created}</span>
+                  <span className="text-amber-700">Skipped: {uploadResult.skipped}</span>
                   {uploadResult.errors.length > 0 && (
-                    <span className="text-red-400">Errors: {uploadResult.errors.length}</span>
+                    <span className="text-red-700">Errors: {uploadResult.errors.length}</span>
                   )}
                 </div>
               </div>
@@ -792,8 +792,8 @@ export default function ERMRisksPage() {
                           {risk.closure_status && (
                             <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                               risk.closure_status === 'closed' 
-                                ? 'bg-slate-500/30 text-slate-700' 
-                                : 'bg-amber-500/20 text-amber-400'
+                                ? 'bg-slate-100 text-slate-700' 
+                                : 'bg-amber-100 text-amber-700'
                             }`}>
                               {risk.closure_status === 'closed' ? <Lock size={10} /> : <Unlock size={10} />}
                               {risk.closure_status === 'closed' ? 'Closed' : 'Pending Closure'}
@@ -836,7 +836,7 @@ export default function ERMRisksPage() {
                                 deleteMutation.mutate(risk.id);
                               }
                             }}
-                            className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
+                            className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>

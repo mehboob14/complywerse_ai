@@ -1278,8 +1278,7 @@ export default function MainDashboard() {
       </div>
 
       {/* â”€â”€ Row 2: COSO/ERM Wheel + Compliance Framework Coverage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CosoErmWheel scores={cosoScores} />
+      <div className="grid gap-4">
 
         {/* Compliance Coverage bars */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">

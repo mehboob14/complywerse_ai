@@ -390,6 +390,15 @@ export const governanceApi = {
     apiClient.get('/governance/reviews/my-pending-reviews', { params }),
   getMyPendingApprovals: (params?: { action_type?: string; entity_type?: string; skip?: number; limit?: number }) =>
     apiClient.get('/governance/reviews/my-pending-approvals', { params }),
+  // Document periodic-review lifecycle
+  getDocumentReviewHistory: (documentId: number) =>
+    apiClient.get(`/governance/reviews/${documentId}/history`),
+  startDocumentReview: (documentId: number) =>
+    apiClient.post(`/governance/reviews/${documentId}/start`),
+  completeDocumentReview: (documentId: number, data: { review_notes?: string; changes_made?: string; outcome?: string }) =>
+    apiClient.post(`/governance/reviews/${documentId}/complete`, {
+      notes: [data.review_notes, data.changes_made, data.outcome].filter(Boolean).join('. ') || undefined,
+    }),
 };
 
 export const policyExceptionApi = {
@@ -949,6 +958,9 @@ export const ermApi = {
     getFrameworkLinks: (id: number) => apiClient.get(`/erm/internal-controls/${id}/framework-links`),
     createFrameworkLink: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/internal-controls/${id}/framework-links`, data),
     deleteFrameworkLink: (id: number, linkId: number) => apiClient.delete(`/erm/internal-controls/${id}/framework-links/${linkId}`),
+    getEvidence: (id: number) => apiClient.get(`/erm/internal-controls/${id}/evidence`),
+    linkEvidence: (id: number, data: { evidence_id: number; notes?: string }) => apiClient.post(`/erm/internal-controls/${id}/evidence`, data),
+    unlinkEvidence: (id: number, linkId: number) => apiClient.delete(`/erm/internal-controls/${id}/evidence/${linkId}`),
     getAISuggestions: (data: { name: string; description?: string }) =>
       apiClient.post<{
         suggested_category: string;

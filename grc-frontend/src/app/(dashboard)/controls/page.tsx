@@ -205,9 +205,9 @@ export default function ControlsPage() {
 
   const getPriorityBadge = (priority: string) => {
     const colors: Record<string, string> = {
-      high: 'bg-rose-50 text-rose-700',
-      medium: 'bg-amber-50 text-amber-700',
-      low: 'bg-emerald-50 text-emerald-700',
+      high: 'bg-rose-50 text-black',
+      medium: 'bg-amber-50 text-black',
+      low: 'bg-emerald-50 text-black',
     };
     return (
       <span className={`rounded-full px-2 py-0.5 text-xs ${colors[priority] || 'bg-slate-200 text-slate-500'}`}>
@@ -219,13 +219,13 @@ export default function ControlsPage() {
   const getVerificationBadge = (isVerified: boolean) => {
     if (isVerified) {
       return (
-        <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">
+        <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-text">
           <CheckCircle size={12} /> Verified
         </span>
       );
     }
     return (
-      <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-600">
+      <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-text">
         <Clock size={12} /> Pending
       </span>
     );
@@ -268,7 +268,7 @@ export default function ControlsPage() {
                 </Link>
               </div>
               <h1 className="text-2xl font-bold text-black flex items-center gap-2">
-                <FileStack className="h-6 w-6 text-primary-600" />
+                <FileStack className="h-6 w-6 text-black" />
                 {selectedFramework.name}
               </h1>
               <p className="text-slate-600">
@@ -282,13 +282,13 @@ export default function ControlsPage() {
             </>
           )}
         </div>
-        <button
+        {/* <button
           onClick={() => setShowInfoModal(true)}
           className="flex items-center gap-2 rounded-lg bg-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-600 transition-colors"
         >
           <HelpCircle className="h-4 w-4" />
           How It Works
-        </button>
+        </button> */}
       </div>
 
       {showInfoModal && (
@@ -396,7 +396,7 @@ export default function ControlsPage() {
       )}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 sm:max-w-xs">
+        <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
           <input
             type="text"
@@ -411,15 +411,15 @@ export default function ControlsPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-slate-600" />
+          <div className="flex items-end gap-2 justify-end max-w-[80%] ml-auto">
+            {/* <Filter className="h-4 w-4 text-slate-600" /> */}
             <select
               value={frameworkFilter || ''}
               onChange={(e) => {
                 setFrameworkFilter(e.target.value ? Number(e.target.value) : null);
                 setPage(0);
               }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border  border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Frameworks</option>
               {summaryData?.frameworks.map((fw) => (
@@ -458,7 +458,7 @@ export default function ControlsPage() {
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                        {/* <Shield className="h-4 w-4 text-primary-600 flex-shrink-0" /> */}
                         <span className="font-mono text-sm text-black">
                           {control.original_reference || control.control_id}
                         </span>
@@ -468,7 +468,7 @@ export default function ControlsPage() {
                       <p className="text-sm text-black line-clamp-1">{control.title}</p>
                     </td>
                     <td className="hidden px-4 py-3 md:table-cell">
-                      <span className="rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-600">
+                      <span className="rounded-full whitespace-nowrap bg-blue-50 px-2 py-1 text-xs text-blue-900!">
                         {control.framework_name}
                       </span>
                     </td>
@@ -529,7 +529,7 @@ export default function ControlsPage() {
                                 </span>
                                 <Link
                                   href={`/evidence?control_id=${control.id}`}
-                                  className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs text-primary-600 hover:bg-primary-100 transition-colors"
+                                  className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs text-text hover:bg-primary-100 transition-colors"
                                 >
                                   <Paperclip className="h-3 w-3" />
                                   {control.evidence_count > 0 ? 'View Evidence' : 'Link Evidence'}
@@ -551,7 +551,7 @@ export default function ControlsPage() {
                                     setSearchTerm(control.parent_section || '');
                                     setPage(0);
                                   }}
-                                  className="mt-1 inline-flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1 text-sm text-blue-600 hover:bg-blue-100 transition-colors"
+                                  className="mt-1 inline-flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1 text-sm text-blue-900! hover:bg-blue-100 transition-colors"
                                 >
                                   <ChevronRight className="h-4 w-4" />
                                   {control.parent_section}
@@ -576,11 +576,11 @@ export default function ControlsPage() {
 
                           {control.evidence_requirements && control.evidence_requirements.length > 0 && (
                             <div>
-                              <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
+                              {/* <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
                                 <FileText className="h-4 w-4 text-amber-600" />
                                 Recommended Evidence
-                              </h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              </h4> */}
+                              {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {control.evidence_requirements.map((evidence, idx) => (
                                   <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
                                     <div className="flex items-start gap-2">
@@ -601,7 +601,7 @@ export default function ControlsPage() {
                                     </div>
                                   </div>
                                 ))}
-                              </div>
+                              </div> */}
                             </div>
                           )}
                           
@@ -618,10 +618,10 @@ export default function ControlsPage() {
                               </div>
                             )}
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500">Mandatory:</span>
+                              {/* <span className="text-xs text-slate-500">Mandatory:</span>
                               <span className={`text-xs font-medium ${control.is_mandatory ? 'text-rose-600' : 'text-slate-600'}`}>
                                 {control.is_mandatory ? 'Yes' : 'No'}
-                              </span>
+                              </span> */}
                             </div>
                           </div>
 
@@ -638,7 +638,7 @@ export default function ControlsPage() {
                                     handleGetAIRecommendations(control);
                                   }}
                                   disabled={loadingAI === control.id}
-                                  className="flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-1.5 text-sm text-primary-600 hover:bg-primary-100 transition-colors disabled:opacity-50"
+                                  className="flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-1.5 text-sm text-black hover:bg-primary-100 transition-colors disabled:opacity-50"
                                 >
                                   {loadingAI === control.id ? (
                                     <>
@@ -747,7 +747,7 @@ export default function ControlsPage() {
 
                             {!aiRecommendations[control.id] && loadingAI !== control.id && (
                               <p className="text-sm text-slate-500">
-                                Click "Get AI Recommendations" to generate test procedures and evidence requirements for this control.
+                                
                               </p>
                             )}
                           </div>

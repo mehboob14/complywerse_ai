@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { rcsaApi } from '@/lib/api';
 import {
@@ -13,6 +14,8 @@ import {
   CheckCircle,
   Clock,
   PlayCircle,
+  Activity,
+  Layers,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -25,6 +28,11 @@ import {
   Bar,
   XAxis,
   YAxis,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
 } from 'recharts';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -184,7 +192,62 @@ export default function RCSADashboardPage() {
     },
   });
 
+  const { data: allAssessments } = useQuery({
+    queryKey: ['rcsa-all-assessments'],
+    queryFn: async () => {
+      try {
+        const response = await rcsaApi.getAssessments({});
+        return response.data as Assessment[];
+      } catch {
+        return [] as Assessment[];
+      }
+    },
+  });
+
   const isLoading = summaryLoading || campaignsLoading || buLoading || findingsLoading || assessmentsLoading || pendingReviewsLoading;
+
+  // ── Derived data for new charts ─────────────────────────────────────────────
+  const assessmentPipelineData = useMemo(() => {
+    const all = allAssessments || [];
+    return [
+      { stage: 'Not Started', key: 'not_started', color: '#94a3b8', count: all.filter(a => a.status === 'not_started').length },
+      { stage: 'In Progress', key: 'in_progress', color: '#3b82f6', count: all.filter(a => a.status === 'in_progress').length },
+      { stage: 'Submitted',   key: 'submitted',   color: '#8b5cf6', count: all.filter(a => a.status === 'submitted').length },
+      { stage: 'Under Review',key: 'under_review',color: '#f59e0b', count: all.filter(a => a.status === 'under_review').length },
+      { stage: 'Approved',    key: 'approved',    color: '#22c55e', count: all.filter(a => a.status === 'approved').length },
+      { stage: 'Rejected',    key: 'rejected',    color: '#ef4444', count: all.filter(a => a.status === 'rejected').length },
+    ].filter(s => s.count > 0 || ['not_started','in_progress','submitted','approved'].includes(s.key));
+  }, [allAssessments]);
+
+  const campaignStatusDist = useMemo(() => {
+    const all = recentCampaigns || [];
+    const groups: Record<string, number> = {};
+    all.forEach(c => { groups[c.status] = (groups[c.status] || 0) + 1; });
+    const colorMap: Record<string, string> = { active: '#22c55e', closed: '#3b82f6', draft: '#94a3b8' };
+    return Object.entries(groups).map(([status, count]) => ({
+      name: STATUS_LABELS[status] || status,
+      value: count,
+      color: colorMap[status] || '#6366f1',
+    }));
+  }, [recentCampaigns]);
+
+  const rcsaMaturityData = useMemo(() => {
+    const completionRate = summary?.completion_rate || 0;
+    const activeCampaigns = summary?.active_campaigns || 0;
+    const openFindings = summary?.open_findings || 0;
+    const totalAss = (allAssessments || []).length;
+    const approvedAss = (allAssessments || []).filter(a => a.status === 'approved').length;
+    const qualityScore = totalAss > 0 ? Math.round((approvedAss / totalAss) * 100) : 0;
+    const coverageScore = Math.min(100, activeCampaigns * 20);
+    const findingsMgmt = openFindings === 0 ? 100 : Math.max(0, 100 - Math.round((openFindings / Math.max(totalAss, 1)) * 50));
+    return [
+      { subject: 'Completion', score: Math.round(completionRate) },
+      { subject: 'Quality', score: qualityScore },
+      { subject: 'Coverage', score: coverageScore },
+      { subject: 'Findings Mgmt', score: findingsMgmt },
+      { subject: 'Timeliness', score: (pendingReviews || []).length === 0 ? 100 : Math.max(0, 100 - (pendingReviews || []).length * 10) },
+    ];
+  }, [summary, allAssessments, pendingReviews]);
 
   if (isLoading) {
     return (
@@ -213,18 +276,24 @@ export default function RCSADashboardPage() {
   const buChartData = (buProgress || [])
     .slice(0, 8)
     .sort((a, b) => b.completion_rate - a.completion_rate)
-    .map((bu) => ({
-      name: bu.business_unit.length > 20 ? bu.business_unit.slice(0, 20) + '\u2026' : bu.business_unit,
-      rate: Math.round(bu.completion_rate),
-      rawRate: bu.completion_rate,
-    }));
+    .map((bu) => {
+      const name = bu.business_unit ?? 'Unknown';
+      return {
+        name: name.length > 20 ? name.slice(0, 20) + '\u2026' : name,
+        rate: Math.round(bu.completion_rate ?? 0),
+        rawRate: bu.completion_rate ?? 0,
+      };
+    });
 
   const campaignProgressData = (recentCampaigns || [])
     .slice(0, 6)
-    .map((c) => ({
-      name: c.name.length > 22 ? c.name.slice(0, 22) + '\u2026' : c.name,
-      progress: c.progress,
-    }));
+    .map((c) => {
+      const name = c.name ?? 'Untitled';
+      return {
+        name: name.length > 22 ? name.slice(0, 22) + '\u2026' : name,
+        progress: c.progress ?? 0,
+      };
+    });
 
   const kpis = [
     {
@@ -266,7 +335,7 @@ export default function RCSADashboardPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -290,14 +359,14 @@ export default function RCSADashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => (
           <Link key={kpi.name} href={kpi.href}>
-            <div className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-5 hover:border-blue-300 hover:shadow-sm transition-all">
-              <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${kpi.iconBg}`}>
-                <kpi.icon className={`h-5 w-5 ${kpi.iconColor}`} />
+            <div className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition-all">
+              <div className={`mb-2 flex h-9 w-9 items-center justify-center rounded-xl ${kpi.iconBg}`}>
+                <kpi.icon className={`h-4 w-4 ${kpi.iconColor}`} />
               </div>
-              <p className="text-2xl font-bold text-black">{kpi.value}</p>
+              <p className="text-xl font-bold text-black">{kpi.value}</p>
               <p className="mt-0.5 text-sm font-medium text-slate-700">{kpi.name}</p>
               <p className="text-xs text-slate-400">{kpi.sublabel}</p>
             </div>
@@ -306,10 +375,10 @@ export default function RCSADashboardPage() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
 
         {/* Findings by Severity Donut */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-4">
             <h3 className="text-sm font-semibold text-black">Findings by Severity</h3>
             <p className="text-xs text-slate-500">Open findings distributed by risk level</p>
@@ -370,8 +439,8 @@ export default function RCSADashboardPage() {
         </div>
 
         {/* BU Completion Horizontal Bar */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-black">Business Unit Completion</h3>
               <p className="text-xs text-slate-500">Assessment completion rate per unit</p>
@@ -418,9 +487,106 @@ export default function RCSADashboardPage() {
         </div>
       </div>
 
-      {/* Campaign Progress Bar Chart */}
-      {campaignProgressData.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+      {/* ── NEW: Assessment Pipeline + RCSA Maturity ──────────────────────── */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {/* Assessment Workflow Pipeline */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-4 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50">
+              <Layers className="h-4 w-4 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-black">Assessment Workflow Pipeline</h3>
+              <p className="text-xs text-slate-500">Stage-by-stage assessment distribution</p>
+            </div>
+          </div>
+          {assessmentPipelineData.some(s => s.count > 0) ? (
+            <>
+              <div className="flex items-end gap-2 h-28">
+                {assessmentPipelineData.map((stage) => {
+                  const maxCount = Math.max(...assessmentPipelineData.map(s => s.count), 1);
+                  const barH = Math.max(12, (stage.count / maxCount) * 96);
+                  return (
+                    <div key={stage.key} className="flex flex-1 flex-col items-center gap-1">
+                      <span className="text-xs font-bold" style={{ color: stage.color }}>{stage.count}</span>
+                      <div className="w-full rounded-t-md transition-all duration-500" style={{ height: `${barH}px`, backgroundColor: stage.color + 'cc' }} />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-1 flex gap-2">
+                {assessmentPipelineData.map(stage => (
+                  <div key={stage.key} className="flex-1 text-center">
+                    <p className="text-[10px] font-medium text-slate-600 leading-tight truncate">{stage.stage}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {assessmentPipelineData.filter(s => s.count > 0).map(stage => (
+                  <div key={stage.key} className="flex items-center gap-1.5 rounded-lg px-2 py-1.5" style={{ backgroundColor: stage.color + '15' }}>
+                    <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: stage.color }} />
+                    <span className="text-[11px] text-slate-600 truncate">{stage.stage}</span>
+                    <span className="ml-auto text-xs font-semibold" style={{ color: stage.color }}>{stage.count}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Activity className="mb-2 h-7 w-7 text-slate-300" />
+              <p className="text-sm text-slate-500">No assessments yet</p>
+            </div>
+          )}
+        </div>
+
+        {/* RCSA Maturity Radar */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50">
+              <Activity className="h-4 w-4 text-violet-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-black">RCSA Program Maturity</h3>
+              <p className="text-xs text-slate-500">Multi-dimensional health assessment</p>
+            </div>
+          </div>
+          {campaignStatusDist.length > 0 || rcsaMaturityData.some(d => d.score > 0) ? (
+            <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
+              <div className="h-44">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={rcsaMaturityData} margin={{ top: 4, right: 16, bottom: 4, left: 16 }}>
+                    <PolarGrid stroke="#e5e7eb" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#6b7280', fontSize: 10 }} />
+                    <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
+                    <Radar name="Score" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.2} strokeWidth={2} dot={{ fill: '#6366f1', r: 3 }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: 12 }} formatter={(v) => [`${v}%`, 'Score']} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-2 min-w-[110px]">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Campaigns</p>
+                {campaignStatusDist.length > 0 ? campaignStatusDist.map(item => (
+                  <div key={item.name} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                      <span className="text-xs text-slate-600">{item.name}</span>
+                    </div>
+                    <span className="text-xs font-bold text-black">{item.value}</span>
+                  </div>
+                )) : <p className="text-xs text-slate-400">No campaigns</p>}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Activity className="mb-2 h-7 w-7 text-slate-300" />
+              <p className="text-sm text-slate-500">Start campaigns to see maturity</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Campaign Progress Bar Chart */}      {campaignProgressData.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-black">Campaign Progress</h3>
@@ -465,7 +631,7 @@ export default function RCSADashboardPage() {
 
       {/* Recent Campaigns Table */}
       <div className="rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
             <h3 className="text-sm font-semibold text-black">Recent Campaigns</h3>
             <p className="text-xs text-slate-500">Ongoing and recently completed RCSA campaigns</p>
@@ -541,7 +707,7 @@ export default function RCSADashboardPage() {
 
       {/* My Assessments */}
       <div className="rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
             <h3 className="text-sm font-semibold text-black">My Assessments</h3>
             <p className="text-xs text-slate-500">Assessments assigned to you</p>
@@ -653,7 +819,7 @@ export default function RCSADashboardPage() {
       )}
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Link href="/risks/rcsa/campaigns?action=new" className="group flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 hover:border-blue-300 hover:shadow-sm transition-all">
           <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 transition-colors group-hover:bg-blue-100">
             <Plus className="h-5 w-5 text-blue-600" />

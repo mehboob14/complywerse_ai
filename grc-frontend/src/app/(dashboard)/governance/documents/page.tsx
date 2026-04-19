@@ -632,8 +632,7 @@ export default function GovernanceDocumentsPage() {
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-4">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${typeStyle.bgColor} text-gray-800`}>
-                            <TypeIcon className="h-3 w-3" />
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${typeStyle.bgColor} text-gray-800`}>
                             {typeStyle.label}
                           </span>
                         </td>
@@ -650,7 +649,7 @@ export default function GovernanceDocumentsPage() {
                           )}
                         </td>
                         <td className="whitespace-nowrap px-4 py-4">
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle.bgColor} text-gray-800`}>
                             {statusStyle.label}
                           </span>
                         </td>

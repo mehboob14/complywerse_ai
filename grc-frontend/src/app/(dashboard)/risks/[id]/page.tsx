@@ -43,34 +43,34 @@ interface RiskDetailData {
 }
 
 const RISK_CATEGORIES: Record<string, { label: string; color: string }> = {
-  strategic: { label: 'Strategic', color: 'bg-purple-900/50 text-purple-400 border-purple-700' },
-  operational: { label: 'Operational', color: 'bg-blue-900/50 text-blue-400 border-blue-700' },
-  financial: { label: 'Financial', color: 'bg-green-900/50 text-green-400 border-green-700' },
-  compliance: { label: 'Compliance', color: 'bg-yellow-900/50 text-yellow-400 border-yellow-700' },
-  technology: { label: 'Technology', color: 'bg-cyan-900/50 text-cyan-400 border-cyan-700' },
-  third_party: { label: 'Third-Party', color: 'bg-orange-900/50 text-orange-400 border-orange-700' },
+  strategic: { label: 'Strategic', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+  operational: { label: 'Operational', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+  financial: { label: 'Financial', color: 'bg-green-100 text-green-800 border-green-200' },
+  compliance: { label: 'Compliance', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+  technology: { label: 'Technology', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+  third_party: { label: 'Third-Party', color: 'bg-orange-100 text-orange-800 border-orange-200' },
 };
 
 const RISK_STATUSES: Record<string, { label: string; color: string }> = {
-  open: { label: 'Open', color: 'bg-red-900/50 text-red-400 border-red-700' },
-  in_treatment: { label: 'In Treatment', color: 'bg-yellow-900/50 text-yellow-400 border-yellow-700' },
-  mitigating: { label: 'Mitigating', color: 'bg-yellow-900/50 text-yellow-400 border-yellow-700' },
-  mitigated: { label: 'Mitigated', color: 'bg-green-900/50 text-green-400 border-green-700' },
-  accepted: { label: 'Accepted', color: 'bg-blue-900/50 text-blue-400 border-blue-700' },
-  closed: { label: 'Closed', color: 'bg-slate-100 text-slate-600 border-slate-300' },
+  open: { label: 'Open', color: 'bg-red-100 text-red-800 border-red-200' },
+  in_treatment: { label: 'In Treatment', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+  mitigating: { label: 'Mitigating', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+  mitigated: { label: 'Mitigated', color: 'bg-green-100 text-green-800 border-green-200' },
+  accepted: { label: 'Accepted', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+  closed: { label: 'Closed', color: 'bg-slate-100 text-slate-700 border-slate-200' },
 };
 
 const MITIGATION_EFFECTIVENESS = [
-  { value: 'full', label: 'Full', color: 'text-green-400' },
-  { value: 'partial', label: 'Partial', color: 'text-yellow-400' },
-  { value: 'minimal', label: 'Minimal', color: 'text-orange-400' },
-  { value: 'none', label: 'None', color: 'text-red-400' },
+  { value: 'full', label: 'Full', color: 'text-green-700' },
+  { value: 'partial', label: 'Partial', color: 'text-amber-700' },
+  { value: 'minimal', label: 'Minimal', color: 'text-orange-700' },
+  { value: 'none', label: 'None', color: 'text-red-700' },
 ];
 
 const IMPACT_LEVELS = [
-  { value: 'high', label: 'High', color: 'text-red-400' },
-  { value: 'medium', label: 'Medium', color: 'text-yellow-400' },
-  { value: 'low', label: 'Low', color: 'text-green-400' },
+  { value: 'high', label: 'High', color: 'text-red-700' },
+  { value: 'medium', label: 'Medium', color: 'text-amber-700' },
+  { value: 'low', label: 'Low', color: 'text-green-700' },
 ];
 
 type TabType = 'details' | 'treatment' | 'controls' | 'assets' | 'evidence' | 'governance';
@@ -235,10 +235,10 @@ export default function RiskDetailPage() {
 
   const getScoreColor = (score: number | null | undefined) => {
     if (!score) return 'text-slate-600';
-    if (score >= 20) return 'text-red-400';
-    if (score >= 12) return 'text-orange-400';
-    if (score >= 6) return 'text-yellow-400';
-    return 'text-green-400';
+    if (score >= 20) return 'text-red-700';
+    if (score >= 12) return 'text-orange-700';
+    if (score >= 6) return 'text-amber-700';
+    return 'text-green-700';
   };
 
   const getScoreBgColor = (score: number | null | undefined) => {
@@ -275,12 +275,12 @@ export default function RiskDetailPage() {
   const getTreatmentStatus = () => {
     if (!risk) return { label: 'Not Set', color: 'text-slate-600' };
     if (risk.treatment_plan && risk.status === 'mitigated') {
-      return { label: 'Completed', color: 'text-green-400' };
+      return { label: 'Completed', color: 'text-green-700' };
     }
     if (risk.treatment_plan) {
-      return { label: 'In Progress', color: 'text-yellow-400' };
+      return { label: 'In Progress', color: 'text-amber-700' };
     }
-    return { label: 'Not Started', color: 'text-red-400' };
+    return { label: 'Not Started', color: 'text-red-700' };
   };
 
   if (isLoading) {
@@ -357,7 +357,7 @@ export default function RiskDetailPage() {
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center gap-2 rounded-lg bg-red-900/50 px-4 py-2 text-red-400 hover:bg-red-900/80"
+            className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-red-700 hover:bg-red-100"
           >
             <Trash2 className="h-4 w-4" />
             Delete
@@ -454,9 +454,9 @@ export default function RiskDetailPage() {
         </div>
         {riskReduction !== null && (
           <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-white p-3">
-            <BarChart3 className="h-5 w-5 text-green-400" />
+            <BarChart3 className="h-5 w-5 text-green-700" />
             <span className="text-slate-700">Risk Reduction:</span>
-            <span className="text-xl font-bold text-green-400">{riskReduction}%</span>
+            <span className="text-xl font-bold text-green-700">{riskReduction}%</span>
           </div>
         )}
       </div>
@@ -787,7 +787,7 @@ function ControlsTab({
                 <button
                   onClick={() => onUnlinkControl(control.id)}
                   disabled={isUnlinking}
-                  className="rounded-lg p-2 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+                  className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -818,7 +818,7 @@ function ControlsTab({
                 <button
                   onClick={() => onUnlinkFrameworkControl(control.id)}
                   disabled={isUnlinking}
-                  className="rounded-lg p-2 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+                  className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -881,7 +881,7 @@ function AssetsTab({
               <button
                 onClick={() => onUnlinkAsset(asset.id)}
                 disabled={isUnlinking}
-                className="rounded-lg p-2 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+                className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -912,9 +912,9 @@ function EvidenceTab({
 }) {
   const getStatusColor = (status?: string) => {
     switch (status) {
-      case 'approved': return 'text-green-400 bg-green-900/30';
-      case 'pending': return 'text-yellow-400 bg-yellow-900/30';
-      case 'rejected': return 'text-red-400 bg-red-900/30';
+      case 'approved': return 'text-green-700 bg-green-100';
+      case 'pending': return 'text-amber-700 bg-amber-100';
+      case 'rejected': return 'text-red-700 bg-red-100';
       default: return 'text-slate-600 bg-slate-100';
     }
   };
@@ -951,7 +951,7 @@ function EvidenceTab({
               <button
                 onClick={() => onUnlinkEvidence(evidence.id)}
                 disabled={isUnlinking}
-                className="rounded-lg p-2 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+                className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -1017,7 +1017,7 @@ function GovernanceTab({
               <button
                 onClick={() => onUnlinkGovernance(objective.id)}
                 disabled={isUnlinking}
-                className="rounded-lg p-2 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+                className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

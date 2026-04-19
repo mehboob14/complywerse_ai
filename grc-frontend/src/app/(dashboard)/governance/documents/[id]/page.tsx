@@ -66,24 +66,24 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
 };
 
 const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  fully_compliant: { bg: 'bg-green-100', text: 'text-green-700', label: 'Fully Compliant' },
-  partially_compliant: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Partially Compliant' },
-  not_addressed: { bg: 'bg-red-100', text: 'text-red-700', label: 'Not Addressed' },
-  not_applicable: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Not Applicable' },
+  fully_compliant: { bg: 'bg-green-100', text: 'text-gray-800', label: 'Fully Compliant' },
+  partially_compliant: { bg: 'bg-blue-100', text: 'text-gray-800', label: 'Partially Compliant' },
+  not_addressed: { bg: 'bg-red-100', text: 'text-gray-800', label: 'Not Addressed' },
+  not_applicable: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Not Applicable' },
 };
 
 const RISK_SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  critical: { bg: 'bg-red-100', text: 'text-red-700', label: 'Critical' },
-  high: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'High' },
-  medium: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Medium' },
-  low: { bg: 'bg-green-100', text: 'text-green-700', label: 'Low' },
+  critical: { bg: 'bg-red-100', text: 'text-gray-800', label: 'Critical' },
+  high: { bg: 'bg-orange-100', text: 'text-gray-800', label: 'High' },
+  medium: { bg: 'bg-yellow-100', text: 'text-gray-800', label: 'Medium' },
+  low: { bg: 'bg-green-100', text: 'text-gray-800', label: 'Low' },
 };
 
 const REMEDIATION_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  open: { bg: 'bg-red-100', text: 'text-red-700', label: 'Open' },
-  in_progress: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'In Progress' },
-  closed: { bg: 'bg-green-100', text: 'text-green-700', label: 'Closed' },
-  accepted_risk: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Accepted Risk' },
+  open: { bg: 'bg-red-100', text: 'text-gray-800', label: 'Open' },
+  in_progress: { bg: 'bg-yellow-100', text: 'text-gray-800', label: 'In Progress' },
+  closed: { bg: 'bg-green-100', text: 'text-gray-800', label: 'Closed' },
+  accepted_risk: { bg: 'bg-purple-100', text: 'text-gray-800', label: 'Accepted Risk' },
 };
 
 const DOC_TYPE_STYLES: Record<string, { icon: any; color: string; bgColor: string; label: string }> = {
@@ -560,17 +560,14 @@ export default function PolicyDetailPage() {
           </button>
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <div className={`rounded-lg ${docType.bgColor} p-2`}>
-                <TypeIcon className={`h-5 w-5 ${docType.color}`} />
-              </div>
               <h1 className="text-lg font-semibold text-black">{document.title}</h1>
             </div>
             <div className="flex items-center gap-3 text-sm text-gray-600">
               {document.document_code && <span className="font-mono">{document.document_code}</span>}
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${docStatus.bg} ${docStatus.text}`}>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${docStatus.bg} text-gray-800`}>
                 {docStatus.label}
               </span>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${docType.bgColor} ${docType.color}`}>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${docType.bgColor} text-gray-800`}>
                 {docType.label}
               </span>
             </div>
@@ -665,50 +662,6 @@ export default function PolicyDetailPage() {
           </div>
         </div>
       )}
-
-      {/* Workflow Actions */}
-      <div className="flex items-center gap-3">
-        {document.status === 'draft' && (
-          <button
-            onClick={() => updateStatusMutation.mutate('pending_review')}
-            disabled={updateStatusMutation.isPending}
-            className="flex items-center gap-2 rounded-lg bg-yellow-600 px-4 py-2 text-sm font-medium text-black hover:bg-yellow-700 disabled:opacity-50 transition-colors"
-          >
-            {updateStatusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Submit for Review
-          </button>
-        )}
-        {document.status === 'pending_review' && (
-          <button
-            onClick={() => updateStatusMutation.mutate('approved')}
-            disabled={updateStatusMutation.isPending}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-black hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {updateStatusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-            Approve
-          </button>
-        )}
-        {document.status === 'approved' && (
-          <button
-            onClick={() => publishMutation.mutate()}
-            disabled={publishMutation.isPending}
-            className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-black hover:bg-green-700 disabled:opacity-50 transition-colors"
-          >
-            {publishMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            Publish
-          </button>
-        )}
-        {document.status === 'published' && (
-          <button
-            onClick={() => updateStatusMutation.mutate('archived')}
-            disabled={updateStatusMutation.isPending}
-            className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-black hover:bg-slate-500 disabled:opacity-50 transition-colors"
-          >
-            {updateStatusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
-            Archive
-          </button>
-        )}
-      </div>
 
       {/* Tab Navigation */}
       <div className="border-b border-gray-300">
@@ -895,7 +848,7 @@ export default function PolicyDetailPage() {
                         <SortHeader field="updated_at" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Updated</SortHeader>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-700">
+                    <tbody className="divide-y divide-gray-200">
                       {findings.map((finding: any) => {
                         const isExpanded = expandedRows.has(finding.id);
                         const isEditing = editingRow === finding.id;
@@ -1113,7 +1066,8 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
     queryKey: ['review-history', documentId],
     queryFn: async () => {
       const response = await governanceApi.getDocumentReviewHistory(documentId);
-      return response.data as any[];
+      const data = response.data as any;
+      return Array.isArray(data) ? data : (data?.items ?? []);
     },
     enabled: !!documentId,
   });
@@ -1452,19 +1406,25 @@ function MetadataRow({ label, value }: { label: string; value: string }) {
 }
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  security: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300' },
-  privacy: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-300' },
-  governance: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300' },
-  compliance: { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-300' },
-  operational: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300' },
-  risk_management: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-300' },
-  hr: { bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-pink-300' },
-  it: { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-300' },
-  financial: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300' },
-  legal: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300' },
-  environmental: { bg: 'bg-teal-100', text: 'text-teal-700', border: 'border-teal-300' },
-  quality: { bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-300' },
+  security: { bg: 'bg-blue-100', text: 'text-gray-800', border: 'border-blue-300' },
+  privacy: { bg: 'bg-purple-100', text: 'text-gray-800', border: 'border-purple-300' },
+  governance: { bg: 'bg-emerald-100', text: 'text-gray-800', border: 'border-emerald-300' },
+  compliance: { bg: 'bg-cyan-100', text: 'text-gray-800', border: 'border-cyan-300' },
+  operational: { bg: 'bg-orange-100', text: 'text-gray-800', border: 'border-orange-300' },
+  risk_management: { bg: 'bg-amber-100', text: 'text-gray-800', border: 'border-amber-300' },
+  hr: { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300' },
+  it: { bg: 'bg-indigo-100', text: 'text-gray-800', border: 'border-indigo-300' },
+  financial: { bg: 'bg-yellow-100', text: 'text-gray-800', border: 'border-yellow-300' },
+  legal: { bg: 'bg-slate-100', text: 'text-gray-800', border: 'border-slate-300' },
+  environmental: { bg: 'bg-teal-100', text: 'text-gray-800', border: 'border-teal-300' },
+  quality: { bg: 'bg-rose-100', text: 'text-gray-800', border: 'border-rose-300' },
 };
+
+const CATEGORY_ABBREVIATIONS: Record<string, string> = { hr: 'HR', it: 'IT' };
+function formatCategory(cat: string): string {
+  if (CATEGORY_ABBREVIATIONS[cat]) return CATEGORY_ABBREVIATIONS[cat];
+  return cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isParsing, documentId }: any) {
   const queryClient = useQueryClient();
@@ -1663,7 +1623,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                     className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
                   >
                     {Object.keys(CATEGORY_COLORS).map(c => (
-                      <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
+                      <option key={c} value={c}>{formatCategory(c)}</option>
                     ))}
                   </select>
                 </div>
@@ -1766,7 +1726,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
               const colors = CATEGORY_COLORS[cat] || { bg: 'bg-slate-500/20', text: 'text-gray-600', border: 'border-slate-500/30' };
               return (
                 <span key={cat} className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}>
-                  {cat.replace(/_/g, ' ')}: {grouped[cat].length}
+                  {formatCategory(cat)}: {grouped[cat].length}
                 </span>
               );
             })}
@@ -1846,7 +1806,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                   className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
                 >
                   {Object.keys(CATEGORY_COLORS).map(c => (
-                    <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
+                    <option key={c} value={c}>{formatCategory(c)}</option>
                   ))}
                 </select>
               </div>
@@ -2005,8 +1965,8 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-100/50 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${colors.bg} ${colors.text} capitalize`}>
-                  {cat.replace(/_/g, ' ')}
+                <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${colors.bg} ${colors.text}`}>
+                  {formatCategory(cat)}
                 </span>
                 <span className="text-sm text-gray-800">{catStmts.length} statement{catStmts.length !== 1 ? 's' : ''}</span>
               </div>
@@ -2014,7 +1974,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
             </button>
 
             {isExpanded && (
-              <div className="border-t border-gray-300 divide-y divide-slate-700/50">
+              <div className="border-t border-gray-300 divide-y divide-gray-200">
                 {catStmts.map((stmt: any, idx: number) => {
                   const isEditingThis = editingStmtId === stmt.id;
                   const isDeleting = deleteConfirm === stmt.id;
@@ -2050,7 +2010,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                                 className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
                               >
                                 {Object.keys(CATEGORY_COLORS).map(c => (
-                                  <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
+                                  <option key={c} value={c}>{formatCategory(c)}</option>
                                 ))}
                               </select>
                             </div>
@@ -2420,70 +2380,70 @@ function GapFindingRow({
 }: any) {
   return (
     <>
-      <tr className="bg-white/50 hover:bg-white transition-colors cursor-pointer" onClick={onToggleExpand}>
-        <td className="px-2 py-3">
-          {isExpanded ? <ChevronUp className="h-4 w-4 text-gray-600" /> : <ChevronDown className="h-4 w-4 text-gray-600" />}
+      <tr className="bg-white hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-200" onClick={onToggleExpand}>
+        <td className="px-2 py-2">
+          {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-gray-500" /> : <ChevronDown className="h-3.5 w-3.5 text-gray-500" />}
         </td>
-        <td className="px-3 py-3">
-          <div className="text-sm text-gray-800 font-mono">{finding.clause_reference || '-'}</div>
+        <td className="px-3 py-2">
+          <div className="text-xs text-gray-800 font-mono">{finding.clause_reference || '-'}</div>
           {finding.clause_title && (
-            <div className="text-xs text-gray-600 mt-0.5 max-w-[200px] line-clamp-2">{finding.clause_title}</div>
+            <div className="text-xs text-gray-500 mt-0.5 max-w-[180px] truncate">{finding.clause_title}</div>
           )}
         </td>
-        <td className="px-3 py-3">
-          <div className="text-sm text-gray-800">{finding.policy_section_reference || '-'}</div>
-          {finding.policy_section_text && (
-            <div className="text-xs text-gray-600 mt-0.5 max-w-[220px] line-clamp-2">{finding.policy_section_text}</div>
-          )}
+        <td className="px-3 py-2">
+          <div className="text-xs text-gray-800 max-w-[140px] truncate">{finding.policy_section_reference || '-'}</div>
         </td>
-        <td className="px-3 py-3">
+        <td className="px-3 py-2">
           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${cs.bg} ${cs.text}`}>
             {cs.label}
           </span>
+          {finding.is_overridden && (
+            <span className="ml-1 text-xs text-gray-500" title="Overridden">✓</span>
+          )}
         </td>
-        <td className="px-3 py-3 text-sm text-gray-800 max-w-[180px]">{truncateText(finding.gap_description)}</td>
-        <td className="px-3 py-3">
+        <td className="px-3 py-2 text-xs text-gray-800 max-w-[160px] truncate">{finding.gap_description || '-'}</td>
+        <td className="px-3 py-2">
           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${rs.bg} ${rs.text}`}>
             {rs.label}
           </span>
         </td>
-        <td className="px-3 py-3 text-sm text-gray-800 max-w-[160px]">{truncateText(finding.remediation_recommendation, 60)}</td>
-        <td className="px-3 py-3 text-sm">
+        <td className="px-3 py-2 text-xs text-gray-800 max-w-[140px] truncate">{finding.remediation_recommendation || '-'}</td>
+        <td className="px-3 py-2 text-xs">
           {finding.assigned_owner_name || finding.assigned_owner?.display_name ? (
             <span className="text-gray-800">{finding.assigned_owner_name || finding.assigned_owner?.display_name}</span>
           ) : (
-            <span className="text-gray-700 italic">Unassigned</span>
+            <span className="text-gray-400 italic">Unassigned</span>
           )}
         </td>
-        <td className="px-3 py-3 text-sm text-gray-800">{formatDate(finding.target_remediation_date)}</td>
-        <td className="px-3 py-3">
+        <td className="px-3 py-2 text-xs text-gray-800">{formatDate(finding.target_remediation_date)}</td>
+        <td className="px-3 py-2">
           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${rms.bg} ${rms.text}`}>
             {rms.label}
           </span>
         </td>
-        <td className="px-3 py-3">
+        <td className="px-3 py-2">
           <span className="inline-flex items-center justify-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-800">
             {finding.evidence_count || finding.evidence?.length || 0}
           </span>
         </td>
-        <td className="px-3 py-3 text-sm text-gray-600">{formatDate(finding.updated_at)}</td>
+        <td className="px-3 py-2 text-xs text-gray-500">{formatDate(finding.updated_at)}</td>
       </tr>
 
       {isExpanded && (
-        <tr className="bg-white/50">
+        <tr className="bg-gray-50 border-b border-gray-200">
           <td colSpan={12} className="px-6 py-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Details Section */}
               <div className="space-y-4">
                 {finding.clause_requirement_text && (
-                  <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
-                    <label className="text-xs font-medium uppercase tracking-wider text-blue-400 block mb-1">Framework Clause Requirement</label>
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <label className="text-xs font-medium uppercase tracking-wider text-blue-700 block mb-1">Framework Clause Requirement</label>
                     <p className="text-sm text-gray-800">{finding.clause_requirement_text}</p>
                   </div>
                 )}
                 {finding.policy_section_text && (
-                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
-                    <label className="text-xs font-medium uppercase tracking-wider text-emerald-400 block mb-1">Matching Policy Text</label>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <label className="text-xs font-medium uppercase tracking-wider text-emerald-700 block mb-1">Matching Policy Text</label>
                     <p className="text-sm text-gray-800">{finding.policy_section_text}</p>
                   </div>
                 )}
@@ -2494,8 +2454,8 @@ function GapFindingRow({
                   </div>
                 )}
                 {finding.ai_reasoning && (
-                  <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 p-3">
-                    <label className="text-xs font-medium uppercase tracking-wider text-purple-400 block mb-1">AI Reasoning</label>
+                  <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                    <label className="text-xs font-medium uppercase tracking-wider text-purple-700 block mb-1">AI Reasoning</label>
                     <p className="text-sm text-gray-800">{finding.ai_reasoning}</p>
                   </div>
                 )}
@@ -2503,7 +2463,7 @@ function GapFindingRow({
                   <div>
                     <label className="text-xs font-medium uppercase tracking-wider text-gray-600 block mb-1">Confidence Score</label>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 flex-1 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="h-2 flex-1 rounded-full bg-gray-200 overflow-hidden">
                         <div className="h-full rounded-full bg-primary-500" style={{ width: `${finding.confidence_score * 100}%` }} />
                       </div>
                       <span className="text-sm text-gray-800">{Math.round(finding.confidence_score * 100)}%</span>
@@ -2531,11 +2491,11 @@ function GapFindingRow({
                       return (
                         <div key={impact} className="flex items-center gap-1.5">
                           {isActive ? (
-                            <Check className="h-4 w-4 text-green-400" />
+                            <Check className="h-4 w-4 text-green-600" />
                           ) : (
-                            <Minus className="h-4 w-4 text-slate-600" />
+                            <Minus className="h-4 w-4 text-gray-400" />
                           )}
-                          <span className={`text-sm capitalize ${isActive ? 'text-gray-800' : 'text-gray-700'}`}>{impact}</span>
+                          <span className={`text-sm capitalize ${isActive ? 'text-gray-800' : 'text-gray-500'}`}>{impact}</span>
                         </div>
                       );
                     })}
@@ -2549,34 +2509,34 @@ function GapFindingRow({
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'assign-owner' ? null : 'assign-owner'); }}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-100"
+                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-200"
                   >
                     <User className="h-3.5 w-3.5" /> Assign Owner
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'set-date' ? null : 'set-date'); }}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-100"
+                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-200"
                   >
                     <Calendar className="h-3.5 w-3.5" /> Set Target Date
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'update-status' ? null : 'update-status'); }}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-100"
+                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-200"
                   >
                     <Edit3 className="h-3.5 w-3.5" /> Update Status
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'override' ? null : 'override'); }}
-                    className="flex items-center gap-1.5 rounded-lg border border-purple-500/50 bg-purple-500/10 px-3 py-1.5 text-sm text-purple-400 hover:bg-purple-500/20"
+                    className="flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm text-gray-800 hover:bg-purple-100"
                   >
-                    <ShieldCheck className="h-3.5 w-3.5" /> Override
+                    <ShieldCheck className="h-3.5 w-3.5 text-purple-600" /> Override
                   </button>
                   {finding.compliance_status !== 'fully_compliant' && finding.compliance_status !== 'not_applicable' && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'accept-risk' ? null : 'accept-risk'); }}
-                      className="flex items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-500/20"
+                      className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-gray-800 hover:bg-amber-100"
                     >
-                      <ShieldAlert className="h-3.5 w-3.5" /> Accept Risk
+                      <ShieldAlert className="h-3.5 w-3.5 text-amber-600" /> Accept Risk
                     </button>
                   )}
                 </div>
@@ -2598,7 +2558,7 @@ function GapFindingRow({
                       ))}
                     </select>
                     <button
-                      onClick={() => onUpdateFinding(finding.id, { assigned_owner_id: assignOwnerForm })}
+                      onClick={(e) => { e.stopPropagation(); onUpdateFinding(finding.id, { assigned_owner_id: assignOwnerForm }); }}
                       disabled={!assignOwnerForm || isPending}
                       className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-black hover:bg-primary-700 disabled:opacity-50"
                     >
@@ -2617,7 +2577,7 @@ function GapFindingRow({
                       className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
                     />
                     <button
-                      onClick={() => onUpdateFinding(finding.id, { target_remediation_date: targetDateForm })}
+                      onClick={(e) => { e.stopPropagation(); onUpdateFinding(finding.id, { target_remediation_date: targetDateForm }); }}
                       disabled={!targetDateForm || isPending}
                       className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-black hover:bg-primary-700 disabled:opacity-50"
                     >
@@ -2640,7 +2600,7 @@ function GapFindingRow({
                       ))}
                     </select>
                     <button
-                      onClick={() => onUpdateFinding(finding.id, { remediation_status: statusUpdateForm })}
+                      onClick={(e) => { e.stopPropagation(); onUpdateFinding(finding.id, { remediation_status: statusUpdateForm }); }}
                       disabled={!statusUpdateForm || isPending}
                       className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-black hover:bg-primary-700 disabled:opacity-50"
                     >
@@ -2650,12 +2610,12 @@ function GapFindingRow({
                 )}
 
                 {isEditing && editAction === 'override' && (
-                  <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
-                    <label className="text-sm font-medium text-purple-300">Override Compliance Status</label>
+                  <div className="rounded-lg border border-purple-300 bg-purple-50 p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+                    <label className="text-sm font-medium text-gray-800">Override Compliance Status</label>
                     <select
                       value={overrideForm.status}
                       onChange={(e) => setOverrideForm((prev: any) => ({ ...prev, status: e.target.value }))}
-                      className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
                     >
                       {Object.entries(COMPLIANCE_STATUS_STYLES).map(([val, s]) => (
                         <option key={val} value={val}>{s.label}</option>
@@ -2666,12 +2626,12 @@ function GapFindingRow({
                       onChange={(e) => setOverrideForm((prev: any) => ({ ...prev, justification: e.target.value }))}
                       placeholder="Justification (required)"
                       rows={3}
-                      className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none resize-none"
                     />
                     <button
-                      onClick={() => onOverride(finding.id, { override_status: overrideForm.status, override_justification: overrideForm.justification })}
-                      disabled={!overrideForm.justification || isPending}
-                      className="rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-black hover:bg-purple-700 disabled:opacity-50"
+                      onClick={(e) => { e.stopPropagation(); onOverride(finding.id, { override_status: overrideForm.status, override_justification: overrideForm.justification }); }}
+                      disabled={!overrideForm.justification.trim() || isPending}
+                      className="rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
                     >
                       {isPending ? 'Applying...' : 'Apply Override'}
                     </button>
@@ -2679,14 +2639,14 @@ function GapFindingRow({
                 )}
 
                 {isEditing && editAction === 'accept-risk' && (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
-                    <label className="text-sm font-medium text-amber-300">Accept Risk</label>
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+                    <label className="text-sm font-medium text-gray-800">Accept Risk</label>
                     <textarea
                       value={acceptRiskForm.justification}
                       onChange={(e) => setAcceptRiskForm((prev: any) => ({ ...prev, justification: e.target.value }))}
                       placeholder="Justification (required)"
                       rows={3}
-                      className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none resize-none"
                     />
                     <div>
                       <label className="text-xs text-gray-600 block mb-1">Expiry Date (optional)</label>
@@ -2694,17 +2654,18 @@ function GapFindingRow({
                         type="date"
                         value={acceptRiskForm.expiry_date}
                         onChange={(e) => setAcceptRiskForm((prev: any) => ({ ...prev, expiry_date: e.target.value }))}
-                        className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
                       />
                     </div>
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         const data: any = { justification: acceptRiskForm.justification };
                         if (acceptRiskForm.expiry_date) data.expiry_date = acceptRiskForm.expiry_date;
                         onAcceptRisk(finding.id, data);
                       }}
-                      disabled={!acceptRiskForm.justification || isPending}
-                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-black hover:bg-amber-700 disabled:opacity-50"
+                      disabled={!acceptRiskForm.justification.trim() || isPending}
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
                     >
                       {isPending ? 'Accepting...' : 'Accept Risk'}
                     </button>

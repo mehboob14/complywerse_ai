@@ -47,27 +47,28 @@ interface Campaign {
   name: string;
   description?: string;
   status: 'draft' | 'active' | 'closed';
-  attestation_type: string;
+  campaign_type: string;
   start_date: string;
-  end_date: string;
+  due_date: string;
   total_requests: number;
   completed_requests: number;
-  progress: number;
+  completion_rate: number;
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  pending: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
-  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
-  draft: { bg: 'bg-slate-500/20', text: 'text-gray-600', icon: FileCheck },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: Play },
-  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle },
+  pending: { bg: 'bg-amber-50', text: 'text-amber-700', icon: Clock },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: CheckCircle },
+  overdue: { bg: 'bg-rose-50', text: 'text-rose-700', icon: AlertCircle },
+  draft: { bg: 'bg-gray-100', text: 'text-gray-600', icon: FileCheck },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: Play },
+  closed: { bg: 'bg-blue-50', text: 'text-blue-700', icon: CheckCircle },
 };
 
 export default function AttestationsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedAttestations, setSelectedAttestations] = useState<number[]>([]);
+  const [expandedAttestation, setExpandedAttestation] = useState<number | null>(null);
   const [showUnlinkedOnly, setShowUnlinkedOnly] = useState(false);
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
@@ -113,9 +114,9 @@ export default function AttestationsPage() {
         return (response.data as Campaign[]).slice(0, 5);
       } catch {
         return [
-          { id: 1, name: 'Q4 2025 Policy Attestation', description: 'Quarterly policy acknowledgment', status: 'active', attestation_type: 'policy_acknowledgment', start_date: '2025-01-01', end_date: '2025-01-31', total_requests: 150, completed_requests: 108, progress: 72 },
-          { id: 2, name: 'Annual Code of Conduct', description: 'Annual compliance certification', status: 'active', attestation_type: 'compliance_certification', start_date: '2025-01-01', end_date: '2025-01-31', total_requests: 200, completed_requests: 156, progress: 78 },
-          { id: 3, name: 'Q3 2025 SOX Attestation', description: 'SOX compliance attestation', status: 'closed', attestation_type: 'sarbanes_oxley', start_date: '2024-10-01', end_date: '2024-10-31', total_requests: 50, completed_requests: 50, progress: 100 },
+          { id: 1, name: 'Q4 2025 Policy Attestation', description: 'Quarterly policy acknowledgment', status: 'active', campaign_type: 'policy_signoff', start_date: '2025-01-01', due_date: '2025-01-31', total_requests: 150, completed_requests: 108, completion_rate: 72 },
+          { id: 2, name: 'Annual Code of Conduct', description: 'Annual compliance certification', status: 'active', campaign_type: 'annual_certification', start_date: '2025-01-01', due_date: '2025-01-31', total_requests: 200, completed_requests: 156, completion_rate: 78 },
+          { id: 3, name: 'Q3 2025 SOX Attestation', description: 'SOX compliance attestation', status: 'closed', campaign_type: 'sox_302', start_date: '2024-10-01', due_date: '2024-10-31', total_requests: 50, completed_requests: 50, completion_rate: 100 },
         ] as Campaign[];
       }
     },
@@ -306,40 +307,48 @@ export default function AttestationsPage() {
             </h3>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {pendingAttestations.map((attestation) => {
               const statusStyle = STATUS_COLORS[attestation.status] || STATUS_COLORS.pending;
               const StatusIcon = statusStyle.icon;
               const isOverdue = attestation.status === 'overdue';
+              const isExpanded = expandedAttestation === attestation.id;
 
               return (
-                <div key={attestation.id} className={`px-3 py-2 rounded border ${isOverdue ? 'bg-rose-50 border-rose-200' : 'bg-white border-gray-200'}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h4 className="text-black font-medium">{attestation.campaign_name}</h4>
-                        <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
-                          <StatusIcon className="h-3 w-3" />
-                          {attestation.status}
-                        </span>
-                      </div>
-                      <p className="text-gray-500 text-xs line-clamp-1 mb-1">{attestation.attestation_text}</p>
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <span className="flex items-center gap-1.5">
-                          <Calendar className="h-4 w-4" />
-                          Due: {new Date(attestation.due_date).toLocaleDateString()}
-                        </span>
-                        <span className="capitalize">{attestation.attestation_type.replace('_', ' ')}</span>
+                <div key={attestation.id} className={`rounded border transition-all ${isOverdue ? 'border-rose-200 bg-rose-50' : 'border-gray-200 bg-white'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedAttestation(isExpanded ? null : attestation.id)}
+                    className="w-full px-3 py-2 flex items-center justify-between text-left"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <h4 className="text-black font-medium text-sm truncate">{attestation.campaign_name}</h4>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 flex-shrink-0 ${statusStyle.bg} ${statusStyle.text}`}>
+                        <StatusIcon className="h-3 w-3" />
+                        {attestation.status}
+                      </span>
+                      <span className="text-xs text-gray-400 flex-shrink-0 hidden sm:inline-flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        Due: {new Date(attestation.due_date).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-400 ml-2">{isExpanded ? '▲' : '▼'}</span>
+                  </button>
+                  {isExpanded && (
+                    <div className="px-3 pb-3 border-t border-gray-100 mt-1 pt-2">
+                      <p className="text-gray-500 text-xs mb-2">{attestation.attestation_text}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400 capitalize">{attestation.attestation_type?.replace(/_/g, ' ')}</span>
+                        <Link
+                          href={`/governance/attestations/complete/${attestation.id}`}
+                          className="btn-primary text-xs py-1 px-3 flex items-center gap-1.5"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View
+                        </Link>
                       </div>
                     </div>
-                    <Link
-                      href={`/governance/attestations/complete/${attestation.id}`}
-                      className="btn-primary flex items-center gap-2 ml-4"
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      Complete
-                    </Link>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -359,7 +368,7 @@ export default function AttestationsPage() {
                 onClick={() => setShowUnlinkedOnly(!showUnlinkedOnly)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                   showUnlinkedOnly 
-                    ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30' 
+                    ? 'bg-blue-50 text-blue-600 border border-blue-200' 
                     : 'bg-gray-100 text-gray-800 border border-gray-300 hover:bg-gray-100'
                 }`}
               >
@@ -371,8 +380,8 @@ export default function AttestationsPage() {
           </div>
 
           {selectedCompletedIds.length > 0 && (
-            <div className="mb-4 p-3 bg-primary-500/10 border border-primary-500/30 rounded-lg flex items-center justify-between">
-              <span className="text-sm text-primary-300">
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+              <span className="text-sm text-blue-700">
                 {selectedCompletedIds.length} attestation(s) selected
               </span>
               <div className="flex items-center gap-2">
@@ -427,12 +436,12 @@ export default function AttestationsPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-1">
                         <h4 className="text-black font-medium">{attestation.campaign_name}</h4>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 inline-flex items-center gap-1">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1">
                           <CheckCircle className="h-3 w-3" />
                           completed
                         </span>
                         {isLinked && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 inline-flex items-center gap-1">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 inline-flex items-center gap-1">
                             <Link2 className="h-3 w-3" />
                             linked to evidence
                           </span>
@@ -510,7 +519,7 @@ export default function AttestationsPage() {
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="text-gray-800 capitalize text-sm">{campaign.attestation_type.replace('_', ' ')}</span>
+                      <span className="text-gray-800 capitalize text-sm">{campaign.campaign_type?.replace(/_/g, ' ') ?? ''}</span>
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
@@ -519,17 +528,17 @@ export default function AttestationsPage() {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">
-                      {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
+                      {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.due_date).toLocaleDateString()}
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full ${campaign.progress === 100 ? 'bg-emerald-500' : 'bg-primary-500'}`}
-                            style={{ width: `${campaign.progress}%` }}
+                            className={`h-full rounded-full ${campaign.completion_rate === 100 ? 'bg-emerald-500' : 'bg-primary-500'}`}
+                            style={{ width: `${campaign.completion_rate}%` }}
                           />
                         </div>
-                        <span className="text-sm text-gray-600">{campaign.progress}%</span>
+                        <span className="text-sm text-gray-600">{campaign.completion_rate}%</span>
                       </div>
                     </td>
                     <td className="py-3 px-4">

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { 
-  Send, 
-  Loader2, 
-  MessageSquare, 
+import {
+  Send,
+  Loader2,
+  MessageSquare,
   Sparkles,
   FileText,
   Shield,
@@ -12,12 +12,15 @@ import {
   AlertTriangle,
   Bot,
   User,
-  RefreshCw,
   Trash2,
   Plus,
   ChevronDown,
   ChevronUp,
-  Database
+  Database,
+  Paperclip,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
@@ -47,54 +50,115 @@ interface Message {
   originalQuestion?: string;
 }
 
+interface UploadedChatFile {
+  id: string;
+  filename: string;
+  size: number;
+  content_type?: string;
+  uploaded_at?: string;
+}
+
 interface Conversation {
   id: string;
   title: string;
   messages: Message[];
   createdAt: Date;
+  attachments?: UploadedChatFile[];
 }
+
+const CONVERSATION_STORAGE_KEY = 'complychat.conversations.v2';
+const ACTIVE_CHAT_STORAGE_KEY = 'complychat.activeConversation.v2';
+
+const createConversation = (): Conversation => ({
+  id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  title: 'New Conversation',
+  messages: [],
+  createdAt: new Date(),
+  attachments: [],
+});
+
+const loadStoredConversations = (): Conversation[] => {
+  if (typeof window === 'undefined') {
+    return [createConversation()];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(CONVERSATION_STORAGE_KEY);
+    if (!raw) {
+      return [createConversation()];
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return [createConversation()];
+    }
+
+    return parsed.map((conversation: Partial<Conversation> & { messages?: Array<Partial<Message>> }) => ({
+      id: conversation.id || createConversation().id,
+      title: conversation.title || 'New Conversation',
+      createdAt: new Date(conversation.createdAt || Date.now()),
+      attachments: Array.isArray(conversation.attachments) ? conversation.attachments : [],
+      messages: Array.isArray(conversation.messages)
+        ? conversation.messages.map((message) => ({
+            id: message.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            role: message.role === 'assistant' ? 'assistant' : 'user',
+            content: message.content || '',
+            timestamp: new Date(message.timestamp || Date.now()),
+            isLoading: Boolean(message.isLoading),
+            sources: message.sources as Source[] | undefined,
+            hasMore: message.hasMore,
+            totalCount: message.totalCount,
+            currentOffset: message.currentOffset,
+            originalQuestion: message.originalQuestion,
+          }))
+        : [],
+    }));
+  } catch (error) {
+    console.error('Failed to load stored conversations:', error);
+    return [createConversation()];
+  }
+};
 
 const SUGGESTED_PROMPTS = [
   {
     icon: Shield,
-    title: 'Audit Universe',
-    prompt: 'Show the audit universe and how many auditable entities are in scope',
+    title: 'Framework Progress',
+    prompt: 'Show framework progress overview and any active compliance journeys',
   },
   {
     icon: FileText,
-    title: 'Audit Findings',
-    prompt: 'List open audit findings by severity and engagement',
+    title: 'Evidence Gaps',
+    prompt: 'List controls with missing or weak evidence that need attention',
   },
   {
     icon: BarChart3,
-    title: 'Audit Capacity',
-    prompt: 'Show auditor utilization and capacity allocation for this quarter',
+    title: 'Risk Summary',
+    prompt: 'Show the highest priority risks and their current treatment status',
   },
   {
     icon: AlertTriangle,
-    title: 'QAIP Reviews',
-    prompt: 'What QAIP reviews are pending and their current status?',
+    title: 'Open Vulnerabilities',
+    prompt: 'What critical vulnerabilities or remediation actions are still open?',
   },
 ];
 
 export default function ComplyChatPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([
-    {
-      id: '1',
-      title: 'New Conversation',
-      messages: [],
-      createdAt: new Date(),
-    }
-  ]);
-  const [activeConversationId, setActiveConversationId] = useState('1');
+  const [conversations, setConversations] = useState<Conversation[]>(() => loadStoredConversations());
+  const [activeConversationId, setActiveConversationId] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return window.localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY) || '';
+  });
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState<string | null>(null);
   const [showSources, setShowSources] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const activeConversation = conversations.find(c => c.id === activeConversationId);
+  const activeConversation = conversations.find(c => c.id === activeConversationId) || conversations[0];
   const messages = useMemo(() => activeConversation?.messages || [], [activeConversation]);
 
   const scrollToBottom = () => {
@@ -112,28 +176,104 @@ export default function ComplyChatPage() {
     }
   }, [inputMessage]);
 
+  useEffect(() => {
+    if (!activeConversationId && conversations.length > 0) {
+      setActiveConversationId(conversations[0].id);
+      return;
+    }
+
+    if (activeConversationId && !conversations.some((conversation) => conversation.id === activeConversationId) && conversations.length > 0) {
+      setActiveConversationId(conversations[0].id);
+    }
+  }, [activeConversationId, conversations]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || conversations.length === 0) return;
+    window.localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(conversations));
+    if (activeConversationId) {
+      window.localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, activeConversationId);
+    }
+  }, [conversations, activeConversationId]);
+
+  useEffect(() => {
+    setSelectedFiles([]);
+  }, [activeConversationId]);
+
   const createNewConversation = () => {
-    const newConv: Conversation = {
-      id: Date.now().toString(),
-      title: 'New Conversation',
-      messages: [],
-      createdAt: new Date(),
-    };
-    setConversations([...conversations, newConv]);
-    setActiveConversationId(newConv.id);
+    const newConversation = createConversation();
+    setConversations((prev) => [...prev, newConversation]);
+    setActiveConversationId(newConversation.id);
+    setInputMessage('');
+    setShowSources(null);
   };
 
-  const deleteConversation = (id: string) => {
-    const filtered = conversations.filter(c => c.id !== id);
-    setConversations(filtered.length > 0 ? filtered : [{
-      id: Date.now().toString(),
-      title: 'New Conversation',
-      messages: [],
-      createdAt: new Date(),
-    }]);
-    if (activeConversationId === id && filtered.length > 0) {
-      setActiveConversationId(filtered[0].id);
+  const deleteConversation = async (id: string) => {
+    try {
+      await fetch(`/api/ai/complychat/history/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+        },
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.warn('Failed to clear server-side conversation history:', error);
     }
+
+    const filtered = conversations.filter((conversation) => conversation.id !== id);
+    const nextConversations = filtered.length > 0 ? filtered : [createConversation()];
+    setConversations(nextConversations);
+    if (activeConversationId === id) {
+      setActiveConversationId(nextConversations[0].id);
+    }
+  };
+
+  const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = Array.from(event.target.files || []);
+    if (newFiles.length === 0) return;
+
+    setSelectedFiles((prev) => [...prev, ...newFiles]);
+    event.target.value = '';
+  };
+
+  const removePendingFile = (indexToRemove: number) => {
+    setSelectedFiles((prev) => prev.filter((_, index) => index !== indexToRemove));
+  };
+
+  const uploadFilesForConversation = async (conversationId: string, filesToUpload: File[]) => {
+    if (filesToUpload.length === 0) return [] as UploadedChatFile[];
+
+    const formData = new FormData();
+    formData.append('session_id', conversationId);
+    filesToUpload.forEach((file) => formData.append('files', file));
+
+    const response = await fetch('/api/ai/complychat/upload', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+      },
+      credentials: 'include',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Upload failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const uploadedFiles = Array.isArray(data.uploaded_files) ? (data.uploaded_files as UploadedChatFile[]) : [];
+
+    setConversations((prev) => prev.map((conversation) => {
+      if (conversation.id !== conversationId) return conversation;
+      const existingAttachments = conversation.attachments || [];
+      return {
+        ...conversation,
+        attachments: [...existingAttachments, ...uploadedFiles],
+      };
+    }));
+
+    setSelectedFiles([]);
+    return uploadedFiles;
   };
 
   const sendMessage = async (
@@ -142,58 +282,79 @@ export default function ComplyChatPage() {
     messageId?: string,
     questionOverride?: string
   ) => {
-    const questionText = questionOverride !== undefined ? questionOverride : content;
-    if (!questionText.trim() || isLoading) return;
+    const currentConversationId = activeConversationId || activeConversation?.id || '';
+    const currentConversation = conversations.find((conversation) => conversation.id === currentConversationId);
+    const isLoadMoreRequest = messageId !== undefined;
+    const baseQuestion = questionOverride !== undefined ? questionOverride : content;
 
-    // If this is a Load More request
-    if (messageId !== undefined) {
-      setLoadingMore(messageId);
-    } else {
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: questionText.trim(),
-        timestamp: new Date(),
-      };
-
-      // Update conversation with user message
-      setConversations(prev => prev.map(conv => {
-        if (conv.id === activeConversationId) {
-          const updatedMessages = [...conv.messages, userMessage];
-          return {
-            ...conv,
-            messages: updatedMessages,
-            title: conv.messages.length === 0 ? questionText.trim().slice(0, 50) : conv.title,
-          };
-        }
-        return conv;
-      }));
-
-      setInputMessage('');
-      setIsLoading(true);
-
-      // Add loading message
-      const loadingMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '',
-        timestamp: new Date(),
-        isLoading: true,
-      };
-
-      setConversations(prev => prev.map(conv => {
-        if (conv.id === activeConversationId) {
-          return { ...conv, messages: [...conv.messages, loadingMessage] };
-        }
-        return conv;
-      }));
+    let questionText = baseQuestion.trim();
+    if (!questionText && !isLoadMoreRequest && selectedFiles.length > 0) {
+      questionText = 'Please analyze the uploaded files and summarize the key GRC-relevant information.';
     }
 
+    if ((!questionText && selectedFiles.length === 0) || !currentConversationId || isLoading) return;
+
+    const historyPayload = (currentConversation?.messages || [])
+      .filter((message) => !message.isLoading)
+      .slice(-10)
+      .map((message) => ({ role: message.role, content: message.content }));
+
     try {
+      let uploadedFiles: UploadedChatFile[] = [];
+
+      if (isLoadMoreRequest) {
+        setLoadingMore(messageId);
+      } else {
+        if (selectedFiles.length > 0) {
+          uploadedFiles = await uploadFilesForConversation(currentConversationId, selectedFiles);
+        }
+
+        const visibleQuestion = uploadedFiles.length > 0
+          ? `Uploaded files: ${uploadedFiles.map((file) => file.filename).join(', ')}\n\n${questionText}`
+          : questionText;
+
+        const userMessage: Message = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: visibleQuestion,
+          timestamp: new Date(),
+        };
+
+        setConversations((prev) => prev.map((conversation) => {
+          if (conversation.id === currentConversationId) {
+            const updatedMessages = [...conversation.messages, userMessage];
+            return {
+              ...conversation,
+              messages: updatedMessages,
+              title: conversation.messages.length === 0 ? questionText.slice(0, 50) : conversation.title,
+            };
+          }
+          return conversation;
+        }));
+
+        setInputMessage('');
+        setIsLoading(true);
+
+        const loadingMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          isLoading: true,
+        };
+
+        setConversations((prev) => prev.map((conversation) => {
+          if (conversation.id === currentConversationId) {
+            return { ...conversation, messages: [...conversation.messages, loadingMessage] };
+          }
+          return conversation;
+        }));
+      }
+
       // Call actual backend API
       const response = await fetch('/api/ai/complychat/ask', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -203,9 +364,11 @@ export default function ComplyChatPage() {
         credentials: 'include',
         cache: 'no-store',
         body: JSON.stringify({
-          message: questionText.trim(),
+          message: questionText,
           framework: null,
           include_sources: true,
+          session_id: currentConversationId,
+          history: historyPayload,
           limit: 10,
           offset: offset,
         }),
@@ -220,7 +383,7 @@ export default function ComplyChatPage() {
       if (messageId !== undefined) {
         // Append to existing message (Load More)
         setConversations(prev => prev.map(conv => {
-          if (conv.id === activeConversationId) {
+          if (conv.id === currentConversationId) {
             return {
               ...conv,
               messages: conv.messages.map(msg => {
@@ -255,7 +418,7 @@ export default function ComplyChatPage() {
         };
 
         setConversations(prev => prev.map(conv => {
-          if (conv.id === activeConversationId) {
+          if (conv.id === currentConversationId) {
             const filtered = conv.messages.filter(m => !m.isLoading);
             return { ...conv, messages: [...filtered, aiResponse] };
           }
@@ -275,7 +438,7 @@ export default function ComplyChatPage() {
       };
 
       setConversations(prev => prev.map(conv => {
-        if (conv.id === activeConversationId) {
+        if (conv.id === currentConversationId) {
           const filtered = conv.messages.filter(m => !m.isLoading);
           return { ...conv, messages: [...filtered, errorResponse] };
         }
@@ -307,47 +470,71 @@ export default function ComplyChatPage() {
   return (
     <div className="flex h-[calc(100vh-4.75rem)] gap-3">
       {/* Conversations Sidebar */}
-      <div className="hidden lg:flex lg:w-56 flex-col gap-2.5">
+      <div
+        className={clsx(
+          'hidden lg:flex flex-col gap-2.5 transition-all duration-200',
+          isSidebarCollapsed ? 'lg:w-16' : 'lg:w-56'
+        )}
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-black">Conversations</h2>
-          <button
-            onClick={createNewConversation}
-            className="p-1.5 rounded-lg text-black hover:text-black hover:bg-white transition-colors"
-            title="New conversation"
-          >
-            <Plus size={16} />
-          </button>
+          {!isSidebarCollapsed && <h2 className="text-sm font-semibold text-black">Conversations</h2>}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+              className="p-1.5 rounded-lg text-black hover:bg-white transition-colors"
+              title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            </button>
+            <button
+              onClick={createNewConversation}
+              className="p-1.5 rounded-lg text-black hover:text-black hover:bg-white transition-colors"
+              title="New conversation"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto space-y-1 scrollbar-thin">
           {conversations.map((conv) => (
             <button
               key={conv.id}
               onClick={() => setActiveConversationId(conv.id)}
+              title={conv.title}
               className={clsx(
                 'w-full text-left px-3 py-2.5 rounded-lg transition-all group',
                 'hover:bg-white/80',
-                activeConversationId === conv.id
+                activeConversation?.id === conv.id
                   ? 'bg-primary-600/15 border-l-2 border-primary-500 text-black'
                   : 'text-black border-l-2 border-transparent'
               )}
             >
               <div className="flex items-start justify-between gap-1.5">
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium truncate">
-                    {conv.title}
-                  </p>
-                  <p className="text-xs text-slate-800 mt-0.5">
-                    {conv.messages.length} messages
-                  </p>
+                  {isSidebarCollapsed ? (
+                    <div className="flex justify-center">
+                      <MessageSquare size={16} className="text-black" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[13px] font-medium truncate">
+                        {conv.title}
+                      </p>
+                      <p className="text-xs text-slate-800 mt-0.5">
+                        {conv.messages.length} messages
+                      </p>
+                    </>
+                  )}
                 </div>
-                {conversations.length > 1 && (
+                {conversations.length > 1 && !isSidebarCollapsed && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteConversation(conv.id);
                     }}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-100 transition-all"
+                    title="Delete chat"
                   >
                     <Trash2 size={12} className="text-slate-800 hover:text-red-400" />
                   </button>
@@ -494,22 +681,25 @@ export default function ComplyChatPage() {
                                 </td>
                               ),
                               p: ({ children }) => (
-                                <p className="mb-2 last:mb-0 text-slate-700 leading-relaxed">{children}</p>
+                                <p className="mb-2 last:mb-0 text-[13px] text-slate-700 leading-relaxed">{children}</p>
                               ),
                               ul: ({ children }) => (
-                                <ul className="list-disc list-inside mb-2 space-y-1 text-slate-700">{children}</ul>
+                                <ul className="list-disc pl-4 mb-3 space-y-1 text-[13px] text-slate-700">{children}</ul>
                               ),
                               ol: ({ children }) => (
-                                <ol className="list-decimal list-inside mb-2 space-y-1 text-slate-700">{children}</ol>
+                                <ol className="list-decimal pl-4 mb-3 space-y-1.5 text-[13px] text-slate-700">{children}</ol>
                               ),
                               li: ({ children }) => (
-                                <li className="text-slate-700">{children}</li>
+                                <li className="text-[13px] text-slate-700 leading-relaxed">{children}</li>
                               ),
                               strong: ({ children }) => (
-                                <strong className="font-semibold text-black">{children}</strong>
+                                <strong className="font-semibold text-slate-900">{children}</strong>
+                              ),
+                              em: ({ children }) => (
+                                <em className="text-slate-500 not-italic text-[12px]">{children}</em>
                               ),
                               code: ({ children }) => (
-                                <code className="px-1.5 py-0.5 rounded bg-slate-100 text-black text-xs font-mono">
+                                <code className="px-1.5 py-0.5 rounded bg-slate-100 text-blue-700 text-xs font-mono">
                                   {children}
                                 </code>
                               ),
@@ -518,14 +708,25 @@ export default function ComplyChatPage() {
                                   {children}
                                 </pre>
                               ),
+                              blockquote: ({ children }) => (
+                                <blockquote className="my-2 pl-3 border-l-4 border-blue-400 bg-blue-50 rounded-r-md py-1.5 text-slate-700 text-[13px]">
+                                  {children}
+                                </blockquote>
+                              ),
                               h1: ({ children }) => (
-                                <h1 className="text-lg font-bold text-black mb-2">{children}</h1>
+                                <h1 className="text-[15px] font-bold text-slate-900 mt-4 mb-2 pb-1 border-b border-slate-200">{children}</h1>
                               ),
                               h2: ({ children }) => (
-                                <h2 className="text-base font-bold text-black mb-2">{children}</h2>
+                                <h2 className="text-[14px] font-semibold text-blue-700 mt-3 mb-1.5 flex items-center gap-1.5">
+                                  <span className="inline-block w-1 h-3.5 rounded-full bg-blue-500 flex-shrink-0" />
+                                  {children}
+                                </h2>
                               ),
                               h3: ({ children }) => (
-                                <h3 className="text-sm font-bold text-black mb-1">{children}</h3>
+                                <h3 className="text-[13px] font-semibold text-slate-800 mt-2 mb-1">{children}</h3>
+                              ),
+                              hr: () => (
+                                <hr className="my-3 border-slate-200" />
                               ),
                             }}
                           >
@@ -651,36 +852,93 @@ export default function ComplyChatPage() {
 
         {/* Input Area */}
         <div className="border-t border-slate-200 bg-white/50 p-3">
+          {(activeConversation?.attachments?.length || 0) > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {activeConversation?.attachments?.map((file) => (
+                <span
+                  key={`${file.id}-${file.filename}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700"
+                >
+                  <Paperclip className="h-3 w-3" />
+                  <span className="max-w-[180px] truncate">{file.filename}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {selectedFiles.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {selectedFiles.map((file, index) => (
+                <span
+                  key={`${file.name}-${index}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
+                >
+                  <Paperclip className="h-3 w-3" />
+                  <span className="max-w-[180px] truncate">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removePendingFile(index)}
+                    className="rounded-full p-0.5 hover:bg-blue-100"
+                    title="Remove file"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="relative">
-            <textarea
-              ref={textareaRef}
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about controls, evidence, compliance requirements..."
-              rows={1}
-              className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-11 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 scrollbar-thin"
-              style={{ minHeight: '42px', maxHeight: '132px' }}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleFileSelection}
             />
-            <button
-              type="submit"
-              disabled={!inputMessage.trim() || isLoading}
-              className={clsx(
-                'absolute bottom-1.5 right-1.5 rounded-lg p-2 transition-all',
-                inputMessage.trim() && !isLoading
-                  ? 'bg-primary-600 text-white hover:bg-primary-700'
-                  : 'bg-slate-100 text-slate-800 cursor-not-allowed'
-              )}
-            >
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-            </button>
+
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-xl border border-slate-300 bg-white p-2.5 text-slate-700 transition-colors hover:bg-slate-100"
+                title="Attach files"
+              >
+                <Paperclip className="h-4 w-4" />
+              </button>
+
+              <div className="relative flex-1">
+                <textarea
+                  ref={textareaRef}
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask about controls, evidence, risks, or upload files for analysis..."
+                  rows={1}
+                  className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-11 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 scrollbar-thin"
+                  style={{ minHeight: '42px', maxHeight: '132px' }}
+                />
+                <button
+                  type="submit"
+                  disabled={(!inputMessage.trim() && selectedFiles.length === 0) || isLoading}
+                  className={clsx(
+                    'absolute bottom-1.5 right-1.5 rounded-lg p-2 transition-all',
+                    (inputMessage.trim() || selectedFiles.length > 0) && !isLoading
+                      ? 'bg-primary-600 text-white hover:bg-primary-700'
+                      : 'bg-slate-100 text-slate-800 cursor-not-allowed'
+                  )}
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+            </div>
           </form>
           <p className="text-xs text-slate-800 mt-2 text-center">
-            ComplyChat can make mistakes. Verify important information with official documentation.
+            ComplyChat can make mistakes. Verify important information with official documentation. Chats stay here until you delete them.
           </p>
         </div>
       </div>

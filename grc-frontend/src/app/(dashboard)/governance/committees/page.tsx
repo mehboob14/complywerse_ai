@@ -216,9 +216,8 @@ export default function CommitteesPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[200px] max-w-xs flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+      <div className="flex items-center gap-3">
+        <div className="relative w-[80%] flex-1">
           <input
             type="text"
             placeholder="Search committees..."
@@ -230,7 +229,7 @@ export default function CommitteesPage() {
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="input"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20; max-w-[20%]!"
         >
           <option value="">All Types</option>
           {Object.entries(COMMITTEE_TYPE_LABELS).map(([value, { label }]) => (
@@ -254,7 +253,7 @@ export default function CommitteesPage() {
           const typeStyle = COMMITTEE_TYPE_LABELS[committee.committee_type] || COMMITTEE_TYPE_LABELS.custom;
 
           return (
-            <div key={committee.id} className="card p-6 hover:border-primary-500/50 transition-all">
+            <div key={committee.id} className="card p-2 flex flex-col justify-between hover:border-primary-500/50 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">

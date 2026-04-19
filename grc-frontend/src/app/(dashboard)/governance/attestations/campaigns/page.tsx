@@ -26,30 +26,29 @@ interface Campaign {
   name: string;
   description?: string;
   status: 'draft' | 'active' | 'closed';
-  attestation_type: string;
+  campaign_type: string;
   start_date: string;
-  end_date: string;
+  due_date: string;
   total_requests: number;
   completed_requests: number;
-  progress: number;
+  completion_rate: number;
   created_at: string;
   updated_at: string;
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
   draft: { bg: 'bg-gray-100', text: 'text-gray-700', icon: FileCheck },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: Play },
-  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle },
+  active: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: Play },
+  closed: { bg: 'bg-blue-100', text: 'text-blue-700', icon: CheckCircle },
 };
 
 const ATTESTATION_TYPES = [
-  { value: 'policy_acknowledgment', label: 'Policy Acknowledgment' },
-  { value: 'compliance_certification', label: 'Compliance Certification' },
-  { value: 'conflict_of_interest', label: 'Conflict of Interest' },
-  { value: 'sarbanes_oxley', label: 'Sarbanes-Oxley (SOX)' },
-  { value: 'data_protection', label: 'Data Protection' },
-  { value: 'access_review', label: 'Access Review' },
-  { value: 'custom', label: 'Custom' },
+  { value: 'sox_302', label: 'SOX 302 Certification' },
+  { value: 'sox_404', label: 'SOX 404 Certification' },
+  { value: 'policy_signoff', label: 'Policy Sign-Off' },
+  { value: 'bcp_awareness', label: 'BCP Awareness' },
+  { value: 'training_acknowledgment', label: 'Training Acknowledgment' },
+  { value: 'annual_certification', label: 'Annual Certification' },
 ];
 
 export default function AttestationCampaignsPage() {
@@ -69,10 +68,10 @@ export default function AttestationCampaignsPage() {
         return response.data as Campaign[];
       } catch {
         return [
-          { id: 1, name: 'Q4 2025 Policy Attestation', description: 'Quarterly policy acknowledgment for all employees', status: 'active', attestation_type: 'policy_acknowledgment', start_date: '2025-01-01', end_date: '2025-01-31', total_requests: 150, completed_requests: 108, progress: 72, created_at: '2024-12-15', updated_at: '2025-01-20' },
-          { id: 2, name: 'Annual Code of Conduct', description: 'Annual compliance certification for all staff', status: 'active', attestation_type: 'compliance_certification', start_date: '2025-01-01', end_date: '2025-01-31', total_requests: 200, completed_requests: 156, progress: 78, created_at: '2024-12-20', updated_at: '2025-01-18' },
-          { id: 3, name: 'Q3 2025 SOX Attestation', description: 'SOX compliance attestation for finance team', status: 'closed', attestation_type: 'sarbanes_oxley', start_date: '2024-10-01', end_date: '2024-10-31', total_requests: 50, completed_requests: 50, progress: 100, created_at: '2024-09-15', updated_at: '2024-11-01' },
-          { id: 4, name: 'Conflict of Interest 2025', description: 'Annual COI disclosure', status: 'draft', attestation_type: 'conflict_of_interest', start_date: '2025-02-01', end_date: '2025-02-28', total_requests: 0, completed_requests: 0, progress: 0, created_at: '2025-01-20', updated_at: '2025-01-20' },
+          { id: 1, name: 'Q4 2025 Policy Attestation', description: 'Quarterly policy acknowledgment for all employees', status: 'active', campaign_type: 'policy_signoff', start_date: '2025-01-01', due_date: '2025-01-31', total_requests: 150, completed_requests: 108, completion_rate: 72, created_at: '2024-12-15', updated_at: '2025-01-20' },
+          { id: 2, name: 'Annual Code of Conduct', description: 'Annual compliance certification for all staff', status: 'active', campaign_type: 'annual_certification', start_date: '2025-01-01', due_date: '2025-01-31', total_requests: 200, completed_requests: 156, completion_rate: 78, created_at: '2024-12-20', updated_at: '2025-01-18' },
+          { id: 3, name: 'Q3 2025 SOX Attestation', description: 'SOX compliance attestation for finance team', status: 'closed', campaign_type: 'sox_302', start_date: '2024-10-01', due_date: '2024-10-31', total_requests: 50, completed_requests: 50, completion_rate: 100, created_at: '2024-09-15', updated_at: '2024-11-01' },
+          { id: 4, name: 'Conflict of Interest 2025', description: 'Annual COI disclosure', status: 'draft', campaign_type: 'policy_signoff', start_date: '2025-02-01', due_date: '2025-02-28', total_requests: 0, completed_requests: 0, completion_rate: 0, created_at: '2025-01-20', updated_at: '2025-01-20' },
         ] as Campaign[];
       }
     },
@@ -136,60 +135,58 @@ export default function AttestationCampaignsPage() {
   return (
     <div className="space-y-5">
       <div className="page-header">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-black">Attestation Campaigns</h1>
-            <p className="mt-1 text-gray-600">Manage attestation and certification campaigns</p>
-          </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            New Campaign
-          </button>
+        <div>
+          <h1 className="text-lg font-semibold text-black">Attestation Campaigns</h1>
+          <p className="mt-1 text-gray-600">Manage attestation and certification campaigns</p>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-600" />
-          <input
-            type="text"
-            placeholder="Search campaigns..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10 w-full"
-          />
-        </div>
+      <div className="flex items-center gap-3">
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="input"
+          className="input w-auto"
         >
           <option value="">All Statuses</option>
           <option value="draft">Draft</option>
           <option value="active">Active</option>
           <option value="closed">Closed</option>
         </select>
+        <div className="relative flex-1">
+         
+          <input
+            type="text"
+            placeholder="Search campaigns..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="input pl-9 w-full"
+          />
+        </div>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="btn-primary flex items-center gap-2 whitespace-nowrap"
+        >
+          <Plus className="h-4 w-4" />
+          New Campaign
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredCampaigns.map((campaign) => {
           const statusStyle = STATUS_COLORS[campaign.status] || STATUS_COLORS.draft;
           const StatusIcon = statusStyle.icon;
           const pendingRequests = campaign.total_requests - campaign.completed_requests;
 
           return (
-            <div key={campaign.id} className="card p-6 hover:border-primary-500/50 transition-all">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
-                    <ClipboardCheck className="h-5 w-5 text-primary-400" />
+            <div key={campaign.id} className="card p-4 hover:border-primary-500/50 transition-all">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500/20 flex-shrink-0">
+                    <ClipboardCheck className="h-4 w-4 text-primary-400" />
                   </div>
-                  <div>
-                    <h3 className="text-black font-medium">{campaign.name}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
+                  <div className="min-w-0">
+                    <h3 className="text-black font-medium text-sm truncate">{campaign.name}</h3>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
                       <StatusIcon className="h-3 w-3" />
                       {campaign.status}
                     </span>
@@ -197,48 +194,39 @@ export default function AttestationCampaignsPage() {
                 </div>
               </div>
 
-              <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                {campaign.description || `${campaign.attestation_type.replace('_', ' ')} attestation`}
+              <p className="text-gray-500 text-xs mb-3 line-clamp-2">
+                {campaign.description || `${campaign.campaign_type?.replace(/_/g, ' ') ?? ''} attestation`}
               </p>
 
-              <div className="space-y-3 mb-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 flex items-center gap-1.5">
-                    <Calendar className="h-4 w-4" />
-                    Duration
+              <div className="space-y-2 mb-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500 flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {new Date(campaign.due_date).toLocaleDateString()}
                   </span>
-                  <span className="text-gray-700">
-                    {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 flex items-center gap-1.5">
-                    <Users className="h-4 w-4" />
-                    {campaign.total_requests} recipients
-                  </span>
-                  <span className="text-gray-700">
-                    {campaign.completed_requests} completed
+                  <span className="text-gray-500 flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" />
+                    {campaign.completed_requests}/{campaign.total_requests}
                   </span>
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-gray-600">Progress</span>
-                    <span className="text-black font-medium">{campaign.progress}%</span>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-gray-500">Progress</span>
+                    <span className="text-black font-medium">{campaign.completion_rate}%</span>
                   </div>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${campaign.progress === 100 ? 'bg-emerald-500' : 'bg-primary-500'}`}
-                      style={{ width: `${campaign.progress}%` }}
+                      className={`h-full rounded-full ${campaign.completion_rate === 100 ? 'bg-emerald-500' : 'bg-primary-500'}`}
+                      style={{ width: `${campaign.completion_rate}%` }}
                     />
                   </div>
                 </div>
 
                 {pendingRequests > 0 && campaign.status === 'active' && (
-                  <div className="flex items-center gap-1.5 text-amber-400 text-sm">
-                    <Clock className="h-4 w-4" />
-                    {pendingRequests} pending responses
+                  <div className="flex items-center gap-1 text-amber-600 text-xs">
+                    <Clock className="h-3.5 w-3.5" />
+                    {pendingRequests} pending
                   </div>
                 )}
               </div>
@@ -330,12 +318,13 @@ export default function AttestationCampaignsPage() {
                 const formData = new FormData(e.currentTarget);
                 createMutation.mutate({
                   name: formData.get('name') as string,
-                  description: formData.get('description') as string,
-                  attestation_type: formData.get('attestation_type') as string,
-                  attestation_text: formData.get('attestation_text') as string,
+                  description: formData.get('description') as string || undefined,
+                  campaign_type: formData.get('attestation_type') as string,
+                  attestation_text: formData.get('attestation_text') as string || undefined,
                   start_date: new Date(formData.get('start_date') as string).toISOString(),
-                  end_date: new Date(formData.get('end_date') as string).toISOString(),
+                  due_date: new Date(formData.get('end_date') as string).toISOString(),
                   requires_evidence: formData.get('requires_evidence') === 'on',
+                  target_type: 'all_users',
                 });
               }}
             >

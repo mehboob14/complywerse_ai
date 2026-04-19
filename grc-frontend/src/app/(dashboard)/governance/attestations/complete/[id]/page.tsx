@@ -63,24 +63,10 @@ export default function CompleteAttestationPage() {
 
   const completeMutation = useMutation({
     mutationFn: async (data: { comments?: string; evidence?: File }) => {
-      const formData: Record<string, unknown> = {
-        comments: data.comments,
-        acknowledged: true,
+      const payload: Record<string, unknown> = {
+        user_comments: data.comments || undefined,
       };
-      
-      if (data.evidence) {
-        const reader = new FileReader();
-        const base64 = await new Promise<string>((resolve) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(data.evidence);
-        });
-        formData.evidence = {
-          filename: data.evidence.name,
-          content: base64,
-        };
-      }
-      
-      return attestationApi.completeAttestation(attestationId, formData);
+      return attestationApi.completeAttestation(attestationId, payload);
     },
     onSuccess: () => {
       router.push('/governance/attestations');
@@ -136,9 +122,9 @@ export default function CompleteAttestationPage() {
   if (error || !attestation) {
     return (
       <div className="card p-8 text-center">
-        <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-white mb-2">Attestation Not Found</h3>
-        <p className="text-slate-400 mb-4">The requested attestation could not be loaded.</p>
+        <AlertCircle className="h-12 w-12 text-rose-500 mx-auto mb-4" />
+        <h3 className="text-base font-medium text-black mb-2">Attestation Not Found</h3>
+        <p className="text-gray-500 mb-4">The requested attestation could not be loaded.</p>
         <Link href="/governance/attestations" className="btn-primary">
           Back to Attestations
         </Link>
@@ -149,9 +135,9 @@ export default function CompleteAttestationPage() {
   if (attestation.status === 'completed') {
     return (
       <div className="card p-8 text-center">
-        <CheckCircle className="h-12 w-12 text-emerald-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-white mb-2">Already Completed</h3>
-        <p className="text-slate-400 mb-4">This attestation has already been completed.</p>
+        <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-4" />
+        <h3 className="text-base font-medium text-black mb-2">Already Completed</h3>
+        <p className="text-gray-500 mb-4">This attestation has already been completed.</p>
         <Link href="/governance/attestations" className="btn-primary">
           Back to Attestations
         </Link>
@@ -162,82 +148,82 @@ export default function CompleteAttestationPage() {
   const isOverdue = attestation.status === 'overdue';
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto max-w-2xl space-y-4">
       <div className="page-header">
-        <div className="flex items-center gap-4 mb-4">
-          <Link href="/governance/attestations" className="text-slate-400 hover:text-white">
-            <ArrowLeft className="h-5 w-5" />
+        <div className="flex items-center gap-3 mb-2">
+          <Link href="/governance/attestations" className="text-gray-500 hover:text-black">
+            <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="flex-1">
-            <h1 className="text-lg font-semibold text-white">Complete Attestation</h1>
-            <p className="text-slate-400 mt-1">{attestation.campaign_name}</p>
+            <h1 className="text-base font-semibold text-black">Complete Attestation</h1>
+            <p className="text-gray-500 text-xs mt-0.5">{attestation.campaign_name}</p>
           </div>
         </div>
       </div>
 
       {isOverdue && (
-        <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-4 flex items-center gap-3">
-          <AlertCircle className="h-5 w-5 text-rose-400 flex-shrink-0" />
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 flex items-center gap-3">
+          <AlertCircle className="h-4 w-4 text-rose-500 flex-shrink-0" />
           <div>
-            <p className="text-rose-400 font-medium">This attestation is overdue</p>
-            <p className="text-rose-400/70 text-sm">
+            <p className="text-rose-700 text-sm font-medium">This attestation is overdue</p>
+            <p className="text-rose-600 text-xs">
               Due date was {new Date(attestation.due_date).toLocaleDateString()}. Please complete as soon as possible.
             </p>
           </div>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="card p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
-              <ClipboardCheck className="h-5 w-5 text-primary-400" />
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-primary-500/10">
+              <ClipboardCheck className="h-4 w-4 text-primary-500" />
             </div>
             <div>
-              <h3 className="text-lg font-medium text-white">Attestation Statement</h3>
-              <span className="text-sm text-slate-400 capitalize">{attestation.attestation_type.replace('_', ' ')}</span>
+              <h3 className="text-sm font-medium text-black">Attestation Statement</h3>
+              <span className="text-xs text-gray-500 capitalize">{attestation.attestation_type?.replace(/_/g, ' ')}</span>
             </div>
           </div>
 
-          <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 mb-4">
-            <p className="text-slate-300 whitespace-pre-line">{attestation.attestation_text}</p>
+          <div className="bg-slate-50 rounded-lg p-3 border border-gray-200 mb-4">
+            <p className="text-gray-700 text-sm whitespace-pre-line">{attestation.attestation_text}</p>
           </div>
 
-          <div className="flex items-center gap-3 text-sm text-slate-400 mb-4">
-            <Calendar className="h-4 w-4" />
+          <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
+            <Calendar className="h-3.5 w-3.5" />
             <span>Due: {new Date(attestation.due_date).toLocaleDateString()}</span>
           </div>
 
-          <div className="flex items-start gap-3 p-4 bg-slate-700/30 rounded-lg border border-slate-600">
+          <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-gray-200">
             <input
               type="checkbox"
               id="acknowledge"
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
-              className="mt-1 rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+              className="mt-0.5 rounded border-gray-300 text-primary-500 focus:ring-primary-500"
             />
-            <label htmlFor="acknowledge" className="text-slate-300">
+            <label htmlFor="acknowledge" className="text-gray-700 text-sm">
               I have read, understand, and agree to comply with the above statement. I acknowledge that this attestation is legally binding and represents my commitment to the stated requirements.
             </label>
           </div>
         </div>
 
         {attestation.requires_evidence && (
-          <div className="card p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/20">
-                <Upload className="h-5 w-5 text-amber-400" />
+          <div className="card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded bg-amber-50">
+                <Upload className="h-4 w-4 text-amber-600" />
               </div>
               <div>
-                <h3 className="text-lg font-medium text-white">Evidence Upload</h3>
-                <span className="text-sm text-amber-400">Required</span>
+                <h3 className="text-sm font-medium text-black">Evidence Upload</h3>
+                <span className="text-xs text-amber-600">Required</span>
               </div>
             </div>
 
             {attestation.evidence_description && (
-              <div className="flex items-start gap-2 mb-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                <Info className="h-4 w-4 text-primary-400 mt-0.5 flex-shrink-0" />
-                <p className="text-slate-400 text-sm">{attestation.evidence_description}</p>
+              <div className="flex items-start gap-2 mb-3 p-2.5 bg-slate-50 rounded-lg border border-gray-200">
+                <Info className="h-3.5 w-3.5 text-primary-500 mt-0.5 flex-shrink-0" />
+                <p className="text-gray-500 text-xs">{attestation.evidence_description}</p>
               </div>
             )}
 
@@ -250,18 +236,18 @@ export default function CompleteAttestationPage() {
             />
 
             {evidenceFile ? (
-              <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-gray-200">
                 <div className="flex items-center gap-3">
-                  <FileText className="h-5 w-5 text-primary-400" />
+                  <FileText className="h-4 w-4 text-primary-500" />
                   <div>
-                    <p className="text-white text-sm">{evidenceFile.name}</p>
-                    <p className="text-xs text-slate-500">{(evidenceFile.size / 1024).toFixed(1)} KB</p>
+                    <p className="text-black text-sm">{evidenceFile.name}</p>
+                    <p className="text-xs text-gray-500">{(evidenceFile.size / 1024).toFixed(1)} KB</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={removeFile}
-                  className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 rounded"
+                  className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -270,34 +256,34 @@ export default function CompleteAttestationPage() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full p-6 border-2 border-dashed border-slate-600 rounded-lg hover:border-primary-500/50 transition-colors text-center"
+                className="w-full p-5 border-2 border-dashed border-gray-200 rounded-lg hover:border-primary-300 transition-colors text-center"
               >
-                <Upload className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-                <p className="text-slate-400">Click to upload evidence</p>
-                <p className="text-xs text-slate-500 mt-1">PDF, DOC, DOCX, PNG, JPG (max 10MB)</p>
+                <Upload className="h-6 w-6 text-gray-400 mx-auto mb-1" />
+                <p className="text-gray-500 text-sm">Click to upload evidence</p>
+                <p className="text-xs text-gray-400 mt-0.5">PDF, DOC, DOCX, PNG, JPG (max 10MB)</p>
               </button>
             )}
           </div>
         )}
 
-        <div className="card p-6">
-          <h3 className="text-lg font-medium text-white mb-4">Comments (Optional)</h3>
+        <div className="card p-4">
+          <h3 className="text-sm font-medium text-black mb-2">Comments (Optional)</h3>
           <textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}
             className="input w-full"
-            rows={4}
+            rows={3}
             placeholder="Add any comments or notes about your attestation..."
           />
         </div>
 
-        <div className="flex items-center justify-end gap-4">
-          <Link href="/governance/attestations" className="btn-secondary">
+        <div className="flex items-center justify-end gap-3">
+          <Link href="/governance/attestations" className="btn-secondary text-sm">
             Cancel
           </Link>
           <button
             type="submit"
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-2 text-sm"
             disabled={completeMutation.isPending || !acknowledged}
           >
             {completeMutation.isPending ? (
@@ -312,7 +298,7 @@ export default function CompleteAttestationPage() {
         </div>
 
         {completeMutation.isError && (
-          <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-4 text-rose-400 text-sm">
+          <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-rose-700 text-sm">
             Failed to submit attestation. Please try again.
           </div>
         )}

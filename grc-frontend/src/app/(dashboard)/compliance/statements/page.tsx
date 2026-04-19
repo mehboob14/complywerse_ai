@@ -139,7 +139,7 @@ export default function PolicyStatementsPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [documentFilter, setDocumentFilter] = useState('');
   const [page, setPage] = useState(0);
-  const [pageSize] = useState(10);
+  const pageSize = 20;
   const [selectedStatement, setSelectedStatement] = useState<StatementDetail | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [complianceForm, setComplianceForm] = useState({
@@ -160,7 +160,7 @@ export default function PolicyStatementsPage() {
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['compliance-statements', statusFilter, priorityFilter, categoryFilter, documentFilter, page, pageSize],
+    queryKey: ['compliance-statements', statusFilter, priorityFilter, categoryFilter, documentFilter, page],
     queryFn: async () => {
       const params: Record<string, any> = {
         skip: page * pageSize,
@@ -615,19 +615,23 @@ export default function PolicyStatementsPage() {
       )}
 
       {isModalOpen && selectedStatement && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <>
+          <div
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={() => setIsModalOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-white shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
               <div>
-                <h2 className="text-lg font-semibold text-black">Statement Details</h2>
-                <p className="text-sm text-gray-600">{selectedStatement.statement_code}</p>
+                <h2 className="text-base font-semibold text-black">Statement Details</h2>
+                <p className="text-sm text-gray-500">{selectedStatement.statement_code}</p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-500 hover:text-black hover:bg-gray-100 rounded-lg transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Statement Text</label>
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700">
@@ -733,7 +737,7 @@ export default function PolicyStatementsPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200">
               <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">
                 Cancel
               </button>
@@ -751,7 +755,7 @@ export default function PolicyStatementsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

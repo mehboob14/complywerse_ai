@@ -18,7 +18,8 @@ const analyticsModules = [
     description: 'Visualize risk distribution across likelihood and impact dimensions with drill-down capability. Filter by category, business unit, and treatment plan.',
     href: '/erm/analytics/heatmap',
     icon: BarChart3,
-    color: 'from-red-500 to-orange-500',
+    color: 'from-red-500/15 to-orange-500/15',
+    iconColor: 'text-red-600',
     features: ['Inherent vs Residual toggle', 'Category filtering', 'Drill-down on cells', 'Risk detail popover'],
   },
   {
@@ -26,7 +27,8 @@ const analyticsModules = [
     description: 'Comprehensive cause-and-effect visualization showing threats, preventive controls, risk event, mitigating controls, and consequences for any risk.',
     href: '/erm/analytics/bowtie',
     icon: GitBranch,
-    color: 'from-blue-500 to-cyan-500',
+    color: 'from-blue-500/15 to-cyan-500/15',
+    iconColor: 'text-blue-600',
     features: ['Threat identification', 'Preventive controls', 'Mitigating controls', 'Consequence mapping'],
   },
   {
@@ -34,7 +36,8 @@ const analyticsModules = [
     description: 'Model what-if scenarios by adjusting risk likelihood and impact. Use preset scenarios or create custom ones to understand portfolio impact.',
     href: '/erm/analytics/scenario',
     icon: Target,
-    color: 'from-purple-500 to-pink-500',
+    color: 'from-purple-500/15 to-pink-500/15',
+    iconColor: 'text-purple-600',
     features: ['Preset scenarios', 'Custom adjustments', 'Portfolio impact', 'Before/after comparison'],
   },
   {
@@ -42,7 +45,8 @@ const analyticsModules = [
     description: 'Enterprise-wide risk aggregation across categories, business units, and status. Track total risk exposure and reduction effectiveness.',
     href: '/erm/analytics/aggregation',
     icon: Layers,
-    color: 'from-emerald-500 to-teal-500',
+    color: 'from-emerald-500/15 to-teal-500/15',
+    iconColor: 'text-emerald-600',
     features: ['Enterprise summary', 'Category breakdown', 'Business unit view', 'Risk reduction tracking'],
   },
   {
@@ -50,7 +54,8 @@ const analyticsModules = [
     description: 'Monitor Key Risk Indicators in real-time with automated threshold breach detection. View alerts by severity with recommended corrective actions.',
     href: '/erm/analytics/kri-triggers',
     icon: Activity,
-    color: 'from-amber-500 to-yellow-500',
+    color: 'from-amber-500/15 to-yellow-500/15',
+    iconColor: 'text-amber-600',
     features: ['Threshold monitoring', 'Breach alerts', 'Severity classification', 'Recommended actions'],
   },
 ];
@@ -78,8 +83,8 @@ export default function AnalyticsPage() {
             className="group bg-white border border-slate-200 rounded-xl p-6 hover:border-slate-300 transition-all hover:shadow-lg hover:shadow-blue-500/5"
           >
             <div className="flex items-start gap-4">
-              <div className={`p-3 rounded-lg bg-gradient-to-br ${module.color} bg-opacity-20`}>
-                <module.icon className="h-6 w-6 text-slate-900" />
+              <div className={`p-3 rounded-lg bg-gradient-to-br ${module.color}`}>
+                <module.icon className={`h-6 w-6 ${module.iconColor}`} />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-semibold text-slate-900 group-hover:text-blue-400 transition-colors flex items-center gap-2">

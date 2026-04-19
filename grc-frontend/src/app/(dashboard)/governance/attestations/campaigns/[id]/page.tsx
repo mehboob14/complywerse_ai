@@ -29,11 +29,14 @@ interface AttestationRequest {
   user_id: number;
   user_name: string;
   user_email: string;
-  department?: string;
+  attestation_type: string;
   status: 'pending' | 'completed' | 'overdue' | 'escalated';
   completed_at?: string;
-  comments?: string;
-  has_evidence: boolean;
+  due_date?: string;
+  user_comments?: string;
+  evidence_id?: number;
+  is_overdue?: boolean;
+  days_until_due?: number;
 }
 
 interface Campaign {
@@ -41,31 +44,29 @@ interface Campaign {
   name: string;
   description?: string;
   status: 'draft' | 'active' | 'closed';
-  attestation_type: string;
-  attestation_text: string;
-  start_date: string;
-  end_date: string;
+  campaign_type: string;
+  attestation_text?: string;
+  start_date?: string;
+  due_date: string;
   total_requests: number;
   completed_requests: number;
-  overdue_requests: number;
-  progress: number;
+  completion_rate: number;
   requires_evidence: boolean;
-  requests: AttestationRequest[];
   created_at: string;
   updated_at: string;
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  draft: { bg: 'bg-gray-100', text: 'text-gray-700' },
+  active: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  closed: { bg: 'bg-blue-100', text: 'text-blue-700' },
 };
 
 const REQUEST_STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  pending: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
-  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
-  escalated: { bg: 'bg-purple-500/20', text: 'text-purple-400', icon: AlertTriangle },
+  pending: { bg: 'bg-amber-50', text: 'text-amber-700', icon: Clock },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: CheckCircle },
+  overdue: { bg: 'bg-rose-50', text: 'text-rose-700', icon: AlertCircle },
+  escalated: { bg: 'bg-purple-50', text: 'text-purple-700', icon: AlertTriangle },
 };
 
 export default function CampaignDetailPage() {
@@ -83,6 +84,21 @@ export default function CampaignDetailPage() {
       return response.data as Campaign;
     },
   });
+
+  const { data: requestsData, isLoading: requestsLoading } = useQuery({
+    queryKey: ['attestation-campaign-requests', campaignId],
+    queryFn: async () => {
+      try {
+        const response = await attestationApi.getCampaignRequests(campaignId);
+        return response.data as AttestationRequest[];
+      } catch {
+        return [] as AttestationRequest[];
+      }
+    },
+    enabled: !!campaign,
+  });
+
+  const requests = requestsData ?? [];
 
   const activateMutation = useMutation({
     mutationFn: () => attestationApi.activateCampaign(campaignId),
@@ -156,14 +172,14 @@ export default function CampaignDetailPage() {
   if (error || !campaign) {
     return (
       <div className="space-y-8">
-        <Link href="/governance/attestations/campaigns" className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+        <Link href="/governance/attestations/campaigns" className="inline-flex items-center gap-2 text-gray-600 hover:text-black transition-colors">
           <ArrowLeft className="h-4 w-4" />
           Back to Campaigns
         </Link>
         <div className="card p-12 text-center">
-          <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-white mb-2">Campaign Not Found</h2>
-          <p className="text-slate-400 mb-6">The campaign you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.</p>
+          <AlertCircle className="h-12 w-12 text-rose-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-black mb-2">Campaign Not Found</h2>
+          <p className="text-gray-500 mb-6">The campaign you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.</p>
           <Link href="/governance/attestations/campaigns" className="btn-primary inline-flex items-center gap-2">
             <ArrowLeft className="h-4 w-4" />
             Go Back
@@ -174,24 +190,24 @@ export default function CampaignDetailPage() {
   }
 
   const statusStyle = STATUS_COLORS[campaign.status] || STATUS_COLORS.draft;
-  const filteredRequests = campaign.requests.filter(r => !statusFilter || r.status === statusFilter);
-  const pendingRequests = campaign.requests.filter(a => a.status === 'pending' || a.status === 'overdue');
+  const filteredRequests = requests.filter(r => !statusFilter || r.status === statusFilter);
+  const pendingRequests = requests.filter(a => a.status === 'pending' || a.status === 'overdue');
 
   return (
     <div className="space-y-8">
       <div className="page-header">
         <div className="flex items-center gap-4 mb-4">
-          <Link href="/governance/attestations/campaigns" className="text-slate-400 hover:text-white">
+          <Link href="/governance/attestations/campaigns" className="text-gray-500 hover:text-black">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-white">{campaign.name}</h1>
+              <h1 className="text-2xl font-semibold text-black">{campaign.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
                 {campaign.status}
               </span>
             </div>
-            <p className="text-slate-400 mt-1">{campaign.description || `${campaign.attestation_type.replace('_', ' ')} attestation`}</p>
+            <p className="text-gray-500 mt-1">{campaign.description || `${campaign.campaign_type?.replace(/_/g, ' ') ?? ''} attestation`}</p>
           </div>
           <div className="flex items-center gap-3">
             {campaign.status === 'draft' && (
@@ -225,39 +241,35 @@ export default function CampaignDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-6">
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Type</p>
-            <p className="text-white font-medium capitalize">{campaign.attestation_type.replace('_', ' ')}</p>
+            <p className="text-gray-500 text-sm">Type</p>
+            <p className="text-black font-medium capitalize">{campaign.campaign_type?.replace(/_/g, ' ') ?? '-'}</p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Duration</p>
-            <p className="text-white font-medium text-sm">
-              {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
+            <p className="text-gray-500 text-sm">Due Date</p>
+            <p className="text-black font-medium text-sm">
+              {campaign.due_date ? new Date(campaign.due_date).toLocaleDateString() : '-'}
             </p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Total Requests</p>
-            <p className="text-white font-medium">{campaign.total_requests}</p>
+            <p className="text-gray-500 text-sm">Total Requests</p>
+            <p className="text-black font-medium">{campaign.total_requests}</p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Completed</p>
-            <p className="text-emerald-400 font-medium">{campaign.completed_requests}</p>
+            <p className="text-gray-500 text-sm">Completed</p>
+            <p className="text-emerald-600 font-medium">{campaign.completed_requests}</p>
           </div>
           <div className="card p-4">
-            <p className="text-slate-400 text-sm">Overdue</p>
-            <p className="text-rose-400 font-medium">{campaign.overdue_requests}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-slate-400 text-sm">Progress</p>
+            <p className="text-gray-500 text-sm">Progress</p>
             <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary-500 rounded-full"
-                  style={{ width: `${campaign.progress}%` }}
+                  style={{ width: `${campaign.completion_rate}%` }}
                 />
               </div>
-              <span className="text-white font-medium text-sm">{campaign.progress}%</span>
+              <span className="text-black font-medium text-sm">{campaign.completion_rate.toFixed(0)}%</span>
             </div>
           </div>
         </div>
@@ -265,16 +277,16 @@ export default function CampaignDetailPage() {
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-white flex items-center gap-2">
+          <h3 className="text-lg font-medium text-black flex items-center gap-2">
             <FileCheck className="h-5 w-5 text-primary-400" />
             Attestation Statement
           </h3>
         </div>
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-          <p className="text-slate-300">{campaign.attestation_text}</p>
+        <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
+          <p className="text-gray-700">{campaign.attestation_text || 'No attestation text specified.'}</p>
         </div>
         {campaign.requires_evidence && (
-          <p className="text-sm text-amber-400 mt-2 flex items-center gap-1.5">
+          <p className="text-sm text-amber-600 mt-2 flex items-center gap-1.5">
             <AlertCircle className="h-4 w-4" />
             Evidence upload is required for this attestation
           </p>
@@ -283,7 +295,7 @@ export default function CampaignDetailPage() {
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-white flex items-center gap-2">
+          <h3 className="text-lg font-medium text-black flex items-center gap-2">
             <Users className="h-5 w-5 text-primary-400" />
             Attestation Requests ({filteredRequests.length})
           </h3>
@@ -314,21 +326,21 @@ export default function CampaignDetailPage() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-700">
+              <tr className="border-b border-gray-200">
                 <th className="text-left py-3 px-4">
                   <input
                     type="checkbox"
                     checked={selectedRequests.length === filteredRequests.length && filteredRequests.length > 0}
                     onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                    className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
                   />
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">User</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Department</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Completed</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Evidence</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Actions</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">User</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Type</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Status</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Completed</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Evidence</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -337,26 +349,26 @@ export default function CampaignDetailPage() {
                 const StatusIcon = rstyle.icon;
 
                 return (
-                  <tr key={request.id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                  <tr key={request.id} className="border-b border-gray-100 hover:bg-slate-50">
                     <td className="py-3 px-4">
                       <input
                         type="checkbox"
                         checked={selectedRequests.includes(request.id)}
                         onChange={(e) => handleSelectRequest(request.id, e.target.checked)}
-                        className="rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                        className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
                       />
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-slate-400" />
+                        <User className="h-4 w-4 text-gray-400" />
                         <div>
-                          <p className="text-white font-medium">{request.user_name}</p>
-                          <p className="text-xs text-slate-500">{request.user_email}</p>
+                          <p className="text-black font-medium">{request.user_name}</p>
+                          <p className="text-xs text-gray-500">{request.user_email}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-slate-400 text-sm">
-                      {request.department || '-'}
+                    <td className="py-3 px-4 text-gray-600 text-sm capitalize">
+                      {request.attestation_type?.replace(/_/g, ' ') ?? '-'}
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 ${rstyle.bg} ${rstyle.text}`}>
@@ -364,14 +376,14 @@ export default function CampaignDetailPage() {
                         {request.status}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-sm text-slate-400">
+                    <td className="py-3 px-4 text-sm text-gray-500">
                       {request.completed_at ? new Date(request.completed_at).toLocaleDateString() : '-'}
                     </td>
                     <td className="py-3 px-4">
-                      {request.has_evidence ? (
-                        <span className="text-emerald-400 text-sm">Yes</span>
+                      {request.evidence_id ? (
+                        <span className="text-emerald-600 text-sm">Yes</span>
                       ) : (
-                        <span className="text-slate-500 text-sm">No</span>
+                        <span className="text-gray-400 text-sm">No</span>
                       )}
                     </td>
                     <td className="py-3 px-4">
@@ -380,7 +392,7 @@ export default function CampaignDetailPage() {
                           <>
                             <button
                               onClick={() => sendReminderMutation.mutate(request.id)}
-                              className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-primary-500/20 rounded"
+                              className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded"
                               title="Send Reminder"
                             >
                               <Send className="h-4 w-4" />
@@ -391,7 +403,7 @@ export default function CampaignDetailPage() {
                                   escalateMutation.mutate(request.id);
                                 }
                               }}
-                              className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-500/20 rounded"
+                              className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded"
                               title="Escalate"
                             >
                               <AlertTriangle className="h-4 w-4" />
@@ -410,19 +422,19 @@ export default function CampaignDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-primary-400" />
             Status Summary
           </h3>
           <div className="space-y-3">
-            {Object.entries(REQUEST_STATUS_COLORS).map(([status, style]) => {
-              const count = campaign.requests.filter(a => a.status === status).length;
+            {Object.entries(REQUEST_STATUS_COLORS).map(([st, style]) => {
+              const count = requests.filter(a => a.status === st).length;
               const StatusIcon = style.icon;
               return (
-                <div key={status} className="flex items-center justify-between">
+                <div key={st} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <StatusIcon className={`h-4 w-4 ${style.text}`} />
-                    <span className="text-slate-300 capitalize">{status}</span>
+                    <span className="text-gray-700 capitalize">{st}</span>
                   </div>
                   <span className={`font-medium ${style.text}`}>{count}</span>
                 </div>
@@ -432,19 +444,19 @@ export default function CampaignDetailPage() {
         </div>
 
         <div className="card p-6">
-          <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-amber-400" />
+          <h3 className="text-lg font-medium text-black mb-4 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-amber-500" />
             Pending Actions
           </h3>
           {pendingRequests.length > 0 ? (
             <div className="space-y-3">
               {pendingRequests.slice(0, 5).map((request) => (
-                <div key={request.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                <div key={request.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-gray-200">
                   <div className="flex items-center gap-3">
-                    <User className="h-4 w-4 text-slate-400" />
+                    <User className="h-4 w-4 text-gray-400" />
                     <div>
-                      <p className="text-white text-sm">{request.user_name}</p>
-                      <p className="text-xs text-slate-500">{request.department}</p>
+                      <p className="text-black text-sm">{request.user_name}</p>
+                      <p className="text-xs text-gray-500">{request.user_email}</p>
                     </div>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full ${REQUEST_STATUS_COLORS[request.status]?.bg} ${REQUEST_STATUS_COLORS[request.status]?.text}`}>
@@ -453,11 +465,11 @@ export default function CampaignDetailPage() {
                 </div>
               ))}
               {pendingRequests.length > 5 && (
-                <p className="text-sm text-slate-500 text-center">+ {pendingRequests.length - 5} more</p>
+                <p className="text-sm text-gray-500 text-center">+ {pendingRequests.length - 5} more</p>
               )}
             </div>
           ) : (
-            <p className="text-slate-400 text-center py-4">All attestations completed</p>
+            <p className="text-gray-500 text-center py-4">All attestations completed</p>
           )}
         </div>
       </div>
