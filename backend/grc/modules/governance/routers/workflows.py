@@ -95,6 +95,12 @@ def serialize_approval_step(step: DocumentApprovalStep) -> dict:
 
 
 def serialize_pending_approval(step: DocumentApprovalStep, document: GovernanceDocument) -> dict:
+    owner_name = None
+    if document.owner:
+        owner_name = document.owner.display_name or document.owner.username
+    elif getattr(document, "author", None):
+        owner_name = document.author.display_name or document.author.username
+
     return {
         "step_id": step.id,
         "document_id": document.id,
@@ -106,7 +112,7 @@ def serialize_pending_approval(step: DocumentApprovalStep, document: GovernanceD
         "requested_at": step.requested_at.isoformat() if step.requested_at else None,
         "due_date": step.due_date.isoformat() if step.due_date else None,
         "is_overdue": step.due_date < datetime.utcnow() if step.due_date else False,
-        "owner_name": document.owner.display_name if document.owner else None,
+        "owner_name": owner_name,
     }
 
 
@@ -136,15 +142,16 @@ def list_pending_approvals(
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(GovernanceDocument.tenant_id == tenant_id)
     
-    if include_delegated:
+    # Simplified approval model for now: any authenticated tenant user can
+    # view and action pending document approvals. When explicitly requested,
+    # still allow a filtered "mine only" view.
+    if not include_delegated:
         query = query.filter(
             or_(
                 DocumentApprovalStep.approver_id == current_user.id,
                 DocumentApprovalStep.delegated_to == current_user.id
             )
         )
-    else:
-        query = query.filter(DocumentApprovalStep.approver_id == current_user.id)
     
     total = query.count()
     steps = query.order_by(DocumentApprovalStep.due_date.asc().nulls_last()).offset(skip).limit(limit).all()
@@ -216,47 +223,73 @@ def submit_for_approval(
             detail=f"Document cannot be submitted for approval in '{document.status}' status"
         )
     
+    if not document.owner_id:
+        document.owner_id = current_user.id
+    if not document.author_id:
+        document.author_id = current_user.id
+
     approvers = db.query(DocumentReviewer).filter(
         DocumentReviewer.document_id == request.document_id,
-        DocumentReviewer.role_type == "approver"
+        DocumentReviewer.role_type == "approver",
+        DocumentReviewer.user_id.isnot(None)
     ).order_by(DocumentReviewer.sequence).all()
-    
-    if not approvers:
+
+    approver_user_ids = []
+    for reviewer in approvers:
+        if reviewer.user_id and reviewer.user_id not in approver_user_ids:
+            approver_user_ids.append(reviewer.user_id)
+
+    if not approver_user_ids:
+        primary_approver_id = current_user.id or document.owner_id or document.author_id
+        if primary_approver_id:
+            reviewer = DocumentReviewer(
+                document_id=document.id,
+                user_id=primary_approver_id,
+                role_type="approver",
+                sequence=1,
+                is_required=True,
+                assigned_by=current_user.id,
+            )
+            db.add(reviewer)
+            approver_user_ids.append(primary_approver_id)
+
+    if not approver_user_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No approvers assigned to this document. Please add approvers first."
+            detail="Unable to create a review step for this document."
         )
-    
+
     existing_pending = db.query(DocumentApprovalStep).filter(
         DocumentApprovalStep.document_id == request.document_id,
         DocumentApprovalStep.status == "pending"
     ).first()
-    
+
     if existing_pending:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Document already has pending approval steps"
         )
-    
+
     due_date = datetime.utcnow() + timedelta(days=request.due_days)
-    
+
+    # Keep approval intentionally simple for now: one open review step that any
+    # logged-in tenant user can action from the approvals queue.
     created_steps = []
-    for idx, reviewer in enumerate(approvers, start=1):
-        step = DocumentApprovalStep(
-            document_id=document.id,
-            step_sequence=idx,
-            step_name=f"Approval Step {idx}",
-            approval_type="single",
-            approver_id=reviewer.user_id,
-            approver_role=reviewer.role_type,
-            status="pending",
-            requested_at=datetime.utcnow(),
-            due_date=due_date
-        )
-        db.add(step)
-        created_steps.append(step)
+    step = DocumentApprovalStep(
+        document_id=document.id,
+        step_sequence=1,
+        step_name="Document Review",
+        approval_type="single",
+        approver_id=approver_user_ids[0],
+        approver_role="approver",
+        status="pending",
+        requested_at=datetime.utcnow(),
+        due_date=due_date
+    )
+    db.add(step)
+    created_steps.append(step)
     
-    document.status = "pending_approval"
+    document.status = "pending_review"
     document.updated_at = datetime.utcnow()
     
     create_audit_log(
@@ -305,22 +338,30 @@ def approve_step(
             detail="Access denied"
         )
     
-    actual_approver_id = step.delegated_to if step.delegated_to else step.approver_id
-    if actual_approver_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to approve this step"
-        )
-    
+    # Temporary simplified model: any logged-in user from the same tenant can
+    # approve a pending document review step.
     if step.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Step cannot be approved in '{step.status}' status"
         )
     
+    step.approver_id = current_user.id
+    step.delegated_to = None
     step.status = "approved"
     step.completed_at = datetime.utcnow()
     step.comments = request.comments
+
+    other_pending_steps = db.query(DocumentApprovalStep).filter(
+        DocumentApprovalStep.document_id == step.document_id,
+        DocumentApprovalStep.id != step.id,
+        DocumentApprovalStep.status == "pending"
+    ).all()
+
+    for sibling_step in other_pending_steps:
+        sibling_step.status = "approved"
+        sibling_step.completed_at = datetime.utcnow()
+        sibling_step.comments = sibling_step.comments or "Auto-completed by simplified approval flow"
     
     create_audit_log(
         db=db,
@@ -390,13 +431,8 @@ def reject_step(
             detail="Access denied"
         )
     
-    actual_approver_id = step.delegated_to if step.delegated_to else step.approver_id
-    if actual_approver_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to reject this step"
-        )
-    
+    # Temporary simplified model: any logged-in user from the same tenant can
+    # reject a pending document review step.
     if step.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -409,6 +445,8 @@ def reject_step(
             detail="Comments are required when rejecting"
         )
     
+    step.approver_id = current_user.id
+    step.delegated_to = None
     step.status = "rejected"
     step.completed_at = datetime.utcnow()
     step.comments = request.comments
@@ -740,7 +778,7 @@ def get_workflow_dashboard(
     
     docs_query = db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id.in_(user_tenants),
-        GovernanceDocument.status == "pending_approval"
+        GovernanceDocument.status.in_(["pending_review", "pending_approval"])
     )
     if tenant_id:
         docs_query = docs_query.filter(GovernanceDocument.tenant_id == tenant_id)

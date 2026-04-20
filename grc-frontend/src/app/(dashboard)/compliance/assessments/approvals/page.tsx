@@ -29,6 +29,7 @@ interface PendingApproval {
   id: number;
   assessment_item_id: number;
   evidence_id: number;
+  source: 'compliance' | 'evidence';
   status: string;
   current_tier: number;
   submitted_at: string | null;
@@ -43,7 +44,7 @@ interface PendingApproval {
       name: string;
       assessment_type: string;
     };
-  };
+  } | null;
   evidence: {
     id: number;
     name: string;
@@ -79,42 +80,82 @@ export default function PendingApprovalsPage() {
   const { data: pendingApprovals, isLoading, error } = useQuery<PendingApproval[]>({
     queryKey: ['pending-approvals'],
     queryFn: async () => {
-      const response = await apiClient.get('/compliance/assessments/pending-approvals');
-      const data = response.data?.pending_approvals || response.data || [];
-      return Array.isArray(data) ? data.map((item: any) => ({
-        id: item.id,
-        assessment_item_id: item.assessment_item_id,
-        evidence_id: item.evidence_id,
-        status: item.status,
-        current_tier: item.current_tier,
-        submitted_at: item.submitted_at,
-        created_at: item.created_at,
-        assessment_item: {
-          id: item.assessment_id,
-          item_number: item.item_number,
-          area_domain: null,
-          control_description: item.control_description,
-          assessment: {
-            id: item.assessment_id,
-            name: item.assessment_name,
-            assessment_type: '',
-          },
-        },
-        evidence: {
-          id: item.evidence_id,
-          name: item.evidence_name,
-          file_name: item.evidence_file_name,
-          file_type: '',
-          description: null,
-          uploaded_at: item.submitted_at,
-        },
-      })) : [];
+      const [complianceResult, evidenceResult] = await Promise.allSettled([
+        apiClient.get('/compliance/assessments/pending-approvals'),
+        apiClient.get('/evidence-mgmt/items', { params: { status: 'pending_review', limit: 100, skip: 0 } }),
+      ]);
+
+      const complianceItems = complianceResult.status === 'fulfilled'
+        ? ((complianceResult.value.data?.pending_approvals || complianceResult.value.data || []) as any[]).map((item: any) => ({
+            id: item.id,
+            assessment_item_id: item.assessment_item_id,
+            evidence_id: item.evidence_id,
+            source: 'compliance' as const,
+            status: item.status,
+            current_tier: item.current_tier,
+            submitted_at: item.submitted_at,
+            created_at: item.created_at,
+            assessment_item: {
+              id: item.assessment_id,
+              item_number: item.item_number,
+              area_domain: null,
+              control_description: item.control_description,
+              assessment: {
+                id: item.assessment_id,
+                name: item.assessment_name,
+                assessment_type: '',
+              },
+            },
+            evidence: {
+              id: item.evidence_id,
+              name: item.evidence_name,
+              file_name: item.evidence_file_name,
+              file_type: '',
+              description: null,
+              uploaded_at: item.submitted_at,
+            },
+          }))
+        : [];
+
+      const evidenceItems = evidenceResult.status === 'fulfilled'
+        ? (((evidenceResult.value.data?.items || []) as any[]).map((item: any) => ({
+            id: item.id,
+            assessment_item_id: 0,
+            evidence_id: item.id,
+            source: 'evidence' as const,
+            status: item.status,
+            current_tier: 1,
+            submitted_at: item.submitted_at || item.uploaded_at,
+            created_at: item.uploaded_at || item.submitted_at || new Date().toISOString(),
+            assessment_item: null,
+            evidence: {
+              id: item.id,
+              name: item.name,
+              file_name: item.file_name || 'No file',
+              file_type: item.file_type || '',
+              description: item.description || null,
+              uploaded_at: item.uploaded_at,
+              uploader: { full_name: item.uploader_name || 'Unknown' },
+            },
+            submitter: { full_name: item.uploader_name || 'Unknown' },
+          })))
+        : [];
+
+      return [...evidenceItems, ...complianceItems];
     },
   });
 
   const approvalMutation = useMutation({
-    mutationFn: async ({ evidenceLinkId, action, comments }: { evidenceLinkId: number; action: string; comments: string }) => {
-      const response = await apiClient.post(`/compliance/assessments/evidence/${evidenceLinkId}/approval`, {
+    mutationFn: async ({ approval, action, comments }: { approval: PendingApproval; action: string; comments: string }) => {
+      if (approval.source === 'evidence') {
+        const response = await apiClient.post(`/evidence-mgmt/lifecycle/${approval.evidence_id}/review`, {
+          action: action === 'return' ? 'reject' : action,
+          comments: comments || undefined,
+        });
+        return response.data;
+      }
+
+      const response = await apiClient.post(`/compliance/assessments/evidence/${approval.id}/approval`, {
         action,
         comments: comments || undefined,
       });
@@ -122,6 +163,7 @@ export default function PendingApprovalsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-items'] });
       setProcessingId(null);
       setActionType(null);
       setComments('');
@@ -131,20 +173,20 @@ export default function PendingApprovalsPage() {
     },
   });
 
-  const handleAction = (id: number, action: string) => {
+  const handleAction = (approval: PendingApproval, action: string) => {
     if (action === 'approve') {
-      setProcessingId(id);
-      approvalMutation.mutate({ evidenceLinkId: id, action: 'approve', comments });
+      setProcessingId(approval.id);
+      approvalMutation.mutate({ approval, action: 'approve', comments });
     } else {
-      setExpandedId(id);
+      setExpandedId(approval.id);
       setActionType(action);
     }
   };
 
-  const submitAction = (id: number) => {
+  const submitAction = (approval: PendingApproval) => {
     if (!actionType) return;
-    setProcessingId(id);
-    approvalMutation.mutate({ evidenceLinkId: id, action: actionType, comments });
+    setProcessingId(approval.id);
+    approvalMutation.mutate({ approval, action: actionType, comments });
   };
 
   const formatDate = (dateStr: string | null) => {
@@ -196,7 +238,7 @@ export default function PendingApprovalsPage() {
         <div className="card p-12 text-center">
           <CheckCircle className="mx-auto h-12 w-12 text-emerald-600 mb-4" />
           <h3 className="text-lg font-semibold text-black mb-2">All Caught Up!</h3>
-          <p className="text-gray-600">You have no pending evidence approvals.</p>
+          <p className="text-gray-600">You have no pending approvals.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -219,19 +261,32 @@ export default function PendingApprovalsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="text-gray-600 mb-1">Assessment</p>
-                        <Link 
-                          href={`/compliance/assessments/${approval.assessment_item.assessment.id}`}
-                          className="text-blue-600 hover:underline flex items-center gap-1"
-                        >
-                          {approval.assessment_item.assessment.name}
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
+                        {approval.assessment_item ? (
+                          <Link 
+                            href={`/compliance/assessments/${approval.assessment_item.assessment.id}`}
+                            className="text-blue-600 hover:underline flex items-center gap-1"
+                          >
+                            {approval.assessment_item.assessment.name}
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <Link href={`/evidence/${approval.evidence.id}`} className="text-blue-600 hover:underline flex items-center gap-1">
+                            Evidence Library
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        )}
                       </div>
                       <div>
                         <p className="text-gray-600 mb-1">Control/Requirement</p>
                         <p className="text-black text-xs line-clamp-2">
-                          {approval.assessment_item.item_number && `${approval.assessment_item.item_number}: `}
-                          {approval.assessment_item.control_description || 'N/A'}
+                          {approval.assessment_item ? (
+                            <>
+                              {approval.assessment_item.item_number && `${approval.assessment_item.item_number}: `}
+                              {approval.assessment_item.control_description || 'N/A'}
+                            </>
+                          ) : (
+                            <>Evidence submitted from the library for manual review</>
+                          )}
                         </p>
                       </div>
                       <div>
@@ -250,7 +305,7 @@ export default function PendingApprovalsPage() {
 
                   <div className="flex flex-col gap-2">
                     <button
-                      onClick={() => handleAction(approval.id, 'approve')}
+                      onClick={() => handleAction(approval, 'approve')}
                       disabled={processingId === approval.id}
                       className="btn-primary flex items-center gap-2 text-sm"
                     >
@@ -262,14 +317,14 @@ export default function PendingApprovalsPage() {
                       Approve
                     </button>
                     <button
-                      onClick={() => handleAction(approval.id, 'reject')}
+                      onClick={() => handleAction(approval, 'reject')}
                       className="btn-danger flex items-center gap-2 text-sm"
                     >
                       <ThumbsDown className="h-4 w-4" />
                       Reject
                     </button>
                     <button
-                      onClick={() => handleAction(approval.id, 'return')}
+                      onClick={() => handleAction(approval, 'return')}
                       className="btn-secondary flex items-center gap-2 text-sm"
                     >
                       <RotateCcw className="h-4 w-4" />
@@ -301,7 +356,7 @@ export default function PendingApprovalsPage() {
                         />
                         <div className="flex gap-2 mt-2">
                           <button
-                            onClick={() => submitAction(approval.id)}
+                            onClick={() => submitAction(approval)}
                             disabled={processingId === approval.id || (actionType === 'reject' && !comments.trim())}
                             className="btn-primary flex items-center gap-2 text-sm"
                           >

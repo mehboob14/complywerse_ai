@@ -7521,6 +7521,9 @@ def init_grc_db():
     
     from .seed_vuln_workflows import seed_default_vuln_workflow
     seed_default_vuln_workflow()
+
+    from .seed_workflow_engine_defaults import seed_workflow_engine_defaults
+    seed_workflow_engine_defaults()
     
     from .seed_rcsa_templates import seed_rcsa_templates
     seed_rcsa_templates()

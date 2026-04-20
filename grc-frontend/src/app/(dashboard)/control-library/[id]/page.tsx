@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient, { frameworksApi, controlsApi } from '@/lib/api';
+import apiClient, { frameworksApi, controlsApi, frameworkUploadApi } from '@/lib/api';
 import { 
   ArrowLeft, Loader2, AlertCircle, Shield, Calendar, Tag,
   Edit2, Sparkles, Trash2, Plus, X, Search, Layers, GitMerge,
@@ -547,6 +547,7 @@ export default function ControlGroupDetailPage() {
           groupId={groupId}
           existingNormalizedIds={(group.normalized_controls || []).map(c => c.control_id)}
           existingFrameworkIds={(group.framework_controls || []).map(c => c.control_id)}
+          existingParsedIds={(group.parsed_controls || []).map(c => c.control_id)}
           onClose={() => setShowAddControlsModal(false)}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['control-group-detail', groupId] });
@@ -1232,12 +1233,14 @@ function AddControlsModal({
   groupId,
   existingNormalizedIds,
   existingFrameworkIds,
+  existingParsedIds,
   onClose,
   onSuccess,
 }: {
   groupId: number;
   existingNormalizedIds: number[];
   existingFrameworkIds: number[];
+  existingParsedIds: number[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -1277,21 +1280,22 @@ function AddControlsModal({
     },
   });
 
-  const { data: frameworkControls } = useQuery({
+  const { data: frameworkControls, isLoading: frameworkControlsLoading } = useQuery({
     queryKey: ['framework-controls', frameworkFilter],
     queryFn: async () => {
       if (!frameworkFilter) return [];
-      const response = await apiClient.get(`/frameworks/${frameworkFilter}`);
-      const framework = response.data;
-      const controls: Array<{ id: number; code: string; name: string }> = [];
-      for (const domain of framework.domains || []) {
-        for (const objective of domain.objectives || []) {
-          for (const control of objective.controls || []) {
-            controls.push({ id: control.id, code: control.code, name: control.name });
-          }
-        }
-      }
-      return controls;
+      const response = await frameworkUploadApi.getParsedControls(frameworkFilter, { limit: 500 });
+      const controls = (response.data?.items || []) as Array<{
+        id: number;
+        control_id?: string | null;
+        original_reference?: string | null;
+        title?: string | null;
+      }>;
+      return controls.map((control) => ({
+        id: control.id,
+        code: control.original_reference || control.control_id || `CTRL-${control.id}`,
+        name: control.title || 'Untitled Control',
+      }));
     },
     enabled: !!frameworkFilter,
   });
@@ -1300,7 +1304,8 @@ function AddControlsModal({
     mutationFn: async () => {
       const data = {
         normalized_control_ids: selectedNormalized,
-        framework_control_ids: selectedFramework,
+        framework_control_ids: [],
+        parsed_control_ids: selectedFramework,
       };
       await apiClient.post(`/control-library/groups/${groupId}/controls`, data);
     },
@@ -1316,6 +1321,7 @@ function AddControlsModal({
 
   const filteredFramework = (frameworkControls || []).filter((c: { id: number; code: string; name: string }) =>
     !existingFrameworkIds.includes(c.id) &&
+    !existingParsedIds.includes(c.id) &&
     (searchTerm === '' || c.code.toLowerCase().includes(searchTerm.toLowerCase()) || c.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
@@ -1420,7 +1426,14 @@ function AddControlsModal({
               </div>
             )}
 
-            {frameworkFilter !== null && filteredFramework.length === 0 && (
+            {frameworkFilter !== null && frameworkControlsLoading && (
+              <div className="flex items-center justify-center gap-2 p-8 text-gray-600">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading framework controls...
+              </div>
+            )}
+
+            {frameworkFilter !== null && !frameworkControlsLoading && filteredFramework.length === 0 && (
               <div className="p-8 text-center text-gray-600">
                 {searchTerm ? 'No matching controls found' : 'No available controls in this framework'}
               </div>

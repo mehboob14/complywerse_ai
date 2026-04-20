@@ -16,6 +16,76 @@ from ....routers.auth_router import require_auth, get_user_tenants, get_user_pri
 router = APIRouter(prefix="/coverage", tags=["Control Library - Coverage Matrix"])
 
 
+def build_framework_display_code(name: Optional[str], short_code: Optional[str], framework_type: Optional[str], fallback_id: int) -> str:
+    if short_code and str(short_code).strip():
+        return str(short_code).strip()
+    if name and str(name).strip():
+        return str(name).strip()
+    if framework_type and str(framework_type).strip():
+        return str(framework_type).strip().title()
+    return f"UP-{fallback_id}"
+
+
+def dedupe_uploaded_frameworks(frameworks: List[UploadedFramework]) -> List[UploadedFramework]:
+    status_rank = {
+        "published": 4,
+        "completed": 3,
+        "classified": 2,
+        "parsed": 1,
+    }
+    deduped = {}
+
+    for framework in frameworks:
+        normalized_name = (framework.name or "").strip().lower()
+        normalized_version = str(getattr(framework, "version", "") or "").strip().lower()
+        signature = str(framework.published_framework_id) if framework.published_framework_id else f"{normalized_name}::{normalized_version or (framework.framework_type or '').strip().lower()}"
+
+        existing = deduped.get(signature)
+        if not existing:
+            deduped[signature] = framework
+            continue
+
+        existing_rank = status_rank.get((existing.upload_status or "").lower(), 0)
+        current_rank = status_rank.get((framework.upload_status or "").lower(), 0)
+        existing_updated = getattr(existing, "updated_at", None) or getattr(existing, "created_at", None) or datetime.min
+        current_updated = getattr(framework, "updated_at", None) or getattr(framework, "created_at", None) or datetime.min
+
+        if current_rank > existing_rank or (current_rank == existing_rank and current_updated > existing_updated):
+            deduped[signature] = framework
+
+    return sorted(deduped.values(), key=lambda fw: ((fw.name or "").lower(), fw.id))
+
+
+def dedupe_framework_entries(frameworks: List[dict]) -> List[dict]:
+    deduped = {}
+
+    for framework in frameworks:
+        normalized_code = str(framework.get("framework_code") or "").strip().lower()
+        normalized_name = str(framework.get("framework_name") or "").strip().lower()
+        signature = normalized_code or normalized_name or str(framework.get("framework_id"))
+
+        existing = deduped.get(signature)
+        if not existing:
+            deduped[signature] = framework
+            continue
+
+        existing_total = existing.get("total_controls", 0)
+        current_total = framework.get("total_controls", 0)
+        existing_is_legacy = (existing.get("framework_id") or 0) > 0
+        current_is_legacy = (framework.get("framework_id") or 0) > 0
+
+        if current_total > existing_total or (current_total == existing_total and current_is_legacy and not existing_is_legacy):
+            deduped[signature] = framework
+
+    return sorted(
+        deduped.values(),
+        key=lambda item: (
+            str(item.get("framework_name") or item.get("framework_code") or "").lower(),
+            item.get("framework_id") or 0,
+        )
+    )
+
+
 def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: Optional[List[int]] = None) -> dict:
     tenant_evidence_ids = db.query(Evidence.id).filter(
         Evidence.tenant_id == tenant_id
@@ -114,15 +184,16 @@ def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: O
         tenant_filter = visible_tenant_ids
 
     # Only show unpublished uploaded frameworks (published ones are in the legacy_frameworks list above)
-    uploaded_frameworks = db.query(UploadedFramework).filter(
+    uploaded_frameworks = dedupe_uploaded_frameworks(db.query(UploadedFramework).filter(
         UploadedFramework.upload_status.in_(['completed', 'parsed', 'classified']),
+        UploadedFramework.published_framework_id.is_(None),
         or_(UploadedFramework.is_active == True, UploadedFramework.is_active.is_(None)),
         or_(
             UploadedFramework.tenant_id.in_(tenant_filter),
             UploadedFramework.tenant_id.is_(None),
             UploadedFramework.is_shared == True
         )
-    ).all()
+    ).all())
 
     for uploaded_framework in uploaded_frameworks:
         parsed_controls = db.query(ParsedFrameworkControl).filter(
@@ -137,7 +208,12 @@ def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: O
         matrix[fw_key] = {
             "framework_id": synthetic_framework_id,
             "framework_name": uploaded_framework.name,
-            "framework_code": uploaded_framework.framework_type.upper() if uploaded_framework.framework_type else f"UP-{uploaded_framework.id}",
+            "framework_code": build_framework_display_code(
+                uploaded_framework.name,
+                None,
+                uploaded_framework.framework_type,
+                uploaded_framework.id,
+            ),
             "categories": {}
         }
 
@@ -371,7 +447,12 @@ def get_uploaded_framework_coverage(
     return {
         "framework_id": -uploaded_framework.id,
         "framework_name": uploaded_framework.name,
-        "framework_code": uploaded_framework.framework_type.upper() if uploaded_framework.framework_type else f"UP-{uploaded_framework.id}",
+        "framework_code": build_framework_display_code(
+            uploaded_framework.name,
+            None,
+            uploaded_framework.framework_type,
+            uploaded_framework.id,
+        ),
         "total_controls": total_controls,
         "covered_controls": covered_controls,
         "uncovered_controls": len(uncovered_controls),
@@ -492,7 +573,7 @@ def get_coverage_matrix(
         })
     
     return {
-        "frameworks": frameworks,
+        "frameworks": dedupe_framework_entries(frameworks),
         "categories": result["categories"]
     }
 
@@ -603,15 +684,16 @@ def get_coverage_by_framework(
         })
 
     # Only show unpublished uploaded frameworks (published ones are in the frameworks list above)
-    uploaded_frameworks = db.query(UploadedFramework).filter(
+    uploaded_frameworks = dedupe_uploaded_frameworks(db.query(UploadedFramework).filter(
         UploadedFramework.upload_status.in_(['completed', 'parsed', 'classified']),
+        UploadedFramework.published_framework_id.is_(None),
         or_(UploadedFramework.is_active == True, UploadedFramework.is_active.is_(None)),
         or_(
             UploadedFramework.tenant_id.in_(user_tenants),
             UploadedFramework.tenant_id.is_(None),
             UploadedFramework.is_shared == True
         )
-    ).all()
+    ).all())
 
     for uploaded_framework in uploaded_frameworks:
         parsed_controls = db.query(ParsedFrameworkControl).filter(
@@ -650,14 +732,19 @@ def get_coverage_by_framework(
         results.append({
             "framework_id": -uploaded_framework.id,
             "framework_name": uploaded_framework.name,
-            "framework_code": uploaded_framework.framework_type.upper() if uploaded_framework.framework_type else f"UP-{uploaded_framework.id}",
+            "framework_code": build_framework_display_code(
+                uploaded_framework.name,
+                None,
+                uploaded_framework.framework_type,
+                uploaded_framework.id,
+            ),
             "total_controls": total,
             "covered_controls": covered,
             "coverage_percent": round((covered / total * 100) if total > 0 else 0, 2),
             "by_category": list(by_category.values())
         })
     
-    return {"frameworks": results}
+    return {"frameworks": dedupe_framework_entries(results)}
 
 
 @router.get("/by-category")
@@ -740,14 +827,15 @@ def get_coverage_by_category(
                     categories[cat_key]["covered_controls"] += 1
                     categories[cat_key]["frameworks"][fw_key]["covered_controls"] += 1
 
-    uploaded_frameworks = db.query(UploadedFramework).filter(
+    uploaded_frameworks = dedupe_uploaded_frameworks(db.query(UploadedFramework).filter(
+        UploadedFramework.published_framework_id.is_(None),
         or_(UploadedFramework.is_active == True, UploadedFramework.is_active.is_(None)),
         or_(
             UploadedFramework.tenant_id.in_(user_tenants),
             UploadedFramework.tenant_id.is_(None),
             UploadedFramework.is_shared == True
         )
-    ).all()
+    ).all())
 
     for uploaded_framework in uploaded_frameworks:
         parsed_controls = db.query(ParsedFrameworkControl).filter(

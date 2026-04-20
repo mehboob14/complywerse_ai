@@ -106,6 +106,29 @@ const truncateText = (text: string | null | undefined, maxLen: number = 80) => {
   return text.substring(0, maxLen) + '...';
 };
 
+const dedupeFrameworkOptions = (items: any[] = []) => {
+  const statusRank: Record<string, number> = { published: 4, completed: 3, classified: 2, parsed: 1 };
+  const deduped = new Map<string, any>();
+
+  items.forEach((framework: any) => {
+    const key = String(
+      framework?.published_framework_id ||
+      `${String(framework?.name || '').trim().toLowerCase()}::${String(framework?.version || framework?.framework_version || '').trim().toLowerCase()}`
+    );
+    const existing = deduped.get(key);
+    const existingRank = existing ? statusRank[String(existing?.upload_status || '').toLowerCase()] ?? 0 : -1;
+    const currentRank = statusRank[String(framework?.upload_status || '').toLowerCase()] ?? 0;
+    const existingUpdated = existing?.updated_at ? new Date(existing.updated_at).getTime() : 0;
+    const currentUpdated = framework?.updated_at ? new Date(framework.updated_at).getTime() : 0;
+
+    if (!existing || currentRank > existingRank || (currentRank === existingRank && currentUpdated > existingUpdated)) {
+      deduped.set(key, framework);
+    }
+  });
+
+  return Array.from(deduped.values()).sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+};
+
 const sanitizeDocumentHtml = (html: string | null | undefined) => {
   if (!html) return '';
 
@@ -246,7 +269,9 @@ export default function PolicyDetailPage() {
       const response = await apiClient.get('/framework-upload/upload');
       const data = response.data;
       const items = Array.isArray(data) ? data : data?.items || data?.frameworks || [];
-      return items.filter((f: any) => f.is_active && (f.upload_status === 'parsed' || f.upload_status === 'published'));
+      return dedupeFrameworkOptions(
+        items.filter((f: any) => f.is_active && ['parsed', 'published', 'classified', 'completed'].includes(f.upload_status))
+      );
     },
     enabled: showGapModal,
   });
@@ -324,7 +349,7 @@ export default function PolicyDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['gap-analysis-runs', id], refetchType: 'all' });
       queryClient.invalidateQueries({ queryKey: ['compliance-summary', id], refetchType: 'all' });
       // Refetch findings with all filter combinations
-      queryClient.invalidateQueries({ queryKey: ['document-gap-findings'] }, { refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['document-gap-findings'], refetchType: 'all' });
       setShowGapModal(false);
       setSelectedFrameworkIds([]);
     },
@@ -400,11 +425,33 @@ export default function PolicyDetailPage() {
     },
   });
 
+  const submitForReviewMutation = useMutation({
+    mutationFn: () => governanceApi.submitDocumentForReview(id),
+    onSuccess: () => {
+      toast({ type: 'success', title: 'Submitted for Review', message: 'The document is now in the approvals queue.' });
+      queryClient.invalidateQueries({ queryKey: ['governance-document', id] });
+      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['workflow-dashboard'] });
+      router.push('/governance/workflows');
+    },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.detail || 'Failed to submit document for review.';
+      if (typeof detail === 'string' && detail.toLowerCase().includes('already has pending approval steps')) {
+        toast({ type: 'info', title: 'Already in Review', message: 'This document is already waiting in approvals.' });
+        router.push('/governance/workflows');
+        return;
+      }
+      toast({ type: 'error', title: 'Submit Failed', message: detail });
+    },
+  });
+
   const publishMutation = useMutation({
     mutationFn: () => governanceApi.publishDocument(id),
     onSuccess: () => {
       toast({ type: 'success', title: 'Document Published' });
       queryClient.invalidateQueries({ queryKey: ['governance-document', id] });
+      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
     },
     onError: (error: any) => {
       toast({ type: 'error', title: 'Publish Failed', message: error?.response?.data?.detail || 'Failed to publish document.' });
@@ -573,7 +620,36 @@ export default function PolicyDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {document.status === 'draft' && (
+            <button
+              onClick={() => submitForReviewMutation.mutate()}
+              disabled={submitForReviewMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {submitForReviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Submit for Review
+            </button>
+          )}
+          {(document.status === 'pending_review' || document.status === 'pending_approval') && (
+            <button
+              onClick={() => router.push('/governance/workflows')}
+              className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-blue-700 hover:bg-blue-100 transition-colors"
+            >
+              <Clock className="h-4 w-4" />
+              Open Approvals
+            </button>
+          )}
+          {document.status === 'approved' && (
+            <button
+              onClick={() => publishMutation.mutate()}
+              disabled={publishMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {publishMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              Publish
+            </button>
+          )}
           {document.has_file && (
             <button
               onClick={handleDownload}

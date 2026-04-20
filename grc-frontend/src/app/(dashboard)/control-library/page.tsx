@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient from '@/lib/api';
+import apiClient, { frameworksApi } from '@/lib/api';
 import {
   Library,
   Loader2,
@@ -142,11 +142,11 @@ export default function ControlLibraryPage() {
     },
   });
 
-  const { data: uploadedFrameworks } = useQuery({
-    queryKey: ['uploaded-frameworks'],
+  const { data: availableFrameworks } = useQuery({
+    queryKey: ['available-frameworks-count'],
     queryFn: async () => {
-      const response = await apiClient.get('/framework-upload/upload');
-      return response.data?.items || [];
+      const response = await frameworksApi.getAvailable();
+      return response.data || [];
     },
   });
 
@@ -305,13 +305,13 @@ export default function ControlLibraryPage() {
   }, [groupsData]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Unified Control Library</h1>
-          <p className="text-gray-600">AI-powered control mapping across frameworks</p>
+          <h1 className="text-xl font-semibold text-black sm:text-2xl">Unified Control Library</h1>
+          <p className="text-sm text-gray-600">AI-powered control mapping across frameworks</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
@@ -324,7 +324,7 @@ export default function ControlLibraryPage() {
               setAutoGroupResult(null);
               setShowAutoGroupModal(true);
             }}
-            className="flex items-center gap-2 rounded-lg border border-primary-500 bg-primary-500/10 px-4 py-2 font-medium text-blue-600 hover:bg-primary-500/20"
+            className="flex items-center gap-2 rounded-lg border border-primary-500 bg-primary-500/10 px-3.5 py-2 text-sm font-medium text-blue-600 hover:bg-primary-500/20"
           >
             <Sparkles size={18} />
             Auto-Group with AI
@@ -332,7 +332,7 @@ export default function ControlLibraryPage() {
           <button
             onClick={() => populateFromFrameworksMutation.mutate()}
             disabled={populateFromFrameworksMutation.isPending}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 font-medium text-black hover:bg-gray-200 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-100 px-3.5 py-2 text-sm font-medium text-black hover:bg-gray-200 disabled:opacity-50"
           >
             {populateFromFrameworksMutation.isPending ? (
               <Loader2 size={18} className="animate-spin" />
@@ -341,7 +341,7 @@ export default function ControlLibraryPage() {
             )}
             Populate from Frameworks
           </button>
-          <button
+          {/* <button
             onClick={() => {
               setAnalysisResult(null);
               setShowAnalysisModal(true);
@@ -350,7 +350,7 @@ export default function ControlLibraryPage() {
           >
             <Brain size={18} />
             Run AI Analysis
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -371,10 +371,10 @@ export default function ControlLibraryPage() {
         />
         <StatCard
           title="Frameworks Covered"
-          value={groupsLoading ? '-' : uploadedFrameworks?.length || 0}
+          value={groupsLoading ? '-' : availableFrameworks?.length || 0}
           icon={Layers}
           variant="success"
-          subtitle="Uploaded frameworks"
+          subtitle="Available compliance frameworks"
         />
         <StatCard
           title="Evidence Coverage"
@@ -393,8 +393,8 @@ export default function ControlLibraryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Link href="/control-library/coverage" className="card hover:border-primary-500/50 transition-colors group">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <Link href="/control-library/coverage" className="card group hover:border-primary-500/50 transition-colors">
           <div className="flex items-center gap-4">
             <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
               <Grid3X3 className="h-6 w-6 text-blue-400" />
@@ -1025,7 +1025,7 @@ export default function ControlLibraryPage() {
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">Select Frameworks (optional)</label>
                   <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-gray-300 bg-gray-100 p-3">
-                    {uploadedFrameworks?.map((fw: any) => (
+                    {availableFrameworks?.map((fw: any) => (
                       <label key={fw.id} className="flex items-center gap-2 text-sm text-gray-700">
                         <input
                           type="checkbox"
@@ -1043,7 +1043,7 @@ export default function ControlLibraryPage() {
                         {fw.name}
                       </label>
                     ))}
-                    {(!uploadedFrameworks || uploadedFrameworks.length === 0) && (
+                    {(!availableFrameworks || availableFrameworks.length === 0) && (
                       <p className="text-sm text-gray-500">No frameworks uploaded. Please upload frameworks first.</p>
                     )}
                   </div>
@@ -1167,7 +1167,7 @@ export default function ControlLibraryPage() {
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">Select Frameworks (optional)</label>
                   <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-gray-300 bg-gray-100 p-3">
-                    {uploadedFrameworks?.map((fw: any) => (
+                    {availableFrameworks?.map((fw: any) => (
                       <label key={fw.id} className="flex items-center gap-2 text-sm text-gray-700">
                         <input
                           type="checkbox"
@@ -1185,7 +1185,7 @@ export default function ControlLibraryPage() {
                         {fw.name}
                       </label>
                     ))}
-                    {(!uploadedFrameworks || uploadedFrameworks.length === 0) && (
+                    {(!availableFrameworks || availableFrameworks.length === 0) && (
                       <p className="text-sm text-gray-500">No frameworks uploaded. Please upload frameworks first.</p>
                     )}
                   </div>

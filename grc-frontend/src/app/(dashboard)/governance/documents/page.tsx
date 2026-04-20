@@ -171,6 +171,29 @@ const getFileTypeColor = (fileType: string | null): string => {
   return 'text-[var(--color-muted)]';
 };
 
+const dedupeFrameworkOptions = (items: any[] = []) => {
+  const statusRank: Record<string, number> = { published: 4, completed: 3, classified: 2, parsed: 1 };
+  const deduped = new Map<string, any>();
+
+  items.forEach((framework: any) => {
+    const key = String(
+      framework?.published_framework_id ||
+      `${String(framework?.name || '').trim().toLowerCase()}::${String(framework?.version || framework?.framework_version || '').trim().toLowerCase()}`
+    );
+    const existing = deduped.get(key);
+    const existingRank = existing ? statusRank[String(existing?.upload_status || '').toLowerCase()] ?? 0 : -1;
+    const currentRank = statusRank[String(framework?.upload_status || '').toLowerCase()] ?? 0;
+    const existingUpdated = existing?.updated_at ? new Date(existing.updated_at).getTime() : 0;
+    const currentUpdated = framework?.updated_at ? new Date(framework.updated_at).getTime() : 0;
+
+    if (!existing || currentRank > existingRank || (currentRank === existingRank && currentUpdated > existingUpdated)) {
+      deduped.set(key, framework);
+    }
+  });
+
+  return Array.from(deduped.values()).sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+};
+
 type SortField = 'document_code' | 'title' | 'doc_type' | 'status' | 'owner_name' | 'current_version' | 'next_review_date' | 'created_at';
 type SortOrder = 'asc' | 'desc';
 
@@ -474,24 +497,24 @@ export default function GovernanceDocumentsPage() {
           <h1 className="page-title">Document Library</h1>
           <p className="page-description">Manage governance documents, policies, and procedures</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setIsAIDraftModalOpen(true)}
-            className="cw-btn-secondary flex items-center gap-2"
+            className="cw-btn-secondary flex items-center gap-2 whitespace-nowrap"
           >
             <Wand2 size={18} />
-            AI Draft Policy
+            AI Draft Document
           </button>
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            className="cw-btn-secondary flex items-center gap-2"
+            className="cw-btn-secondary flex items-center gap-2 whitespace-nowrap"
           >
             <Upload size={18} />
             New Document with File
           </button>
           <button
             onClick={handleCreate}
-            className="cw-btn-primary flex items-center gap-2"
+            className="cw-btn-primary flex items-center gap-2 whitespace-nowrap"
           >
             <Plus size={18} />
             New Document
@@ -535,7 +558,7 @@ export default function GovernanceDocumentsPage() {
       <div className="cw-card p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 cw-text-muted" />
+            {/* <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 cw-text-muted" /> */}
             <input
               type="text"
               placeholder="Search documents..."
@@ -601,7 +624,140 @@ export default function GovernanceDocumentsPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="lg:hidden divide-y divide-[var(--color-border)]">
+              {filteredDocuments.map((doc) => {
+                const typeStyle = getTypeStyle(doc.doc_type);
+                const statusStyle = getStatusStyle(doc.status);
+                const FileIcon = getFileIcon(doc.file_type);
+
+                return (
+                  <div key={doc.id} className="space-y-3 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <button
+                          onClick={() => router.push(`/governance/documents/${doc.id}`)}
+                          className="max-w-full truncate text-left font-semibold cw-text-default hover:text-[var(--color-base)]"
+                          title={doc.title}
+                        >
+                          {doc.title}
+                        </button>
+                        {doc.description && (
+                          <p className="mt-1 text-sm cw-text-muted line-clamp-2">{doc.description}</p>
+                        )}
+                      </div>
+                      <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle.bgColor} text-gray-800`}>
+                        {statusStyle.label}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${typeStyle.bgColor} text-gray-800`}>
+                        {typeStyle.label}
+                      </span>
+                      <span className="rounded-full bg-[var(--color-surface)] px-2.5 py-1 cw-text-muted">
+                        Owner: {doc.owner_name || '-'}
+                      </span>
+                      <span className="rounded-full bg-[var(--color-surface)] px-2.5 py-1 cw-text-muted">
+                        Version: {doc.current_version || '1.0'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-sm cw-text-muted">
+                      <FileIcon className={`h-4 w-4 ${getFileTypeColor(doc.file_type)}`} />
+                      <span className="truncate">{doc.file_name || 'No file attached'}</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        onClick={() => router.push(`/governance/documents/${doc.id}`)}
+                        className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
+                        title="View Details"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleEdit(doc)}
+                        className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
+                        title="Edit"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                      {doc.file_name ? (
+                        <>
+                          <button
+                            onClick={() => handleDownload(doc)}
+                            className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
+                            title="Download File"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => parsePolicyMutation.mutate(doc.id)}
+                            className={`rounded p-1.5 transition-colors ${
+                              doc.policy_statement_count && doc.policy_statement_count > 0
+                                ? 'text-[var(--color-success)] hover:bg-[var(--color-success-soft)]'
+                                : 'text-[var(--color-base)] hover:bg-[var(--color-base-soft)]'
+                            }`}
+                            title={doc.policy_statement_count && doc.policy_statement_count > 0
+                              ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
+                              : 'Parse Policy Statements'
+                            }
+                            disabled={parsingDocumentId === doc.id}
+                          >
+                            {parsingDocumentId === doc.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Wand2 className="h-4 w-4" />
+                            )}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setUploadingToDocumentId(doc.id)}
+                          className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
+                          title="Upload File"
+                        >
+                          <Upload className="h-4 w-4" />
+                        </button>
+                      )}
+                      {doc.status === 'approved' && (
+                        <button
+                          onClick={() => publishMutation.mutate(doc.id)}
+                          className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
+                          title="Publish Document"
+                          disabled={publishMutation.isPending}
+                        >
+                          {publishMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Globe className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                      {doc.status === 'published' && (
+                        <button
+                          onClick={() => setAttestationTargetDocument(doc)}
+                          className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
+                          title="Request Attestation"
+                        >
+                          <Send className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(doc)}
+                        className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-colors"
+                        title="Delete"
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-[var(--color-surface)]">
                   <tr>
@@ -618,14 +774,19 @@ export default function GovernanceDocumentsPage() {
                   {filteredDocuments.map((doc) => {
                     const typeStyle = getTypeStyle(doc.doc_type);
                     const statusStyle = getStatusStyle(doc.status);
-                    const TypeIcon = typeStyle.icon || FileText;
                     const FileIcon = getFileIcon(doc.file_type);
-                    
+
                     return (
                       <tr key={doc.id} className="hover:bg-[var(--color-hover)] transition-colors">
                         <td className="px-4 py-4">
                           <div className="max-w-xs">
-                            <p className="font-medium cw-text-default truncate">{doc.title}</p>
+                            <button
+                              onClick={() => router.push(`/governance/documents/${doc.id}`)}
+                              className="max-w-full truncate text-left font-medium cw-text-default hover:text-[var(--color-base)]"
+                              title={doc.title}
+                            >
+                              {doc.title}
+                            </button>
                             {doc.description && (
                               <p className="text-sm cw-text-muted truncate">{doc.description}</p>
                             )}
@@ -1345,7 +1506,7 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="cw-card w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl shadow-xl">
+      <div className="cw-card w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl shadow-xl">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
           <h2 className="text-xl font-semibold cw-text">
             {document?.id ? 'Edit Document' : 'New Document'}
@@ -1833,7 +1994,9 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
       const response = await apiClient.get('/framework-upload/upload');
       const data = response.data;
       const items = Array.isArray(data) ? data : data?.items || data?.frameworks || [];
-      return items.filter((f: any) => f.is_active && (f.upload_status === 'parsed' || f.upload_status === 'published'));
+      return dedupeFrameworkOptions(
+        items.filter((f: any) => f.is_active && ['parsed', 'published', 'classified', 'completed'].includes(f.upload_status))
+      );
     },
   });
 
@@ -1914,28 +2077,28 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
   };
 
   const priorityColors: Record<string, string> = {
-    high: 'bg-red-500/20 text-red-300 border-red-500/30',
-    medium: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-    low: 'bg-green-500/20 text-green-300 border-green-500/30',
+    high: 'border border-red-200 bg-red-50 text-red-700',
+    medium: 'border border-amber-200 bg-amber-50 text-amber-700',
+    low: 'border border-green-200 bg-green-50 text-green-700',
   };
 
   const docTypeColors: Record<string, string> = {
-    policy: 'bg-blue-500/20 text-blue-300',
-    standard: 'bg-purple-500/20 text-purple-300',
-    procedure: 'bg-teal-500/20 text-teal-300',
-    guideline: 'bg-indigo-500/20 text-indigo-300',
+    policy: 'bg-blue-100 text-blue-800',
+    standard: 'bg-purple-100 text-purple-800',
+    procedure: 'bg-teal-100 text-teal-800',
+    guideline: 'bg-indigo-100 text-indigo-800',
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="cw-card w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-xl flex flex-col">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10">
+      <div className="cw-card flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden shadow-xl">
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-gradient-to-r from-blue-50 to-violet-50 px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-2">
-              <Wand2 className="h-5 w-5 text-purple-400" />
+            <div className="rounded-lg bg-white p-2 shadow-sm border border-blue-100">
+              <Wand2 className="h-5 w-5 text-violet-700" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold cw-text">AI Draft Policy</h2>
+              <h2 className="text-lg font-semibold cw-text">AI Draft Document</h2>
               <p className="text-sm cw-text-muted">Generate professional policy documents with AI</p>
             </div>
           </div>
@@ -2008,7 +2171,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                   {selectedFrameworks.map((fw: any) => (
                     <span
                       key={fw.id}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/20 px-3 py-1 text-xs font-medium text-purple-300"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700"
                     >
                       <Shield className="h-3 w-3" />
                       {fw.name}
@@ -2029,7 +2192,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                   type="button"
                   onClick={handleSuggestDocuments}
                   disabled={suggestionsLoading}
-                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 px-4 py-2.5 text-sm font-medium text-purple-300 hover:from-purple-500/30 hover:to-blue-500/30 transition-all w-full justify-center"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-all"
                 >
                   {suggestionsLoading ? (
                     <>
@@ -2046,13 +2209,13 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
               )}
 
               {showSuggestions && (
-                <div className="rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-blue-500/5 overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-purple-500/20 px-4 py-3 bg-purple-500/10">
+                <div className="overflow-hidden rounded-xl border border-blue-200 bg-white">
+                  <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50 px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Wand2 className="h-4 w-4 text-purple-400" />
-                      <span className="text-sm font-medium text-purple-300">
+                      <Wand2 className="h-4 w-4 text-blue-700" />
+                      <span className="text-sm font-medium text-blue-700">
                         AI-Suggested Documents
-                        {suggestions && <span className="text-purple-400 ml-1">({suggestions.length})</span>}
+                        {suggestions && <span className="ml-1 text-blue-600">({suggestions.length})</span>}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -2060,7 +2223,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                         type="button"
                         onClick={handleSuggestDocuments}
                         disabled={suggestionsLoading}
-                        className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                        className="flex items-center gap-1 text-xs text-blue-700 hover:text-blue-800"
                       >
                         <Wand2 className="h-3 w-3" />
                         Refresh
@@ -2076,9 +2239,9 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                   </div>
                   <div className="max-h-60 overflow-y-auto p-3 space-y-2">
                     {suggestionsLoading ? (
-                      <div className="flex flex-col items-center justify-center py-8 gap-3">
-                        <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
-                        <p className="text-sm cw-text-muted">Analyzing framework controls and requirements...</p>
+                      <div className="flex items-center justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-4 text-sm text-blue-700">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <p>Analyzing framework controls and requirements...</p>
                       </div>
                     ) : suggestions && suggestions.length > 0 ? (
                       suggestions.map((suggestion: any, idx: number) => (
@@ -2222,8 +2385,9 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
               <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/50 overflow-hidden">
                 <div className="border-b border-[var(--color-border)] px-4 py-2 bg-[var(--color-surface)]/50">
                   <h3 className="font-medium cw-text">{result.suggested_title}</h3>
+                  <p className="mt-1 text-xs cw-text-muted">The following contents will be part of the document. Click Use This Content to continue.</p>
                 </div>
-                <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
+                <div className="p-4 space-y-4 max-h-[200px] overflow-y-auto">
                   {result.suggested_sections.map((section, idx) => (
                     <div key={idx} className="space-y-2">
                       <h4 className="font-medium text-purple-300">{section.heading}</h4>

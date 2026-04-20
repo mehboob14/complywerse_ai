@@ -1261,12 +1261,20 @@ function ApprovalCard({ item, onApprove, onReject, isOverdue }: ApprovalCardProp
               <span className="text-sm text-gray-600">({item.document_code})</span>
             )}
           </div>
+          <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-3">
+            <span>
+              <span className="font-medium text-black">Policy:</span> {item.document_title}
+            </span>
+            <span>
+              <span className="font-medium text-black">Uploaded by:</span> {item.owner_name || 'Unknown'}
+            </span>
+            <span>
+              <span className="font-medium text-black">Time:</span> {formatDateTime(item.requested_at)}
+            </span>
+          </div>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
             <span className={`rounded px-2 py-0.5 ${docTypeStyle.bgColor} ${docTypeStyle.color}`}>
               {docTypeStyle.label}
-            </span>
-            <span className="text-gray-600">
-              Requested: {formatDateTime(item.requested_at)}
             </span>
             <span className={isOverdue || item.is_overdue ? 'text-red-400' : 'text-gray-600'}>
               Due: {formatDate(item.due_date)}
@@ -1276,11 +1284,7 @@ function ApprovalCard({ item, onApprove, onReject, isOverdue }: ApprovalCardProp
                 </span>
               )}
             </span>
-          </div>
-          <div className="mt-2 flex items-center gap-3 text-sm text-gray-600">
-            <span>Requester: {item.owner_name || 'Unknown'}</span>
-            <span>•</span>
-            <span>Step: {item.step_name}</span>
+            <span className="text-gray-600">Step: {item.step_name}</span>
           </div>
         </div>
 

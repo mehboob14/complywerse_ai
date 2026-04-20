@@ -440,13 +440,13 @@ GROUP BY COALESCE(department_id, -1)
 [EMPTY] grc_evidence - No evidence yet
 [EMPTY] Most other tables are empty
 
-**⚠️ IMPORTANT**: ALWAYS generate valid SQL even for empty tables.
+** IMPORTANT**: ALWAYS generate valid SQL even for empty tables.
 The system handles "0 rows" gracefully with helpful "no data yet" messages.
 NEVER skip SQL generation or return null SQL for empty tables.
 NEVER say "no data found" — generate SQL and let the system handle the empty response.
 
 =================================================================================
-📂 DOMAIN 1: COMPLIANCE & FRAMEWORKS (15 core tables)
+ DOMAIN 1: COMPLIANCE & FRAMEWORKS (15 core tables)
 =================================================================================
 **Purpose**: Manage regulatory frameworks, controls, compliance programs
 
@@ -563,7 +563,7 @@ is_mandatory, enforcement_type, is_active, is_custom
 USE grc_uploaded_frameworks INSTEAD ⭐
 
 =================================================================================
-📂 DOMAIN 2: VULNERABILITY MANAGEMENT (7 tables)
+DOMAIN 2: VULNERABILITY MANAGEMENT (7 tables)
 =================================================================================
 **Purpose**: Security vulnerability tracking, SLA management
 
@@ -1578,7 +1578,7 @@ LIMIT 100
 [YES] CORRECT: WHERE (owner_id = 123 OR owner_id IS NULL)
 
 =================================================================================
-📋 USER CONTEXT HANDLING
+USER CONTEXT HANDLING
 =================================================================================
 
 When user asks "my department", "assigned to me", "my risks":
@@ -1614,13 +1614,24 @@ CRITICAL GENERATION RULES:
 13. **LIKE for pattern matching** - Use LIKE (case-insensitive), NEVER ILIKE or SIMILAR TO
 
 DOMAIN DECISION TREE:
-- Framework/control questions [>] COMPLIANCE & FRAMEWORKS (Domain 1)
-- Security/vulnerability questions [>] VULNERABILITY MANAGEMENT (Domain 2)
-- Risk/KRI questions [>] RISK MANAGEMENT (Domain 3)
-- Committee/policy questions [>] GOVERNANCE (Domain 4)
-- Evidence/document questions [>] EVIDENCE & DOCUMENTATION (Domain 5)
+- Framework / control / compliance questions [>] COMPLIANCE & FRAMEWORKS (Domain 1)
+- Security / vulnerability / pentest / CVE questions [>] VULNERABILITY MANAGEMENT (Domain 2)
+- Risk register / KRI / risk incidents / mitigation questions [>] RISK MANAGEMENT (Domain 6C)
+- Policy / procedure / standard / guideline / document / statement questions [>] GOVERNANCE DOCUMENTS (Domain 7)
+- Regulatory change / regulation update questions [>] REGULATORY CHANGES (Domain 8)
+- Committee / meeting / oversight action / charter questions [>] COMMITTEE GOVERNANCE (Domain 9)
+- Internal control / control test / key control questions [>] INTERNAL CONTROLS (Domain 10)
+- IT asset / asset inventory / hardware / software / CDE questions [>] IT ASSETS (Domain 11)
+- Attestation / certification / signoff / SOX questions [>] ATTESTATION (Domain 12)
+- RCSA / self-assessment / business unit risk questions [>] RCSA (Domain 13)
+- Evidence / document evidence / control evidence questions [>] EVIDENCE (Domain 14)
+- Compliance assessment / gap assessment / checklist questions [>] COMPLIANCE ASSESSMENT DOCS (Domain 15)
+- User / department / role / permission questions [>] USERS & ROLES (Domain 16)
+- Exception / policy exception / control exception questions [>] EXCEPTIONS & VENDORS (Domain 6D)
+- Vendor / third-party / supplier questions [>] EXCEPTIONS & VENDORS (Domain 6D)
+- Compliance program / assessment status questions [>] COMPLIANCE ASSESSMENTS (Domain 6B)
 - Removed audit-management questions [>] Politely explain that the Audit Management module is no longer available and redirect to active GRC domains
-- Multiple domains [>] Use link tables to join them
+- Multiple domains [>] Use link tables and JOINs to combine them
 
 RESPONSE FORMAT - ALWAYS return valid JSON:
 {{
@@ -1670,13 +1681,28 @@ Q: "Any open risks?" or "My risk register"
 A: {{"sql": "SELECT id, COALESCE(title,'Untitled') as title, COALESCE(category,'N/A') as category, COALESCE(inherent_score,0) as score, COALESCE(status,'open') as status FROM grc_risks WHERE COALESCE(status,'open') = 'open' ORDER BY COALESCE(inherent_score,0) DESC LIMIT 20", "explanation": "Shows all open risks in the risk register", "entity_type": "risks", "estimated_rows": "low"}}
 
 Q: "Any exceptions?" or "Show pending exceptions"
-A: {{"sql": "SELECT id, COALESCE(title,'Untitled') as title, COALESCE(exception_type,'policy') as type, COALESCE(status,'pending') as status, COALESCE(expiry_date,'N/A') as expires FROM grc_exceptions WHERE COALESCE(status,'pending') IN ('pending','approved') ORDER BY created_at DESC LIMIT 20", "explanation": "Lists active policy/control exceptions", "entity_type": "exceptions", "estimated_rows": "low"}}
+A: {{"sql": "SELECT id, COALESCE(title,'Untitled') as title, COALESCE(status,'pending') as status, COALESCE(expiry_date,'N/A') as expires FROM grc_exceptions WHERE COALESCE(status,'pending') IN ('pending','approved') ORDER BY created_at DESC LIMIT 20", "explanation": "Lists active control exceptions", "entity_type": "exceptions", "estimated_rows": "low"}}
 
 Q: "Vendor overview" or "Any vendors?"
 A: {{"sql": "SELECT id, COALESCE(name,'Unknown Vendor') as vendor, COALESCE(vendor_type,'N/A') as type, COALESCE(risk_rating,'medium') as risk, COALESCE(status,'active') as status FROM grc_vendors ORDER BY CASE risk_rating WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 20", "explanation": "Shows all vendors with their risk ratings", "entity_type": "vendors", "estimated_rows": "low"}}
 
-Q: "Open incidents" or "Any incidents?"
-A: {{"sql": "SELECT id, COALESCE(title,'Untitled') as title, COALESCE(severity,'medium') as severity, COALESCE(status,'new') as status, COALESCE(occurred_at,'N/A') as occurred FROM grc_incidents WHERE COALESCE(status,'new') NOT IN ('resolved','closed') ORDER BY occurred_at DESC LIMIT 20", "explanation": "Lists all unresolved security incidents", "entity_type": "incidents", "estimated_rows": "low"}}
+Q: "Open incidents" or "Any incidents?" or "Risk incidents"
+A: {{"sql": "SELECT id, COALESCE(title,'Untitled') as title, COALESCE(severity,'medium') as severity, COALESCE(status,'open') as status, COALESCE(incident_date,'N/A') as incident_date FROM grc_risk_incidents WHERE COALESCE(status,'open') NOT IN ('resolved','closed') ORDER BY incident_date DESC LIMIT 20", "explanation": "Lists all unresolved risk incidents", "entity_type": "incidents", "estimated_rows": "low"}}
+
+Q: "Show policies" or "List all documents" or "What policies do we have?"
+A: {{"sql": "SELECT id, COALESCE(title,'Untitled') as title, COALESCE(doc_type,'policy') as type, COALESCE(status,'draft') as status, COALESCE(next_review_date,'N/A') as next_review FROM grc_governance_documents WHERE COALESCE(doc_type,'policy') IN ('policy','standard','procedure','guideline','charter') ORDER BY doc_type, title LIMIT 30", "explanation": "Lists all governance documents and policies", "entity_type": "governance", "estimated_rows": "low"}}
+
+Q: "Internal controls" or "Show active controls" or "Key controls"
+A: {{"sql": "SELECT COALESCE(control_id,'IC-?') as control_id, COALESCE(name,'Untitled') as name, COALESCE(category,'N/A') as category, COALESCE(control_type,'preventive') as type, COALESCE(design_effectiveness,'not_tested') as design_eff, COALESCE(operating_effectiveness,'not_tested') as op_eff FROM grc_internal_controls WHERE COALESCE(status,'draft') = 'active' ORDER BY category, control_id LIMIT 30", "explanation": "Lists active internal controls with effectiveness ratings", "entity_type": "internal_controls", "estimated_rows": "low"}}
+
+Q: "IT assets" or "Asset inventory" or "Critical systems"
+A: {{"sql": "SELECT COALESCE(name,'Unnamed') as name, COALESCE(asset_type,'N/A') as type, COALESCE(criticality,'medium') as criticality, COALESCE(status,'active') as status, COALESCE(owner_name,'Unassigned') as owner FROM grc_it_assets WHERE COALESCE(status,'active') = 'active' ORDER BY CASE criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 30", "explanation": "Lists active IT assets by criticality", "entity_type": "it_assets", "estimated_rows": "low"}}
+
+Q: "Pending attestations" or "Any attestations due?"
+A: {{"sql": "SELECT ar.id, COALESCE(ac.name,'Campaign') as campaign, COALESCE(ac.campaign_type,'N/A') as type, COALESCE(ar.status,'pending') as status, COALESCE(ar.due_date,'N/A') as due_date FROM grc_attestation_requests ar LEFT JOIN grc_attestation_campaigns ac ON ar.campaign_id = ac.id WHERE COALESCE(ar.status,'pending') IN ('pending','overdue','escalated') ORDER BY ar.due_date ASC LIMIT 20", "explanation": "Shows pending attestation requests with campaign names", "entity_type": "attestations", "estimated_rows": "low"}}
+
+Q: "Regulatory changes" or "New regulations" or "What regulations changed?"
+A: {{"sql": "SELECT id, COALESCE(title,'Untitled') as title, COALESCE(source,'N/A') as source, COALESCE(priority,'medium') as priority, COALESCE(status,'identified') as status, COALESCE(effective_date,'N/A') as effective_date FROM grc_regulatory_changes WHERE COALESCE(status,'identified') NOT IN ('completed','not_applicable') ORDER BY effective_date ASC LIMIT 20", "explanation": "Lists open regulatory changes that require action", "entity_type": "regulatory", "estimated_rows": "low"}}
 
 Q: "How many open vulnerabilities are there?" or "Vulnerability summary"
 A: {{"sql": "SELECT COALESCE(severity,'unknown') as severity, COUNT(*) as count FROM grc_vulnerabilities WHERE COALESCE(status,'Open') NOT IN ('Closed','Resolved') GROUP BY COALESCE(severity,'unknown') ORDER BY CASE COALESCE(severity,'unknown') WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END", "explanation": "Shows vulnerability counts grouped by severity", "entity_type": "vulnerabilities", "estimated_rows": "low"}}
@@ -2172,8 +2198,8 @@ PAGINATION REQUIREMENT:
     
     try:
         logger.info("[REFRESH] STEP 1: Generating SQL with AI...")
-        logger.info(f"🤖 Attempt {retry_count + 1}/3")
-        logger.info(f"⚡ API Request: model=gpt-4o-mini, temp=0.1")
+        logger.info(f" Attempt {retry_count + 1}/3")
+        logger.info(f" API Request: model=gpt-4o-mini, temp=0.1")
         
         response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
@@ -2426,58 +2452,51 @@ This query joined tables incorrectly or queried relationships that don't have da
             messages=[
                 {
                     "role": "system",
-                    "content": f"""You are a GRC data analyst. Format query results into STRUCTURED, PROFESSIONAL response.
+                    "content": f"""You are ComplyChat, a GRC business analyst presenting platform data clearly to non-technical users.
 
-CRITICAL FORMATTING RULES:
-1. **Executive Summary** (2-3 sentences): Key findings, total count, notable patterns
-2. **Structured Data Table**: 
-   - Use proper markdown tables with alignment
-   - **ONLY include columns with meaningful data** - skip IDs, timestamps unless specifically requested
-   - Show ALL data if ≤20 rows (no truncation)
-   - If 21-100 rows: Show top 20 + summary stats at bottom
-   - If 100+ rows: Show top 15 + detailed statistics
-   - Align numbers RIGHT, text LEFT
-   - Format dates consistently (YYYY-MM-DD)
-   - Highlight Critical/High severity items with **bold**
-   - **Never show file_path or long system paths**
-3. **Key Insights** (bullet points):
-   - Patterns in the data
-   - Notable trends or anomalies
-   - Risk indicators
-4. **Recommendations** (if applicable):
-   - Actionable next steps
-   - Priority items to address
+CRITICAL RULES — follow exactly:
+1. **NEVER mention**: SQL, queries, databases, tables, columns, query execution, data source, "results returned", "query ran", "database", "records fetched". Write as if you're naturally presenting facts, not running queries.
+2. **Executive Summary** (1-2 sentences): What was found, total count, key takeaway.
+3. **Structured Table** (use markdown tables):
+   - Show ONLY meaningful business columns — skip IDs, tenant_id, file paths, UUIDs, timestamps unless asked
+   - Show ALL rows if ≤ 20; show top 20 + "X more items available" note if more
+   - Bold **Critical** and **High** severity values
+   - Format dates as YYYY-MM-DD
+4. **Key Insights** (2-4 bullet points): Patterns, risks, anomalies worth highlighting
+5. **Recommended Actions** (only if relevant): 2-3 specific next steps
 
-COLUMN SELECTION (IMPORTANT):
-- For evidence queries: Show id, name/description, evidence_type, file_name, status, version
-- For assets: Show name, asset_type, criticality, location, status
-- For controls: Show code, name, statement, framework
-- For vulnerabilities: Show title, severity, cvss_score, status, discovered_at
-- **Skip**: tenant_id, created_by, updated_by, file_path, UUIDs
+COLUMN DISPLAY RULES:
+- Frameworks: Show name, type, version, status, control_count — skip IDs
+- Controls: Show control_id/code, name/title, category, framework — skip IDs  
+- Vulnerabilities: Show title, severity, cvss_score, status, asset — skip IDs
+- Risks: Show title, category, inherent_score, residual_score, status — skip IDs
+- Vendors: Show name, vendor_type, tier, risk_rating, status — skip IDs
+- Evidence: Show name, evidence_type, status, quality_score, expiry_date — skip IDs
+- Assets: Show name, asset_type, criticality, status, owner_name — skip IDs
+- Policies/Documents: Show title, doc_type, status, owner, next_review_date — skip IDs
+- Incidents: Show title, severity, status, incident_date — skip IDs
+- Exceptions: Show title, status, expiry_date — skip IDs
+- All others: Show the most human-readable 3-5 columns, skip technical IDs and system fields
 
-SEVERITY/STATUS HIGHLIGHTING:
-- Critical/High severity: Use **bold**
-- Open/In Progress status: Mention in insights
-- Overdue items: Highlight in recommendations
+SEVERITY/STATUS EMPHASIS:
+- Critical/High: **bold**
+- Overdue items: note in insights
+- Open/unresolved: highlight in recommendations
 
 DATA ACCURACY:
-- Count MUST match exactly: {total_rows} rows
-- Never approximate or round counts
-- Show actual values, not estimates
+- Count MUST match exactly: {total_rows} total items found
+- Never round or approximate
 
-Respond in {language} language.
-Be concise but complete. Focus on actionable intelligence."""
+Respond in {language}. Be concise, professional, and actionable."""
                 },
                 {
                     "role": "user",
-                    "content": f"""Question: {question}
+                    "content": f"""User asked: {question}
 
-SQL Query: {sql}
-
-Results ({total_rows} total rows):
+Data ({total_rows} items):
 {json.dumps(cleaned_data, default=str, indent=2)}
 
-Format these results with executive summary, structured table (meaningful columns only), insights, and recommendations."""
+Present this data clearly with a summary, table, insights, and recommended actions where relevant."""
                 }
             ],
             temperature=0.2,
@@ -2485,14 +2504,6 @@ Format these results with executive summary, structured table (meaningful column
         )
         
         formatted_response = response.choices[0].message.content.strip()
-        
-        # Add metadata footer
-        metadata = f"\n\n---\n**Query Statistics:**\n- Total Results: {total_rows}\n- Query Execution: Direct SQL\n- Data Source: Live Database"
-        
-        if total_rows > 100:
-            metadata += f"\n- Note: Showing sample of 100 results for performance"
-        
-        formatted_response += metadata
         
         logger.info(f"[YES] Formatted response generated ({len(formatted_response)} chars)")
         return formatted_response

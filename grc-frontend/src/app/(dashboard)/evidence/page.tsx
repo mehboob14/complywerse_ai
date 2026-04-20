@@ -175,6 +175,12 @@ export default function EvidencePage() {
       const response = await apiClient.get('/evidence-mgmt/items', { params });
       return response.data as EvidenceListResponse;
     },
+    refetchInterval: (query) => {
+      const items = (query.state.data as EvidenceListResponse | undefined)?.items || [];
+      const hasActiveOCR = items.some((item) => item.ocr_status === 'pending' || item.ocr_status === 'processing');
+      return hasActiveOCR ? 3000 : false;
+    },
+    refetchIntervalInBackground: true,
   });
 
   const uploadMutation = useMutation({
@@ -277,112 +283,77 @@ export default function EvidencePage() {
   const totalPages = Math.ceil(totalItems / pageSize);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="risk-workspace -m-4 lg:-m-5">
+      <div className="border-b border-[var(--color-border)] px-4 py-3 sm:px-6">
         <div>
-          <h1 className="text-2xl font-bold text-black">Evidence Library</h1>
-          <p className="text-gray-600">Manage compliance evidence and documentation</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {selectedItems.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">{selectedItems.length} selected</span>
-              <button
-                onClick={() => batchProcessOCRMutation.mutate(selectedItems)}
-                disabled={batchProcessOCRMutation.isPending}
-                className="flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-black hover:bg-gray-50"
-              >
-                <ScanText size={14} />
-                Batch OCR
-              </button>
-            </div>
-          )}
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
-          >
-            <Upload size={18} />
-            Upload Evidence
-          </button>
+          <h1 className="text-lg font-semibold text-slate-900">Evidence Library</h1>
+          <p className="mt-0.5 text-xs text-gray-500">Manage compliance evidence and documentation</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <FileCheck className="h-6 w-6 text-primary-400" />
-            </div>
+      <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:px-6 xl:grid-cols-5">
+        <div className="cw-card rounded-xl p-3">
+          <div className="mb-2 inline-flex rounded-lg bg-primary-50 p-2 text-primary-600">
+            <FileCheck className="h-4 w-4" />
           </div>
-          <p className="stat-value">{summaryLoading ? '-' : summary?.total_count || 0}</p>
-          <p className="stat-label">Total Evidence</p>
+          <p className="text-lg font-semibold text-slate-900">{summaryLoading ? '-' : summary?.total_count || 0}</p>
+          <p className="text-xs text-gray-500">Total Evidence</p>
         </div>
 
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/10 p-3">
-              <CheckCircle className="h-6 w-6 text-green-400" />
-            </div>
+        <div className="cw-card rounded-xl p-3">
+          <div className="mb-2 inline-flex rounded-lg bg-green-50 p-2 text-green-600">
+            <CheckCircle className="h-4 w-4" />
           </div>
-          <p className="stat-value">{summaryLoading ? '-' : summary?.by_status?.approved || 0}</p>
-          <p className="stat-label">Approved</p>
+          <p className="text-lg font-semibold text-slate-900">{summaryLoading ? '-' : summary?.by_status?.approved || 0}</p>
+          <p className="text-xs text-gray-500">Approved</p>
         </div>
 
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 p-3">
-              <Clock className="h-6 w-6 text-yellow-400" />
-            </div>
+        <div className="cw-card rounded-xl p-3">
+          <div className="mb-2 inline-flex rounded-lg bg-yellow-50 p-2 text-yellow-600">
+            <Clock className="h-4 w-4" />
           </div>
-          <p className="stat-value">{summaryLoading ? '-' : summary?.pending_review_count || 0}</p>
-          <p className="stat-label">Pending Review</p>
+          <p className="text-lg font-semibold text-slate-900">{summaryLoading ? '-' : summary?.pending_review_count || 0}</p>
+          <p className="text-xs text-gray-500">Pending Review</p>
         </div>
 
-        <div className="stat-card group">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/10 p-3">
-              <AlertTriangle className="h-6 w-6 text-red-400" />
-            </div>
-            {(summary?.stale_count || 0) > 0 && (
-              <span className="flex h-2 w-2">
-                <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
-              </span>
-            )}
+        <div className="cw-card rounded-xl p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="inline-flex rounded-lg bg-red-50 p-2 text-red-600">
+              <AlertTriangle className="h-4 w-4" />
+            </span>
+            {(summary?.stale_count || 0) > 0 && <span className="h-2 w-2 rounded-full bg-red-500" />}
           </div>
-          <p className="stat-value">{summaryLoading ? '-' : summary?.stale_count || 0}</p>
-          <p className="stat-label">Stale Evidence</p>
+          <p className="text-lg font-semibold text-slate-900">{summaryLoading ? '-' : summary?.stale_count || 0}</p>
+          <p className="text-xs text-gray-500">Stale Evidence</p>
         </div>
 
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 p-3">
-              <Calendar className="h-6 w-6 text-orange-400" />
-            </div>
+        <div className="col-span-2 cw-card rounded-xl p-3 xl:col-span-1">
+          <div className="mb-2 inline-flex rounded-lg bg-orange-50 p-2 text-orange-600">
+            <Calendar className="h-4 w-4" />
           </div>
-          <p className="stat-value">{summaryLoading ? '-' : summary?.expiring_soon_count || 0}</p>
-          <p className="stat-label">Expiring Soon</p>
+          <p className="text-lg font-semibold text-slate-900">{summaryLoading ? '-' : summary?.expiring_soon_count || 0}</p>
+          <p className="text-xs text-gray-500">Expiring Soon</p>
         </div>
       </div>
 
-      <div className="card">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1 sm:max-w-xs">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+      <div className="space-y-3 bg-[var(--color-subtle)] px-4 py-3 sm:px-6">
+        <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-center 2xl:justify-between">
+          <div className="flex flex-1 flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
+            <div className="relative flex-1 lg:min-w-[220px] lg:max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
               <input
                 type="text"
                 placeholder="Search by name or description..."
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-black placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-gray-300 bg-white py-1.5 pl-8 pr-3 text-sm text-black placeholder-gray-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
 
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setPage(0); }}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-blue-500 focus:outline-none"
+              className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:border-blue-500 focus:outline-none"
             >
               <option value="all">All Status</option>
               <option value="draft">Draft</option>
@@ -395,7 +366,7 @@ export default function EvidencePage() {
             <select
               value={typeFilter}
               onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-blue-500 focus:outline-none"
+              className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:border-blue-500 focus:outline-none"
             >
               <option value="">All Types</option>
               {evidenceTypes?.map(type => (
@@ -404,8 +375,8 @@ export default function EvidencePage() {
             </select>
           </div>
 
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <label className="flex items-center gap-2 text-xs text-gray-600">
               <input
                 type="checkbox"
                 checked={staleFilter === true}
@@ -414,7 +385,7 @@ export default function EvidencePage() {
               />
               Stale Only
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-600">
+            <label className="flex items-center gap-2 text-xs text-gray-600">
               <input
                 type="checkbox"
                 checked={showExpired}
@@ -423,200 +394,287 @@ export default function EvidencePage() {
               />
               Show Expired
             </label>
+            {selectedItems.length > 0 && (
+              <button
+                onClick={() => batchProcessOCRMutation.mutate(selectedItems)}
+                disabled={batchProcessOCRMutation.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                <ScanText size={14} />
+                Batch OCR
+              </button>
+            )}
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
+            >
+              <Upload size={14} />
+              Upload Evidence
+            </button>
           </div>
         </div>
-      </div>
 
-      {isLoading ? (
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-        </div>
-      ) : error ? (
-        <div className="flex h-64 flex-col items-center justify-center text-red-400">
-          <AlertCircle className="mb-2 h-8 w-8" />
-          <p>Failed to load evidence</p>
-          <button onClick={() => refetch()} className="mt-2 text-sm text-primary-400 hover:underline">
-            Try again
-          </button>
-        </div>
-      ) : filteredItems.length === 0 ? (
-        <div className="card flex flex-col items-center justify-center py-12 text-center">
-          <FileCheck className="mb-4 h-12 w-12 text-gray-400" />
-          <h3 className="text-lg font-medium text-black">No evidence found</h3>
-          <p className="mt-1 text-gray-600">Upload your first evidence item to get started</p>
-        </div>
-      ) : (
-        <>
-          <div className="overflow-hidden rounded-lg border border-gray-200">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="w-12 px-4 py-3 text-left">
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.length === filteredItems.length && filteredItems.length > 0}
-                      onChange={toggleSelectAll}
-                      className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
-                    />
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Evidence</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">OCR</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Quality</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Controls</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Dates</th>
-                  <th className="w-24 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-600">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
-                {filteredItems.map((item) => {
-                  const TypeIcon = TYPE_ICONS[item.evidence_type || 'other'] || FileCheck;
-                  return (
-                    <tr key={item.id} className={`hover:bg-gray-50 ${selectedItems.includes(item.id) ? 'bg-blue-50' : ''}`}>
-                      <td className="px-4 py-3">
+        {isLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+          </div>
+        ) : error ? (
+          <div className="flex h-64 flex-col items-center justify-center text-red-400">
+            <AlertCircle className="mb-2 h-8 w-8" />
+            <p>Failed to load evidence</p>
+            <button onClick={() => refetch()} className="mt-2 text-sm text-primary-400 hover:underline">
+              Try again
+            </button>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="cw-card rounded-lg px-6 py-10 text-center">
+            <FileCheck className="mx-auto mb-3 h-10 w-10 text-gray-400" />
+            <h3 className="text-base font-medium text-black">No evidence found</h3>
+            <p className="mt-1 text-sm text-gray-600">Upload your first evidence item to get started</p>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3 xl:hidden">
+              {filteredItems.map((item) => {
+                const TypeIcon = TYPE_ICONS[item.evidence_type || 'other'] || FileCheck;
+                return (
+                  <div key={item.id} className={`cw-card rounded-xl p-3 ${selectedItems.includes(item.id) ? 'ring-1 ring-blue-200' : ''}`}>
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
                         <input
                           type="checkbox"
                           checked={selectedItems.includes(item.id)}
                           onChange={() => toggleSelectItem(item.id)}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="rounded-lg bg-gray-100 p-2">
+                          <TypeIcon className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <Link href={`/evidence/${item.id}`} className="block text-sm font-medium text-black hover:text-blue-600">
+                            {item.name}
+                          </Link>
+                          <p className="mt-0.5 line-clamp-2 text-xs text-gray-600">{item.description || 'No description'}</p>
+                        </div>
+                      </div>
+                      {item.is_stale && <span className="mt-1 h-2.5 w-2.5 rounded-full bg-red-500" title="Stale evidence" />}
+                    </div>
+
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      {getStatusBadge(item.status)}
+                      {getOCRBadge(item.ocr_status)}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                      <div>
+                        <span className="font-medium text-gray-800">Type:</span>{' '}
+                        <span className="capitalize">{(item.evidence_type || 'Other').replace(/_/g, ' ')}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Link2 className="h-3 w-3" />
+                        <span>{item.control_mappings_count || 0} controls</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-800">Collected:</span>{' '}
+                        {item.collection_date ? new Date(item.collection_date).toLocaleDateString() : '-'}
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-800">Expiry:</span>{' '}
+                        {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '-'}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-20 overflow-hidden rounded-full bg-gray-200">
+                          <div
+                            className={`h-full ${getQualityScoreColor(item.quality_score)} transition-all`}
+                            style={{ width: `${item.quality_score || 0}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-600">{item.quality_score !== null ? `${item.quality_score}%` : '-'}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <Link href={`/evidence/${item.id}`} title="View" className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black">
+                          <Eye size={14} />
+                        </Link>
+                        <Link href={`/evidence/${item.id}`} title="Edit" className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black">
+                          <Edit2 size={14} />
+                        </Link>
+                        {(item.ocr_status === 'pending' || item.ocr_status === 'failed') && (
+                          <button
+                            title="Process OCR"
+                            onClick={() => processOCRMutation.mutate(item.id)}
+                            disabled={processOCRMutation.isPending}
+                            className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-blue-600"
+                          >
+                            <ScanText size={14} />
+                          </button>
+                        )}
+                        <button
+                          title="Delete"
+                          onClick={() => handleDelete(item)}
+                          className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm xl:block">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="border-b border-[var(--color-border)] bg-[var(--color-subtle)]">
+                    <tr>
+                      <th className="w-12 px-3 py-2 text-left">
+                        <input
+                          type="checkbox"
+                          checked={selectedItems.length === filteredItems.length && filteredItems.length > 0}
+                          onChange={toggleSelectAll}
                           className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
                         />
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link href={`/evidence/${item.id}`} className="block">
-                          <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
-                            <div className="rounded-lg bg-gray-100 p-2">
-                              <TypeIcon className="h-4 w-4 text-blue-600" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="truncate text-sm font-medium text-black hover:text-blue-600 transition-colors">{item.name}</p>
-                                {item.is_stale && (
-                                  <span className="flex h-2 w-2 rounded-full bg-red-500" title="Stale evidence"></span>
-                                )}
-                              </div>
-                              <p className="truncate text-xs text-gray-600 max-w-xs">
-                                {item.description || 'No description'}
-                              </p>
-                            </div>
-                          </div>
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm text-black capitalize">
-                          {(item.evidence_type || 'Other').replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {getStatusBadge(item.status)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {getOCRBadge(item.ocr_status)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2 w-16 overflow-hidden rounded-full bg-gray-200">
-                            <div 
-                              className={`h-full ${getQualityScoreColor(item.quality_score)} transition-all`}
-                              style={{ width: `${item.quality_score || 0}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-gray-600">
-                            {item.quality_score !== null ? `${item.quality_score}%` : '-'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <Link2 className="h-3 w-3 text-gray-600" />
-                          <span className="text-sm text-black">{item.control_mappings_count || 0}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-xs">
-                          <div className="text-black">
-                            {item.collection_date ? new Date(item.collection_date).toLocaleDateString() : '-'}
-                          </div>
-                          {item.expiry_date && (
-                            <div className={`${new Date(item.expiry_date) < new Date() ? 'text-red-600' : 'text-gray-500'}`}>
-                              Exp: {new Date(item.expiry_date).toLocaleDateString()}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <Link
-                            href={`/evidence/${item.id}`}
-                            title="View"
-                            className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
-                          >
-                            <Eye size={14} />
-                          </Link>
-                          <Link
-                            href={`/evidence/${item.id}`}
-                            title="Edit"
-                            className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
-                          >
-                            <Edit2 size={14} />
-                          </Link>
-                          {(item.ocr_status === 'pending' || item.ocr_status === 'failed') && (
-                            <button
-                              title="Process OCR"
-                              onClick={() => processOCRMutation.mutate(item.id)}
-                              disabled={processOCRMutation.isPending}
-                              className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-blue-600"
-                            >
-                              <ScanText size={14} />
-                            </button>
-                          )}
-                          <button
-                            title="Delete"
-                            onClick={() => handleDelete(item)}
-                            className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Evidence</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Type</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Status</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">OCR</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Quality</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Controls</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Dates</th>
+                      <th className="w-24 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-gray-600">Actions</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-              <div className="text-sm text-gray-600">
-                Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalItems)} of {totalItems} results
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-black hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-gray-600">
-                  Page {page + 1} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-black hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Next
-                </button>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    {filteredItems.map((item) => {
+                      const TypeIcon = TYPE_ICONS[item.evidence_type || 'other'] || FileCheck;
+                      return (
+                        <tr key={item.id} className={`transition-colors hover:bg-gray-50 ${selectedItems.includes(item.id) ? 'bg-blue-50' : ''}`}>
+                          <td className="px-3 py-2.5">
+                            <input
+                              type="checkbox"
+                              checked={selectedItems.includes(item.id)}
+                              onChange={() => toggleSelectItem(item.id)}
+                              className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <Link href={`/evidence/${item.id}`} className="block">
+                              <div className="flex cursor-pointer items-center gap-3 transition-opacity hover:opacity-80">
+                                <div className="rounded-lg bg-gray-100 p-2">
+                                  <TypeIcon className="h-4 w-4 text-blue-600" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="truncate text-sm font-medium text-black transition-colors hover:text-blue-600">{item.name}</p>
+                                    {item.is_stale && <span className="flex h-2 w-2 rounded-full bg-red-500" title="Stale evidence"></span>}
+                                  </div>
+                                  <p className="max-w-xs truncate text-xs text-gray-600">{item.description || 'No description'}</p>
+                                </div>
+                              </div>
+                            </Link>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="text-sm text-black capitalize">{(item.evidence_type || 'Other').replace(/_/g, ' ')}</span>
+                          </td>
+                          <td className="px-3 py-2.5">{getStatusBadge(item.status)}</td>
+                          <td className="px-3 py-2.5">{getOCRBadge(item.ocr_status)}</td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-16 overflow-hidden rounded-full bg-gray-200">
+                                <div
+                                  className={`h-full ${getQualityScoreColor(item.quality_score)} transition-all`}
+                                  style={{ width: `${item.quality_score || 0}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-600">{item.quality_score !== null ? `${item.quality_score}%` : '-'}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-1 text-sm text-black">
+                              <Link2 className="h-3 w-3 text-gray-600" />
+                              <span>{item.control_mappings_count || 0}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="text-xs">
+                              <div className="text-black">{item.collection_date ? new Date(item.collection_date).toLocaleDateString() : '-'}</div>
+                              {item.expiry_date && (
+                                <div className={`${new Date(item.expiry_date) < new Date() ? 'text-red-600' : 'text-gray-500'}`}>
+                                  Exp: {new Date(item.expiry_date).toLocaleDateString()}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center justify-end gap-1">
+                              <Link href={`/evidence/${item.id}`} title="View" className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black">
+                                <Eye size={14} />
+                              </Link>
+                              <Link href={`/evidence/${item.id}`} title="Edit" className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black">
+                                <Edit2 size={14} />
+                              </Link>
+                              {(item.ocr_status === 'pending' || item.ocr_status === 'failed') && (
+                                <button
+                                  title="Process OCR"
+                                  onClick={() => processOCRMutation.mutate(item.id)}
+                                  disabled={processOCRMutation.isPending}
+                                  className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-blue-600"
+                                >
+                                  <ScanText size={14} />
+                                </button>
+                              )}
+                              <button
+                                title="Delete"
+                                onClick={() => handleDelete(item)}
+                                className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-600"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
-          )}
-        </>
-      )}
+
+            {totalPages > 1 && (
+              <div className="flex flex-col gap-2 border-t border-gray-200 pt-3 text-xs text-gray-600 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalItems)} of {totalItems} results
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-black hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-sm text-gray-600">Page {page + 1} of {totalPages}</span>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={page >= totalPages - 1}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-black hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {isUploadModalOpen && (
-        <UploadModal 
+        <UploadModal
           onClose={() => setIsUploadModalOpen(false)}
           onUpload={(formData) => uploadMutation.mutate(formData)}
           isLoading={uploadMutation.isPending}
@@ -714,8 +772,8 @@ function UploadModal({
   }, [name, description, evidenceType, runQuickAssessment]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <h2 className="text-lg font-semibold text-black">Upload Evidence</h2>
           <button onClick={onClose} className="text-gray-600 hover:text-black">
@@ -769,7 +827,7 @@ function UploadModal({
             )}
           </div>
 
-          {(isAiLoading || aiAssessment || aiError) && (
+          {/* {(isAiLoading || aiAssessment || aiError) && (
             <div className="animate-in fade-in slide-in-from-top-2 duration-300 rounded-lg border border-purple-500/30 bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-indigo-900/20 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-500">
@@ -885,7 +943,7 @@ function UploadModal({
                 </div>
               )}
             </div>
-          )}
+          )} */}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">

@@ -51,28 +51,51 @@ GRC_RELEVANT_TERMS = (
     "grc", "erm", "enterprise risk", "risk management", "risk register",
     # Core GRC concepts
     "compliance", "framework", "control", "policy", "risk", "evidence", "governance",
-    "regulatory", "regulation", "regulation", "obligation", "maturity", "readiness",
-    # Security / vulnerability (use stem to match plural forms)
-    "vulnerabilit",  # matches vulnerability + vulnerabilities
+    "regulatory", "regulation", "obligation", "maturity", "readiness",
+    # Security / vulnerability
+    "vulnerabilit", "vulnerabilty", "vunerabilit",  # typo-tolerant stems
     "pentest", "penetration", "cve", "patch", "exploit", "remediat", "threat", "attack",
-    "cybersecurit",  # matches cybersecurity
-    "infosec", "security",
+    "cybersecurit", "cyber secur", "infosec", "security",
     # Asset management
     "asset", "inventor", "hardware", "software", "system", "infrastructure",
     # Vendor / third-party
     "vendor", "third party", "third-party", "supplier", "outsourc",
-    # Incidents and exceptions
+    # Incidents / exceptions
     "incident", "exception", "breach", "finding",
-    # Certifications and journeys
+    # Certifications / journeys
     "attestation", "certification", "journey", "assessment", "gap", "audit",
     # Frameworks (abbreviations and names)
     "iso", "pci", "nist", "sbp", "sama", "dora", "gdpr", "soc 2", "soc2",
     "cobit", "cis", "hipaa", "sox", "basel",
+    # Platform sub-modules & pages
+    "rcsa", "self-assessment", "self assessment",
+    "internal control", "key control", "control test",
+    "regulatory change", "regulatory update", "new regulation",
+    "oversight action", "committee meeting", "board meeting",
+    "policy statement", "policy gap", "gap analysis",
+    "pentest report", "vulnerability report", "vuln report",
+    "control library", "control mapping", "control framework",
+    "certification journey", "compliance program", "compliance status",
+    "issue tracker", "open issue", "risk incident",
+    "it asset", "asset inventory", "cde environment",
+    "vendor assessment", "vendor review", "vendor risk",
+    "policy exception", "control exception",
     # Org / people
     "organization", "tenant", "company", "committee", "document", "charter",
-    "department", "user", "role", "permission",
-    # GRC status words (combined with other context)
+    "department", "business unit", "user", "role", "permission",
+    # GRC status words
     "open", "overdue", "critical", "high risk", "pending", "active", "closed",
+    # Common typos / misspellings
+    "complaince", "complianse", "complience",  # compliance
+    "goveranc", "governanc", "govrnance",  # governance
+    "framwork", "frameowrk",  # framework
+    "attesstati", "attestaion",  # attestation
+    "regultory", "regualtory",  # regulatory
+    "vulnerablity", "vunlerabilit",  # vulnerability
+    "certifcation", "certifiation",  # certification
+    "asessment", "assessement",  # assessment
+    "controll", "cotrnol",  # control
+    "incidnet",  # incident
 )
 OFF_TOPIC_TERMS = (
     "weather", "football", "cricket score", "movie review", "movie ticket",
@@ -109,21 +132,56 @@ DB_QUERY_TERMS = (
     # Possessive patterns = platform data
     "my risks", "my controls", "my vendors", "my exceptions", "our risks",
 )
-# Platform module nouns — if present, the question is ALWAYS about live DB data
-# regardless of whether any DB_QUERY_TERM appears
+# Platform module nouns — if present, the question is about live DB data
+# Covers full platform: modules, sub-modules, pages, features
 PLATFORM_DATA_NOUNS = (
+    # Risk Management
     "risk register", "risk incidents", "risk exceptions", "risk kris", "key risk indicator",
-    "open exceptions", "policy exceptions", "exceptions",
-    "open incidents", "security incidents", "incidents",
-    "vendor assessments", "vendor risks", "vendor reviews",
-    "compliance assessments", "compliance programs", "compliance status",
+    "risk review", "risk treatment", "residual risk", "inherent risk", "risk appetite",
+    "risk mitigation", "risk owner", "risk category",
+    # Exceptions & Issues
+    "open exceptions", "policy exceptions", "exceptions", "control exceptions",
+    "open issues", "issues", "issue tracker",
+    # Incidents
+    "open incidents", "security incidents", "incidents", "risk incidents", "incident log",
+    # Vendors
+    "vendor assessments", "vendor risks", "vendor reviews", "vendor register",
+    "third party risk", "supplier list", "vendor list", "vendors",
+    # Compliance"
+    "compliance assessments", "compliance programs", "compliance status","frameworks", "compliance frameworks", "compliance requirements", "regulatory obligations","pci dss requirements", "iso controls", "nist controls", "cobit controls", "cis controls", "sbp controls", "sama controls", "dora controls", "gdpr requirements", "hipaa requirements", "sox controls","state bank of pakistan"
+    "compliance gaps", "compliance score", "compliance checklist",
+    # Attestation & Certifications
     "attestation campaigns", "attestation requests", "attestations",
+    "pending attestations", "overdue attestations",
+    "certification journeys", "certification phases", "certification status",
+    # Committee & Governance
     "committee meetings", "governance committees", "oversight actions",
-    "certification journeys", "certification phases",
-    "rcsa campaigns", "rcsa findings",
+    "board meetings", "meeting agenda", "meeting minutes",
+    "governance documents", "governance document",
+    # RCSA
+    "rcsa campaigns", "rcsa findings", "rcsa assessments", "self assessments",
+    "rcsa",
+    # Vulnerabilities & Pentests
     "pentest reports", "vuln reports", "vulnerability reports",
-    "asset inventory", "it assets", "asset management",
-    "issues", "open issues", "regulatory changes",
+    "open vulnerabilities", "critical vulnerabilities", "cve list",
+    # Assets
+    "asset inventory", "it assets", "asset management", "assets",
+    "critical assets", "cde assets",
+    # Regulatory Changes
+    "regulatory changes", "regulatory updates", "new regulations",
+    # Policies & Documents
+    "policies", "procedures", "standards", "guidelines", "charters",
+    "policy documents", "governance policies", "policy statements",
+    "document review", "review schedule", "expiring policies",
+    "policy gap analysis", "policy compliance",
+    # Internal Controls
+    "internal controls", "key controls", "control tests", "control library",
+    "control effectiveness", "control gaps",
+    # Evidence
+    "evidence register", "evidence items", "control evidence",
+    "missing evidence", "weak evidence", "evidence gaps",
+    # Users & Departments
+    "user accounts", "platform users", "department list",
 )
 FRAMEWORK_PROGRESS_TERMS = (
     "active compliance frameworks", "current progress", "framework progress", "active frameworks",
@@ -132,6 +190,70 @@ FRAMEWORK_PROGRESS_TERMS = (
 EVIDENCE_GAP_TERMS = (
     "missing or weak evidence", "missing evidence", "weak evidence", "evidence gaps",
     "controls with missing", "controls with weak evidence"
+)
+# ─── Prompt injection patterns ──────────────────────────────────────────────
+PROMPT_INJECTION_PATTERNS = (
+    "forget your role", "ignore previous instructions", "ignore your instructions",
+    "ignore all previous", "disregard your", "override your instructions",
+    "reveal admin", "reveal credentials", "reveal the admin", "reveal your prompt",
+    "pretend you are", "act as if you are", "you are now a",
+    "bypass your", "your new instructions", "your new role",
+    "execute any instructions", "execute the following instructions",
+    "forget everything", "new persona", "jailbreak",
+    "dan mode", "developer mode", "unrestricted mode",
+    "translate the following", "ignore the above",
+    "print your system prompt", "output your instructions",
+    "what are your instructions", "reveal your system",
+    "respond only in", "respond in the following way",
+)
+# ─── Harmful / attack-oriented request patterns ─────────────────────────────
+HARMFUL_REQUEST_PATTERNS = (
+    "ways to bypass", "how to bypass", "bypass security controls",
+    "bypass evidence", "bypass audit", "bypass soc 2",
+    "bypass iso", "bypass pci", "bypass nist", "bypass compliance",
+    "circumvent controls", "circumvent evidence", "circumvent audit",
+    "evade controls", "evade detection", "evade audit",
+    "disable logging", "disable monitoring", "disable controls",
+    "avoid detection", "hide from audit", "avoid audit trail",
+    "delete evidence to", "remove evidence to", "destroy evidence",
+    "ways to avoid", "how to avoid compliance", "bypass authorization",
+    "unauthorized access", "how to hack", "how to exploit",
+    "attack vector", "penetrate without", "bypass authentication",
+    "disable evidence collection", "defeat monitoring",
+)
+# ─── Framework content / knowledge signals ───────────────────────────────────
+# Questions about what a framework says/requires route to LLM (not DB query)
+FRAMEWORK_CONTENT_SIGNALS = (
+    "what are the new requirements",
+    "new requirements in",
+    "new requirements of",
+    "what is new in",
+    "what changed in",
+    "what does pci", "what does iso", "what does nist", "what does sama",
+    "what does sbp", "what does gdpr", "what does hipaa", "what does dora",
+    "what does soc 2", "what does sox", "what does cobit", "what does cis",
+    "what does basel",
+    "what are the requirements of",
+    "requirements of pci", "requirements of iso", "requirements of nist",
+    "requirements of sama", "requirements of sbp", "requirements of gdpr",
+    "requirements of hipaa", "requirements of sox",
+    "clauses of", "sections of", "domains of framework",
+    "explain pci", "explain iso 27001", "explain nist", "explain sama",
+    "describe the framework", "explain the framework", "what is the framework",
+    "what are the key controls of", "key domains of",
+    "what does this standard require", "what does this regulation require",
+    # Version references signal framework knowledge question
+    " v1.", " v2.", " v3.", " v4.", " v5.",
+    "version 1.", "version 2.", "version 3.", "version 4.",
+    "pci dss 4", "pci dss 3.2", "iso 27001:2022", "iso 27001:2013",
+    "nist 2.0", "nist 1.1",
+)
+# When present, question is about the USER's platform data → override to DB route
+PLATFORM_CONTEXT_SIGNALS = (
+    " my ", " our ", " we ", "we have", "do we have",
+    "have we", "are we ", "in our system", "in the platform",
+    "in this system", "which controls have i", "what have we",
+    "our compliance", "our gaps", "our posture", "our implementation",
 )
 LANGCHAIN_HISTORY_AVAILABLE = False
 
@@ -328,7 +450,8 @@ def build_uploaded_context(user_id: Any, session_id: str) -> str:
 def is_grc_relevant_question(question: str) -> bool:
     """Returns True if the question contains ANY GRC-related signal (permissive)."""
     lowered = (question or "").lower()
-    return any(term in lowered for term in GRC_RELEVANT_TERMS)
+    normalized = normalize_question(lowered)
+    return any(term in lowered for term in GRC_RELEVANT_TERMS) or any(term in normalized for term in GRC_RELEVANT_TERMS)
 
 
 def grc_relevance_score(question: str) -> float:
@@ -341,41 +464,115 @@ def grc_relevance_score(question: str) -> float:
 def is_off_topic_question(question: str) -> bool:
     """Only blocks queries that are clearly non-GRC with zero relevance (< 20% score)."""
     lowered = (question or "").lower().strip()
-    # Always allow greetings
     if any(term == lowered for term in GREETING_TERMS):
         return False
-    # Any GRC signal at all → not off-topic (permissive guardrail)
     if is_grc_relevant_question(question):
         return False
-    # Clearly off-topic only if it matches an off-topic phrase
     if any(term in lowered for term in OFF_TOPIC_TERMS):
         return True
-    # Short ambiguous queries without ANY GRC term pass through to LLM
-    # (LLM will handle the GRC scope, not a hard reject)
     return False
+
+
+def is_prompt_injection(question: str) -> bool:
+    """Detect prompt injection / jailbreak attempts."""
+    lowered = (question or "").lower()
+    return any(pattern in lowered for pattern in PROMPT_INJECTION_PATTERNS)
+
+
+def is_harmful_request(question: str) -> bool:
+    """Detect requests asking how to bypass or defeat security/compliance controls."""
+    lowered = (question or "").lower()
+    return any(pattern in lowered for pattern in HARMFUL_REQUEST_PATTERNS)
+
+
+def is_framework_knowledge_question(question: str) -> bool:
+    """
+    Returns True if the question is asking about what a GRC framework says/requires
+    (knowledge question) rather than about the user's own live platform data.
+    These route to LLM guidance, not DB query.
+    """
+    lowered = normalize_question((question or "").lower())
+    # If question explicitly references the user's own platform data, it's a DB question
+    if any(ctx in lowered for ctx in PLATFORM_CONTEXT_SIGNALS):
+        return False
+    return any(signal in lowered for signal in FRAMEWORK_CONTENT_SIGNALS)
+
+
+def normalize_question(question: str) -> str:
+    """
+    Normalize common typos and alternate spellings to canonical GRC terms
+    so classification and routing work regardless of spelling mistakes.
+    """
+    import re
+    text = (question or "").lower()
+    substitutions = [
+        # compliance
+        (r'\bcomplian[sc]e?\b', 'compliance'),
+        (r'\bcomplience\b', 'compliance'),
+        # governance
+        (r'\bgover[ae]n[ae]nce?\b', 'governance'),
+        (r'\bgovrnance\b', 'governance'),
+        # framework
+        (r'\bfram[ew]ork\b', 'framework'),
+        (r'\bframworks?\b', 'frameworks'),
+        # vulnerability / vulnerabilities
+        (r'\bvuln?er[ae]bil[iy]t[yi]e?s?\b', 'vulnerabilities'),
+        (r'\bvunerabilit\w*\b', 'vulnerabilities'),
+        # regulatory
+        (r'\breg[uo]l[ae]tor[yi]\b', 'regulatory'),
+        # attestation
+        (r'\batte?sta[st]?ion\b', 'attestation'),
+        # certification
+        (r'\bcertif[iy]?[ae]?tion\b', 'certification'),
+        # assessment
+        (r'\basse[sc]?e?ment\b', 'assessment'),
+        # incident
+        (r'\bincid[ae]?nts?\b', 'incident'),
+        # control
+        (r'\bcontro?ll?\b', 'control'),
+        # risk
+        (r'\brisk[s]?\b', 'risk'),
+    ]
+    for pattern, replacement in substitutions:
+        text = re.sub(pattern, replacement, text)
+    return text
 
 
 def classify_request_mode(question: str, has_uploaded_files: bool = False) -> str:
     lowered = (question or "").lower().strip()
+    # Normalize typos before classification so misspellings route correctly
+    normalized = normalize_question(lowered)
+
+    # ── Security guardrails (always first) ───────────────────────────────────
+    if is_prompt_injection(question):
+        return "blocked_injection"
+    if is_harmful_request(question):
+        return "blocked_harmful"
 
     if is_audit_related_question(lowered):
         return "deprecated_audit"
-    if is_off_topic_question(lowered) and not has_uploaded_files:
+    if is_off_topic_question(normalized) and not has_uploaded_files:
         return "off_topic"
-    if any(term in lowered for term in FRAMEWORK_PROGRESS_TERMS):
+    if any(term in normalized for term in FRAMEWORK_PROGRESS_TERMS):
         return "framework_progress"
-    if any(term in lowered for term in EVIDENCE_GAP_TERMS):
+    if any(term in normalized for term in EVIDENCE_GAP_TERMS):
         return "evidence_gaps"
-    if has_uploaded_files and any(term in lowered for term in FILE_ANALYSIS_TERMS):
+    if has_uploaded_files and any(term in normalized for term in FILE_ANALYSIS_TERMS):
         return "file_analysis"
-    if has_uploaded_files and not any(term in lowered for term in DB_QUERY_TERMS):
+    if has_uploaded_files and not any(term in normalized for term in DB_QUERY_TERMS):
         return "file_analysis"
-    # Explicit DB query commands
-    if any(term in lowered for term in DB_QUERY_TERMS):
+    # Framework knowledge questions → LLM (before DB check)
+    # e.g. "what are the new requirements in PCI DSS v4.0.1?"
+    if is_framework_knowledge_question(question) and not has_uploaded_files:
+        return "grc_guidance"
+    # Explicit DB query commands — check both original and normalized
+    if any(term in normalized for term in DB_QUERY_TERMS) or any(term in lowered for term in DB_QUERY_TERMS):
         return "database"
-    # GRC platform module nouns always refer to live data — route to SQL agent
-    # even when no standard query verb is present (e.g. "any exceptions?", "vendor overview")
-    if any(noun in lowered for noun in PLATFORM_DATA_NOUNS) and not has_uploaded_files:
+    # GRC platform module nouns always refer to live data
+    if (any(noun in normalized for noun in PLATFORM_DATA_NOUNS) or any(noun in lowered for noun in PLATFORM_DATA_NOUNS)) and not has_uploaded_files:
+        return "database"
+    # If the normalized question has a strong GRC noun signal, prefer DB mode
+    if any(term in normalized for term in GRC_RELEVANT_TERMS) and any(term in normalized for term in DB_QUERY_TERMS):
         return "database"
     return "grc_guidance"
 
@@ -388,36 +585,46 @@ def answer_grc_knowledge_question(
     question: str,
     context_summary: str = "",
     uploaded_context: str = "",
+    db_context: str = "",
 ) -> str:
     """
-    Call GPT directly to answer GRC knowledge/conceptual questions
-    when no live DB data is needed or available.
-    Covers: ERM overviews, framework explanations, best practices, module summaries.
+    Answer a GRC knowledge / conceptual question using GPT-4o.
+    Covers: framework requirements, ERM overviews, best practices, clause explanations,
+    version differences, and general compliance guidance.
+    An optional db_context can be passed to ground the answer in real platform data.
     """
     try:
         import openai as _openai
         _api_key = os.environ.get("OPENAI_API_KEY", "")
         if not _api_key:
             return (
-                "I couldn't reach the AI engine (missing API key). "
-                "Please ask about specific data such as frameworks, risks or vulnerabilities that are stored in the system."
+                "I couldn't reach the AI engine. "
+                "Please ask about frameworks, risks, or controls stored in the platform."
             )
         _client = _openai.OpenAI(api_key=_api_key)
 
         system_prompt = (
             "You are ComplyChat, an expert GRC AI assistant inside the ComplyVerse enterprise GRC platform.\n\n"
-            "You specialise in: ERM, compliance frameworks (ISO 27001, PCI DSS, NIST, SAMA, SBP, DORA, GDPR, SOC 2, HIPAA, COBIT), "
-            "controls, evidence management, vulnerability management, asset management, governance, and incidents.\n\n"
+            "You are deeply knowledgeable about:\n"
+            "- Compliance frameworks: ISO 27001 (2013 & 2022), PCI DSS (v3.2.1 & v4.0.1), NIST CSF (1.1 & 2.0), "
+            "SAMA Cyber Security Framework, SBP ETGRMF, DORA, GDPR, SOC 2, HIPAA, SOX, COBIT, CIS Controls, Basel\n"
+            "- Enterprise Risk Management (ERM), internal controls, governance, evidence management\n"
+            "- Vulnerability management, asset management, vendor risk, RCSA, attestation, incident management\n\n"
             "RESPONSE RULES — follow strictly:\n"
-            "1. Be CONCISE. Max 200 words unless the question clearly requires more.\n"
-            "2. Use markdown formatting: `##` for section headers, `-` for bullet points, `**bold**` for key terms.\n"
-            "3. Do NOT use numbered top-level sections like '1. Definition', '2. Overview' — use `##` headers instead.\n"
-            "4. Lead with the direct answer, not a definition.\n"
-            "5. If asked about live platform data (counts, statuses), say: 'Your platform has no [X] data yet.' and list 2-3 quick setup steps.\n"
-            "6. Answer ONLY GRC topics. Redirect non-GRC questions politely in one sentence."
+            "1. Lead with a direct, concise answer. Max 350 words unless detail is clearly needed.\n"
+            "2. Use `##` for section headers, `-` for bullets, `**bold**` for key terms and control IDs.\n"
+            "3. For version/change questions (e.g. PCI DSS v3.2.1 vs v4.0.1): list specific differences clearly.\n"
+            "4. For framework requirement questions: list the actual requirements/controls with their IDs.\n"
+            "5. NEVER say 'I cannot answer' for GRC topics you clearly know — give the best answer.\n"
+            "6. NEVER hallucinate control IDs or clause numbers you are not sure of — say 'refer to the official document' instead.\n"
+            "7. If referencing platform-specific data that isn't in context, note it and suggest checking the relevant module.\n"
+            "8. Do NOT mention databases, queries, SQL, or system internals to the user.\n"
+            "9. Politely decline anything outside GRC topics in one sentence."
         )
 
         messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+        if db_context:
+            messages.append({"role": "user", "content": f"Platform data context:\n{db_context}"})
         if context_summary:
             messages.append({"role": "user", "content": f"Previous conversation context:\n{context_summary}"})
         if uploaded_context:
@@ -425,20 +632,128 @@ def answer_grc_knowledge_question(
         messages.append({"role": "user", "content": question})
 
         completion = _client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=messages,
-            temperature=0.3,
-            max_tokens=1200,
+            temperature=0.2,
+            max_tokens=1500,
         )
         return (completion.choices[0].message.content or "").strip() or "I couldn't generate an answer. Please try rephrasing."
 
     except Exception as llm_err:
         logger.warning(f"[LLM-FALLBACK] knowledge answer failed: {llm_err}")
         return (
-            "I can answer questions about ERM, compliance frameworks (ISO, PCI DSS, NIST, SAMA, SBP), "
+            "I can answer questions about GRC frameworks (ISO 27001, PCI DSS, NIST, SAMA, SBP, DORA), "
             "controls, vulnerabilities, assets, governance, and evidence management. "
             "Please try rephrasing your question."
         )
+
+
+def answer_with_db_context(
+    question: str,
+    db: Session,
+    tenant_ids: List[int],
+    context_summary: str = "",
+    uploaded_context: str = "",
+) -> str:
+    """
+    Hybrid answer: pull relevant framework controls / documents from the DB as grounding
+    context, then use LLM to synthesize a comprehensive, accurate answer.
+    Used for framework requirement questions, clause lookups, and control explanations.
+    """
+    db_context_parts: List[str] = []
+
+    try:
+        # Detect framework names mentioned in the question
+        question_lower = (question or "").lower()
+        framework_keywords = []
+        for fw in ["pci dss", "pci-dss", "iso 27001", "iso27001", "nist", "sama", "sbp", "dora", "gdpr",
+                   "soc 2", "soc2", "hipaa", "sox", "cobit", "cis", "basel", "etgrmf", "bss"]:
+            if fw in question_lower:
+                framework_keywords.append(fw.replace("-", " ").strip())
+
+        if framework_keywords:
+            for kw in framework_keywords[:2]:  # max 2 frameworks
+                try:
+                    fw_rows = db.execute(
+                        text(
+                            "SELECT id, name, framework_type, version, source_organization, framework_purpose "
+                            "FROM grc_uploaded_frameworks "
+                            "WHERE LOWER(name) LIKE :kw "
+                            "OR LOWER(framework_type) LIKE :kw "
+                            "LIMIT 2"
+                        ),
+                        {"kw": f"%{kw[:30]}%"},
+                    ).fetchall()
+
+                    for fw_row in fw_rows[:1]:
+                        fw_dict = dict(fw_row._mapping)
+                        fw_name = fw_dict.get("name") or kw
+                        fw_ver = fw_dict.get("version") or "N/A"
+                        fw_purpose = (str(fw_dict.get("framework_purpose") or "")).strip()[:200]
+                        db_context_parts.append(
+                            f"## {fw_name} (v{fw_ver})\n"
+                            + (f"Purpose: {fw_purpose}\n" if fw_purpose else "")
+                        )
+
+                        # Get controls for this framework
+                        ctrl_rows = db.execute(
+                            text(
+                                "SELECT pfc.control_id, pfc.title, pfc.category, pfc.description "
+                                "FROM grc_parsed_framework_controls pfc "
+                                "JOIN grc_uploaded_frameworks uf ON pfc.uploaded_framework_id = uf.id "
+                                "WHERE uf.id = :fw_id "
+                                "ORDER BY pfc.control_id "
+                                "LIMIT 60"
+                            ),
+                            {"fw_id": fw_dict.get("id")},
+                        ).fetchall()
+
+                        if ctrl_rows:
+                            controls_text = "\n".join(
+                                f"- **{r.control_id}**: {r.title}"
+                                + (f" ({r.category})" if r.category else "")
+                                for r in ctrl_rows[:40]
+                            )
+                            db_context_parts.append(
+                                f"Controls in platform ({len(ctrl_rows)} total):\n{controls_text}"
+                            )
+                except Exception as fw_err:
+                    logger.warning(f"[DB-CONTEXT] framework lookup failed for '{kw}': {fw_err}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
+        # Also pull relevant governance documents (policies / standards)
+        try:
+            doc_rows = db.execute(
+                text(
+                    "SELECT title, doc_type, status, current_version "
+                    "FROM grc_governance_documents "
+                    "WHERE tenant_id IN :tids "
+                    "AND COALESCE(status,'draft') IN ('published','approved') "
+                    "LIMIT 10"
+                ),
+                {"tids": tuple(tenant_ids) if tenant_ids else (-1,)},
+            ).fetchall()
+
+            if doc_rows:
+                docs_text = "\n".join(
+                    f"- {r.title} ({r.doc_type}, v{r.current_version or '1.0'})" for r in doc_rows
+                )
+                db_context_parts.append(f"Published documents in your platform:\n{docs_text}")
+        except Exception as doc_err:
+            logger.warning(f"[DB-CONTEXT] document lookup failed: {doc_err}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+    except Exception as db_err:
+        logger.warning(f"[DB-CONTEXT] DB context fetch failed: {db_err}")
+
+    db_context = "\n\n".join(db_context_parts) if db_context_parts else ""
+    return answer_grc_knowledge_question(question, context_summary, uploaded_context, db_context=db_context)
 
 
 def summarize_framework_progress(db: Session, tenant_ids: List[int]) -> str:
@@ -848,6 +1163,40 @@ async def ask_compliance_question(
     try:
         request_mode = classify_request_mode(request.message, has_uploaded_files=bool(uploaded_files))
 
+        if request_mode == "blocked_injection":
+            answer = (
+                "This request contains patterns that ComplyChat cannot process. "
+                "Please ask a genuine GRC question about compliance frameworks, risks, controls, policies, or governance."
+            )
+            store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
+            return ChatResponse(
+                answer=answer,
+                sources=[],
+                framework_filter=request.framework,
+                timestamp=datetime.utcnow().isoformat(),
+                has_more=False,
+                total_count=0,
+                current_offset=0
+            )
+
+        if request_mode == "blocked_harmful":
+            answer = (
+                "ComplyChat cannot assist with requests related to bypassing, defeating, or circumventing "
+                "security controls, audit trails, or compliance mechanisms. "
+                "If you have a legitimate security testing requirement, please work through your authorized "
+                "security team and follow your organization's change management and approval process."
+            )
+            store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
+            return ChatResponse(
+                answer=answer,
+                sources=[],
+                framework_filter=request.framework,
+                timestamp=datetime.utcnow().isoformat(),
+                has_more=False,
+                total_count=0,
+                current_offset=0
+            )
+
         if request_mode == "off_topic":
             answer = (
                 "ComplyChat is limited to GRC topics only. "
@@ -923,9 +1272,10 @@ async def ask_compliance_question(
             )
 
         if request_mode == "grc_guidance":
-            # LLM-driven answer for conceptual / knowledge questions (ERM overview, framework explanations, best practices)
-            logger.info(f"[LLM-GUIDANCE] Routing to LLM knowledge fallback for: {request.message}")
-            answer = answer_grc_knowledge_question(request.message, context_summary, uploaded_context)
+            # LLM-driven answer — use DB-augmented context for framework/knowledge questions
+            logger.info(f"[LLM-GUIDANCE] Routing to DB-augmented LLM guidance for: {request.message}")
+            tenant_ids = get_user_tenants(current_user, db)
+            answer = answer_with_db_context(request.message, db, tenant_ids, context_summary, uploaded_context)
             store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
             return ChatResponse(
                 answer=answer,
@@ -946,16 +1296,17 @@ async def ask_compliance_question(
         if uploaded_context:
             enhanced_question = f"{enhanced_question}\n\n{uploaded_context}"
         
+        tenant_ids = get_user_tenants(current_user, db)
+
         # 🤖 STEP 1: Generate SQL query from natural language
         logger.info("[STATS] Generating SQL query from question...")
         sql_result = generate_sql_query(enhanced_question, language="en", limit=request.limit, offset=request.offset)
         
         if not sql_result.get('sql') or not validate_sql(sql_result['sql']):
-            # If no valid SQL generated, return explanation
-            answer = sql_result.get('explanation', 'Unable to process this question as a SQL query.')
-            
+            # No valid SQL — fall back to LLM knowledge to answer the question directly
+            logger.info(f"[LLM-FALLBACK] No valid SQL generated — routing to LLM guidance")
+            answer = answer_with_db_context(request.message, db, tenant_ids, context_summary, uploaded_context)
             store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
-            
             return ChatResponse(
                 answer=answer,
                 sources=[],
@@ -1027,8 +1378,9 @@ Generate new SQL using ONLY the column names listed above.
                     # Re-validate new query
                     validation = validate_columns_in_sql(sql_query)
                     if not validation['valid']:
-                        logger.error("[FAIL] RETRY FAILED: New query still has column errors")
-                        answer = f"**Unable to Query This Data**\n\nThe system tried multiple times but couldn't find the correct database structure for your question.\n\nValidation errors:\n" + "\n".join(f"- {e}" for e in validation['errors']) + "\n\n💡 Try a simpler question or contact support."
+                        logger.error("[FAIL] RETRY FAILED: New query still has column errors — LLM fallback")
+                        answer = answer_with_db_context(request.message, db, tenant_ids, context_summary, uploaded_context)
+                        store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
                         return ChatResponse(
                             answer=answer,
                             sources=[],
@@ -1041,14 +1393,11 @@ Generate new SQL using ONLY the column names listed above.
                 else:
                     logger.error("[FAIL] RETRY FAILED: Could not regenerate query")
             
-            # If retry failed or no schema found, return friendly error
+            # If retry failed or no schema found, fall back to LLM knowledge
             if not validation['valid']:
-                logger.error("[FAIL] Final validation failed - returning error to user")
-                for error in validation['errors']:
-                    logger.warning(f"  - {error}")
-                
-                answer = f"**Unable to Query This Data**\n\nThe database structure for this question is not yet fully mapped.\n\n💡 **Suggestions:**\n- Try asking about frameworks, controls, or vulnerabilities\n- Use simpler queries like 'Show all [item type]'\n- This feature may be available soon as more data is added\n\n*Error details: Column validation failed for the requested data*"
-                
+                logger.error("[FAIL] Final validation failed — LLM fallback")
+                answer = answer_with_db_context(request.message, db, tenant_ids, context_summary, uploaded_context)
+                store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
                 return ChatResponse(
                     answer=answer,
                     sources=[],
@@ -1099,22 +1448,23 @@ Generate new SQL using ONLY the column names listed above.
                 pagination_note = f"\n\n*Showing {request.offset + 1}-{request.offset + len(data_list)} of {total_count} total results*"
 
             if not data_list:
-                # No DB rows — give a short, platform-focused "no data yet" message
-                logger.info(f"[LLM-FALLBACK] SQL returned 0 rows, generating platform status response")
-                answer = answer_grc_knowledge_question(
-                    f"The user asked: '{request.message}' inside the ComplyVerse GRC platform.\n"
-                    "The live database has NO records for this query yet — the platform is empty for this data type.\n\n"
-                    "Respond in this EXACT concise format (no verbose definitions, no academic content):\n\n"
-                    "## No [data type] found in your platform yet\n\n"
-                    "**Why:** One sentence explaining this data is empty.\n\n"
-                    "**Quick steps to populate this:**\n"
-                    "1. [First specific action in ComplyVerse]\n"
-                    "2. [Second specific action]\n"
-                    "3. [Third specific action]\n\n"
-                    "Keep it under 120 words total. Do NOT explain what the concept means — the user already knows.",
-                    context_summary,
-                    uploaded_context,
-                )
+                logger.info(f"[LLM-FALLBACK] SQL returned 0 rows — checking if framework knowledge question")
+                if is_framework_knowledge_question(request.message):
+                    # Framework knowledge question with no matching DB rows — answer from LLM knowledge directly
+                    answer = answer_with_db_context(request.message, db, tenant_ids, context_summary, uploaded_context)
+                else:
+                    # Platform data question with no results — give setup guidance
+                    answer = answer_grc_knowledge_question(
+                        f"The user asked: '{request.message}' inside the ComplyVerse GRC platform.\n"
+                        "The platform has no data for this type of information yet.\n\n"
+                        "Respond as ComplyChat with a brief, professional message (under 100 words):\n"
+                        "1. Acknowledge what they asked\n"
+                        "2. Note that no data exists in the platform yet\n"
+                        "3. Give 2-3 specific steps to set this up in ComplyVerse\n"
+                        "Do NOT use technical jargon. Do NOT mention databases or queries.",
+                        context_summary,
+                        uploaded_context,
+                    )
             else:
                 answer = format_query_results(data_list, request.message, sql_query, language="en") + pagination_note
             
@@ -1134,16 +1484,17 @@ Generate new SQL using ONLY the column names listed above.
             )
             logger.info(f"💾 Saved to history. Total messages in session: {len(get_recent_session_log(current_user.id, session_id))}")
             
-            # Build response with SQL metadata
+            # Build response with user-friendly source reference
+            entity_label = (sql_result.get('entity_type') or 'data').replace('_', ' ').title()
             sources = [ChatSource(
                 rank=1,
-                entity_type=sql_result.get('entity_type', 'sql_query'),
+                entity_type=sql_result.get('entity_type', 'platform_data'),
                 entity_id="",
-                framework_code="SQL",
+                framework_code="Live Data",
                 control_code=None,
-                control_name=f"Direct Database Query ({len(data_list)} results)",
+                control_name=f"{entity_label} — {len(data_list)} item(s) found",
                 relevance_score=1.0,
-                snippet=f"Executed SQL query returned {len(data_list)} results"
+                snippet=f"{len(data_list)} record(s) retrieved from your platform"
             )] if request.include_sources else []
             
             return ChatResponse(
@@ -1225,11 +1576,11 @@ Generate new SQL using ONLY the column names listed above. Use SQLite syntax (da
                             
                             # Check if empty result
                             if len(retry_data) == 0:
-                                answer = f"## No Data Found\n\nThe query executed successfully but found no matching records.\n\n💡 This table may be empty or the filter criteria didn't match any data.\n\n**What was queried:** {request.message}"
+                                logger.info("[LLM-FALLBACK] Retry returned 0 rows — routing to LLM knowledge")
+                                answer = answer_with_db_context(request.message, db, tenant_ids, context_summary, uploaded_context)
                             else:
                                 # Format successful retry results
                                 answer = format_query_results(retry_data, request.message, retry_sql, language="en")
-                                answer += f"\n\n*[YES] Query auto-corrected and returned {len(retry_data)} results*"
                             
                             return ChatResponse(
                                 answer=answer,
@@ -1248,12 +1599,9 @@ Generate new SQL using ONLY the column names listed above. Use SQLite syntax (da
             logger.info("[REFRESH] No retry possible or retry failed - returning friendly error")
             
             # Check if it's empty data vs actual error
-            if 'no such column' in error_str:
-                answer = f"## Data Structure Not Available\n\nThe information you're asking about uses a database structure that isn't fully configured yet.\n\n💡 **Try these instead:**\n- 'Show all frameworks'\n- 'List vulnerabilities'\n- 'Show all controls'\n\n*This feature will be available as more data structures are added.*"
-            elif 'no such table' in error_str:
-                answer = f"## Feature Not Available\n\nThis type of data isn't available in the system yet.\n\n💡 **Available data:**\n- Compliance frameworks (NIST CSF, SAMA, BSL)\n- Vulnerabilities\n- Controls\n- Evidence\n\n*Additional features are being added regularly.*"
-            else:
-                answer = f"## Unable to Process Query\n\nThe system encountered an issue processing your question.\n\n💡 **Suggestions:**\n- Try rephrasing your question\n- Use simpler terms\n- Ask about specific items like 'Show frameworks' or 'List controls'\n\n*If this persists, contact support with this error: Query execution failed*"
+            # All SQL execution errors fall back gracefully to LLM knowledge
+            logger.info(f"[LLM-FALLBACK] SQL execution failed — routing to LLM knowledge: {error_str[:80]}")
+            answer = answer_with_db_context(request.message, db, tenant_ids, context_summary, uploaded_context)
             
             # Save error to history
             store_chat_exchange(

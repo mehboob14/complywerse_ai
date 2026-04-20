@@ -137,6 +137,27 @@ const COLORS = {
   cyan: '#06b6d4',
 };
 
+function dedupeFrameworkCoverage<T extends { framework_id: number; framework_name: string; framework_code: string; total_controls: number }>(frameworks: T[]) {
+  const map = new Map<string, T>();
+
+  frameworks.forEach((framework) => {
+    const key = `${(framework.framework_code || '').trim().toLowerCase()}::${(framework.framework_name || '').trim().toLowerCase()}`;
+    const existing = map.get(key);
+    if (!existing || framework.total_controls > existing.total_controls) {
+      map.set(key, framework);
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) =>
+    `${a.framework_name || a.framework_code}`.localeCompare(`${b.framework_name || b.framework_code}`)
+  );
+}
+
+function shortenFrameworkLabel(value?: string, max = 22) {
+  if (!value) return 'Unknown';
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
 export default function GapAnalysisDashboardPage() {
   const [activeTab, setActiveTab] = useState('unmapped');
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<number | null>(null);
@@ -194,6 +215,10 @@ export default function GapAnalysisDashboardPage() {
     enabled: !!selectedFrameworkId && showFrameworkDrillDown,
   });
 
+  const uniqueFrameworkCoverage = useMemo(() => {
+    return dedupeFrameworkCoverage(dashboard?.coverage_by_framework || []);
+  }, [dashboard]);
+
   const gapSeverityData = useMemo(() => {
     if (!dashboard?.critical_gaps) return [];
     const counts = { critical: 0, high: 0, medium: 0, low: 0 };
@@ -210,15 +235,15 @@ export default function GapAnalysisDashboardPage() {
   }, [dashboard]);
 
   const frameworkChartData = useMemo(() => {
-    if (!dashboard?.coverage_by_framework) return [];
-    return dashboard.coverage_by_framework.map(fw => ({
-      name: fw.framework_code,
+    if (!uniqueFrameworkCoverage.length) return [];
+    return uniqueFrameworkCoverage.map(fw => ({
+      name: fw.framework_name || fw.framework_code,
       fullName: fw.framework_name,
       covered: fw.controls_with_evidence,
       uncovered: fw.controls_without_evidence,
       coverage: fw.coverage_percentage,
     }));
-  }, [dashboard]);
+  }, [uniqueFrameworkCoverage]);
 
   const exportMutation = useMutation({
     mutationFn: async (format: 'json' | 'csv') => {
@@ -304,11 +329,11 @@ export default function GapAnalysisDashboardPage() {
   const highCount = dashboard?.critical_gaps?.filter(g => g.priority === 'high').length || 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Gap Analysis Dashboard</h1>
-          <p className="text-gray-600">Identify and address control mapping and evidence gaps</p>
+          <h1 className="text-xl font-semibold text-black sm:text-2xl">Gap Analysis Dashboard</h1>
+          <p className="text-sm text-gray-600">Identify and address control mapping and evidence gaps</p>
         </div>
         <div className="relative">
           <button
@@ -434,11 +459,11 @@ export default function GapAnalysisDashboardPage() {
           empty={frameworkChartData.length === 0}
           emptyMessage="No framework data"
         >
-          <div className="h-64">
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={frameworkChartData} layout="vertical">
-                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#6b7280' }} />
-                <YAxis dataKey="name" type="category" tick={{ fill: '#6b7280' }} width={80} />
+              <BarChart data={frameworkChartData} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
+                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 11 }} />
+                <YAxis dataKey="name" type="category" tick={{ fill: '#374151', fontSize: 11 }} width={150} interval={0} tickFormatter={(value) => shortenFrameworkLabel(String(value), 20)} />
                 <Tooltip
                   contentStyle={{ 
                     backgroundColor: '#ffffff', 
@@ -465,7 +490,7 @@ export default function GapAnalysisDashboardPage() {
         </DataCard>
       </div>
 
-      {dashboard?.critical_gaps && dashboard.critical_gaps.length > 0 && (
+      {/* {dashboard?.critical_gaps && dashboard.critical_gaps.length > 0 && (
         <DataCard
           title="Priority Gaps"
           subtitle="Issues requiring immediate attention"
@@ -541,7 +566,7 @@ export default function GapAnalysisDashboardPage() {
             ))}
           </div>
         </DataCard>
-      )}
+      )} */}
 
       <div className="card">
         <div className="card-header">
@@ -571,7 +596,7 @@ export default function GapAnalysisDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {dashboard.coverage_by_framework.map((fw) => (
+                {uniqueFrameworkCoverage.map((fw) => (
                   <tr
                     key={`${fw.framework_type || 'legacy'}-${fw.framework_id}`}
                     className="hover:bg-gray-100 cursor-pointer transition-colors"
@@ -671,18 +696,18 @@ export default function GapAnalysisDashboardPage() {
                 className="appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-10 text-black focus:border-primary-500 focus:outline-none"
               >
                 <option value="">All Frameworks</option>
-                {dashboard?.coverage_by_framework?.filter(fw => fw.framework_type === 'uploaded').length ? (
+                {uniqueFrameworkCoverage.filter(fw => fw.framework_type === 'uploaded').length ? (
                   <optgroup label="Uploaded Frameworks">
-                    {dashboard.coverage_by_framework.filter(fw => fw.framework_type === 'uploaded').map(fw => (
+                    {uniqueFrameworkCoverage.filter(fw => fw.framework_type === 'uploaded').map(fw => (
                       <option key={`uploaded-${fw.framework_id}`} value={`uploaded:${fw.framework_id}`}>
                         {fw.framework_code} - {fw.framework_name}
                       </option>
                     ))}
                   </optgroup>
                 ) : null}
-                {dashboard?.coverage_by_framework?.filter(fw => fw.framework_type !== 'uploaded').length ? (
+                {uniqueFrameworkCoverage.filter(fw => fw.framework_type !== 'uploaded').length ? (
                   <optgroup label="Legacy Frameworks">
-                    {dashboard.coverage_by_framework.filter(fw => fw.framework_type !== 'uploaded').map(fw => (
+                    {uniqueFrameworkCoverage.filter(fw => fw.framework_type !== 'uploaded').map(fw => (
                       <option key={`legacy-${fw.framework_id}`} value={`legacy:${fw.framework_id}`}>
                         {fw.framework_code} - {fw.framework_name}
                       </option>

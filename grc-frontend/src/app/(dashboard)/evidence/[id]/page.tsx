@@ -225,10 +225,23 @@ export default function EvidenceDetailPage() {
   const [selectedNormalizedId, setSelectedNormalizedId] = useState<number | null>(null);
   const [showRiskModal, setShowRiskModal] = useState(false);
   const [showAssetModal, setShowAssetModal] = useState(false);
+  const [showIncidentModal, setShowIncidentModal] = useState(false);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [selectedRiskId, setSelectedRiskId] = useState<number | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(null);
+  const [selectedPolicyStatementId, setSelectedPolicyStatementId] = useState<number | null>(null);
   const [linkingClauseIndex, setLinkingClauseIndex] = useState<number | null>(null);
   const [linkFeedback, setLinkFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    evidence_type: '',
+    collection_date: '',
+    validity_period_days: '',
+    source_system: '',
+  });
 
   const { data: evidence, isLoading, error } = useQuery<EvidenceDetail>({
     queryKey: ['evidence-detail', evidenceId],
@@ -236,6 +249,12 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get(`/evidence-mgmt/items/${evidenceId}`);
       return response.data;
     },
+    refetchInterval: (query) => {
+      const currentEvidence = query.state.data as EvidenceDetail | undefined;
+      const hasActiveOCR = currentEvidence?.ocr_status === 'pending' || currentEvidence?.ocr_status === 'processing';
+      return hasActiveOCR ? 3000 : false;
+    },
+    refetchIntervalInBackground: true,
   });
 
   const { data: ocrContent } = useQuery<OCRContent>({
@@ -245,6 +264,12 @@ export default function EvidenceDetailPage() {
       return response.data;
     },
     enabled: activeTab === 'ocr',
+    refetchInterval: (query) => {
+      const currentContent = query.state.data as OCRContent | undefined;
+      const hasActiveOCR = currentContent?.ocr_status === 'pending' || currentContent?.ocr_status === 'processing';
+      return hasActiveOCR ? 3000 : false;
+    },
+    refetchIntervalInBackground: true,
   });
 
   const { data: latestAssessment, refetch: refetchAssessment } = useQuery<LatestAssessment>({
@@ -303,6 +328,27 @@ export default function EvidenceDetailPage() {
       return response.data;
     },
     enabled: showAssetModal,
+  });
+
+  const { data: incidentsList } = useQuery<Array<{ id: number; title: string; severity?: string | null }>>({
+    queryKey: ['incidents-list'],
+    queryFn: async () => {
+      const response = await apiClient.get('/erm/incidents');
+      return response.data;
+    },
+    enabled: showIncidentModal,
+  });
+
+  const { data: policyStatementsList } = useQuery<{
+    statements: Array<{ id: number; statement_code: string; statement_summary?: string | null }>;
+    total: number;
+  }>({
+    queryKey: ['policy-statements-list'],
+    queryFn: async () => {
+      const response = await apiClient.get('/compliance/statements', { params: { limit: 200 } });
+      return response.data;
+    },
+    enabled: showPolicyModal,
   });
 
   const { data: clauseMappings } = useQuery<ClauseMapping[]>({
@@ -366,6 +412,25 @@ export default function EvidenceDetailPage() {
     mutationFn: () => apiClient.post(`/evidence-mgmt/lifecycle/${evidenceId}/submit`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-items'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
+      router.push('/compliance/assessments/approvals');
+    },
+  });
+
+  const updateEvidenceMutation = useMutation({
+    mutationFn: () => apiClient.put(`/evidence-mgmt/items/${evidenceId}`, {
+      name: editForm.name,
+      description: editForm.description || null,
+      evidence_type: editForm.evidence_type || null,
+      collection_date: editForm.collection_date ? `${editForm.collection_date}T00:00:00` : null,
+      validity_period_days: editForm.validity_period_days ? Number(editForm.validity_period_days) : null,
+      source_system: editForm.source_system || null,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-items'] });
+      setIsEditModalOpen(false);
     },
   });
 
@@ -399,6 +464,22 @@ export default function EvidenceDetailPage() {
   const unlinkAssetMutation = useMutation({
     mutationFn: (linkId: number) => 
       apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/assets/${linkId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    },
+  });
+
+  const unlinkIncidentMutation = useMutation({
+    mutationFn: (linkId: number) => 
+      apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/incidents/${linkId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    },
+  });
+
+  const unlinkPolicyMutation = useMutation({
+    mutationFn: (linkId: number) => 
+      apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/policy-statements/${linkId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
     },
@@ -450,6 +531,24 @@ export default function EvidenceDetailPage() {
     onSuccess: () => {
       setShowAssetModal(false);
       setSelectedAssetId(null);
+      queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    },
+  });
+
+  const linkIncidentMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/incidents`, { incident_ids: [selectedIncidentId] }),
+    onSuccess: () => {
+      setShowIncidentModal(false);
+      setSelectedIncidentId(null);
+      queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    },
+  });
+
+  const linkPolicyMutation = useMutation({
+    mutationFn: () => apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/policy-statements`, { statement_ids: [selectedPolicyStatementId] }),
+    onSuccess: () => {
+      setShowPolicyModal(false);
+      setSelectedPolicyStatementId(null);
       queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
     },
   });
@@ -591,95 +690,90 @@ export default function EvidenceDetailPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start gap-4">
-        <Link
-          href="/evidence"
-          className="mt-1 rounded-lg p-2 text-gray-600 hover:bg-gray-50 hover:text-black"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <TypeIcon className="h-6 w-6" />
+    <div className="risk-workspace -m-4 space-y-4 lg:-m-5">
+      <div className="border-b border-[var(--color-border)] px-4 py-3 sm:px-6">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex items-start gap-3">
+            <Link href="/evidence" className="mt-0.5 rounded-md p-1.5 text-gray-600 hover:bg-gray-50 hover:text-black">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <TypeIcon className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-black">{evidence.name}</h1>
-              <p className="text-gray-600">{evidence.description || 'No description'}</p>
+              <h1 className="text-lg font-semibold text-black">{evidence.name}</h1>
+              <p className="text-xs text-gray-600">{evidence.description || 'No description'}</p>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {evidence.evidence_type && (
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-600">
-              {evidence.evidence_type.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
-            </span>
-          )}
-          <span className={`rounded-full ${statusStyle.bg} px-3 py-1 text-sm ${statusStyle.text}`}>
-            {statusStyle.label}
-          </span>
-          {evidence.quality_score !== null && (
-            <span className={`rounded-full ${getQualityScoreColor(evidence.quality_score)} px-3 py-1 text-sm text-white`}>
-              Quality: {Math.round(evidence.quality_score)}%
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-black hover:bg-gray-50"
-            title="Edit Evidence"
-          >
-            <Edit className="h-4 w-4" />
-            Edit
-          </button>
-          {evidence.status === 'draft' && (
-            <button
-              onClick={() => submitForReviewMutation.mutate()}
-              disabled={submitForReviewMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-yellow-600 px-4 py-2 text-white hover:bg-yellow-700 disabled:opacity-50"
-              title="Submit for Review"
-            >
-              {submitForReviewMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              Submit
-            </button>
-          )}
-          {evidence.ocr_status !== 'completed' && evidence.ocr_status !== 'not_applicable' && (
-            <button
-              onClick={() => processOCRMutation.mutate()}
-              disabled={processOCRMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-              title="Process OCR"
-            >
-              {processOCRMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ScanText className="h-4 w-4" />
-              )}
-              OCR
-            </button>
-          )}
-          <button
-            onClick={() => runAssessmentMutation.mutate()}
-            disabled={runAssessmentMutation.isPending || evidence.ocr_status !== 'completed'}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
-            title={evidence.ocr_status !== 'completed' ? 'Run OCR first' : 'Run AI Assessment'}
-          >
-            {runAssessmentMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Brain className="h-4 w-4" />
+
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            {evidence.evidence_type && (
+              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-600">
+                {evidence.evidence_type.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+              </span>
             )}
-            Assess
-          </button>
+            <span className={`rounded-full ${statusStyle.bg} px-2.5 py-1 text-xs ${statusStyle.text}`}>
+              {statusStyle.label}
+            </span>
+            {evidence.quality_score !== null && (
+              <span className={`rounded-full ${getQualityScoreColor(evidence.quality_score)} px-2.5 py-1 text-xs text-white`}>
+                Quality: {Math.round(evidence.quality_score)}%
+              </span>
+            )}
+            <button
+              onClick={() => {
+                setEditForm({
+                  name: evidence.name || '',
+                  description: evidence.description || '',
+                  evidence_type: evidence.evidence_type || '',
+                  collection_date: evidence.collection_date ? new Date(evidence.collection_date).toISOString().split('T')[0] : '',
+                  validity_period_days: evidence.validity_period_days ? String(evidence.validity_period_days) : '',
+                  source_system: evidence.source_system || '',
+                });
+                setIsEditModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-black hover:bg-gray-50"
+              title="Edit Evidence"
+            >
+              <Edit className="h-3.5 w-3.5" />
+              Edit
+            </button>
+            {evidence.status === 'draft' && (
+              <button
+                onClick={() => submitForReviewMutation.mutate()}
+                disabled={submitForReviewMutation.isPending}
+                className="flex items-center gap-1.5 rounded-md bg-yellow-600 px-3 py-1.5 text-sm text-white hover:bg-yellow-700 disabled:opacity-50"
+                title="Submit for Review"
+              >
+                {submitForReviewMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                Submit for Review
+              </button>
+            )}
+            {evidence.ocr_status !== 'completed' && evidence.ocr_status !== 'not_applicable' && (
+              <button
+                onClick={() => processOCRMutation.mutate()}
+                disabled={processOCRMutation.isPending}
+                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                title="Process OCR"
+              >
+                {processOCRMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanText className="h-3.5 w-3.5" />}
+                OCR
+              </button>
+            )}
+            <button
+              onClick={() => runAssessmentMutation.mutate()}
+              disabled={runAssessmentMutation.isPending || evidence.ocr_status !== 'completed'}
+              className="flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+              title={evidence.ocr_status !== 'completed' ? 'Run OCR first' : 'Run AI Assessment'}
+            >
+              {runAssessmentMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
+              Assess
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 px-4 sm:px-6 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <div className="mb-3 flex items-center gap-2 text-gray-700">
             <Calendar className="h-4 w-4" />
@@ -796,92 +890,90 @@ export default function EvidenceDetailPage() {
       </div>
 
       {evidence.status === 'pending_review' && (
-        <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Clock className="h-5 w-5 text-yellow-600" />
+        <div className="rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-yellow-600" />
               <div>
-                <p className="font-medium text-yellow-700">Pending Review</p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm font-medium text-yellow-700">This evidence is awaiting approval</p>
+                <p className="text-xs text-gray-600">
                   Submitted by {evidence.uploader_name || 'Unknown'} on {formatDateTime(evidence.submitted_at)}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {reviewAction === null ? (
-                <>
-                  <button
-                    onClick={() => setReviewAction('approve')}
-                    className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
-                  >
-                    <ThumbsUp className="h-4 w-4" />
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => setReviewAction('reject')}
-                    className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
-                  >
-                    <ThumbsDown className="h-4 w-4" />
-                    Reject
-                  </button>
-                </>
-              ) : reviewAction === 'approve' ? (
-                <>
-                  <span className="text-sm text-gray-600">Confirm approval?</span>
-                  <button
-                    onClick={() => reviewMutation.mutate({ action: 'approve' })}
-                    disabled={reviewMutation.isPending}
-                    className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
-                  >
-                    {reviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                    Confirm
-                  </button>
-                  <button
-                    onClick={() => setReviewAction(null)}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-black hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={rejectComments}
-                    onChange={(e) => setRejectComments(e.target.value)}
-                    placeholder="Rejection comments..."
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-500 focus:border-red-500 focus:outline-none"
-                  />
-                  <button
-                    onClick={() => reviewMutation.mutate({ action: 'reject', comments: rejectComments })}
-                    disabled={reviewMutation.isPending}
-                    className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
-                  >
-                    {reviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-                    Reject
-                  </button>
-                  <button
-                    onClick={() => { setReviewAction(null); setRejectComments(''); }}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-black hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
+            <Link
+              href="/compliance/assessments/approvals"
+              className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm text-black border border-yellow-300 hover:bg-yellow-100"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open Pending Approvals
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+              <h2 className="text-sm font-semibold text-black">Edit Evidence</h2>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-gray-500 hover:text-black">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-3 p-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Name</label>
+                <input value={editForm.name} onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Description</label>
+                <textarea value={editForm.description} onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))} rows={3} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Evidence Type</label>
+                  <select value={editForm.evidence_type} onChange={(e) => setEditForm((prev) => ({ ...prev, evidence_type: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                    <option value="">Select type...</option>
+                    {['screenshot','document','certificate','audit_report','log','policy','procedure','configuration','attestation','training_record','access_review','vulnerability_scan','penetration_test','backup_log','change_record','incident_report','other'].map((type) => (
+                      <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Collection Date</label>
+                  <input type="date" value={editForm.collection_date} onChange={(e) => setEditForm((prev) => ({ ...prev, collection_date: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Validity Days</label>
+                  <input type="number" min="1" value={editForm.validity_period_days} onChange={(e) => setEditForm((prev) => ({ ...prev, validity_period_days: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Source System</label>
+                  <input value={editForm.source_system} onChange={(e) => setEditForm((prev) => ({ ...prev, source_system: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-gray-200 pt-3">
+                <button onClick={() => setIsEditModalOpen(false)} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-black hover:bg-gray-50">Cancel</button>
+                <button onClick={() => updateEvidenceMutation.mutate()} disabled={updateEvidenceMutation.isPending || !editForm.name.trim()} className="rounded-md bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700 disabled:opacity-50">
+                  {updateEvidenceMutation.isPending ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      <div className="border-b border-gray-200">
-        <nav className="flex gap-1">
+
+      <div className="border-b border-gray-200 px-4 sm:px-6">
+        <nav className="flex flex-wrap gap-1 overflow-x-auto py-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-600 hover:text-black'
@@ -895,7 +987,7 @@ export default function EvidenceDetailPage() {
         </nav>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
+      <div className="mx-4 rounded-lg border border-gray-200 bg-white p-3 sm:mx-6 sm:p-4">
         {activeTab === 'overview' && (
           <OverviewTab evidence={evidence} formatDate={formatDate} formatDateTime={formatDateTime} />
         )}
@@ -946,9 +1038,18 @@ export default function EvidenceDetailPage() {
             links={allLinks}
             onUnlinkRisk={(linkId) => unlinkRiskMutation.mutate(linkId)}
             onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
-            isUnlinking={unlinkRiskMutation.isPending || unlinkAssetMutation.isPending}
+            onUnlinkIncident={(linkId) => unlinkIncidentMutation.mutate(linkId)}
+            onUnlinkPolicy={(linkId) => unlinkPolicyMutation.mutate(linkId)}
+            isUnlinking={
+              unlinkRiskMutation.isPending ||
+              unlinkAssetMutation.isPending ||
+              unlinkIncidentMutation.isPending ||
+              unlinkPolicyMutation.isPending
+            }
             onOpenRiskModal={() => setShowRiskModal(true)}
             onOpenAssetModal={() => setShowAssetModal(true)}
+            onOpenIncidentModal={() => setShowIncidentModal(true)}
+            onOpenPolicyModal={() => setShowPolicyModal(true)}
           />
         )}
       </div>
@@ -1071,7 +1172,7 @@ export default function EvidenceDetailPage() {
         )}
 
         {showAssetModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
             <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-black">Link Asset</h3>
@@ -1095,6 +1196,72 @@ export default function EvidenceDetailPage() {
                   className="rounded bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
                 >
                   {linkAssetMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Link Asset'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showIncidentModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-black">Link Incident</h3>
+                <button onClick={() => setShowIncidentModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
+              </div>
+              <select
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                value={selectedIncidentId ?? ''}
+                onChange={(e) => setSelectedIncidentId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Select incident</option>
+                {incidentsList?.map((incident) => (
+                  <option key={incident.id} value={incident.id}>
+                    {(incident.title || `Incident #${incident.id}`) + (incident.severity ? ` • ${incident.severity}` : '')}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-4 flex justify-end gap-3">
+                <button onClick={() => setShowIncidentModal(false)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={() => linkIncidentMutation.mutate()}
+                  disabled={!selectedIncidentId || linkIncidentMutation.isPending}
+                  className="rounded bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {linkIncidentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Link Incident'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showPolicyModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-black">Link Policy Statement</h3>
+                <button onClick={() => setShowPolicyModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
+              </div>
+              <select
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                value={selectedPolicyStatementId ?? ''}
+                onChange={(e) => setSelectedPolicyStatementId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Select policy statement</option>
+                {policyStatementsList?.statements?.map((statement) => (
+                  <option key={statement.id} value={statement.id}>
+                    {(statement.statement_code || `Statement #${statement.id}`) + ' - ' + (statement.statement_summary || 'Policy Statement')}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-4 flex justify-end gap-3">
+                <button onClick={() => setShowPolicyModal(false)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={() => linkPolicyMutation.mutate()}
+                  disabled={!selectedPolicyStatementId || linkPolicyMutation.isPending}
+                  className="rounded bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {linkPolicyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Link Statement'}
                 </button>
               </div>
             </div>
@@ -1813,16 +1980,24 @@ function CrossLinksTab({
   links,
   onUnlinkRisk,
   onUnlinkAsset,
+  onUnlinkIncident,
+  onUnlinkPolicy,
   isUnlinking,
   onOpenRiskModal,
-  onOpenAssetModal
+  onOpenAssetModal,
+  onOpenIncidentModal,
+  onOpenPolicyModal
 }: { 
   links?: AllLinksResponse;
   onUnlinkRisk: (linkId: number) => void;
   onUnlinkAsset: (linkId: number) => void;
+  onUnlinkIncident: (linkId: number) => void;
+  onUnlinkPolicy: (linkId: number) => void;
   isUnlinking: boolean;
   onOpenRiskModal: () => void;
   onOpenAssetModal: () => void;
+  onOpenIncidentModal: () => void;
+  onOpenPolicyModal: () => void;
 }) {
   if (!links) {
     return (
@@ -1933,7 +2108,7 @@ function CrossLinksTab({
                 <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-blue-400" />
-                    <Link href={`/assets/${link.asset_id}`} className="text-sm text-white hover:text-blue-600">
+                    <Link href={`/assets/${link.asset_id}`} className="text-sm text-black hover:text-blue-600">
                       {link.asset?.name || `Asset #${link.asset_id}`}
                     </Link>
                   </div>
@@ -1963,7 +2138,10 @@ function CrossLinksTab({
           iconColor="text-orange-400"
           count={links.incidents.total}
           addButton={
-            <button className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
+            <button
+              onClick={onOpenIncidentModal}
+              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+            >
               <Plus className="h-4 w-4" /> Add
             </button>
           }
@@ -1974,20 +2152,29 @@ function CrossLinksTab({
                 <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-orange-400" />
-                    <span className="text-sm text-white">
+                    <span className="text-sm text-black">
                       {link.incident?.title || `Incident #${link.incident_id}`}
                     </span>
                   </div>
-                  {link.incident && (
-                    <span className={`rounded px-2 py-0.5 text-xs ${
-                      link.incident.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
-                      link.incident.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
-                      link.incident.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-green-500/20 text-green-400'
-                    }`}>
-                      {link.incident.severity}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {link.incident && (
+                      <span className={`rounded px-2 py-0.5 text-xs ${
+                        link.incident.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                        link.incident.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                        link.incident.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                        'bg-green-500/20 text-green-400'
+                      }`}>
+                        {link.incident.severity}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => onUnlinkIncident(link.id)}
+                      disabled={isUnlinking}
+                      className="text-gray-600 hover:text-red-400"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -2002,7 +2189,10 @@ function CrossLinksTab({
           iconColor="text-purple-400"
           count={links.policy_statements.total}
           addButton={
-            <button className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
+            <button
+              onClick={onOpenPolicyModal}
+              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+            >
               <Plus className="h-4 w-4" /> Add
             </button>
           }
@@ -2014,10 +2204,17 @@ function CrossLinksTab({
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-purple-400" />
                     <div>
-                      <span className="text-xs text-purple-400">{link.policy_statement?.statement_code}</span>
-                      <p className="text-sm text-white">{link.policy_statement?.statement_summary || 'Policy Statement'}</p>
+                      <span className="text-xs text-purple-500">{link.policy_statement?.statement_code}</span>
+                      <p className="text-sm text-black">{link.policy_statement?.statement_summary || 'Policy Statement'}</p>
                     </div>
                   </div>
+                  <button
+                    onClick={() => onUnlinkPolicy(link.id)}
+                    disabled={isUnlinking}
+                    className="text-gray-600 hover:text-red-400"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               ))}
             </div>

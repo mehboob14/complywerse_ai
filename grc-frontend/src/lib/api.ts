@@ -292,7 +292,7 @@ export const governanceApi = {
     apiClient.get(`/governance/gap-analysis/runs/${documentId}`),
   getComplianceSummary: (documentId: number) =>
     apiClient.get(`/governance/gap-analysis/compliance-summary/${documentId}`),
-  runGapAnalysis: (data: { document_id: number; framework_ids: number[]; run_all?: boolean }) =>
+  runGapAnalysis: (data: { document_id: number; framework_ids?: number[]; run_all?: boolean }) =>
     apiClient.post('/governance/gap-analysis/run', data, { timeout: 30000 }),
   generatePolicyDraft: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; include_sections?: string[] }) =>
     apiClient.post('/governance/documents/ai-draft', data),
@@ -354,6 +354,12 @@ export const governanceApi = {
     apiClient.get(`/governance/dashboard/trends?months=${months}`),
   updateDocumentStatus: (documentId: number, status: string) =>
     apiClient.put(`/governance/documents/${documentId}/status`, { status }),
+  submitDocumentForReview: (documentId: number, data?: { due_days?: number; message?: string }) =>
+    apiClient.post('/governance/workflows/submit', {
+      document_id: documentId,
+      due_days: data?.due_days ?? 7,
+      message: data?.message,
+    }),
   publishDocument: (documentId: number) =>
     apiClient.post(`/governance/documents/${documentId}/publish`),
   requestAttestation: (documentId: number, data: { user_ids: number[]; attestation_type?: string; due_date?: string }) =>
@@ -367,6 +373,8 @@ export const governanceApi = {
     apiClient.get(`/governance/documents/${documentId}/parse-status`),
   getDocumentGapFindings: (documentId: number, params?: Record<string, any>) =>
     apiClient.get(`/governance/gap-analysis/findings/document/${documentId}`, { params }),
+  exportGapFindings: (documentId: number) =>
+    apiClient.get(`/governance/gap-analysis/export/${documentId}`, { responseType: 'blob' }),
   updateGapFinding: (findingId: number, data: Record<string, any>) =>
     apiClient.put(`/governance/gap-analysis/findings/${findingId}`, data),
   overrideGapFinding: (findingId: number, data: { override_status: string; override_justification: string }) =>

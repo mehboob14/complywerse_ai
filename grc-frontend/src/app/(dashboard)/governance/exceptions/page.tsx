@@ -689,7 +689,25 @@ export default function PolicyExceptionsPage() {
                   className="input"
                   placeholder="Exception request title"
                 />
-                {showCreateModal && !editingException && (
+               
+              </div>
+
+              <div>
+                <label className="label">Policy</label>
+                <select
+                  value={formData.document_id}
+                  onChange={(e) => setFormData({ ...formData, document_id: e.target.value })}
+                  className="select"
+                >
+                  <option value="">Select a policy...</option>
+                  {(documents || []).map((doc: GovernancePolicyOption) => (
+                    <option key={doc.id} value={doc.id}>
+                      {doc.title} ({doc.document_code || doc.doc_type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+               {showCreateModal && !editingException && (
                   <div className="mt-2">
                     <button
                       type="button"
@@ -709,23 +727,6 @@ export default function PolicyExceptionsPage() {
                     </p>
                   </div>
                 )}
-              </div>
-
-              <div>
-                <label className="label">Policy</label>
-                <select
-                  value={formData.document_id}
-                  onChange={(e) => setFormData({ ...formData, document_id: e.target.value })}
-                  className="select"
-                >
-                  <option value="">Select a policy...</option>
-                  {(documents || []).map((doc: GovernancePolicyOption) => (
-                    <option key={doc.id} value={doc.id}>
-                      {doc.title} ({doc.document_code || doc.doc_type})
-                    </option>
-                  ))}
-                </select>
-              </div>
 
                 {showCreateModal && !editingException && suggestContentMutation.isPending && (
                 <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 flex items-center gap-3">

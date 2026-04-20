@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { committeeApi } from '@/lib/api';
+import { assetsApi, committeeApi } from '@/lib/api';
 import {
   Users,
   Plus,
@@ -39,6 +39,12 @@ interface DashboardData {
   upcoming_meetings: number;
   open_actions: number;
   overdue_actions: number;
+}
+
+interface TenantUserOption {
+  id: number;
+  display_name?: string;
+  email?: string;
 }
 
 const COMMITTEE_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
@@ -87,6 +93,14 @@ export default function CommitteesPage() {
       const response = await committeeApi.getCommittees();
       const data = response.data as { items: Committee[]; total: number };
       return data.items || [];
+    },
+  });
+
+  const { data: tenantUsers = [], isLoading: usersLoading } = useQuery({
+    queryKey: ['tenant-users-committee-form'],
+    queryFn: async () => {
+      const response = await assetsApi.getTenantUsers();
+      return (response.data || []) as TenantUserOption[];
     },
   });
 
@@ -377,24 +391,36 @@ export default function CommitteesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Chair ID</label>
-                  <input
-                    type="number"
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Chair</label>
+                  <select
                     value={formData.chair_id}
                     onChange={(e) => setFormData({ ...formData, chair_id: e.target.value })}
                     className="input w-full"
-                    placeholder="User ID"
-                  />
+                    disabled={usersLoading}
+                  >
+                    <option value="">{usersLoading ? 'Loading users...' : 'Select chair'}</option>
+                    {tenantUsers.map((user) => (
+                      <option key={user.id} value={String(user.id)}>
+                        {(user.display_name || user.email || `User ${user.id}`) + (user.email && user.display_name ? ` (${user.email})` : '')}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Secretary ID</label>
-                  <input
-                    type="number"
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Secretary</label>
+                  <select
                     value={formData.secretary_id}
                     onChange={(e) => setFormData({ ...formData, secretary_id: e.target.value })}
                     className="input w-full"
-                    placeholder="User ID"
-                  />
+                    disabled={usersLoading}
+                  >
+                    <option value="">{usersLoading ? 'Loading users...' : 'Select secretary'}</option>
+                    {tenantUsers.map((user) => (
+                      <option key={user.id} value={String(user.id)}>
+                        {(user.display_name || user.email || `User ${user.id}`) + (user.email && user.display_name ? ` (${user.email})` : '')}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

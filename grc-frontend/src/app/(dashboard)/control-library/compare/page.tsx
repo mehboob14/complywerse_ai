@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { controlLibraryApi } from '@/lib/api';
 import {
@@ -69,6 +69,25 @@ interface AIMapResult {
   ai_mappings: AIMapping[];
 }
 
+function dedupeComparisonFrameworks(frameworks: FrameworkInfo[]) {
+  const map = new Map<string, FrameworkInfo>();
+
+  frameworks.forEach((framework) => {
+    const key = `${(framework.short_code || '').trim().toLowerCase()}::${(framework.name || '').trim().toLowerCase()}`;
+    const existing = map.get(key);
+    if (!existing || framework.control_count > existing.control_count) {
+      map.set(key, framework);
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function truncateInlineText(value?: string, max = 80) {
+  if (!value) return '—';
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
 export default function FrameworkComparisonPage() {
   const [sourceFrameworkId, setSourceFrameworkId] = useState<number | null>(null);
   const [destFrameworkId, setDestFrameworkId] = useState<number | null>(null);
@@ -85,6 +104,11 @@ export default function FrameworkComparisonPage() {
       return response.data as { frameworks: FrameworkInfo[] };
     },
   });
+
+  const frameworkOptions = useMemo(
+    () => dedupeComparisonFrameworks(frameworksData?.frameworks || []),
+    [frameworksData]
+  );
 
   const { data: crosswalkData, isLoading: crosswalkLoading, isFetching: crosswalkFetching } = useQuery({
     queryKey: ['crosswalk', sourceFrameworkId, destFrameworkId, page, pageSize],
@@ -183,15 +207,15 @@ export default function FrameworkComparisonPage() {
   };
 
   const totalPages = crosswalkData ? Math.ceil(crosswalkData.total / pageSize) : 0;
-  const sourceFramework = frameworksData?.frameworks.find(f => f.id === sourceFrameworkId);
-  const destFramework = frameworksData?.frameworks.find(f => f.id === destFrameworkId);
+  const sourceFramework = frameworkOptions.find(f => f.id === sourceFrameworkId);
+  const destFramework = frameworkOptions.find(f => f.id === destFrameworkId);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Framework Comparison</h1>
-          <p className="text-gray-600">Crosswalk mapping between regulatory frameworks</p>
+          <h1 className="text-xl font-semibold text-black sm:text-2xl">Framework Comparison</h1>
+          <p className="text-sm text-gray-600">Crosswalk mapping between regulatory frameworks</p>
         </div>
         {crosswalkData?.crosswalk && crosswalkData.crosswalk.length > 0 && (
           <button
@@ -221,7 +245,7 @@ export default function FrameworkComparisonPage() {
                 {frameworksLoading ? (
                   <option disabled>Loading...</option>
                 ) : (
-                  frameworksData?.frameworks.map(fw => (
+                  frameworkOptions.map(fw => (
                     <option key={fw.id} value={fw.id} disabled={fw.id === destFrameworkId}>
                       {fw.name} {fw.version ? `(${fw.version})` : ''} — {fw.control_count} controls
                     </option>
@@ -251,7 +275,7 @@ export default function FrameworkComparisonPage() {
                 {frameworksLoading ? (
                   <option disabled>Loading...</option>
                 ) : (
-                  frameworksData?.frameworks.map(fw => (
+                  frameworkOptions.map(fw => (
                     <option key={fw.id} value={fw.id} disabled={fw.id === sourceFrameworkId}>
                       {fw.name} {fw.version ? `(${fw.version})` : ''} — {fw.control_count} controls
                     </option>
@@ -280,7 +304,7 @@ export default function FrameworkComparisonPage() {
               <Shield className="h-6 w-6 text-blue-600" />
             </div>
           </div>
-          <p className="stat-value">{frameworksData?.frameworks.length || 0}</p>
+          <p className="stat-value">{frameworkOptions.length || 0}</p>
           <p className="stat-label">Available Frameworks</p>
         </div>
         <div className="stat-card">
@@ -352,151 +376,146 @@ export default function FrameworkComparisonPage() {
                       const isExpanded = expandedRows.has(row.source_control.id);
                       const aiResult = aiResults[row.source_control.id];
                       const hasDest = row.destination_controls.length > 0;
+                      const destinationRefs = hasDest ? row.destination_controls.map((dc) => dc.reference).join(' • ') : 'No mapping found';
+                      const destinationTitles = hasDest ? row.destination_controls.map((dc) => dc.title).join(' • ') : '—';
+                      const destinationDomains = hasDest
+                        ? row.destination_controls.map((dc) => dc.domain).filter(Boolean).join(' • ')
+                        : '—';
+                      const evidenceSummary = row.evidence_recommendations.length > 0
+                        ? row.evidence_recommendations.map((ev) => formatEvidence(ev)).join(' • ')
+                        : '—';
 
                       return (
-                        <tr key={row.source_control.id} className="hover:bg-gray-100/20 align-top">
-                          <td className="px-3 py-3">
-                            <button
-                              onClick={() => toggleRow(row.source_control.id)}
-                              className="font-mono text-sm font-medium text-blue-600 hover:text-blue-700"
-                            >
-                              {row.source_control.reference}
-                            </button>
-                          </td>
-                          <td className="px-3 py-3">
-                            <p className="text-sm font-medium text-black line-clamp-2">{row.source_control.title}</p>
-                            {isExpanded && row.source_control.description && (
-                              <p className="mt-1 text-xs text-gray-600 line-clamp-4">{row.source_control.description}</p>
-                            )}
-                          </td>
-                          <td className="px-3 py-3">
-                            {row.source_control.domain && (
-                              <span className="inline-block rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
-                                {row.source_control.domain}
+                        <Fragment key={row.source_control.id}>
+                          <tr
+                            key={row.source_control.id}
+                            className="cursor-pointer align-top transition-colors hover:bg-gray-50"
+                            onClick={() => toggleRow(row.source_control.id)}
+                          >
+                            <td className="px-3 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-sm font-medium text-blue-600">{row.source_control.reference}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-3">
+                              <p className="truncate whitespace-nowrap text-sm font-medium text-black" title={row.source_control.title}>
+                                {truncateInlineText(row.source_control.title, 78)}
+                              </p>
+                            </td>
+                            <td className="px-3 py-3">
+                              <span className="block truncate whitespace-nowrap text-xs text-gray-700" title={row.source_control.domain || row.source_control.category || '—'}>
+                                {truncateInlineText(row.source_control.domain || row.source_control.category || '—', 26)}
                               </span>
-                            )}
-                            {row.source_control.category && row.source_control.category !== row.source_control.domain && (
-                              <span className="mt-1 inline-block rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                                {row.source_control.category}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3">
-                            {hasDest ? (
+                            </td>
+                            <td className="px-3 py-3">
                               <div className="space-y-1">
-                                {row.destination_controls.map((dc) => (
-                                  <span key={dc.id} className="block font-mono text-sm text-blue-700">
-                                    {dc.reference}
-                                  </span>
-                                ))}
-                                {row.match_count > 5 && (
-                                  <span className="text-xs text-gray-500">+{row.match_count - 5} more</span>
-                                )}
-                                <span className={`mt-1 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                                  row.match_type === 'category' ? 'bg-green-500/20 text-green-400' :
-                                  row.match_type === 'domain' ? 'bg-blue-500/20 text-blue-400' :
-                                  row.match_type === 'keyword' ? 'bg-amber-500/20 text-amber-400' :
-                                  'bg-gray-200 text-gray-600'
+                                <p className="truncate whitespace-nowrap font-mono text-sm text-blue-700" title={destinationRefs}>
+                                  {truncateInlineText(destinationRefs, 40)}
+                                </p>
+                                <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                                  row.match_type === 'category' ? 'bg-green-100 text-green-700' :
+                                  row.match_type === 'domain' ? 'bg-blue-100 text-blue-700' :
+                                  row.match_type === 'keyword' ? 'bg-amber-100 text-amber-700' :
+                                  'bg-gray-100 text-gray-700'
                                 }`}>
                                   {row.match_type === 'category' ? 'Category Match' :
                                    row.match_type === 'domain' ? 'Domain Match' :
                                    row.match_type === 'keyword' ? 'Keyword Match' : 'Heuristic'}
                                 </span>
                               </div>
-                            ) : (
-                              <span className="text-xs italic text-gray-500">No mapping found</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3">
-                            {hasDest ? (
-                              <div className="space-y-2">
-                                {row.destination_controls.slice(0, isExpanded ? 5 : 2).map((dc) => (
-                                  <div key={dc.id}>
-                                    <p className="text-sm text-gray-700 line-clamp-2">{dc.title}</p>
-                                    {isExpanded && dc.description && (
-                                      <p className="mt-0.5 text-xs text-gray-600 line-clamp-3">{dc.description}</p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-xs italic text-gray-500">—</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3">
-                            {hasDest && (
-                              <div className="space-y-1">
-                                {row.destination_controls.slice(0, isExpanded ? 5 : 2).map((dc) => (
-                                  dc.domain ? (
-                                    <span key={dc.id} className="block rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
-                                      {dc.domain}
-                                    </span>
-                                  ) : null
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-3">
-                            {row.evidence_recommendations.length > 0 ? (
-                              <div className="space-y-1">
-                                {row.evidence_recommendations.slice(0, isExpanded ? 5 : 2).map((ev, idx) => (
-                                  <p key={idx} className="text-xs text-gray-700 line-clamp-2">
-                                    • {formatEvidence(ev)}
-                                  </p>
-                                ))}
-                                {!isExpanded && row.evidence_recommendations.length > 2 && (
-                                  <span className="text-xs text-gray-500">+{row.evidence_recommendations.length - 2} more</span>
+                            </td>
+                            <td className="px-3 py-3">
+                              <p className="truncate whitespace-nowrap text-sm text-gray-700" title={destinationTitles}>
+                                {truncateInlineText(destinationTitles, 80)}
+                              </p>
+                            </td>
+                            <td className="px-3 py-3">
+                              <p className="truncate whitespace-nowrap text-xs text-gray-700" title={destinationDomains}>
+                                {truncateInlineText(destinationDomains, 28)}
+                              </p>
+                            </td>
+                            <td className="px-3 py-3">
+                              <p className="truncate whitespace-nowrap text-xs text-gray-700" title={evidenceSummary}>
+                                {truncateInlineText(evidenceSummary, 72)}
+                              </p>
+                            </td>
+                            <td className="px-3 py-3 text-left">
+                              <button
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  aiMapMutation.mutate(row.source_control.id);
+                                }}
+                                disabled={aiMapMutation.isPending && aiMapMutation.variables === row.source_control.id}
+                                className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+                                title="Use AI to find best matches"
+                              >
+                                {aiMapMutation.isPending && aiMapMutation.variables === row.source_control.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3" />
                                 )}
-                              </div>
-                            ) : (
-                              <span className="text-xs italic text-gray-500">—</span>
-                            )}
-
-                            {aiResult && (
-                              <div className="mt-2 rounded border border-purple-200 bg-purple-50 p-2">
-                                <p className="mb-1 text-xs font-medium text-purple-700 flex items-center gap-1">
-                                  <Sparkles className="h-3 w-3" /> AI Mappings
-                                </p>
-                                {aiResult.ai_mappings.map((m, idx) => (
-                                  <div key={idx} className="mb-1 last:mb-0">
-                                    <p className="text-xs text-purple-700">
-                                      <span className="font-mono">{m.destination_reference}</span>
-                                      {m.destination_title && ` — ${m.destination_title}`}
-                                    </p>
-                                    <p className="text-xs text-purple-700/80">
-                                      Confidence: {Math.round(m.confidence * 100)}%
-                                    </p>
-                                    {isExpanded && m.rationale && (
-                                      <p className="text-xs text-purple-700/70 mt-0.5">{m.rationale}</p>
-                                    )}
-                                    {m.evidence_recommendations.length > 0 && (
-                                      <div className="mt-0.5">
-                                        {m.evidence_recommendations.slice(0, 2).map((er, i) => (
-                                          <p key={i} className="text-xs text-purple-700/70">• {er}</p>
-                                        ))}
-                                      </div>
+                                AI
+                              </button>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr key={`expanded-${row.source_control.id}`} className="bg-slate-50">
+                              <td colSpan={8} className="px-4 py-4">
+                                <div className="grid gap-4 lg:grid-cols-3">
+                                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Source Details</p>
+                                    <p className="text-sm font-medium text-black">{row.source_control.title}</p>
+                                    {row.source_control.description && (
+                                      <p className="mt-1 text-xs text-gray-600">{row.source_control.description}</p>
                                     )}
                                   </div>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-center">
-                            <button
-                              onClick={() => aiMapMutation.mutate(row.source_control.id)}
-                              disabled={aiMapMutation.isPending && aiMapMutation.variables === row.source_control.id}
-                              className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
-                              title="Use AI to find best matches"
-                            >
-                              {aiMapMutation.isPending && aiMapMutation.variables === row.source_control.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Sparkles className="h-3 w-3" />
-                              )}
-                              AI
-                            </button>
-                          </td>
-                        </tr>
+                                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Mapped Requirements</p>
+                                    {hasDest ? row.destination_controls.map((dc) => (
+                                      <div key={dc.id} className="mb-2 last:mb-0">
+                                        <p className="text-sm font-medium text-black">{dc.reference} — {dc.title}</p>
+                                        {dc.description && <p className="mt-0.5 text-xs text-gray-600">{dc.description}</p>}
+                                      </div>
+                                    )) : <p className="text-xs text-gray-500">No mapping found.</p>}
+                                  </div>
+                                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Evidence Recommendations</p>
+                                    {row.evidence_recommendations.length > 0 ? row.evidence_recommendations.map((ev, idx) => (
+                                      <p key={idx} className="mb-1 text-xs text-gray-700">• {formatEvidence(ev)}</p>
+                                    )) : <p className="text-xs text-gray-500">No recommendations available.</p>}
+                                  </div>
+                                </div>
+
+                                {aiResult && (
+                                  <div className="mt-4 rounded-lg border border-purple-200 bg-purple-50 p-3">
+                                    <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-purple-700">
+                                      <Sparkles className="h-4 w-4" /> AI Mapping Details
+                                    </p>
+                                    <div className="space-y-2">
+                                      {aiResult.ai_mappings.map((mapping, idx) => (
+                                        <div key={idx} className="rounded-md bg-white/70 p-2">
+                                          <p className="text-sm font-medium text-purple-800">
+                                            {mapping.destination_reference}
+                                            {mapping.destination_title ? ` — ${mapping.destination_title}` : ''}
+                                          </p>
+                                          <p className="text-xs text-purple-700">Confidence: {Math.round(mapping.confidence * 100)}%</p>
+                                          {mapping.rationale && <p className="mt-1 text-xs text-purple-700/80">{mapping.rationale}</p>}
+                                          {mapping.evidence_recommendations.length > 0 && (
+                                            <div className="mt-1">
+                                              {mapping.evidence_recommendations.map((recommendation, recommendationIndex) => (
+                                                <p key={recommendationIndex} className="text-xs text-purple-700/75">• {recommendation}</p>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
