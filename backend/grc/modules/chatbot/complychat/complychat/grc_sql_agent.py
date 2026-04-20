@@ -1454,16 +1454,441 @@ GROUP BY COALESCE(department,'Unassigned') ORDER BY count DESC
 ```
 
 =================================================================================
+� DOMAIN 17: AUDIT MANAGEMENT (Internal Audit Module)
+=================================================================================
+**Purpose**: Internal audit planning, engagements, findings, recommendations, workpapers, board packs
+**NOTE**: These tables EXIST in the database — ALWAYS generate SQL for them even if empty.
+
+**grc_audit_plans**:
+id, tenant_id, name, fiscal_year, description, status, approval_status,
+approved_by_id, approved_at, total_budget_days, ai_generated, risk_alignment_score,
+created_by_id, created_at, updated_at
+  — status: 'draft','active','closed'
+  — approval_status: 'pending','approved','rejected'
+
+**grc_audit_plan_items**:
+id, plan_id, auditable_entity_id, name, risk_score, quarter, scheduled_start,
+scheduled_end, budget_days, framework_id, assigned_auditor_id, priority, status, notes, created_at
+  — status: 'scheduled','in_progress','completed','cancelled'
+  — priority: 'critical','high','medium','low'
+
+**grc_audit_engagements**:
+id, tenant_id, plan_item_id, auditable_entity_id, engagement_number, title,
+description, engagement_type, status, scope, objectives, framework_id,
+planned_start, planned_end, actual_start, actual_end, budget_hours, actual_hours,
+lead_auditor_id, opinion, opinion_narrative, risk_rating, created_by_id, created_at, updated_at
+  — engagement_type: 'assurance','advisory','investigation'
+  — status: 'planning','fieldwork','reporting','completed','cancelled'
+  — opinion: 'clean','qualified','adverse','disclaimer'
+  — risk_rating: 'critical','high','medium','low'
+
+**grc_audit_findings**:
+id, tenant_id, engagement_id, finding_number, title, condition, criteria, cause, effect,
+root_cause_category, severity, status, framework_mappings, risk_id, control_id, owner_id,
+due_date, ai_generated, theme, created_at, updated_at
+  — severity: 'critical','high','medium','low'
+  — status: 'open','management_response_pending','in_remediation','closed','overdue'
+  — root_cause_category: 'process','people','technology','governance'
+
+**grc_audit_recommendations**:
+id, finding_id, title, description, priority, status, owner_id, due_date, created_at, updated_at
+  — priority: 'critical','high','medium','low'
+  — status: 'open','in_progress','implemented','closed','overdue'
+
+**grc_audit_action_plans**:
+id, recommendation_id, milestone, description, owner_id, due_date,
+completed_date, status, evidence_of_completion, created_at
+  — status: 'pending','in_progress','completed','overdue'
+
+**grc_audit_follow_ups**:
+id, finding_id, follow_up_type, retest_result, retest_details, performed_by_id,
+performed_at, closure_approved, closure_approved_by_id, notes
+  — follow_up_type: 'retest','progress_update','escalation'
+  — retest_result: 'pass','fail','partial'
+
+**grc_audit_workpapers**:
+id, engagement_id, reference_number, title, description, workpaper_type,
+status, preparer_id, reviewer_id, prepared_at, reviewed_at, review_notes, conclusion, created_at
+  — workpaper_type: 'test','memo','sampling','analysis','checklist'
+  — status: 'draft','in_review','reviewed','final'
+
+**grc_audit_reports**:
+id, tenant_id, engagement_id, title, report_type, executive_summary, opinion,
+opinion_narrative, scope_summary, status, ai_generated, issued_date, issued_by_id, created_at
+  — report_type: 'engagement_report','management_letter','board_report'
+  — status: 'draft','pending_review','issued','archived'
+
+**grc_audit_board_packs**:
+id, tenant_id, title, period, executive_summary, engagement_ids, key_findings,
+opinion_summary, status, prepared_by_id, presented_date, created_at
+  — status: 'draft','in_review','presented'
+
+**grc_pbc_list_items** (Prepared by Client - audit documents requested):
+id, tenant_id, engagement_id, document_name, description, category, requested_by,
+assigned_to_id, status, due_date, submitted_date, reviewed_date, notes, created_at
+  — status: 'requested','received','accepted','rejected','overdue'
+
+**grc_qaip_reviews** (Quality Assurance & Improvement Program):
+id, tenant_id, engagement_id, review_type, reviewer_id, maturity_score,
+overall_rating, findings, recommendations, status, completed_at, created_at
+  — review_type: 'internal','external','self_assessment'
+  — status: 'pending','in_progress','completed'
+
+**grc_audit_templates**:
+id, tenant_id, name, description, template_type, framework_type, is_system, created_at
+
+**grc_audit_test_scripts**:
+id, tenant_id, title, objective, control_area, entity_type, framework_id,
+test_type, sampling_methodology, usage_count, last_used_date, created_at
+
+**grc_auditable_entities**:
+id, tenant_id, name, entity_type, risk_score, department_id, parent_entity_id, is_active, created_at
+
+**grc_auditor_skills**:
+id, tenant_id, user_id, skill_name, skill_category, proficiency_level,
+certification, years_experience, created_at
+
+**grc_auditor_allocations**:
+id, tenant_id, user_id, engagement_id, allocation_type, allocated_hours, actual_hours,
+start_date, end_date, status, created_at
+
+**QUERY EXAMPLES**:
+```sql
+-- "Open audit findings" / "Audit findings by severity"
+SELECT af.id, COALESCE(af.finding_number,'F-?') as number,
+  COALESCE(af.title,'Untitled Finding') as title,
+  COALESCE(af.severity,'medium') as severity,
+  COALESCE(af.status,'open') as status,
+  COALESCE(af.due_date,'N/A') as due_date,
+  COALESCE(ae.title,'N/A') as engagement
+FROM grc_audit_findings af
+LEFT JOIN grc_audit_engagements ae ON af.engagement_id = ae.id
+WHERE COALESCE(af.status,'open') NOT IN ('closed')
+ORDER BY CASE COALESCE(af.severity,'medium') WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+  af.due_date ASC LIMIT 30
+
+-- "Audit plans / audit universe"
+SELECT ap.id, COALESCE(ap.name,'Unnamed Plan') as name,
+  COALESCE(ap.fiscal_year,'N/A') as fiscal_year,
+  COALESCE(ap.status,'draft') as status,
+  COALESCE(ap.approval_status,'pending') as approval_status,
+  COALESCE(ap.total_budget_days,0) as budget_days,
+  COUNT(api.id) as audit_items_count
+FROM grc_audit_plans ap
+LEFT JOIN grc_audit_plan_items api ON ap.id = api.plan_id
+GROUP BY ap.id, ap.name, ap.fiscal_year, ap.status, ap.approval_status, ap.total_budget_days
+ORDER BY ap.fiscal_year DESC LIMIT 10
+
+-- "Active audit engagements"
+SELECT ae.id, COALESCE(ae.engagement_number,'ENG-?') as number,
+  COALESCE(ae.title,'Untitled') as title,
+  COALESCE(ae.engagement_type,'assurance') as type,
+  COALESCE(ae.status,'planning') as status,
+  COALESCE(ae.risk_rating,'N/A') as risk_rating,
+  COALESCE(ae.planned_end,'N/A') as planned_end,
+  COUNT(af.id) as findings_count
+FROM grc_audit_engagements ae
+LEFT JOIN grc_audit_findings af ON ae.id = af.engagement_id
+WHERE COALESCE(ae.status,'planning') NOT IN ('completed','cancelled')
+GROUP BY ae.id, ae.engagement_number, ae.title, ae.engagement_type, ae.status, ae.risk_rating, ae.planned_end
+ORDER BY ae.planned_end ASC LIMIT 20
+
+-- "Overdue recommendations"
+SELECT ar.id, COALESCE(ar.title,'Untitled') as recommendation,
+  COALESCE(ar.priority,'medium') as priority,
+  COALESCE(ar.status,'open') as status,
+  COALESCE(ar.due_date,'N/A') as due_date,
+  COALESCE(af.title,'N/A') as finding
+FROM grc_audit_recommendations ar
+LEFT JOIN grc_audit_findings af ON ar.finding_id = af.id
+WHERE ar.due_date < datetime('now')
+  AND COALESCE(ar.status,'open') NOT IN ('implemented','closed')
+ORDER BY ar.due_date ASC LIMIT 20
+
+-- "PBC list status" (Prepared by Client items)
+SELECT pbc.id, COALESCE(pbc.document_name,'Untitled') as document,
+  COALESCE(pbc.category,'N/A') as category,
+  COALESCE(pbc.status,'requested') as status,
+  COALESCE(pbc.due_date,'N/A') as due_date,
+  COALESCE(ae.title,'N/A') as engagement
+FROM grc_pbc_list_items pbc
+LEFT JOIN grc_audit_engagements ae ON pbc.engagement_id = ae.id
+WHERE COALESCE(pbc.status,'requested') NOT IN ('accepted')
+ORDER BY pbc.due_date ASC LIMIT 20
+
+-- "Audit findings by root cause / theme"
+SELECT COALESCE(af.root_cause_category,'Unknown') as root_cause,
+  COALESCE(af.theme,'General') as theme,
+  COUNT(*) as finding_count,
+  SUM(CASE WHEN COALESCE(af.severity,'medium') IN ('critical','high') THEN 1 ELSE 0 END) as critical_high_count
+FROM grc_audit_findings af
+WHERE COALESCE(af.status,'open') != 'closed'
+GROUP BY COALESCE(af.root_cause_category,'Unknown'), COALESCE(af.theme,'General')
+ORDER BY finding_count DESC LIMIT 15
+```
+
+=================================================================================
+📂 DOMAIN 18: CCM - CONTINUOUS CONTROL MONITORING
+=================================================================================
+**Purpose**: Automated, real-time control testing, anomaly detection, exception workflow
+
+**grc_ccm_rules** (Control monitoring rules):
+id, tenant_id, rule_code, name, description, control_area, control_id,
+rule_type, threshold_value, threshold_operator, severity, is_active, parameters, created_at
+  — rule_type: 'threshold','pattern','frequency','comparison'
+  — severity: 'critical','high','medium','low'
+  — control_area: text (e.g. 'access_control','financial_transactions','segregation_of_duties')
+
+**grc_ccm_anomalies** (Detected control exceptions):
+id, tenant_id, rule_id, title, description, severity, detected_at,
+transaction_ref, transaction_amount, control_area, is_false_positive, false_positive_reason,
+status, metadata_json
+  — status: 'flagged','under_review','resolved','false_positive'
+  — severity: 'critical','high','medium','low'
+
+**grc_ccm_exceptions** (Workflow for each anomaly):
+id, anomaly_id, workflow_status, assigned_to_id, reviewed_by_id, reviewed_at,
+decision, decision_notes, escalated_to_id, escalated_at, finding_id, closed_at, created_at
+  — workflow_status: 'flagged','assigned','under_review','escalated','closed'
+  — decision: 'true_exception','false_positive','accepted_risk','remediated'
+
+**QUERY EXAMPLES**:
+```sql
+-- "CCM anomalies / control monitoring alerts"
+SELECT ca.id, COALESCE(ca.title,'Untitled Anomaly') as title,
+  COALESCE(cr.name,'N/A') as ccm_rule,
+  COALESCE(ca.severity,'medium') as severity,
+  COALESCE(ca.control_area,'N/A') as control_area,
+  COALESCE(ca.status,'flagged') as status,
+  COALESCE(ca.detected_at,'N/A') as detected_at,
+  CASE WHEN ca.is_false_positive = 1 THEN 'False Positive' ELSE 'Real Exception' END as classification
+FROM grc_ccm_anomalies ca
+LEFT JOIN grc_ccm_rules cr ON ca.rule_id = cr.id
+WHERE COALESCE(ca.status,'flagged') NOT IN ('resolved','false_positive')
+ORDER BY CASE COALESCE(ca.severity,'medium') WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 20
+
+-- "CCM rules overview"
+SELECT id, COALESCE(rule_code,'CCM-?') as code,
+  COALESCE(name,'Unnamed Rule') as name,
+  COALESCE(control_area,'N/A') as area,
+  COALESCE(rule_type,'threshold') as type,
+  COALESCE(severity,'medium') as severity,
+  CASE WHEN is_active = 1 THEN 'Active' ELSE 'Inactive' END as status
+FROM grc_ccm_rules ORDER BY control_area, severity LIMIT 30
+
+-- "CCM anomalies by severity / area"
+SELECT COALESCE(control_area,'Unknown') as area,
+  COUNT(*) as total_anomalies,
+  SUM(CASE WHEN COALESCE(severity,'medium') IN ('critical','high') THEN 1 ELSE 0 END) as high_critical,
+  SUM(CASE WHEN is_false_positive = 1 THEN 1 ELSE 0 END) as false_positives
+FROM grc_ccm_anomalies
+WHERE COALESCE(status,'flagged') NOT IN ('false_positive')
+GROUP BY COALESCE(control_area,'Unknown') ORDER BY total_anomalies DESC LIMIT 15
+
+-- "CCM exceptions pending review"
+SELECT cex.id, COALESCE(ca.title,'Anomaly') as anomaly,
+  COALESCE(ca.severity,'medium') as severity,
+  COALESCE(cex.workflow_status,'flagged') as workflow_status,
+  COALESCE(cex.decision,'pending') as decision,
+  COALESCE(cex.created_at,'N/A') as created_at
+FROM grc_ccm_exceptions cex
+LEFT JOIN grc_ccm_anomalies ca ON cex.anomaly_id = ca.id
+WHERE COALESCE(cex.workflow_status,'flagged') NOT IN ('closed')
+ORDER BY ca.severity ASC LIMIT 20
+```
+
+=================================================================================
+📂 DOMAIN 19: VULNERABILITY SUB-TABLES (Reports, Mitigations, Retests, SLA)
+=================================================================================
+
+**grc_vulnerability_reports** (Scan/pentest reports uploaded):
+id, tenant_id, name, description, report_type, file_name, file_type, scan_tool,
+scan_date, scan_scope, total_vulnerabilities, critical_count, high_count, medium_count,
+low_count, info_count, status, uploaded_by, uploaded_at, created_at
+  — report_type: 'vulnerability_scan','penetration_test','code_review','configuration_audit'
+  — scan_tool: 'nessus','qualys','burp_suite','owasp_zap','nexpose','manual'
+  — status: 'uploaded','parsing','parsed','analyzed','closed'
+
+**grc_vulnerability_mitigations** (Remediation actions per vulnerability):
+id, vulnerability_id, tenant_id, action_title, action_description, action_type,
+owner_id, priority, status, target_date, completed_at, effort_estimate, notes, created_at
+  — action_type: 'remediate','mitigate','transfer','accept'
+  — status: 'pending','in_progress','completed','cancelled'
+  — priority: 'critical','high','medium','low'
+
+**grc_vulnerability_retests** (Retesting after remediation):
+id, vulnerability_id, tenant_id, retest_date, tester_id, result, findings, evidence, created_at
+  — result: 'pass','fail','partial'
+
+**grc_vulnerability_sla_config** (SLA targets by severity):
+id, tenant_id, severity, remediation_days, is_active
+  — severity: 'critical','high','medium','low','info'
+  — remediation_days: integer (e.g. 7 for critical, 30 for high, 90 for medium)
+
+**grc_integration_exceptions** (Scanner-managed vuln exceptions):
+id, tenant_id, vulnerability_id, connection_id, exception_type, reason, justification,
+status, requested_by_user_id, reviewed_by_user_id, expires_at, created_at
+  — exception_type: 'mitigate','accept','defer'
+  — status: 'pending_review','approved','rejected','revoked','expired'
+
+**grc_scan_records** (Individual scanner scan jobs):
+id, tenant_id, connection_id, external_scan_id, scan_name, scan_type,
+start_time, end_time, scan_status, assets_scanned, created_at
+  — scan_status: 'completed','in_progress','failed'
+
+**grc_sync_history** (Integration sync runs):
+id, tenant_id, connection_id, sync_type, started_at, completed_at, status,
+assets_new, assets_updated, vulns_new, vulns_updated, vulns_closed, errors_count
+  — sync_type: 'full','incremental','manual','scheduled'
+  — status: 'running','completed','failed','partial'
+
+**QUERY EXAMPLES**:
+```sql
+-- "Vulnerability reports / pentest reports uploaded"
+SELECT id, COALESCE(name,'Unnamed Report') as report_name,
+  COALESCE(report_type,'vulnerability_scan') as type,
+  COALESCE(scan_tool,'N/A') as tool,
+  COALESCE(scan_date,'N/A') as scan_date,
+  COALESCE(total_vulnerabilities,0) as total,
+  COALESCE(critical_count,0) as critical,
+  COALESCE(high_count,0) as high_risk,
+  COALESCE(status,'uploaded') as status
+FROM grc_vulnerability_reports
+ORDER BY scan_date DESC LIMIT 20
+
+-- "Vulnerability mitigations / remediation actions"
+SELECT vm.id, COALESCE(v.title,'Vuln') as vulnerability,
+  COALESCE(vm.action_title,'Untitled Action') as action,
+  COALESCE(vm.action_type,'remediate') as type,
+  COALESCE(vm.priority,'medium') as priority,
+  COALESCE(vm.status,'pending') as status,
+  COALESCE(vm.target_date,'N/A') as target_date
+FROM grc_vulnerability_mitigations vm
+LEFT JOIN grc_vulnerabilities v ON vm.vulnerability_id = v.id
+WHERE COALESCE(vm.status,'pending') NOT IN ('completed','cancelled')
+ORDER BY CASE COALESCE(vm.priority,'medium') WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 30
+
+-- "Vulnerability SLA configuration"
+SELECT COALESCE(severity,'N/A') as severity,
+  COALESCE(remediation_days,0) as sla_days,
+  CASE WHEN is_active = 1 THEN 'Active' ELSE 'Inactive' END as status
+FROM grc_vulnerability_sla_config
+ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END
+
+-- "Retest results"
+SELECT vr.id, COALESCE(v.title,'Vulnerability') as vulnerability,
+  COALESCE(LOWER(v.severity),'medium') as severity,
+  COALESCE(vr.result,'pending') as retest_result,
+  COALESCE(vr.retest_date,'N/A') as retest_date,
+  COALESCE(vr.findings,'None noted') as findings
+FROM grc_vulnerability_retests vr
+LEFT JOIN grc_vulnerabilities v ON vr.vulnerability_id = v.id
+ORDER BY vr.retest_date DESC LIMIT 20
+
+-- "Integration sync history"
+SELECT ic.connection_name, sh.sync_type,
+  COALESCE(sh.status,'unknown') as status,
+  COALESCE(sh.started_at,'N/A') as started_at,
+  COALESCE(sh.vulns_new,0) as new_vulns,
+  COALESCE(sh.vulns_updated,0) as updated_vulns,
+  COALESCE(sh.errors_count,0) as errors
+FROM grc_sync_history sh
+LEFT JOIN grc_integration_connections ic ON sh.connection_id = ic.id
+ORDER BY sh.started_at DESC LIMIT 10
+
+-- "Scanner exceptions pending"
+SELECT ie.id, COALESCE(v.title,'Vulnerability') as vulnerability,
+  COALESCE(ie.exception_type,'accept') as type,
+  COALESCE(ie.reason,'N/A') as reason,
+  COALESCE(ie.status,'pending_review') as status,
+  COALESCE(ie.expires_at,'N/A') as expires
+FROM grc_integration_exceptions ie
+LEFT JOIN grc_vulnerabilities v ON ie.vulnerability_id = v.id
+WHERE COALESCE(ie.status,'pending_review') IN ('pending_review','approved')
+ORDER BY ie.created_at DESC LIMIT 20
+```
+
+=================================================================================
+📂 DOMAIN 20: RISK ANALYTICS (Score History, Appetite, KRI, Assessments)
+=================================================================================
+
+**grc_risk_score_history** (Historical risk score tracking):
+id, risk_id, inherent_score, residual_score, likelihood, impact, recorded_at, recorded_by, notes
+
+**grc_risk_appetite_config** (Organizational risk appetite settings):
+id, tenant_id, category, appetite_level, min_score, max_score, description,
+color_code, is_active, created_at, updated_at
+  — appetite_level: 'averse','minimal','cautious','open','hungry'
+  — category: 'strategic','operational','financial','compliance','technology','third_party'
+
+**grc_likelihood_impact_scales** (Risk scoring matrix configuration):
+id, tenant_id, scale_type, level, label, description, score, color_code, is_active, created_at
+  — scale_type: 'likelihood','impact'
+  — level: 1 to 5 (1=Very Low/Rare, 5=Very High/Catastrophic)
+
+**grc_risk_reports** (Generated risk reports):
+id, tenant_id, title, report_type, period, content, status, created_by, created_at
+  — report_type: 'executive_summary','risk_register','heat_map','trend_analysis'
+  — status: 'draft','published'
+
+**grc_risk_assessments** (Formal assessment campaigns):
+id, tenant_id, name, description, assessment_type, methodology, scope,
+assessment_period_start, assessment_period_end, status, lead_assessor_id, business_unit_id,
+framework_id, approved_by, approved_at, created_at
+  — status: 'draft','active','completed','archived'
+
+**QUERY EXAMPLES**:
+```sql
+-- "Risk score trend / history for a risk"
+SELECT r.title, rsh.inherent_score, rsh.residual_score, rsh.recorded_at
+FROM grc_risk_score_history rsh
+LEFT JOIN grc_risks r ON rsh.risk_id = r.id
+ORDER BY rsh.recorded_at DESC LIMIT 30
+
+-- "Risk appetite configuration"
+SELECT COALESCE(category,'N/A') as risk_category,
+  COALESCE(appetite_level,'cautious') as appetite,
+  COALESCE(min_score,0) as min_score,
+  COALESCE(max_score,25) as max_score
+FROM grc_risk_appetite_config
+WHERE is_active = 1 ORDER BY category LIMIT 20
+
+-- "Likelihood/impact scale configuration"
+SELECT COALESCE(scale_type,'likelihood') as scale_type,
+  COALESCE(level,1) as level,
+  COALESCE(label,'N/A') as label,
+  COALESCE(score,0) as score
+FROM grc_likelihood_impact_scales
+WHERE is_active = 1
+ORDER BY scale_type, level LIMIT 20
+
+-- "Risk assessments"
+SELECT id, COALESCE(name,'Unnamed Assessment') as name,
+  COALESCE(assessment_type,'N/A') as type,
+  COALESCE(status,'draft') as status,
+  COALESCE(assessment_period_start,'N/A') as period_start,
+  COALESCE(assessment_period_end,'N/A') as period_end
+FROM grc_risk_assessments WHERE COALESCE(status,'draft') != 'archived'
+ORDER BY created_at DESC LIMIT 10
+```
+
+=================================================================================
 🔗 LINK TABLES REFERENCE (Critical for cross-domain queries)
 =================================================================================
 
 grc_evidence_control_mappings: evidence_id, normalized_control_id, framework_control_id
-grc_vulnerability_control_links: vulnerability_id, framework_control_id
-grc_vulnerability_asset_links: vulnerability_id, asset_id
+grc_vulnerability_control_links: vulnerability_id, framework_control_id, normalized_control_id
+grc_vulnerability_asset_links: vulnerability_id, asset_id, impact_on_asset, notes
 grc_risk_control_links: risk_id, normalized_control_id
 grc_risk_framework_control_links: risk_id, framework_control_id
 grc_asset_control_links: asset_id, normalized_control_id
 grc_document_control_links: document_id, framework_control_id
+grc_risk_audit_finding_links: risk_id, finding_id (links audit findings to risks)
+grc_internal_control_risk_links: internal_control_id, risk_id
+grc_internal_control_framework_links: internal_control_id, framework_control_id
+grc_document_risk_links: document_id, risk_id
+grc_document_asset_links: document_id, asset_id
+grc_asset_evidence_links: asset_id, evidence_id
 
 **Pattern**: Most link tables use `framework_control_id` NOT just `control_id`
 
@@ -1511,7 +1936,7 @@ SELECT
 FROM grc_risks
 WHERE (COALESCE(inherent_score, 0) >= 15 OR COALESCE(residual_score, 0) >= 15)
   AND COALESCE(status, 'open') = 'open'
-ORDER BY GREATEST(COALESCE(inherent_score, 0), COALESCE(residual_score, 0)) DESC
+ORDER BY COALESCE(inherent_score, 0) + COALESCE(residual_score, 0) DESC
 LIMIT 100
 ```
 
@@ -1615,22 +2040,36 @@ CRITICAL GENERATION RULES:
 
 DOMAIN DECISION TREE:
 - Framework / control / compliance questions [>] COMPLIANCE & FRAMEWORKS (Domain 1)
-- Security / vulnerability / pentest / CVE questions [>] VULNERABILITY MANAGEMENT (Domain 2)
-- Risk register / KRI / risk incidents / mitigation questions [>] RISK MANAGEMENT (Domain 6C)
-- Policy / procedure / standard / guideline / document / statement questions [>] GOVERNANCE DOCUMENTS (Domain 7)
-- Regulatory change / regulation update questions [>] REGULATORY CHANGES (Domain 8)
+- Security / vulnerability / pentest / CVE / CVSS questions [>] VULNERABILITY MANAGEMENT (Domain 2)
+- Vulnerability report / pentest report / scan report questions [>] VULNERABILITY REPORTS (Domain 19) — table: grc_vulnerability_reports
+- Vulnerability mitigation / remediation action / vuln fix questions [>] VULNERABILITY MITIGATIONS (Domain 19) — table: grc_vulnerability_mitigations
+- Vulnerability retest / retest result questions [>] VULNERABILITY RETESTS (Domain 19) — table: grc_vulnerability_retests
+- Vulnerability SLA / SLA target / remediation SLA questions [>] VULNERABILITY SLA (Domain 19) — table: grc_vulnerability_sla_config
+- Risk register / risk incidents / risk mitigation questions [>] RISK MANAGEMENT (Domain 6C)
+- KRI / key risk indicator / risk score trend / risk appetite / risk assessment questions [>] RISK ANALYTICS (Domain 20)
+- Policy / procedure / standard / guideline / document / statement / charter questions [>] GOVERNANCE DOCUMENTS (Domain 7)
+- Policy gap analysis / policy gap findings questions [>] GOVERNANCE DOCUMENTS (Domain 7) — tables: grc_policy_gap_analysis_runs, grc_policy_gap_findings
+- Regulatory change / regulation update / regulatory feed / regulatory impact questions [>] REGULATORY CHANGES (Domain 8)
 - Committee / meeting / oversight action / charter questions [>] COMMITTEE GOVERNANCE (Domain 9)
-- Internal control / control test / key control questions [>] INTERNAL CONTROLS (Domain 10)
-- IT asset / asset inventory / hardware / software / CDE questions [>] IT ASSETS (Domain 11)
-- Attestation / certification / signoff / SOX questions [>] ATTESTATION (Domain 12)
-- RCSA / self-assessment / business unit risk questions [>] RCSA (Domain 13)
-- Evidence / document evidence / control evidence questions [>] EVIDENCE (Domain 14)
+- Meeting agenda / meeting minutes questions [>] COMMITTEE GOVERNANCE (Domain 9) — tables: grc_meeting_agenda_items, grc_meeting_minutes
+- Internal control / control test / key control / control effectiveness questions [>] INTERNAL CONTROLS (Domain 10)
+- IT asset / asset inventory / hardware / software / CDE / PCI asset questions [>] IT ASSETS (Domain 11) — table: grc_it_assets (NOT grc_assets)
+- Attestation / SOX attestation / policy signoff / certification / signoff questions [>] ATTESTATION (Domain 12)
+- RCSA / self-assessment / business unit risk / RCSA findings / RCSA campaign questions [>] RCSA (Domain 13)
+- Evidence / document evidence / control evidence / expiring evidence questions [>] EVIDENCE (Domain 14)
 - Compliance assessment / gap assessment / checklist questions [>] COMPLIANCE ASSESSMENT DOCS (Domain 15)
-- User / department / role / permission questions [>] USERS & ROLES (Domain 16)
+- User / department / role / permission / platform user questions [>] USERS & ROLES (Domain 16)
 - Exception / policy exception / control exception questions [>] EXCEPTIONS & VENDORS (Domain 6D)
-- Vendor / third-party / supplier questions [>] EXCEPTIONS & VENDORS (Domain 6D)
+- Vendor / third-party / supplier / vendor risk / vendor assessment questions [>] EXCEPTIONS & VENDORS (Domain 6D)
 - Compliance program / assessment status questions [>] COMPLIANCE ASSESSMENTS (Domain 6B)
-- Removed audit-management questions [>] Politely explain that the Audit Management module is no longer available and redirect to active GRC domains
+- Integration / connector / scanner / nexpose / nessus / API connection questions [>] grc_integration_connections (integration_type, connection_name, status, is_active, last_sync_at)
+- Integration sync / sync history / scan history questions [>] INTEGRATION (Domain 19) — table: grc_sync_history
+- Scan record / vulnerability scan / scan job questions [>] INTEGRATION (Domain 19) — table: grc_scan_records
+- Scanner exception / vuln exception questions [>] INTEGRATION (Domain 19) — table: grc_integration_exceptions
+- Vulnerability + asset linkage questions [>] JOIN grc_it_assets + grc_vulnerability_asset_links + grc_vulnerabilities
+- Audit finding / audit plan / audit engagement / audit report / audit workpaper / pbc list questions [>] AUDIT MANAGEMENT (Domain 17)
+- QAIP / quality assurance / audit maturity questions [>] AUDIT MANAGEMENT (Domain 17) — table: grc_qaip_reviews
+- CCM / continuous control monitoring / ccm rule / ccm anomaly / ccm exception questions [>] CCM (Domain 18)
 - Multiple domains [>] Use link tables and JOINs to combine them
 
 RESPONSE FORMAT - ALWAYS return valid JSON:
@@ -1666,7 +2105,7 @@ Q: "Show NIST controls"
 A: {{"sql": "SELECT COALESCE(pfc.control_id, 'N/A') as control_id, COALESCE(pfc.title, 'Unnamed Control') as title, COALESCE(pfc.description, '') as description FROM grc_parsed_framework_controls pfc LEFT JOIN grc_uploaded_frameworks uf ON pfc.uploaded_framework_id = uf.id WHERE uf.name LIKE '%NIST%' ORDER BY pfc.control_id LIMIT 100", "explanation": "Shows controls from NIST framework", "entity_type": "compliance", "estimated_rows": "low"}}
 
 Q: "Show high-severity risks in my department"
-A: {{"sql": "SELECT id, COALESCE(title, 'Untitled') as title, COALESCE(category, 'Uncategorized') as category, COALESCE(inherent_score, 0) as inherent_score FROM grc_risks WHERE (COALESCE(inherent_score, 0) >= 15 OR COALESCE(residual_score, 0) >= 15) AND COALESCE(status, 'open') = 'open' ORDER BY GREATEST(COALESCE(inherent_score, 0), COALESCE(residual_score, 0)) DESC LIMIT 100", "explanation": "Showing all high-severity risks (score >= 15). Note: Cannot filter by your department without user context.", "entity_type": "risks", "estimated_rows": "low"}}
+A: {{"sql": "SELECT id, COALESCE(title, 'Untitled') as title, COALESCE(category, 'Uncategorized') as category, COALESCE(inherent_score, 0) as inherent_score, COALESCE(treatment_plan, 'No treatment') as treatment FROM grc_risks WHERE (COALESCE(inherent_score, 0) >= 15 OR COALESCE(residual_score, 0) >= 15) AND COALESCE(status, 'open') = 'open' ORDER BY COALESCE(inherent_score, 0) + COALESCE(residual_score, 0) DESC LIMIT 100", "explanation": "Showing all high-severity risks (score >= 15) with treatment status.", "entity_type": "risks", "estimated_rows": "low"}}
 
 Q: "Show open governance actions"
 A: {{"sql": "SELECT id, COALESCE(title, 'Untitled Action') as title, COALESCE(status, 'open') as status, COALESCE(priority, 'medium') as priority FROM grc_oversight_actions WHERE COALESCE(status, 'open') IN ('open', 'in_progress') ORDER BY created_at DESC LIMIT 100", "explanation": "Lists open governance oversight actions", "entity_type": "governance", "estimated_rows": "low"}}
@@ -1698,14 +2137,71 @@ A: {{"sql": "SELECT COALESCE(control_id,'IC-?') as control_id, COALESCE(name,'Un
 Q: "IT assets" or "Asset inventory" or "Critical systems"
 A: {{"sql": "SELECT COALESCE(name,'Unnamed') as name, COALESCE(asset_type,'N/A') as type, COALESCE(criticality,'medium') as criticality, COALESCE(status,'active') as status, COALESCE(owner_name,'Unassigned') as owner FROM grc_it_assets WHERE COALESCE(status,'active') = 'active' ORDER BY CASE criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 30", "explanation": "Lists active IT assets by criticality", "entity_type": "it_assets", "estimated_rows": "low"}}
 
-Q: "Pending attestations" or "Any attestations due?"
-A: {{"sql": "SELECT ar.id, COALESCE(ac.name,'Campaign') as campaign, COALESCE(ac.campaign_type,'N/A') as type, COALESCE(ar.status,'pending') as status, COALESCE(ar.due_date,'N/A') as due_date FROM grc_attestation_requests ar LEFT JOIN grc_attestation_campaigns ac ON ar.campaign_id = ac.id WHERE COALESCE(ar.status,'pending') IN ('pending','overdue','escalated') ORDER BY ar.due_date ASC LIMIT 20", "explanation": "Shows pending attestation requests with campaign names", "entity_type": "attestations", "estimated_rows": "low"}}
+Q: "How many frameworks are we pursuing compliance for? What are their names and target dates?"
+A: {{"sql": "SELECT COALESCE(uf.name, 'Unnamed Framework') as framework_name, COALESCE(uf.framework_type, 'N/A') as type, COALESCE(uf.upload_status, 'parsed') as status, COALESCE(uf.compliance_deadline, 'Not set') as target_date, COUNT(pfc.id) as controls_count FROM grc_uploaded_frameworks uf LEFT JOIN grc_parsed_framework_controls pfc ON uf.id = pfc.uploaded_framework_id WHERE uf.upload_status IN ('parsed', 'published') GROUP BY uf.id, uf.name, uf.framework_type, uf.upload_status, uf.compliance_deadline ORDER BY uf.name LIMIT 30", "explanation": "Lists all frameworks with their names, status, compliance target dates, and control counts.", "entity_type": "compliance", "estimated_rows": "low"}}
+
+Q: "How many assets are there in the system and their linked vulnerabilities?"
+A: {{"sql": "SELECT a.name as asset_name, COALESCE(a.asset_type,'N/A') as type, COALESCE(a.criticality,'medium') as criticality, COUNT(DISTINCT val.vulnerability_id) as vuln_count, SUM(CASE WHEN LOWER(v.severity)='critical' THEN 1 ELSE 0 END) as critical_vulns FROM grc_it_assets a LEFT JOIN grc_vulnerability_asset_links val ON a.id = val.asset_id LEFT JOIN grc_vulnerabilities v ON val.vulnerability_id = v.id WHERE COALESCE(a.status,'active') = 'active' GROUP BY a.id, a.name, a.asset_type, a.criticality ORDER BY vuln_count DESC LIMIT 30", "explanation": "Shows all IT assets with count of linked vulnerabilities and how many are critical.", "entity_type": "it_assets", "estimated_rows": "low"}}
+
+Q: "What integrations does the system support? How many integrations are there?"
+A: {{"sql": "SELECT COALESCE(integration_type,'N/A') as integration_type, COALESCE(connection_name,'Unnamed') as name, COALESCE(status,'pending') as status, COALESCE(last_sync_status,'never') as last_sync, COALESCE(last_sync_at,'Never synced') as last_synced_at FROM grc_integration_connections WHERE is_active = 1 ORDER BY integration_type, connection_name LIMIT 30", "explanation": "Lists all configured integration connections and their sync status.", "entity_type": "integrations", "estimated_rows": "low"}}
+
+Q: "What committees do we have? Tell me about the committees."
+A: {{"sql": "SELECT gc.id, COALESCE(gc.name,'Unnamed Committee') as name, COALESCE(gc.committee_type,'custom') as type, COALESCE(gc.meeting_frequency,'quarterly') as frequency, COUNT(DISTINCT cm.id) as member_count, COUNT(DISTINCT mt.id) as meeting_count FROM grc_governance_committees gc LEFT JOIN grc_committee_members cm ON gc.id = cm.committee_id AND (cm.is_active IS NULL OR cm.is_active = 1) LEFT JOIN grc_committee_meetings mt ON gc.id = mt.committee_id WHERE gc.is_active = 1 GROUP BY gc.id, gc.name, gc.committee_type, gc.meeting_frequency ORDER BY gc.name LIMIT 20", "explanation": "Lists all active governance committees with their type, meeting frequency, members, and meeting count.", "entity_type": "committees", "estimated_rows": "low"}}
+
+Q: "Show me the highest priority risks and their current treatment status"
+A: {{"sql": "SELECT r.id, COALESCE(r.title,'Untitled Risk') as title, COALESCE(r.category,'N/A') as category, COALESCE(r.inherent_score,0) as inherent_score, COALESCE(r.residual_score,0) as residual_score, COALESCE(r.status,'open') as status, COALESCE(r.treatment_plan,'No treatment plan') as treatment_plan FROM grc_risks r WHERE COALESCE(r.status,'open') = 'open' ORDER BY COALESCE(r.inherent_score,0) + COALESCE(r.residual_score,0) DESC LIMIT 20", "explanation": "Lists the highest priority open risks ordered by combined inherent and residual score, with their treatment plans.", "entity_type": "risks", "estimated_rows": "low"}}
 
 Q: "Regulatory changes" or "New regulations" or "What regulations changed?"
 A: {{"sql": "SELECT id, COALESCE(title,'Untitled') as title, COALESCE(source,'N/A') as source, COALESCE(priority,'medium') as priority, COALESCE(status,'identified') as status, COALESCE(effective_date,'N/A') as effective_date FROM grc_regulatory_changes WHERE COALESCE(status,'identified') NOT IN ('completed','not_applicable') ORDER BY effective_date ASC LIMIT 20", "explanation": "Lists open regulatory changes that require action", "entity_type": "regulatory", "estimated_rows": "low"}}
 
 Q: "How many open vulnerabilities are there?" or "Vulnerability summary"
 A: {{"sql": "SELECT COALESCE(severity,'unknown') as severity, COUNT(*) as count FROM grc_vulnerabilities WHERE COALESCE(status,'Open') NOT IN ('Closed','Resolved') GROUP BY COALESCE(severity,'unknown') ORDER BY CASE COALESCE(severity,'unknown') WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END", "explanation": "Shows vulnerability counts grouped by severity", "entity_type": "vulnerabilities", "estimated_rows": "low"}}
+
+Q: "Audit findings" or "Open audit findings" or "Show audit findings"
+A: {{"sql": "SELECT af.id, COALESCE(af.finding_number,'F-?') as number, COALESCE(af.title,'Untitled') as title, COALESCE(af.severity,'medium') as severity, COALESCE(af.status,'open') as status, COALESCE(af.due_date,'N/A') as due_date FROM grc_audit_findings af WHERE COALESCE(af.status,'open') != 'closed' ORDER BY CASE COALESCE(af.severity,'medium') WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 30", "explanation": "Lists all open audit findings ordered by severity", "entity_type": "audit", "estimated_rows": "low"}}
+
+Q: "Audit plans" or "Audit universe" or "Annual audit plan"
+A: {{"sql": "SELECT ap.id, COALESCE(ap.name,'Unnamed Plan') as name, COALESCE(ap.fiscal_year,'N/A') as fiscal_year, COALESCE(ap.status,'draft') as status, COALESCE(ap.approval_status,'pending') as approval_status, COALESCE(ap.total_budget_days,0) as budget_days FROM grc_audit_plans ORDER BY ap.fiscal_year DESC LIMIT 10", "explanation": "Lists audit plans with their fiscal year and approval status", "entity_type": "audit", "estimated_rows": "low"}}
+
+Q: "Audit engagements" or "Active audits" or "Current audit engagements"
+A: {{"sql": "SELECT ae.id, COALESCE(ae.engagement_number,'ENG-?') as number, COALESCE(ae.title,'Untitled') as title, COALESCE(ae.engagement_type,'assurance') as type, COALESCE(ae.status,'planning') as status, COALESCE(ae.risk_rating,'N/A') as risk_rating, COALESCE(ae.planned_end,'N/A') as planned_end FROM grc_audit_engagements ae WHERE COALESCE(ae.status,'planning') NOT IN ('completed','cancelled') ORDER BY ae.planned_end ASC LIMIT 20", "explanation": "Lists active audit engagements with their status and risk rating", "entity_type": "audit", "estimated_rows": "low"}}
+
+Q: "Overdue audit recommendations" or "Audit recommendations"
+A: {{"sql": "SELECT ar.id, COALESCE(ar.title,'Untitled') as recommendation, COALESCE(ar.priority,'medium') as priority, COALESCE(ar.status,'open') as status, COALESCE(ar.due_date,'N/A') as due_date FROM grc_audit_recommendations WHERE COALESCE(status,'open') NOT IN ('implemented','closed') ORDER BY due_date ASC LIMIT 20", "explanation": "Lists open audit recommendations with priorities and due dates", "entity_type": "audit", "estimated_rows": "low"}}
+
+Q: "CCM anomalies" or "Control monitoring alerts" or "Continuous control monitoring"
+A: {{"sql": "SELECT ca.id, COALESCE(ca.title,'Untitled') as anomaly, COALESCE(cr.name,'N/A') as ccm_rule, COALESCE(ca.severity,'medium') as severity, COALESCE(ca.control_area,'N/A') as area, COALESCE(ca.status,'flagged') as status, COALESCE(ca.detected_at,'N/A') as detected_at FROM grc_ccm_anomalies ca LEFT JOIN grc_ccm_rules cr ON ca.rule_id = cr.id WHERE COALESCE(ca.status,'flagged') NOT IN ('resolved','false_positive') ORDER BY CASE COALESCE(ca.severity,'medium') WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 20", "explanation": "Lists open CCM anomalies detected by automated monitoring rules", "entity_type": "ccm", "estimated_rows": "low"}}
+
+Q: "Pentest reports" or "Vulnerability scan reports" or "What scans have been uploaded?"
+A: {{"sql": "SELECT id, COALESCE(name,'Unnamed') as report_name, COALESCE(report_type,'vulnerability_scan') as type, COALESCE(scan_tool,'N/A') as tool, COALESCE(total_vulnerabilities,0) as total_vulns, COALESCE(critical_count,0) as critical, COALESCE(high_count,0) as high_risk, COALESCE(status,'uploaded') as status FROM grc_vulnerability_reports ORDER BY scan_date DESC LIMIT 20", "explanation": "Lists all uploaded vulnerability and pentest scan reports", "entity_type": "vulnerabilities", "estimated_rows": "low"}}
+
+Q: "Vulnerability SLA" or "SLA targets" or "Remediation SLA by severity"
+A: {{"sql": "SELECT COALESCE(severity,'N/A') as severity, COALESCE(remediation_days,0) as sla_days_target, CASE WHEN is_active=1 THEN 'Active' ELSE 'Inactive' END as status FROM grc_vulnerability_sla_config ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END", "explanation": "Shows the SLA remediation targets for each vulnerability severity level", "entity_type": "vulnerabilities", "estimated_rows": "low"}}
+
+Q: "Risk appetite" or "Risk appetite configuration" or "What is our risk tolerance?"
+A: {{"sql": "SELECT COALESCE(category,'N/A') as risk_category, COALESCE(appetite_level,'cautious') as appetite, COALESCE(min_score,0) as min_score, COALESCE(max_score,25) as max_score, COALESCE(description,'N/A') as description FROM grc_risk_appetite_config WHERE is_active=1 ORDER BY category LIMIT 20", "explanation": "Shows the organization's risk appetite configuration by risk category", "entity_type": "risks", "estimated_rows": "low"}}
+
+Q: "KRI" or "Key risk indicators" or "KRI status"
+A: {{"sql": "SELECT kri.id, COALESCE(kri.name,'Untitled KRI') as name, COALESCE(kri.metric_type,'N/A') as type, COALESCE(kri.current_value,'N/A') as current_value, COALESCE(kri.unit,'N/A') as unit, COALESCE(r.title,'N/A') as linked_risk FROM grc_risk_kris kri LEFT JOIN grc_risks r ON kri.risk_id = r.id WHERE kri.is_active=1 ORDER BY kri.name LIMIT 20", "explanation": "Lists all active Key Risk Indicators with their current values and linked risks", "entity_type": "risks", "estimated_rows": "low"}}
+
+Q: "Meeting minutes" or "Meeting agenda" or "Committee agenda items"
+A: {{"sql": "SELECT mai.id, COALESCE(mai.title,'Untitled Item') as agenda_item, COALESCE(mai.item_type,'N/A') as type, COALESCE(mai.status,'pending') as status, COALESCE(mai.outcome,'N/A') as outcome, COALESCE(cm.title,'Meeting') as meeting, COALESCE(gc.name,'Committee') as committee FROM grc_meeting_agenda_items mai LEFT JOIN grc_committee_meetings cm ON mai.meeting_id = cm.id LEFT JOIN grc_governance_committees gc ON cm.committee_id = gc.id ORDER BY cm.scheduled_date DESC LIMIT 20", "explanation": "Lists committee meeting agenda items with outcomes", "entity_type": "committees", "estimated_rows": "low"}}
+
+Q: "RCSA findings" or "RCSA assessment results" or "Self assessment findings"
+A: {{"sql": "SELECT rf.id, COALESCE(rf.title,'Untitled') as title, COALESCE(rf.finding_type,'risk_identified') as type, COALESCE(rf.severity,'medium') as severity, COALESCE(rf.status,'open') as status, COALESCE(rf.risk_category,'N/A') as category FROM grc_rcsa_findings rf WHERE COALESCE(rf.status,'open') NOT IN ('closed') ORDER BY CASE COALESCE(rf.severity,'medium') WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 25", "explanation": "Lists open RCSA findings from self-assessments", "entity_type": "rcsa", "estimated_rows": "low"}}
+
+Q: "Integration sync history" or "Last sync status" or "Scanner sync"
+A: {{"sql": "SELECT ic.connection_name, sh.sync_type, COALESCE(sh.status,'unknown') as status, COALESCE(sh.started_at,'N/A') as started_at, COALESCE(sh.vulns_new,0) as new_vulns, COALESCE(sh.errors_count,0) as errors FROM grc_sync_history sh LEFT JOIN grc_integration_connections ic ON sh.connection_id = ic.id ORDER BY sh.started_at DESC LIMIT 10", "explanation": "Shows recent integration sync history for vulnerability scanner connections", "entity_type": "integrations", "estimated_rows": "low"}}
+
+Q: "PBC list" or "Prepared by client" or "Audit document requests"
+A: {{"sql": "SELECT pbc.id, COALESCE(pbc.document_name,'Untitled') as document, COALESCE(pbc.category,'N/A') as category, COALESCE(pbc.status,'requested') as status, COALESCE(pbc.due_date,'N/A') as due_date, COALESCE(ae.title,'N/A') as engagement FROM grc_pbc_list_items pbc LEFT JOIN grc_audit_engagements ae ON pbc.engagement_id = ae.id WHERE COALESCE(pbc.status,'requested') NOT IN ('accepted') ORDER BY pbc.due_date ASC LIMIT 20", "explanation": "Lists outstanding PBC (Prepared by Client) document requests for audits", "entity_type": "audit", "estimated_rows": "low"}}
+
+Q: "Policy gap findings" or "Gap analysis findings" or "Policy compliance gaps"
+A: {{"sql": "SELECT pgf.id, COALESCE(pgf.control_code,'N/A') as control_code, COALESCE(pgf.clause_title,'Untitled') as clause, COALESCE(pgf.compliance_level,'not_addressed') as compliance, COALESCE(pgf.risk_level,'medium') as risk_level, COALESCE(pgf.priority,'medium') as priority, COALESCE(pgf.status,'open') as status, COALESCE(pgf.framework_name,'N/A') as framework FROM grc_policy_gap_findings pgf WHERE COALESCE(pgf.compliance_level,'not_addressed') IN ('not_addressed','partially_compliant') ORDER BY CASE COALESCE(pgf.risk_level,'medium') WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 30", "explanation": "Lists policy gap findings showing areas not covered or partially covered", "entity_type": "governance", "estimated_rows": "low"}}
+
+Q: "Vulnerability mitigations" or "Remediation actions for vulnerabilities"
+A: {{"sql": "SELECT vm.id, COALESCE(v.title,'Vuln') as vulnerability, COALESCE(vm.action_title,'Action') as action, COALESCE(vm.action_type,'remediate') as type, COALESCE(vm.priority,'medium') as priority, COALESCE(vm.status,'pending') as status, COALESCE(vm.target_date,'N/A') as target_date FROM grc_vulnerability_mitigations vm LEFT JOIN grc_vulnerabilities v ON vm.vulnerability_id = v.id WHERE COALESCE(vm.status,'pending') NOT IN ('completed','cancelled') ORDER BY CASE COALESCE(vm.priority,'medium') WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END LIMIT 25", "explanation": "Lists open vulnerability mitigation and remediation actions", "entity_type": "vulnerabilities", "estimated_rows": "low"}}
 """
 
 # =================================================================================
@@ -2138,21 +2634,16 @@ def expand_schema_if_needed(question: str, base_schema: str = GRC_SCHEMA) -> str
 
 
 def is_deprecated_audit_query(question: str) -> bool:
-    """Detect queries targeting the removed Audit Management module."""
-    question_lower = (question or '').lower()
-    audit_terms = [
-        'audit universe', 'audit finding', 'audit findings', 'audit plan', 'audit engagement',
-        'auditor', 'qaip', 'workpaper', 'audit report', 'audit management'
-    ]
-    return any(term in question_lower for term in audit_terms)
+    """
+    Previously blocked audit management queries when those tables didn't exist.
+    All audit management tables NOW exist in the database (Domain 17 in GRC_SCHEMA).
+    This function now always returns False so audit queries reach the SQL engine.
+    """
+    return False
 
 
 def detect_query_type(question: str) -> str:
-    """
-    Return 'unsupported' for removed audit-management queries; otherwise use SQL.
-    """
-    if is_deprecated_audit_query(question):
-        return 'unsupported'
+    """All questions use SQL — audit management tables are live in the DB."""
     return 'sql'
 
 
@@ -2166,14 +2657,6 @@ def generate_sql_query(question: str, language: str = "en", retry_count: int = 0
     - entity_type
     - estimated_rows
     """
-    if is_deprecated_audit_query(question):
-        return {
-            "sql": None,
-            "explanation": "Audit Management is no longer available in this system. Please ask about governance, compliance, evidence, risk, certification, or vulnerabilities instead.",
-            "entity_type": "unsupported",
-            "estimated_rows": "none"
-        }
-
     logger.info("\n" + "="*80)
     logger.info("[QUERY] NEW QUERY RECEIVED")
     logger.info("="*80)

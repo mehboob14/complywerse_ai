@@ -197,6 +197,8 @@ export default function CertificationJourneyPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('default');
   const [uploadingControlId, setUploadingControlId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [cardsCollapsed, setCardsCollapsed] = useState(false);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
 
   const { data: journey, isLoading: journeyLoading, error: journeyError } = useQuery({
     queryKey: ['certification', journeyId],
@@ -738,6 +740,16 @@ export default function CertificationJourneyPage() {
     { id: 'applicability', label: 'Applicability' },
   ];
 
+  useEffect(() => {
+    const el = contentScrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      setCardsCollapsed(el.scrollTop > 80);
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -1134,7 +1146,7 @@ export default function CertificationJourneyPage() {
                 )}
               </button>
               {isExpanded && (
-                <div className="border-t border-gray-200 p-4">
+                <div className="border-t border-gray-200  p-4">
                   {phase.description && (
                     <p className="text-sm text-gray-600 mb-4">{phase.description}</p>
                   )}
@@ -1470,7 +1482,7 @@ export default function CertificationJourneyPage() {
         {isExpanded && (
           <div className="border-t border-gray-200 p-4">
             {/* Sub-controls section - recursive hierarchy */}
-            {control.sub_controls && control.sub_controls.length > 0 && (
+            {/* {control.sub_controls && control.sub_controls.length > 0 && (
               <div className="mb-6">
                 <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-black">
                   <Layers className="h-4 w-4 text-blue-600" />
@@ -1478,7 +1490,7 @@ export default function CertificationJourneyPage() {
                 </h4>
                 {renderSubControlsRecursive(control.sub_controls, 0)}
               </div>
-            )}
+            )} */}
             
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               {/* Linked Evidence - Now appears FIRST (left column) */}
@@ -2690,7 +2702,12 @@ export default function CertificationJourneyPage() {
           </div>
         )}
 
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            cardsCollapsed ? 'max-h-0 opacity-0 pointer-events-none mt-0' : 'max-h-[20rem] opacity-100 mt-6'
+          }`}
+        >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center justify-center p-6">
             <CircularProgress percentage={readinessPercentage} />
             <div className="ml-4">
@@ -2742,6 +2759,7 @@ export default function CertificationJourneyPage() {
             </div>
           </div>
         </div>
+        </div>{/* end collapsible wrapper */}
       </div>
 
       <div className="mb-6 overflow-x-auto">
@@ -2759,10 +2777,18 @@ export default function CertificationJourneyPage() {
               {tab.label}
             </button>
           ))}
+          <button
+            onClick={() => setCardsCollapsed(prev => !prev)}
+            className="ml-4 flex items-center gap-1 px-3 py-2 text-xs text-gray-500 hover:text-gray-700 transition-colors border-b-2 border-transparent"
+            title={cardsCollapsed ? 'Show summary cards' : 'Hide summary cards'}
+          >
+            {cardsCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+            <span>{cardsCollapsed ? 'Show summary' : 'Hide summary'}</span>
+          </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" ref={contentScrollRef}>
         {renderActiveTab()}
       </div>
 

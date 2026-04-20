@@ -475,47 +475,6 @@ export default function ERMRisksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-2">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            accept=".xlsx,.xls"
-            className="hidden"
-          />
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            disabled={isUploading}
-            className="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 font-medium text-slate-900 hover:bg-slate-200 disabled:opacity-50"
-          >
-            {isUploading ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <Upload size={18} />
-            )}
-            Upload Register
-          </button>
-          <button
-            onClick={handleDownloadTemplate}
-            className="flex items-center gap-2 rounded-lg bg-white px-4 py-2 font-medium text-slate-900 border border-slate-300 hover:bg-slate-50"
-          >
-            <Download size={18} />
-            Download Template
-          </button>
-          <button
-            onClick={() => {
-              setEditingRisk(null);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
-          >
-            <Plus size={18} />
-            Add Risk
-          </button>
-        </div>
-      </div>
-
       {uploadResult && (
         <div className={`rounded-xl border p-4 ${uploadResult.errors.length > 0 ? 'border-red-500/50 bg-white' : 'border-green-500/50 bg-white'}`}>
           <div className="flex items-start justify-between">
@@ -600,8 +559,7 @@ export default function ERMRisksPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-1">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">Risk Heatmap</h2>
             <div className="flex gap-1">
@@ -643,7 +601,7 @@ export default function ERMRisksPage() {
               <span>1</span>
             </div>
             <div className="flex-1">
-              <div className="grid aspect-square grid-cols-5 gap-1">
+              <div className="grid grid-cols-5 gap-1" style={{ height: '180px' }}>
                 {[5, 4, 3, 2, 1].map((likelihood) =>
                   [1, 2, 3, 4, 5].map((impact) => {
                     const cell = heatmapMatrix[`${likelihood}-${impact}`];
@@ -689,70 +647,106 @@ export default function ERMRisksPage() {
               Clear filter
             </button>
           )}
-        </div>
+      </div>
 
-        <div className="space-y-4 lg:col-span-2">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-              <input
-                type="text"
-                placeholder="Search risks..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                <option value="all">All Categories</option>
-                {availableCategoryOptions.map((cat) => (
-                  <option key={cat.value} value={cat.value}>{cat.label}</option>
-                ))}
-              </select>
-
-              <select
-                value={registerTypeFilter}
-                onChange={(e) => setRegisterTypeFilter(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                <option value="all">All Register Types</option>
-                {availableRegisterTypeOptions.map((type) => (
-                  <option key={type.value} value={type.value}>{type.label}</option>
-                ))}
-              </select>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as RiskStatus | 'all')}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                <option value="all">All Statuses</option>
-                {RISK_STATUSES.map(status => (
-                  <option key={status.value} value={status.value}>{status.label}</option>
-                ))}
-              </select>
-
-              <select
-                value={scoreFilter}
-                onChange={(e) => setScoreFilter(e.target.value as ScoreFilter)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                <option value="all">All Scores</option>
-                <option value="critical">Critical (≥20)</option>
-                <option value="high">High (12-19)</option>
-                <option value="medium">Medium (6-11)</option>
-                <option value="low">Low (&lt;6)</option>
-              </select>
-            </div>
+      <div className="flex flex-wrap items-center gap-3 ">
+           <div className="relative w-[20%]  xl:flex-none">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search risks..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            />
           </div>
 
-          <div className="space-y-3">
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
+        >
+          <option value="all">All Categories</option>
+          {availableCategoryOptions.map((cat) => (
+            <option key={cat.value} value={cat.value}>{cat.label}</option>
+          ))}
+        </select>
+
+        <select
+          value={registerTypeFilter}
+          onChange={(e) => setRegisterTypeFilter(e.target.value)}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
+        >
+          <option value="all">Register Types</option>
+          {availableRegisterTypeOptions.map((type) => (
+            <option key={type.value} value={type.value}>{type.label}</option>
+          ))}
+        </select>
+
+        {/* <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as RiskStatus | 'all')}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
+        >
+          <option value="all">All Statuses</option>
+          {RISK_STATUSES.map(status => (
+            <option key={status.value} value={status.value}>{status.label}</option>
+          ))}
+        </select> */}
+
+        <select
+          value={scoreFilter}
+          onChange={(e) => setScoreFilter(e.target.value as ScoreFilter)}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
+        >
+          <option value="all">All Scores</option>
+          <option value="critical">Critical (≥20)</option>
+          <option value="high">High (12-19)</option>
+          <option value="medium">Medium (6-11)</option>
+          <option value="low">Low (&lt;6)</option>
+        </select>
+
+        <div className="ml-auto flex gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept=".xlsx,.xls"
+            className="hidden"
+          />
+          <button
+            onClick={() => setIsUploadModalOpen(true)}
+            disabled={isUploading}
+            className="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 font-medium text-slate-900 hover:bg-slate-200 disabled:opacity-50"
+          >
+            {isUploading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Upload size={18} />
+            )}
+            import
+          </button>
+          <button
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-2 rounded-lg bg-white px-4 py-2 font-medium text-slate-900 border border-slate-300 hover:bg-slate-50"
+          >
+            <Download size={18} />
+            Template
+          </button>
+          <button
+            onClick={() => {
+              setEditingRisk(null);
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+          >
+            <Plus size={18} />
+            Add Risk
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
             {filteredRisks.length === 0 ? (
               <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
                 <AlertTriangle className="mx-auto h-10 w-10 text-slate-500" />
@@ -848,8 +842,6 @@ export default function ERMRisksPage() {
               })
             )}
           </div>
-        </div>
-      </div>
 
       {isModalOpen && (
         <RiskModal

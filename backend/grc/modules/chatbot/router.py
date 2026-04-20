@@ -35,17 +35,10 @@ langchain_histories: Dict[str, Any] = {}
 MAX_HISTORY_LENGTH = 10
 CHAT_UPLOAD_ROOT = Path(__file__).resolve().parents[3] / "uploads" / "complychat"
 CHAT_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
-AUDIT_QUERY_TERMS = (
-    "audit",
-    "auditor",
-    "audit universe",
-    "audit finding",
-    "audit findings",
-    "audit plan",
-    "audit engagement",
-    "workpaper",
-    "qaip",
-)
+# IMPORTANT: Only terms that have NO database tables (truly removed UI features).
+# Audit findings, plans, engagements, reports ARE in the DB — route those to database instead.
+# This list is intentionally narrow to avoid blocking valid DB queries.
+AUDIT_QUERY_TERMS: tuple = ()  # Audit Management tables NOW exist — all route to database
 GRC_RELEVANT_TERMS = (
     # Platform modules
     "grc", "erm", "enterprise risk", "risk management", "risk register",
@@ -85,6 +78,33 @@ GRC_RELEVANT_TERMS = (
     "department", "business unit", "user", "role", "permission",
     # GRC status words
     "open", "overdue", "critical", "high risk", "pending", "active", "closed",
+    # Audit Management (all tables in DB)
+    "audit finding", "audit findings", "audit plan", "audit plans",
+    "audit engagement", "audit engagements", "audit report", "audit reports",
+    "audit workpaper", "workpaper", "pbc list", "prepared by client",
+    "qaip", "audit quality", "audit maturity", "audit recommendation",
+    "audit universe", "auditable entity", "audit team",
+    "audit board pack", "board pack", "audit follow up",
+    # CCM
+    "ccm", "continuous control monitoring", "ccm rule", "ccm anomaly",
+    "ccm exception", "control anomaly", "automated control",
+    # Risk analytics
+    "risk appetite", "risk tolerance", "likelihood impact", "risk matrix",
+    "risk score history", "risk trend", "kri", "key risk indicator",
+    "risk appetite config", "risk scoring", "risk appetite level",
+    # Vulnerability sub-items
+    "vulnerability mitigation", "vulnerable mitigation", "vuln mitigation",
+    "vulnerability retest", "vulnerability sla", "sla breach", "sla target",
+    "scan record", "scanner sync", "sync history", "integration exception",
+    # Meeting details
+    "meeting agenda", "meeting minutes", "agenda item", "action points",
+    # Policy gap details
+    "gap finding", "gap findings", "policy gap finding", "gap analysis result",
+    "gap analysis results", "policy gap", "compliance gap finding",
+    # RCSA sub-items
+    "rcsa finding", "rcsa response", "rcsa campaign",
+    # Regulatory details
+    "regulatory feed", "regulatory impact", "regulatory task",
     # Common typos / misspellings
     "complaince", "complianse", "complience",  # compliance
     "goveranc", "governanc", "govrnance",  # governance
@@ -117,6 +137,11 @@ DB_QUERY_TERMS = (
     # Explicit retrieval commands
     "show", "list", "count", "how many", "which", "what are", "find", "get", "fetch",
     "give me", "tell me", "display", "report on", "pull",
+    # Natural question patterns about platform data
+    "what about", "tell me about", "what is the", "what is our", "what are our",
+    "details on", "details about", "information on", "info on",
+    "how many", "how much", "total number", "count of", "number of",
+    "give details", "provide details", "describe our", "describe the",
     # Status / state (always live-data signals)
     "status", "current status", "current state", "progress", "how is", "how are",
     "open", "closed", "resolved", "unresolved", "approved", "rejected", "in progress",
@@ -124,6 +149,7 @@ DB_QUERY_TERMS = (
     # Quantity / existence checks
     "any open", "any pending", "any unresolved", "any active", "any critical",
     "are there", "is there any", "do we have", "how many open", "how many pending",
+    "what is in", "what is the status", "what is currently",
     # Time-based = always live data
     "current", "recent", "latest", "last week", "this month", "today", "this year",
     # Summary / overview of live data
@@ -131,57 +157,114 @@ DB_QUERY_TERMS = (
     "by severity", "by status", "by category", "by framework", "by department",
     # Possessive patterns = platform data
     "my risks", "my controls", "my vendors", "my exceptions", "our risks",
+    "in the system", "in the platform", "in our platform", "in your system",
+    "linked", "linked to", "associated with", "related to",
 )
 # Platform module nouns — if present, the question is about live DB data
-# Covers full platform: modules, sub-modules, pages, features
+# Covers FULL platform: ALL 20+ domains, all sub-modules, all pages, all features
+# Banking / InfoSec specific terms included for production-grade coverage
 PLATFORM_DATA_NOUNS = (
-    # Risk Management
-    "risk register", "risk incidents", "risk exceptions", "risk kris", "key risk indicator",
-    "risk review", "risk treatment", "residual risk", "inherent risk", "risk appetite",
-    "risk mitigation", "risk owner", "risk category",
-    # Exceptions & Issues
+    # ── Risk Management ──
+    "risk", "risks", "risk register", "risk incident", "risk incidents",
+    "risk exception", "risk exceptions", "risk kri", "risk kris", "kri", "kris",
+    "key risk indicator", "key risk indicators",
+    "risk treatment", "risk treatments", "risk owner", "risk category",
+    "risk review", "residual risk", "inherent risk", "risk appetite", "risk tolerance",
+    "risk mitigation", "risk mitigation action", "risk mitigation actions",
+    "risk score", "risk scoring", "risk score history", "risk trend",
+    "risk assessment", "risk assessments", "risk assessment campaign",
+    "risk report", "risk heat map", "risk heatmap",
+    "likelihood", "impact scale", "risk matrix",
+    # ── Exceptions & Issues ──
     "open exceptions", "policy exceptions", "exceptions", "control exceptions",
     "open issues", "issues", "issue tracker",
-    # Incidents
+    # ── Incidents ──
     "open incidents", "security incidents", "incidents", "risk incidents", "incident log",
-    # Vendors
+    "incident response",
+    # ── Vendors ──
     "vendor assessments", "vendor risks", "vendor reviews", "vendor register",
-    "third party risk", "supplier list", "vendor list", "vendors",
-    # Compliance"
-    "compliance assessments", "compliance programs", "compliance status","frameworks", "compliance frameworks", "compliance requirements", "regulatory obligations","pci dss requirements", "iso controls", "nist controls", "cobit controls", "cis controls", "sbp controls", "sama controls", "dora controls", "gdpr requirements", "hipaa requirements", "sox controls","state bank of pakistan"
-    "compliance gaps", "compliance score", "compliance checklist",
-    # Attestation & Certifications
+    "third party risk", "third-party risk", "supplier list", "vendor list", "vendors",
+    "vendor", "third party", "supplier",
+    # ── Compliance ──
+    "compliance assessments", "compliance programs", "compliance status",
+    "frameworks", "compliance frameworks", "compliance requirements", "regulatory obligations",
+    "pci dss requirements", "iso controls", "nist controls", "cobit controls",
+    "cis controls", "sbp controls", "sama controls", "dora controls",
+    "gdpr requirements", "hipaa requirements", "sox controls",
+    "state bank of pakistan", "compliance gaps", "compliance score", "compliance checklist",
+    # ── Attestation & Certification ──
     "attestation campaigns", "attestation requests", "attestations",
     "pending attestations", "overdue attestations",
     "certification journeys", "certification phases", "certification status",
-    # Committee & Governance
-    "committee meetings", "governance committees", "oversight actions",
-    "board meetings", "meeting agenda", "meeting minutes",
+    "attestation campaign", "sox attestation", "policy signoff",
+    # ── Committee & Governance ──
+    "committee", "committees", "committee member", "committee members",
+    "committee meeting", "committee meetings", "governance committee", "governance committees",
+    "oversight action", "oversight actions",
+    "board meeting", "board meetings", "meeting agenda", "meeting minutes",
+    "meeting action", "action points", "action items", "agenda item",
     "governance documents", "governance document",
-    # RCSA
+    # ── RCSA ──
     "rcsa campaigns", "rcsa findings", "rcsa assessments", "self assessments",
-    "rcsa",
-    # Vulnerabilities & Pentests
+    "rcsa", "self-assessment", "rcsa template", "rcsa response",
+    "business unit assessment",
+    # ── Vulnerabilities & Scanning ──
     "pentest reports", "vuln reports", "vulnerability reports",
     "open vulnerabilities", "critical vulnerabilities", "cve list",
-    # Assets
-    "asset inventory", "it assets", "asset management", "assets",
-    "critical assets", "cde assets",
-    # Regulatory Changes
+    "vulnerability", "vulnerabilities", "pentest", "penetration test",
+    "vulnerability mitigation", "vuln mitigation", "remediation action",
+    "retest", "vulnerability retest", "vuln retest",
+    "vulnerability sla", "sla breach", "sla target", "remediation sla",
+    "scan record", "scan records", "vulnerability scan", "scan job",
+    "sync history", "integration sync", "scanner sync", "last sync",
+    "scanner exception", "vuln exception", "integration exception",
+    # ── Assets ──
+    "asset", "assets", "it asset", "it assets", "asset inventory", "asset management",
+    "critical asset", "critical assets", "cde asset", "cde assets",
+    "asset vulnerability", "asset risk", "asset control",
+    # ── Integration / Connections ──
+    "integration", "integrations", "integration connection", "integration connections",
+    "connector", "connectors", "scanner integration", "vulnerability scanner",
+    "nexpose", "nessus", "qualys",
+    # ── Regulatory ──
     "regulatory changes", "regulatory updates", "new regulations",
-    # Policies & Documents
-    "policies", "procedures", "standards", "guidelines", "charters",
+    "regulatory feed", "regulatory impact", "regulatory implementation",
+    "regulatory change",
+    # ── Policies & Documents ──
+    "policy", "policies", "procedure", "procedures", "standard", "standards",
+    "guideline", "guidelines", "charter", "charters",
+    "policy linkage", "control linkage", "policy link",
     "policy documents", "governance policies", "policy statements",
     "document review", "review schedule", "expiring policies",
-    "policy gap analysis", "policy compliance",
-    # Internal Controls
+    "policy gap analysis", "policy compliance", "policy gap",
+    "policy gap finding", "policy gap findings", "gap finding", "gap findings",
+    "gap analysis result", "gap analysis results",
+    "policy attestation",
+    # ── Internal Controls ──
     "internal controls", "key controls", "control tests", "control library",
-    "control effectiveness", "control gaps",
-    # Evidence
+    "control effectiveness", "control gaps", "internal control", "control test",
+    "control mapping",
+    # ── Evidence ──
     "evidence register", "evidence items", "control evidence",
     "missing evidence", "weak evidence", "evidence gaps",
-    # Users & Departments
+    "evidence", "evidence assessment",
+    # ── Audit Management (tables in DB — route to database) ──
+    "audit finding", "audit findings", "audit plan", "audit plans",
+    "audit engagement", "audit engagements", "audit report", "audit reports",
+    "audit workpaper", "workpaper", "workpapers", "audit workpapers",
+    "audit recommendation", "audit recommendations", "audit action plan",
+    "pbc list", "prepared by client", "audit document request",
+    "qaip", "audit quality", "audit maturity",
+    "audit team", "audit universe", "auditable entity", "audit template",
+    "audit board pack", "board pack", "audit follow up", "audit follow-up",
+    "audit finding theme", "audit report opinion",
+    # ── CCM (Continuous Control Monitoring) ──
+    "ccm", "continuous control monitoring", "ccm rule", "ccm rules",
+    "ccm anomaly", "ccm anomalies", "ccm exception", "ccm exceptions",
+    "control monitoring", "control monitoring alert", "automated control testing",
+    # ── Users & Departments ──
     "user accounts", "platform users", "department list",
+    "department member", "department members",
 )
 FRAMEWORK_PROGRESS_TERMS = (
     "active compliance frameworks", "current progress", "framework progress", "active frameworks",
@@ -245,8 +328,14 @@ FRAMEWORK_CONTENT_SIGNALS = (
     # Version references signal framework knowledge question
     " v1.", " v2.", " v3.", " v4.", " v5.",
     "version 1.", "version 2.", "version 3.", "version 4.",
-    "pci dss 4", "pci dss 3.2", "iso 27001:2022", "iso 27001:2013",
+    "pci dss 4", "pci dss 3.2", "pci dss v", "iso 27001:2022", "iso 27001:2013",
     "nist 2.0", "nist 1.1",
+    # "What are <framework> requirements" without 'our' = knowledge question
+    "what are pci", "what are iso", "what are nist", "what are gdpr",
+    "what are hipaa", "what are sama", "what are dora", "what are sox",
+    # Definitional questions ("what is a X" without 'our'/'my' = knowledge, not data)
+    "what is a ", "what is an ", "define ", "how does a ", "how does an ",
+    "what does it mean", "explain what is", "describe what is",
 )
 # When present, question is about the USER's platform data → override to DB route
 PLATFORM_CONTEXT_SIGNALS = (
@@ -518,6 +607,7 @@ def normalize_question(question: str) -> str:
         # vulnerability / vulnerabilities
         (r'\bvuln?er[ae]bil[iy]t[yi]e?s?\b', 'vulnerabilities'),
         (r'\bvunerabilit\w*\b', 'vulnerabilities'),
+        (r'\bvulnr?abilit\w*\b', 'vulnerabilities'),
         # regulatory
         (r'\breg[uo]l[ae]tor[yi]\b', 'regulatory'),
         # attestation
@@ -530,8 +620,33 @@ def normalize_question(question: str) -> str:
         (r'\bincid[ae]?nts?\b', 'incident'),
         # control
         (r'\bcontro?ll?\b', 'control'),
-        # risk
-        (r'\brisk[s]?\b', 'risk'),
+        # risk / risks
+        (r'\brisk[s]?\b', 'risks'),
+        # policy / policies (police → policy is a common typo)
+        (r'\bpolice\b', 'policy'),
+        (r'\bpolicey\b', 'policy'),
+        (r'\bpolicies\b', 'policies'),
+        # asset / assets
+        (r'\bassests?\b', 'assets'),
+        (r'\bassest\b', 'asset'),
+        # committee / committees
+        (r'\bcommitee\b', 'committee'),
+        (r'\bcommitees\b', 'committees'),
+        (r'\bcomittee\b', 'committee'),
+        (r'\bcommitte\b', 'committee'),
+        # integration / integrations
+        (r'\bintegraton\b', 'integration'),
+        (r'\bintegeation\b', 'integration'),
+        (r'\bintegrations?\b', 'integration'),
+        # linkage
+        (r'\blinage\b', 'linkage'),
+        (r'\blinkege\b', 'linkage'),
+        # vendor
+        (r'\bvendors?\b', 'vendor'),
+        (r'\bvender\b', 'vendor'),
+        # evidence
+        (r'\bevidance\b', 'evidence'),
+        (r'\bevidenc[ey]\b', 'evidence'),
     ]
     for pattern, replacement in substitutions:
         text = re.sub(pattern, replacement, text)
@@ -561,19 +676,38 @@ def classify_request_mode(question: str, has_uploaded_files: bool = False) -> st
         return "file_analysis"
     if has_uploaded_files and not any(term in normalized for term in DB_QUERY_TERMS):
         return "file_analysis"
-    # Framework knowledge questions → LLM (before DB check)
-    # e.g. "what are the new requirements in PCI DSS v4.0.1?"
+
+    # ── Quantitative intent = ALWAYS live platform data ───────────────────────
+    # "how many assets", "total risks", "count vulnerabilities", "number of committees" etc.
+    _quantitative = ("how many", "how much", "total number", "count of", "number of",
+                     "how many open", "how many pending", "how many critical",
+                     "what is the total", "what's the total")
+    if any(q in normalized for q in _quantitative) and not has_uploaded_files:
+        return "database"
+
+    # ── Framework / conceptual knowledge questions (check BEFORE PLATFORM_DATA_NOUNS
+    # so "what are pci dss v4 requirements" routes to guidance not database) ───────
     if is_framework_knowledge_question(question) and not has_uploaded_files:
         return "grc_guidance"
+
+    # ── PLATFORM_DATA_NOUNS always means live DB data ─────────────────────────
+    # Check BEFORE framework-knowledge check to avoid intercepting platform queries
+    if (any(noun in normalized for noun in PLATFORM_DATA_NOUNS) or any(noun in lowered for noun in PLATFORM_DATA_NOUNS)) and not has_uploaded_files:
+        # If question also contains a DB_QUERY_TERM or quantitative signal, definitely database
+        if any(term in normalized for term in DB_QUERY_TERMS) or any(term in lowered for term in DB_QUERY_TERMS):
+            return "database"
+        # Even without explicit query term, platform nouns = live data
+        if any(ctx in normalized for ctx in PLATFORM_CONTEXT_SIGNALS) or any(noun in normalized for noun in PLATFORM_DATA_NOUNS):
+            return "database"
+
     # Explicit DB query commands — check both original and normalized
     if any(term in normalized for term in DB_QUERY_TERMS) or any(term in lowered for term in DB_QUERY_TERMS):
         return "database"
-    # GRC platform module nouns always refer to live data
-    if (any(noun in normalized for noun in PLATFORM_DATA_NOUNS) or any(noun in lowered for noun in PLATFORM_DATA_NOUNS)) and not has_uploaded_files:
-        return "database"
-    # If the normalized question has a strong GRC noun signal, prefer DB mode
+
+    # If any GRC noun is present and any DB signal → database
     if any(term in normalized for term in GRC_RELEVANT_TERMS) and any(term in normalized for term in DB_QUERY_TERMS):
         return "database"
+
     return "grc_guidance"
 
 
@@ -619,7 +753,13 @@ def answer_grc_knowledge_question(
             "6. NEVER hallucinate control IDs or clause numbers you are not sure of — say 'refer to the official document' instead.\n"
             "7. If referencing platform-specific data that isn't in context, note it and suggest checking the relevant module.\n"
             "8. Do NOT mention databases, queries, SQL, or system internals to the user.\n"
-            "9. Politely decline anything outside GRC topics in one sentence."
+            "9. Politely decline anything outside GRC topics in one sentence.\n"
+            "CRITICAL ANTI-HALLUCINATION RULES:\n"
+            "10. NEVER say 'I can't access specific data' — the platform already queried the database.\n"
+            "11. NEVER say 'typically' or 'usually' when describing the USER's platform data — only state facts from the context provided.\n"
+            "12. If DB context shows no data: say 'No [X] found in your platform yet' — do NOT invent generic examples.\n"
+            "13. NEVER list generic module names as if they were real results — only report actual data from the provided context.\n"
+            "14. If the question asks for counts/lists and no context was provided: say 'I was unable to retrieve this data — please check the [module] section in the platform.'"
         )
 
         messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]

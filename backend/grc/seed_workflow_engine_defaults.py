@@ -140,11 +140,15 @@ def _build_workflow_graph(trigger: str, recipient_user_id: int | None, recipient
     return nodes, edges
 
 
-def seed_workflow_engine_defaults():
-    """Ensure default workflow engine definitions/templates exist for every active tenant."""
+def seed_workflow_engine_defaults(tenant_id: int | None = None):
+    """Ensure default workflow engine definitions/templates exist for active tenants."""
     db = SessionLocal()
     try:
-        active_tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
+        query = db.query(Tenant).filter(Tenant.is_active == True)
+        if tenant_id is not None:
+            query = query.filter(Tenant.id == tenant_id)
+
+        active_tenants = query.all()
         if not active_tenants:
             logger.info("No active tenants found; skipping workflow engine default seeding")
             return

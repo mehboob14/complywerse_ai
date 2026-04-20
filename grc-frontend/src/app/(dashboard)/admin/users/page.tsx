@@ -283,187 +283,191 @@ export default function UsersManagementPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-white border border-slate-200 rounded-lg w-full max-w-lg mx-4">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-black">
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowModal(false)} />
+          <div className="fixed inset-y-0 right-0 z-50 flex w-[520px] flex-col bg-white shadow-2xl border-l border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 flex-shrink-0">
+              <h2 className="text-sm font-semibold text-slate-900">
                 {editingUser ? 'Edit User' : 'Create User'}
               </h2>
+              <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {!editingUser && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-2">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.username}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, username: e.target.value }))
-                    }
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
-                    required
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-2">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, email: e.target.value }))
-                  }
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
-                  required
-                />
-              </div>
-
-              {!editingUser && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-2">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, password: e.target.value }))
-                    }
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
-                    required
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-2">
-                  Display Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.display_name}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, display_name: e.target.value }))
-                  }
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-2">
-                    Department
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.department}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, department: e.target.value }))
-                    }
-                    placeholder="e.g., IT, Finance, HR"
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-2">
-                    Group
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.group}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, group: e.target.value }))
-                    }
-                    placeholder="e.g., Engineering, Operations"
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-2">
-                    Division
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.division}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, division: e.target.value }))
-                    }
-                    placeholder="e.g., North America, EMEA"
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-2">
-                    Designation
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.designation}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, designation: e.target.value }))
-                    }
-                    placeholder="e.g., Senior Manager, Director"
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-2">
-                  Assign Roles
-                </label>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {roles.map((role) => (
-                    <label
-                      key={role.id}
-                      className="flex items-center space-x-3 p-2 bg-slate-50 rounded cursor-pointer hover:bg-slate-200"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.role_ids.includes(role.id)}
-                        onChange={() => toggleRole(role.id)}
-                        className="w-4 h-4 rounded border-slate-300 bg-slate-50 text-primary-600 focus:ring-primary-500"
-                      />
-                      <div>
-                        <span className="text-black">{role.name}</span>
-                        {role.description && (
-                          <p className="text-xs text-slate-600">{role.description}</p>
-                        )}
-                      </div>
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                {!editingUser && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                      Username
                     </label>
-                  ))}
+                    <input
+                      type="text"
+                      value={formData.username}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, username: e.target.value }))
+                      }
+                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-primary-500"
+                      required
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, email: e.target.value }))
+                    }
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-primary-500"
+                    required
+                  />
+                </div>
+
+                {!editingUser && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, password: e.target.value }))
+                      }
+                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-primary-500"
+                      required
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                    Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.display_name}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, display_name: e.target.value }))
+                    }
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                      Department
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.department}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, department: e.target.value }))
+                      }
+                      placeholder="e.g., IT, Finance, HR"
+                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                      Group
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.group}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, group: e.target.value }))
+                      }
+                      placeholder="e.g., Engineering, Operations"
+                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                      Division
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.division}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, division: e.target.value }))
+                      }
+                      placeholder="e.g., North America, EMEA"
+                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                      Designation
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.designation}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, designation: e.target.value }))
+                      }
+                      placeholder="e.g., Senior Manager, Director"
+                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-primary-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                    Assign Roles
+                  </label>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto mt-1">
+                    {roles.map((role) => (
+                      <label
+                        key={role.id}
+                        className="flex items-center space-x-3 p-2 bg-slate-50 rounded cursor-pointer hover:bg-slate-100"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.role_ids.includes(role.id)}
+                          onChange={() => toggleRole(role.id)}
+                          className="w-4 h-4 rounded border-slate-300 bg-slate-50 text-primary-600 focus:ring-primary-500"
+                        />
+                        <div>
+                          <span className="text-sm text-slate-900">{role.name}</span>
+                          {role.description && (
+                            <p className="text-xs text-slate-500">{role.description}</p>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="border-t border-slate-200 px-6 py-4 flex justify-end gap-3 flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-black rounded-lg text-sm"
+                  className="px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm disabled:opacity-50"
+                  className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded text-sm disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : editingUser ? 'Update User' : 'Create User'}
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

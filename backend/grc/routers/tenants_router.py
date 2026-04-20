@@ -46,6 +46,10 @@ def create_tenant(
     db.add(db_tenant)
     db.commit()
     db.refresh(db_tenant)
+
+    from ..seed_workflow_engine_defaults import seed_workflow_engine_defaults
+    seed_workflow_engine_defaults(db_tenant.id)
+
     return db_tenant
 
 

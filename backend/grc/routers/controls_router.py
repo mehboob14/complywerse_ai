@@ -4,7 +4,7 @@ import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, and_
 from pydantic import BaseModel
 from openai import OpenAI
 
@@ -286,7 +286,22 @@ def get_framework_controls_summary(
 ):
     """Get summary of controls per uploaded framework"""
     user_tenants = get_user_tenants(current_user, db)
-    
+
+    # Names of frameworks that have a tenant-specific copy — used to exclude null-tenant duplicates
+    tenant_specific_names_sq = db.query(UploadedFramework.name).filter(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        UploadedFramework.is_active == True
+    ) if user_tenants else db.query(UploadedFramework.name).filter(False)
+
+    # Dedup: include tenant-specific frameworks, and null-tenant ones only when no tenant copy exists
+    dedup_filter = or_(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        and_(
+            UploadedFramework.tenant_id.is_(None),
+            ~UploadedFramework.name.in_(tenant_specific_names_sq)
+        )
+    )
+
     frameworks = db.query(
         UploadedFramework.id,
         UploadedFramework.name,
@@ -298,11 +313,7 @@ def get_framework_controls_summary(
         ParsedFrameworkControl,
         UploadedFramework.id == ParsedFrameworkControl.uploaded_framework_id
     ).filter(
-        or_(
-            UploadedFramework.tenant_id.in_(user_tenants),
-            UploadedFramework.tenant_id.is_(None),
-            UploadedFramework.is_shared == True
-        ),
+        dedup_filter,
         UploadedFramework.upload_status.in_(['published', 'completed', 'parsed', 'classified']),
         UploadedFramework.is_active == True
     ).group_by(
@@ -312,10 +323,19 @@ def get_framework_controls_summary(
         UploadedFramework.framework_type,
         UploadedFramework.upload_status
     ).all()
-    
+
     # Only include frameworks that have at least one control
     frameworks_with_controls = [f for f in frameworks if f.control_count > 0]
-    
+
+    # Total controls using the same dedup filter as the list endpoint
+    total_controls = db.query(func.count(ParsedFrameworkControl.id)).join(
+        UploadedFramework,
+        ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
+    ).filter(
+        dedup_filter,
+        UploadedFramework.is_active == True
+    ).scalar() or 0
+
     return {
         "frameworks": [
             {
@@ -329,7 +349,7 @@ def get_framework_controls_summary(
             for f in frameworks_with_controls
         ],
         "total_frameworks": len(frameworks_with_controls),
-        "total_controls": sum(f.control_count for f in frameworks_with_controls)
+        "total_controls": total_controls
     }
 
 
@@ -345,16 +365,26 @@ def list_framework_controls(
 ):
     """Get all parsed controls from uploaded frameworks with framework info"""
     user_tenants = get_user_tenants(current_user, db)
-    
+
+    # Dedup: prefer tenant-specific frameworks; exclude null-tenant copy when tenant copy exists
+    tenant_specific_names_sq = db.query(UploadedFramework.name).filter(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        UploadedFramework.is_active == True
+    ) if user_tenants else db.query(UploadedFramework.name).filter(False)
+
+    dedup_filter = or_(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        and_(
+            UploadedFramework.tenant_id.is_(None),
+            ~UploadedFramework.name.in_(tenant_specific_names_sq)
+        )
+    )
+
     query = db.query(ParsedFrameworkControl).join(
         UploadedFramework,
         ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
     ).filter(
-        or_(
-            UploadedFramework.tenant_id.in_(user_tenants),
-            UploadedFramework.tenant_id.is_(None),
-            UploadedFramework.is_shared == True
-        ),
+        dedup_filter,
         UploadedFramework.is_active == True
     )
     

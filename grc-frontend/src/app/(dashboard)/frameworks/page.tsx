@@ -406,7 +406,7 @@ export default function FrameworksPage() {
           <h1 className="text-2xl font-bold cw-text-default">Compliance Frameworks</h1>
           <p className="cw-text-muted">Manage frameworks and track certification journeys</p>
         </div>
-        <div className="flex w-full items-center gap-3 lg:w-auto">
+        {/* <div className="flex w-full items-center gap-3 lg:w-auto">
           <Link
             href="/framework-upload"
             className="cw-btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium whitespace-nowrap lg:w-auto"
@@ -414,7 +414,7 @@ export default function FrameworksPage() {
             <FileStack className="h-4 w-4" />
             <span>Upload New Framework</span>
           </Link>
-        </div>
+        </div> */}
       </div>
 
       {processingFrameworks.length > 0 && (
@@ -710,17 +710,17 @@ export default function FrameworksPage() {
                     </button>
                   )}
                   
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Link
                       href={`/controls?framework=${framework.id}`}
-                      className="cw-btn-secondary flex flex-1 items-center justify-center gap-2 px-3 py-2"
+                      className="cw-btn-secondary whitespace-nowrap flex flex-1 items-center justify-center gap-2 px-3 py-2"
                     >
                       <Shield className="h-4 w-4" />
                       View Controls
                     </Link>
                     <button
                       onClick={() => handleStartCertification(framework)}
-                      className="cw-btn-primary flex flex-1 items-center justify-center gap-2 px-3 py-2"
+                      className="cw-btn-primary whitespace-nowrap flex flex-1 items-center justify-center gap-2 px-3 py-2"
                     >
                       <Play className="h-4 w-4" />
                       Start Journey
@@ -744,7 +744,7 @@ export default function FrameworksPage() {
                       enhanceMutation.mutate(framework.id);
                     }}
                     disabled={enhanceMutation.isPending && enhancingFrameworkId === framework.id}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-purple-50 px-3 py-2 text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50"
+                    className="border-2 rounded-lg flex flex-1 items-center justify-center gap-2 px-3 py-2"
                     title="Generate AI evidence recommendations for all controls"
                   >
                     {enhanceMutation.isPending && enhancingFrameworkId === framework.id ? (
@@ -754,7 +754,7 @@ export default function FrameworksPage() {
                       </>
                     ) : (
                       <>
-                        <Sparkles className="h-4 w-4" />
+                        <Sparkles className="h-6 w-6" />
                         Generate Evidence Recommendations
                       </>
                     )}

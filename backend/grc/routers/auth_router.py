@@ -368,6 +368,9 @@ def register(request: UserCreate, db: Session = Depends(get_db)):
         db.add(default_tenant)
         db.commit()
         db.refresh(default_tenant)
+
+        from ..seed_workflow_engine_defaults import seed_workflow_engine_defaults
+        seed_workflow_engine_defaults(default_tenant.id)
     
     # Create TenantUser record linking user to tenant
     tenant_user = TenantUser(
@@ -988,6 +991,9 @@ def register_organization(request: OrganizationRegisterRequest, db: Session = De
     db.add(tenant)
     db.commit()
     db.refresh(tenant)
+
+    from ..seed_workflow_engine_defaults import seed_workflow_engine_defaults
+    seed_workflow_engine_defaults(tenant.id)
     
     token = create_access_token({
         "sub": username,

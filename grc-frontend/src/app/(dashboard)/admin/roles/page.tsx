@@ -292,141 +292,147 @@ export default function RolesManagementPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-lg w-full max-w-4xl my-8">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-black">
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowModal(false)} />
+          <div className="fixed inset-y-0 right-0 z-50 flex w-[800px] flex-col bg-white shadow-2xl border-l border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 flex-shrink-0">
+              <h2 className="text-sm font-semibold text-slate-900">
                 {editingRole ? (editingRole.is_system_role ? 'View Role' : 'Edit Role') : 'Create Role'}
               </h2>
+              <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-2">
-                    Role Name
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
-                    required
-                    disabled={editingRole?.is_system_role}
-                  />
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                      Role Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, name: e.target.value }))
+                      }
+                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-primary-500"
+                      required
+                      disabled={editingRole?.is_system_role}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                      Description
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.description}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, description: e.target.value }))
+                      }
+                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-primary-500"
+                      disabled={editingRole?.is_system_role}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-2">
-                    Description
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.description}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500"
-                    disabled={editingRole?.is_system_role}
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-4">
-                  Permissions Matrix
-                </label>
-                <div className="border border-slate-200 rounded-lg overflow-hidden max-h-96 overflow-y-auto">
-                  {permissionMatrix.map((module) => (
-                    <div key={module.module} className="border-b border-slate-200 last:border-b-0">
-                      <div
-                        className="flex items-center justify-between p-4 bg-slate-50 cursor-pointer hover:bg-white"
-                        onClick={() => toggleModuleExpand(module.module)}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <input
-                            type="checkbox"
-                            checked={isModuleFullySelected(module)}
-                            ref={(el) => {
-                              if (el) el.indeterminate = isModulePartiallySelected(module);
-                            }}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              toggleAllModulePermissions(module, e.target.checked);
-                            }}
-                            className="w-4 h-4 rounded border-slate-300 bg-slate-50 text-primary-600 focus:ring-primary-500"
-                            disabled={editingRole?.is_system_role}
-                          />
-                          <span className="font-medium text-black">{module.display_name}</span>
-                        </div>
-                        <svg
-                          className={`w-5 h-5 text-slate-600 transition-transform ${
-                            expandedModules.has(module.module) ? 'rotate-180' : ''
-                          }`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Permissions Matrix
+                  </label>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    {permissionMatrix.map((module) => (
+                      <div key={module.module} className="border-b border-slate-200 last:border-b-0">
+                        <div
+                          className="flex items-center justify-between p-3 bg-slate-50 cursor-pointer hover:bg-white"
+                          onClick={() => toggleModuleExpand(module.module)}
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={isModuleFullySelected(module)}
+                              ref={(el) => {
+                                if (el) el.indeterminate = isModulePartiallySelected(module);
+                              }}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleAllModulePermissions(module, e.target.checked);
+                              }}
+                              className="w-4 h-4 rounded border-slate-300 bg-slate-50 text-primary-600 focus:ring-primary-500"
+                              disabled={editingRole?.is_system_role}
+                            />
+                            <span className="text-sm font-medium text-slate-900">{module.display_name}</span>
+                          </div>
+                          <svg
+                            className={`w-4 h-4 text-slate-500 transition-transform ${
+                              expandedModules.has(module.module) ? 'rotate-180' : ''
+                            }`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
 
-                      {expandedModules.has(module.module) && (
-                        <div className="bg-white/50 p-4">
-                          {module.submodules.map((sub) => (
-                            <div key={sub.name} className="mb-4 last:mb-0">
-                              <div className="text-sm font-medium text-slate-600 mb-2">
-                                {sub.display_name}
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {sub.actions.map((action) => {
-                                  const permName = `${module.module}:${sub.name}:${action}`;
-                                  const isSelected = formData.permission_names.includes(permName);
-                                  return (
-                                    <label
-                                      key={action}
-                                      className={`flex items-center space-x-2 px-3 py-1.5 rounded cursor-pointer transition-colors ${
-                                        isSelected
-                                          ? 'bg-primary-500/30 border border-primary-500'
-                                          : 'bg-slate-200 border border-slate-300 hover:border-slate-400'
-                                      }`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={() => togglePermission(permName)}
-                                        className="hidden"
-                                        disabled={editingRole?.is_system_role}
-                                      />
-                                      <span
-                                        className={`text-sm ${
-                                          isSelected ? 'text-primary-500' : 'text-slate-600'
+                        {expandedModules.has(module.module) && (
+                          <div className="bg-white/50 px-4 py-3">
+                            {module.submodules.map((sub) => (
+                              <div key={sub.name} className="mb-3 last:mb-0">
+                                <div className="text-xs font-medium text-slate-500 mb-1.5">
+                                  {sub.display_name}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {sub.actions.map((action) => {
+                                    const permName = `${module.module}:${sub.name}:${action}`;
+                                    const isSelected = formData.permission_names.includes(permName);
+                                    return (
+                                      <label
+                                        key={action}
+                                        className={`flex items-center space-x-2 px-2.5 py-1 rounded cursor-pointer transition-colors ${
+                                          isSelected
+                                            ? 'bg-primary-500/30 border border-primary-500'
+                                            : 'bg-slate-200 border border-slate-300 hover:border-slate-400'
                                         }`}
                                       >
-                                        {action.replace('_', ' ')}
-                                      </span>
-                                    </label>
-                                  );
-                                })}
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={() => togglePermission(permName)}
+                                          className="hidden"
+                                          disabled={editingRole?.is_system_role}
+                                        />
+                                        <span
+                                          className={`text-xs ${
+                                            isSelected ? 'text-primary-500' : 'text-slate-600'
+                                          }`}
+                                        >
+                                          {action.replace('_', ' ')}
+                                        </span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-between items-center pt-4 border-t border-slate-200">
-                <div className="text-sm text-slate-600">
+              <div className="border-t border-slate-200 px-6 py-4 flex justify-between items-center flex-shrink-0">
+                <div className="text-xs text-slate-500">
                   {formData.permission_names.length} permission(s) selected
                 </div>
-                <div className="flex space-x-3">
+                <div className="flex gap-3">
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-black rounded-lg text-sm"
+                    className="px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded text-sm"
                   >
                     {editingRole?.is_system_role ? 'Close' : 'Cancel'}
                   </button>
@@ -434,7 +440,7 @@ export default function RolesManagementPage() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm disabled:opacity-50"
+                      className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded text-sm disabled:opacity-50"
                     >
                       {saving ? 'Saving...' : editingRole ? 'Update Role' : 'Create Role'}
                     </button>
@@ -443,7 +449,7 @@ export default function RolesManagementPage() {
               </div>
             </form>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

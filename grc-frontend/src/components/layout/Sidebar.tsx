@@ -197,9 +197,9 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
     <Link
       href={item.href}
       className={clsx(
-        'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[12px] font-semibold tracking-[0.01em] transition-all duration-150',
+        'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[11px] tracking-[0.01em] transition-all duration-150',
         isActive 
-          ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm' 
+          ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm font-semibold' 
           : 'border-transparent text-[var(--sidebar-text)] font-medium hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
         collapsed && 'justify-center px-2'
       )}
@@ -224,11 +224,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
     .sort((a, b) => b.href.length - a.href.length)[0];
   const activeChildHref = activeChild?.href;
   const isAnyChildActive = !!activeChildHref;
-  const isOpen = true;
-
-  useEffect(() => {
-    // Groups remain open by default.
-  }, []);
+  const [isOpen, setIsOpen] = useState(group.defaultOpen !== false);
 
   if (collapsed) {
     return (
@@ -271,7 +267,8 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
 
   return (
     <div className="space-y-0.5">
-      <div
+      <button
+        onClick={() => setIsOpen(prev => !prev)}
         className={clsx(
           'group flex w-full items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] transition-all duration-150',
           isAnyChildActive
@@ -287,7 +284,11 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
           )} 
         />
         <span className="flex-1 text-left truncate">{group.name}</span>
-      </div>
+        {isOpen
+          ? <ChevronDown size={11} className="flex-shrink-0 opacity-60" />
+          : <ChevronRight size={11} className="flex-shrink-0 opacity-60" />
+        }
+      </button>
       {isOpen && (
         <div className="ml-3 space-y-0.5 border-l border-[var(--sidebar-hover-bg)] pl-3">
           {group.items.map(item => (
