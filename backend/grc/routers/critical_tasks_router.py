@@ -14,11 +14,15 @@ from ..models import (
     CriticalTaskComment, CriticalTaskHistory, GRCUser, TenantUser,
     CriticalTaskTemplate, CriticalTaskApproval, NotificationPreference
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/critical-tasks", tags=["Critical Tasks"])
+router = APIRouter(
+    prefix="/critical-tasks",
+    tags=["Critical Tasks"],
+    dependencies=[Depends(require_tenant_permission("critical_tasks:tasks:view"))],
+)
 
 SORTABLE_COLUMNS = {"created_at", "updated_at", "title", "priority", "status", "due_date", "source", "category"}
 

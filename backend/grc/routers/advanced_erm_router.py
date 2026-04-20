@@ -22,9 +22,13 @@ from ..schemas import (
     AggregatedRiskView, ExecutiveDashboard, BoardReportData, DepartmentRiskSummary,
     ControlEffectivenessUpdate, MessageResponse
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 
-router = APIRouter(prefix="/advanced-erm", tags=["Advanced ERM"])
+router = APIRouter(
+    prefix="/advanced-erm",
+    tags=["Advanced ERM"],
+    dependencies=[Depends(require_tenant_permission("erm:risks:view"))],
+)
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:

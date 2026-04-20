@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from ...routers.auth_router import require_tenant_permission
 from .routers import (
     risks_router,
     kris_router,
@@ -17,7 +18,11 @@ from .routers import (
     advanced_analytics_router
 )
 
-router = APIRouter(prefix="/erm", tags=["ERM Module"])
+router = APIRouter(
+    prefix="/erm",
+    tags=["ERM Module"],
+    dependencies=[Depends(require_tenant_permission("erm:risks:view"))],
+)
 
 router.include_router(risks_router)
 router.include_router(kris_router)

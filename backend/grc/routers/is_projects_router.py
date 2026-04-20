@@ -15,14 +15,18 @@ from ..models import (
     ISProjectDependency, ISProjectHealthSnapshot,
     Evidence, GRCUser, get_db
 )
-from .auth_router import require_auth, get_user_primary_tenant
+from .auth_router import require_auth, get_user_primary_tenant, require_tenant_permission
 
 MILESTONE_EVIDENCE_DIR = "backend/uploads/is_project_milestone_evidence"
 os.makedirs(MILESTONE_EVIDENCE_DIR, exist_ok=True)
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/is-projects", tags=["IS Projects"])
+router = APIRouter(
+    prefix="/is-projects",
+    tags=["IS Projects"],
+    dependencies=[Depends(require_tenant_permission("is_projects:projects:view"))],
+)
 
 
 def safe_parse_date(val):
@@ -551,7 +555,7 @@ def get_health_trend(db: Session = Depends(get_db), current_user: GRCUser = Depe
     return {"trend": trend_data, "current": current}
 
 
-@router.post("")
+@router.post("", status_code=201)
 def create_project(
     data: dict,
     db: Session = Depends(get_db),

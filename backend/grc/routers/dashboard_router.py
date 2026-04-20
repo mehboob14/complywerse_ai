@@ -17,14 +17,18 @@ from ..models import (
     UploadedFramework, ParsedFrameworkControl, RiskIncident, RiskMitigationAction,
     RiskKRI, EvidenceAIAssessment, RiskControlLink
 )
-from .auth_router import require_auth, get_user_tenants
+from .auth_router import require_auth, get_user_tenants, require_tenant_permission
 
 logger = logging.getLogger(__name__)
 
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
-router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+router = APIRouter(
+    prefix="/dashboard",
+    tags=["Dashboard"],
+    dependencies=[Depends(require_tenant_permission("dashboard:overview:view"))],
+)
 
 
 def calculate_framework_compliance(framework_id: int, user_tenants: list, db: Session) -> dict:
@@ -225,6 +229,16 @@ def get_dashboard_stats(
         "compliance_overview": compliance_overview,
         "recent_activity": recent_activity
     }
+
+
+@router.get("/compliance")
+def get_dashboard_compliance_overview(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    stats_payload = get_dashboard_stats(tenant_id=tenant_id, db=db, current_user=current_user)
+    return {"compliance_overview": stats_payload.get("compliance_overview", [])}
 
 
 @router.get("/compliance/{framework_id}")
