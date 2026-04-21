@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rcsaApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ClipboardCheck,
   Search,
@@ -66,8 +67,8 @@ export default function RCSAAssessmentsPage() {
   const [campaignFilter, setCampaignFilter] = useState<string>('');
   const [businessUnitFilter, setBusinessUnitFilter] = useState<string>('');
   const queryClient = useQueryClient();
-
-  const { data: assessments, isLoading, error } = useQuery({
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('risks:rcsa:edit');
     queryKey: ['rcsa-assessments', statusFilter, campaignFilter, businessUnitFilter],
     queryFn: async () => {
       try {
@@ -130,14 +131,14 @@ export default function RCSAAssessmentsPage() {
     switch (assessment.status) {
       case 'not_started':
         return (
-          <button
+          {canEdit ? <button
             onClick={() => startMutation.mutate(assessment.id)}
             disabled={startMutation.isPending}
             className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30"
           >
             <Play className="h-3.5 w-3.5" />
             Start
-          </button>
+          </button> : null}
         );
       case 'in_progress':
         return (

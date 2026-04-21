@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { riskAssessmentApi, ermApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft, Save, Plus, Trash2, Loader2, AlertTriangle, Activity,
   AlertCircle, FileText, ChevronDown, ChevronUp, CheckCircle, XCircle,
@@ -107,6 +108,9 @@ export default function RiskAssessmentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('erm:risk_assessments:edit');
+  const canDelete = hasPermission('erm:risk_assessments:delete');
   const assessmentId = Number(params.id);
 
   const [expandedRisks, setExpandedRisks] = useState<Set<number>>(new Set());
@@ -383,7 +387,7 @@ export default function RiskAssessmentDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {isEditable && (
+          {isEditable && canEdit && (
             <button
               onClick={() => setShowEditModal(true)}
               className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
@@ -392,7 +396,7 @@ export default function RiskAssessmentDetailPage() {
               Edit
             </button>
           )}
-          {assessment.status === 'draft' && (
+          {assessment.status === 'draft' && canDelete && (
             <>
               <button
                 onClick={() => statusMutation.mutate('in_progress')}

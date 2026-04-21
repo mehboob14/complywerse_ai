@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Risk, RiskMitigationAction } from '@/types';
 import {
   Loader2,
@@ -60,6 +61,9 @@ interface MitigationActionFormData {
 }
 
 export default function MitigationActionsPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('erm:mitigation_actions:create');
+  const canDelete = hasPermission('erm:mitigation_actions:delete');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingAction, setEditingAction] = useState<RiskMitigationAction | null>(null);
   const [completingAction, setCompletingAction] = useState<RiskMitigationAction | null>(null);
@@ -244,6 +248,7 @@ export default function MitigationActionsPage() {
             ))}
           </select>
         </div>
+        {canCreate && (
         <button
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
@@ -251,6 +256,7 @@ export default function MitigationActionsPage() {
           <Plus className="h-4 w-4" />
           Add Action
         </button>
+        )}
       </div>
 
       {filteredActions && filteredActions.length > 0 ? (

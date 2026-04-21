@@ -32,6 +32,7 @@ const AssetTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{
 };
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi } from '@/lib/api';
 import { ITAsset, AssetType } from '@/types';
 import { 
@@ -133,6 +134,10 @@ const ASSET_SUB_COMPONENT_SUGGESTIONS: Record<AssetType, Record<string, string[]
 
 export default function AssetsPage() {
   const router = useRouter();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('assets:asset_inventory:create');
+  const canEdit = hasPermission('assets:asset_inventory:edit');
+  const canDelete = hasPermission('assets:asset_inventory:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [criticalityFilter, setCriticalityFilter] = useState<CriticalityFilter>('all');
@@ -514,13 +519,15 @@ export default function AssetsPage() {
             <Upload size={16} />
             Import
           </button>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="btn-primary"
-          >
-            <Plus size={18} />
-            Add Asset
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="btn-primary"
+            >
+              <Plus size={18} />
+              Add Asset
+            </button>
+          )}
         </div>
       </div>
 
@@ -597,20 +604,24 @@ export default function AssetsPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={(e) => handleEdit(e, asset)}
-                          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                          title="Edit"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDelete(e, asset.id)}
-                          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-red-600"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={(e) => handleEdit(e, asset)}
+                            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                            title="Edit"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={(e) => handleDelete(e, asset.id)}
+                            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-red-600"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                         {isExpanded ? (
                           <ChevronDown className="h-4 w-4 text-slate-500" />
                         ) : (

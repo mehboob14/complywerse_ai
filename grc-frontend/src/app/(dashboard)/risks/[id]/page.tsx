@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { risksApi, controlsApi, assetsApi, evidenceApi, governanceApi } from '@/lib/api';
 import { RiskCategory, RiskStatus, NormalizedControl, ITAsset, Evidence, GovernanceObjective } from '@/types';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
   ArrowLeft, Loader2, AlertCircle, AlertTriangle, Shield, 
   Target, TrendingDown, Calendar, User, FileText, Link as LinkIcon,
@@ -81,6 +82,10 @@ export default function RiskDetailPage() {
   const riskId = Number(params.id);
   const queryClient = useQueryClient();
   
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('risks:risk_register:edit');
+  const canDelete = hasPermission('risks:risk_register:delete');
+
   const [activeTab, setActiveTab] = useState<TabType>('details');
   const [isEditingTreatment, setIsEditingTreatment] = useState(false);
   const [treatmentPlan, setTreatmentPlan] = useState('');
@@ -339,12 +344,15 @@ export default function RiskDetailPage() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {canEdit && (
           <button
             className="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-slate-900 hover:bg-slate-200"
           >
             <Edit className="h-4 w-4" />
             Edit
           </button>
+          )}
+          {canEdit && (
           <button
             onClick={() => {
               setActiveTab('treatment');
@@ -355,6 +363,8 @@ export default function RiskDetailPage() {
             <Activity className="h-4 w-4" />
             Update Treatment
           </button>
+          )}
+          {canDelete && (
           <button
             onClick={() => setShowDeleteConfirm(true)}
             className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-red-700 hover:bg-red-100"
@@ -362,6 +372,7 @@ export default function RiskDetailPage() {
             <Trash2 className="h-4 w-4" />
             Delete
           </button>
+          )}
         </div>
       </div>
 
@@ -506,6 +517,8 @@ export default function RiskDetailPage() {
             onUnlinkControl={(linkId) => unlinkControlMutation.mutate(linkId)}
             onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
             isUnlinking={unlinkControlMutation.isPending || unlinkFrameworkControlMutation.isPending}
+            canEdit={canEdit}
+            canDelete={canDelete}
           />
         )}
         {activeTab === 'assets' && (
@@ -514,6 +527,8 @@ export default function RiskDetailPage() {
             onLinkAsset={() => setShowLinkAssetModal(true)}
             onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
             isUnlinking={unlinkAssetMutation.isPending}
+            canEdit={canEdit}
+            canDelete={canDelete}
           />
         )}
         {activeTab === 'evidence' && (
@@ -522,6 +537,8 @@ export default function RiskDetailPage() {
             onLinkEvidence={() => setShowLinkEvidenceModal(true)}
             onUnlinkEvidence={(linkId) => unlinkEvidenceMutation.mutate(linkId)}
             isUnlinking={unlinkEvidenceMutation.isPending}
+            canEdit={canEdit}
+            canDelete={canDelete}
           />
         )}
         {activeTab === 'governance' && (
@@ -530,6 +547,8 @@ export default function RiskDetailPage() {
             onLinkGovernance={() => setShowLinkGovernanceModal(true)}
             onUnlinkGovernance={(linkId) => unlinkGovernanceMutation.mutate(linkId)}
             isUnlinking={unlinkGovernanceMutation.isPending}
+            canEdit={canEdit}
+            canDelete={canDelete}
           />
         )}
       </div>
@@ -733,6 +752,8 @@ function ControlsTab({
   onUnlinkControl,
   onUnlinkFrameworkControl,
   isUnlinking,
+  canEdit,
+  canDelete,
 }: {
   risk: RiskDetailData;
   onLinkControl: () => void;
@@ -740,6 +761,8 @@ function ControlsTab({
   onUnlinkControl: (linkId: number) => void;
   onUnlinkFrameworkControl: (linkId: number) => void;
   isUnlinking: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   const getMitigationColor = (effectiveness?: string) => {
     const item = MITIGATION_EFFECTIVENESS.find(m => m.value === effectiveness);
@@ -754,6 +777,7 @@ function ControlsTab({
           Linked Controls
         </h3>
         <div className="flex gap-2">
+          {canEdit && (
           <button
             onClick={onLinkControl}
             className="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-900 hover:bg-slate-200"
@@ -761,6 +785,8 @@ function ControlsTab({
             <Plus className="h-4 w-4" />
             Link Normalized Control
           </button>
+          )}
+          {canEdit && (
           <button
             onClick={onLinkFrameworkControl}
             className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
@@ -768,6 +794,7 @@ function ControlsTab({
             <Plus className="h-4 w-4" />
             Link Framework Control
           </button>
+          )}
         </div>
       </div>
 
@@ -784,6 +811,7 @@ function ControlsTab({
                     <p className="text-slate-900">{control.name}</p>
                   </div>
                 </div>
+                {canDelete && (
                 <button
                   onClick={() => onUnlinkControl(control.id)}
                   disabled={isUnlinking}
@@ -791,6 +819,7 @@ function ControlsTab({
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
+                )}
               </div>
             ))}
           </div>
@@ -815,6 +844,7 @@ function ControlsTab({
                     )}
                   </div>
                 </div>
+                {canDelete && (
                 <button
                   onClick={() => onUnlinkFrameworkControl(control.id)}
                   disabled={isUnlinking}
@@ -822,6 +852,7 @@ function ControlsTab({
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
+                )}
               </div>
             ))}
           </div>
@@ -845,11 +876,15 @@ function AssetsTab({
   onLinkAsset,
   onUnlinkAsset,
   isUnlinking,
+  canEdit,
+  canDelete,
 }: {
   risk: RiskDetailData;
   onLinkAsset: () => void;
   onUnlinkAsset: (linkId: number) => void;
   isUnlinking: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -858,6 +893,7 @@ function AssetsTab({
           <Building2 className="h-5 w-5 text-primary-400" />
           Linked IT Assets ({risk.linked_assets?.length || 0})
         </h3>
+        {canEdit && (
         <button
           onClick={onLinkAsset}
           className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
@@ -865,6 +901,7 @@ function AssetsTab({
           <Plus className="h-4 w-4" />
           Link Asset
         </button>
+        )}
       </div>
 
       {risk.linked_assets && risk.linked_assets.length > 0 ? (
@@ -878,6 +915,7 @@ function AssetsTab({
                   <span className="text-sm text-slate-600">{asset.asset_type}</span>
                 </div>
               </div>
+              {canDelete && (
               <button
                 onClick={() => onUnlinkAsset(asset.id)}
                 disabled={isUnlinking}
@@ -885,6 +923,7 @@ function AssetsTab({
               >
                 <Trash2 className="h-4 w-4" />
               </button>
+              )}
             </div>
           ))}
         </div>
@@ -904,11 +943,15 @@ function EvidenceTab({
   onLinkEvidence,
   onUnlinkEvidence,
   isUnlinking,
+  canEdit,
+  canDelete,
 }: {
   risk: RiskDetailData;
   onLinkEvidence: () => void;
   onUnlinkEvidence: (linkId: number) => void;
   isUnlinking: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -926,6 +969,7 @@ function EvidenceTab({
           <FileText className="h-5 w-5 text-primary-400" />
           Linked Evidence ({risk.linked_evidence?.length || 0})
         </h3>
+        {canEdit && (
         <button
           onClick={onLinkEvidence}
           className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
@@ -933,6 +977,7 @@ function EvidenceTab({
           <Plus className="h-4 w-4" />
           Link Evidence
         </button>
+        )}
       </div>
 
       {risk.linked_evidence && risk.linked_evidence.length > 0 ? (
@@ -948,6 +993,7 @@ function EvidenceTab({
                   </span>
                 </div>
               </div>
+              {canDelete && (
               <button
                 onClick={() => onUnlinkEvidence(evidence.id)}
                 disabled={isUnlinking}
@@ -955,6 +1001,7 @@ function EvidenceTab({
               >
                 <Trash2 className="h-4 w-4" />
               </button>
+              )}
             </div>
           ))}
         </div>
@@ -974,11 +1021,15 @@ function GovernanceTab({
   onLinkGovernance,
   onUnlinkGovernance,
   isUnlinking,
+  canEdit,
+  canDelete,
 }: {
   risk: RiskDetailData;
   onLinkGovernance: () => void;
   onUnlinkGovernance: (linkId: number) => void;
   isUnlinking: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   const getImpactColor = (level?: string) => {
     const item = IMPACT_LEVELS.find(i => i.value === level);
@@ -992,6 +1043,7 @@ function GovernanceTab({
           <Target className="h-5 w-5 text-primary-400" />
           Linked Governance Objectives ({risk.linked_governance?.length || 0})
         </h3>
+        {canEdit && (
         <button
           onClick={onLinkGovernance}
           className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
@@ -999,6 +1051,7 @@ function GovernanceTab({
           <Plus className="h-4 w-4" />
           Link Objective
         </button>
+        )}
       </div>
 
       {risk.linked_governance && risk.linked_governance.length > 0 ? (
@@ -1014,6 +1067,7 @@ function GovernanceTab({
                   </span>
                 </div>
               </div>
+              {canDelete && (
               <button
                 onClick={() => onUnlinkGovernance(objective.id)}
                 disabled={isUnlinking}
@@ -1021,6 +1075,7 @@ function GovernanceTab({
               >
                 <Trash2 className="h-4 w-4" />
               </button>
+              )}
             </div>
           ))}
         </div>

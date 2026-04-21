@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { auditApi, apiClient } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Plus,
   Search,
@@ -89,6 +90,10 @@ export default function AuditUniversePage() {
   const [filterType, setFilterType] = useState('');
   const [filterRisk, setFilterRisk] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
+  const canDelete = hasPermission('audit:audit_management:delete');
   const [showModal, setShowModal] = useState(false);
   const [editingEntity, setEditingEntity] = useState<any>(null);
   const [form, setForm] = useState(defaultForm);
@@ -245,6 +250,7 @@ export default function AuditUniversePage() {
             <BarChart3 className="h-4 w-4" />
             Generate Audit Plan
           </button>
+          {canCreate && (
           <button
             onClick={openAddModal}
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
@@ -252,6 +258,7 @@ export default function AuditUniversePage() {
             <Plus className="h-4 w-4" />
             Add Entity
           </button>
+          )}
         </div>
       </div>
 
@@ -455,18 +462,22 @@ export default function AuditUniversePage() {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
+                        {canEdit && (
                         <button
                           onClick={() => openEditModal(entity)}
                           className="p-1.5 text-slate-600 hover:text-blue-400 rounded-lg hover:bg-slate-100 transition-colors"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
+                        )}
+                        {canDelete && (
                         <button
                           onClick={() => handleDelete(entity.id)}
                           className="p-1.5 text-slate-600 hover:text-red-400 rounded-lg hover:bg-slate-100 transition-colors"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { attestationApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ClipboardCheck,
   Plus,
@@ -52,6 +53,9 @@ const ATTESTATION_TYPES = [
 ];
 
 export default function AttestationCampaignsPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('governance:attestations:create');
+  const canDelete = hasPermission('governance:attestations:delete');
   const searchParams = useSearchParams();
   const showNewModal = searchParams.get('action') === 'new';
   
@@ -162,6 +166,7 @@ export default function AttestationCampaignsPage() {
             className="input pl-9 w-full"
           />
         </div>
+        {canCreate && (
         <button
           onClick={() => setIsModalOpen(true)}
           className="btn-primary flex items-center gap-2 whitespace-nowrap"
@@ -169,6 +174,7 @@ export default function AttestationCampaignsPage() {
           <Plus className="h-4 w-4" />
           New Campaign
         </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -296,10 +302,12 @@ export default function AttestationCampaignsPage() {
               ? 'No campaigns match your filters'
               : 'Create your first attestation campaign to get started'}
           </p>
+          {canCreate && (
           <button onClick={() => setIsModalOpen(true)} className="btn-primary">
             <Plus className="h-4 w-4 mr-2" />
             Create Campaign
           </button>
+          )}
         </div>
       )}
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
 import apiClient from '@/lib/api';
 import {
@@ -114,6 +115,9 @@ function getScoreBarColor(score: number | null): string {
 }
 
 export default function AssessmentsPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('compliance:assessments:create');
+  const canDelete = hasPermission('compliance:assessments:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -390,13 +394,15 @@ export default function AssessmentsPage() {
             <Clock className="h-4 w-4" />
             Pending Approvals
           </Link>
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
-          >
-            <Upload className="h-4 w-4" />
-            Upload Assessment
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
+            >
+              <Upload className="h-4 w-4" />
+              Upload Assessment
+            </button>
+          )}
         </div>
       </div>
 
@@ -608,13 +614,15 @@ export default function AssessmentsPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
-                          <button
-                            onClick={() => handleDeleteClick(assessment)}
-                            className="p-2 text-gray-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Delete Assessment"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          {canDelete && (
+                            <button
+                              onClick={() => handleDeleteClick(assessment)}
+                              className="p-2 text-gray-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Delete Assessment"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

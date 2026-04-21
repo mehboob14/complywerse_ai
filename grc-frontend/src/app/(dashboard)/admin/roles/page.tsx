@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PageHeader, DataTable } from '@/components/ui';
+import { PageHeader, DataTable, IfPermission } from '@/components/ui';
 import { adminApi, AdminRole, PermissionModule } from '@/lib/api';
 
 async function ensureTenantContext(): Promise<boolean> {
@@ -235,19 +235,23 @@ export default function RolesManagementPage() {
       header: 'Actions',
       accessor: (role: AdminRole) => (
         <div className="flex space-x-2">
-          <button
-            onClick={() => handleEdit(role)}
-            className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-black rounded text-sm"
-          >
-            {role.is_system_role ? 'View' : 'Edit'}
-          </button>
-          {!role.is_system_role && (
+          <IfPermission required={["admin:roles:edit", "admin:roles:view"]}>
             <button
-              onClick={() => handleDelete(role)}
-              className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-600 rounded text-sm"
+              onClick={() => handleEdit(role)}
+              className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-black rounded text-sm"
             >
-              Delete
+              {role.is_system_role ? 'View' : 'Edit'}
             </button>
+          </IfPermission>
+          {!role.is_system_role && (
+            <IfPermission required="admin:roles:delete">
+              <button
+                onClick={() => handleDelete(role)}
+                className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-600 rounded text-sm"
+              >
+                Delete
+              </button>
+            </IfPermission>
           )}
         </div>
       ),
@@ -279,12 +283,14 @@ export default function RolesManagementPage() {
       )}
 
       <div className="flex justify-end">
-        <button
-          onClick={handleCreate}
-          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors"
-        >
-          + Create Role
-        </button>
+        <IfPermission required="admin:roles:create">
+          <button
+            onClick={handleCreate}
+            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors"
+          >
+            + Create Role
+          </button>
+        </IfPermission>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import apiClient from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface ParsedControl {
   id: number;
@@ -143,8 +144,8 @@ export default function ParsedControlsPage() {
   });
   
   const queryClient = useQueryClient();
-
-  const { data: frameworksData } = useQuery({
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('frameworks:framework_upload:edit');
     queryKey: ['uploaded-frameworks-parsed'],
     queryFn: async () => {
       const response = await frameworkUploadApi.getFrameworks({ limit: 100 });
@@ -597,13 +598,13 @@ export default function ParsedControlsPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </button>
-                          <button
+                          {canEdit && <button
                             onClick={() => handleEditControl(control)}
                             className="rounded p-1 text-slate-600 transition-colors hover:bg-slate-600 hover:text-slate-900"
                             title="Edit"
                           >
                             <Edit2 className="h-4 w-4" />
-                          </button>
+                          </button>}
                           <button
                             onClick={() => handleVerifyControl(control)}
                             disabled={control.is_verified || verifyMutation.isPending}

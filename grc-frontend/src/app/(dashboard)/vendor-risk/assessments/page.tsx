@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vendorRiskApi, tenantApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileCheck,
   Loader2,
@@ -140,6 +141,8 @@ const STATUS_OPTIONS = ['draft', 'in_progress', 'reviewed', 'approved', 'complet
 export default function VendorAssessmentsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('vendor_risk:assessments:create');
   const [showModal, setShowModal] = useState(false);
   const [modalStep, setModalStep] = useState<'select_type' | 'details'>('select_type');
   const [searchTerm, setSearchTerm] = useState('');
@@ -264,13 +267,15 @@ export default function VendorAssessmentsPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Vendor Assessments</h1>
           <p className="text-sm text-gray-500 mt-1">Track and manage third-party risk assessments</p>
         </div>
-        <button
-          onClick={openModal}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Create Assessment
-        </button>
+        {canCreate && (
+          <button
+            onClick={openModal}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Create Assessment
+          </button>
+        )}
       </div>
 
       {/* Stat Cards */}

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ClipboardCheck, Loader2, Plus, Sparkles, ListTodo, ChevronRight, Trash2 } from 'lucide-react';
@@ -49,6 +50,9 @@ const STATUS_BADGES: Record<string, string> = {
 export default function FrameworkRiskAssessmentsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('erm:risk_assessments:create');
+  const canDelete = hasPermission('erm:risk_assessments:delete');
   const [activeTab, setActiveTab] = useState<'assessments' | 'assigned'>('assessments');
   const [frameworkId, setFrameworkId] = useState('');
   const [name, setName] = useState('');
@@ -241,20 +245,20 @@ export default function FrameworkRiskAssessmentsPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <button
+                          {canDelete && <button
                             type="button"
                             className="cw-btn-danger inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs"
                             disabled={deleteAssessmentMutation.isPending}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              if (confirm(`Delete assessment \"${assessment.name}\"? This will remove all generated questions and uploaded evidence.`)) {
+                              if (confirm(`Delete assessment "${assessment.name}"? This will remove all generated questions and uploaded evidence.`)) {
                                 deleteAssessmentMutation.mutate(assessment.id);
                               }
                             }}
                           >
                             <Trash2 size={13} /> Delete
-                          </button>
+                          </button>}
                           <span className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_BADGES[assessment.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
                             {assessment.status.replace(/_/g, ' ')}
                           </span>

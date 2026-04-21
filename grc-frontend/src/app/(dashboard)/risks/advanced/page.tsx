@@ -47,6 +47,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type TabType = 'kris' | 'incidents' | 'reviews' | 'dependencies' | 'reports';
 
@@ -148,6 +149,9 @@ function KRIsTab() {
   const [showMeasureModal, setShowMeasureModal] = useState<RiskKRI | null>(null);
   const [editingKRI, setEditingKRI] = useState<RiskKRI | null>(null);
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('risks:risk_register:create');
+  const canDelete = hasPermission('risks:risk_register:delete');
 
   const { data: kris, isLoading } = useQuery({
     queryKey: ['kris'],
@@ -213,13 +217,15 @@ function KRIsTab() {
             </div>
           )}
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
-        >
-          <Plus className="h-4 w-4" />
-          Add KRI
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+          >
+            <Plus className="h-4 w-4" />
+            Add KRI
+          </button>
+        )}
       </div>
 
       {kris && kris.length > 0 ? (
@@ -230,11 +236,11 @@ function KRIsTab() {
               kri={kri}
               onMeasure={() => setShowMeasureModal(kri)}
               onEdit={() => setEditingKRI(kri)}
-              onDelete={() => {
+              onDelete={canDelete ? () => {
                 if (confirm('Are you sure you want to delete this KRI?')) {
                   deleteMutation.mutate(kri.id);
                 }
-              }}
+              } : undefined}
             />
           ))}
         </div>
@@ -293,7 +299,7 @@ function KRICard({
   kri: RiskKRI;
   onMeasure: () => void;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 }) {
   const statusColor = KRI_STATUS_COLORS[kri.current_status || 'unknown'];
   const trend = kri.measurements && kri.measurements.length > 1
@@ -317,12 +323,14 @@ function KRICard({
           >
             <Edit2 className="h-4 w-4" />
           </button>
-          <button
-            onClick={onDelete}
-            className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -654,6 +662,9 @@ function IncidentsTab() {
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('risks:risk_register:create');
+  const canDelete = hasPermission('risks:risk_register:delete');
 
   const { data: incidents, isLoading } = useQuery({
     queryKey: ['incidents', severityFilter, statusFilter],
@@ -776,13 +787,15 @@ function IncidentsTab() {
             ))}
           </select>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
-        >
-          <Plus className="h-4 w-4" />
-          Log Incident
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+          >
+            <Plus className="h-4 w-4" />
+            Log Incident
+          </button>
+        )}
       </div>
 
       {incidents && incidents.length > 0 ? (
@@ -838,16 +851,18 @@ function IncidentsTab() {
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => {
-                            if (confirm('Delete this incident?')) {
-                              deleteMutation.mutate(incident.id);
-                            }
-                          }}
-                          className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => {
+                              if (confirm('Delete this incident?')) {
+                                deleteMutation.mutate(incident.id);
+                              }
+                            }}
+                            className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1087,6 +1102,8 @@ function ReviewsTab() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('risks:risk_register:create');
 
   const { data: reviews, isLoading } = useQuery({
     queryKey: ['reviews', statusFilter],
@@ -1176,13 +1193,15 @@ function ReviewsTab() {
           <option value="completed">Completed</option>
           <option value="overdue">Overdue</option>
         </select>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
-        >
-          <Plus className="h-4 w-4" />
-          Schedule Review
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+          >
+            <Plus className="h-4 w-4" />
+            Schedule Review
+          </button>
+        )}
       </div>
 
       {reviews && reviews.length > 0 ? (
@@ -1403,6 +1422,9 @@ function DependenciesTab() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedRisk, setSelectedRisk] = useState<number | null>(null);
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('risks:risk_register:create');
+  const canDelete = hasPermission('risks:risk_register:delete');
 
   const { data: dependencies, isLoading } = useQuery({
     queryKey: ['dependencies'],
@@ -1463,13 +1485,15 @@ function DependenciesTab() {
             ))}
           </select>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
-        >
-          <Plus className="h-4 w-4" />
-          Add Dependency
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+          >
+            <Plus className="h-4 w-4" />
+            Add Dependency
+          </button>
+        )}
       </div>
 
       {cascadeAnalysis && (
@@ -1521,16 +1545,18 @@ function DependenciesTab() {
                     <p className="text-sm text-slate-600">Strength</p>
                     <p className="font-medium text-slate-900">{dep.strength}/5</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (confirm('Delete this dependency?')) {
-                        deleteMutation.mutate(dep.id);
-                      }
-                    }}
-                    className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {canDelete && (
+                    <button
+                      onClick={() => {
+                        if (confirm('Delete this dependency?')) {
+                          deleteMutation.mutate(dep.id);
+                        }
+                      }}
+                      className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             );

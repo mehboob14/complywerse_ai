@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Bell,
   Plus,
@@ -92,6 +93,10 @@ const defaultForm = {
 
 export default function AuditNotificationsPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
+  const canDelete = hasPermission('audit:audit_management:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -204,12 +209,12 @@ export default function AuditNotificationsPage() {
               Load Defaults
             </button>
           )}
-          <button
+          {canCreate && <button
             onClick={openCreate}
             className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
           >
             <Plus className="h-4 w-4" /> New Template
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -266,18 +271,18 @@ export default function AuditNotificationsPage() {
                     >
                       {template.is_active ? <ToggleRight className="h-4 w-4 text-blue-500" /> : <ToggleLeft className="h-4 w-4" />}
                     </button>
-                    <button
+                    {canEdit && <button
                       onClick={() => openEdit(template)}
                       className="p-1.5 text-slate-400 hover:text-blue-500 rounded-lg hover:bg-slate-50 transition-colors"
                     >
                       <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
+                    </button>}
+                    {canDelete && <button
                       onClick={() => { if (confirm('Delete this template?')) deleteMutation.mutate(template.id); }}
                       className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-50 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </button>}
                   </div>
                 </div>
                 <h3 className="text-sm font-semibold text-slate-900 mb-1">{template.name}</h3>

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { policyExceptionApi, governanceApi, documentsApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Shield,
   Plus,
@@ -112,6 +113,9 @@ function formatDate(dateStr: string | null | undefined) {
 }
 
 export default function PolicyExceptionsPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('governance:policy_exceptions:create');
+  const canDelete = hasPermission('governance:policy_exceptions:delete');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -519,6 +523,7 @@ export default function PolicyExceptionsPage() {
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+        {canCreate && (
         <button
           onClick={() => { resetForm(); setShowCreateModal(true); }}
           className="btn-primary ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs"
@@ -526,6 +531,7 @@ export default function PolicyExceptionsPage() {
           <Plus className="h-3.5 w-3.5" />
           New Exception
         </button>
+        )}
       </div>
 
       <div className="table-container">

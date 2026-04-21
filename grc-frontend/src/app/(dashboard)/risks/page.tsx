@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { risksApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
 import { 
   AlertTriangle, 
@@ -72,6 +73,9 @@ const getHeatmapCellColor = (likelihood: number, impact: number) => {
 };
 
 export default function RisksPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('risks:risk_register:create');
+  const canDelete = hasPermission('risks:risk_register:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RiskStatus | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<RiskCategory | 'all'>('all');
@@ -320,6 +324,7 @@ export default function RisksPage() {
             <Download size={18} />
             Template
           </a>
+          {canCreate && (
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
@@ -332,6 +337,8 @@ export default function RisksPage() {
             )}
             Upload Register
           </button>
+          )}
+          {canCreate && (
           <button
             onClick={() => {
               setEditingRisk(null);
@@ -342,6 +349,7 @@ export default function RisksPage() {
             <Plus size={18} />
             Add Risk
           </button>
+          )}
         </div>
       </div>
 

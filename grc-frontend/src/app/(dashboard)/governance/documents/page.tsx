@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -199,6 +200,10 @@ type SortOrder = 'asc' | 'desc';
 
 export default function GovernanceDocumentsPage() {
   const router = useRouter();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('governance:policies:create');
+  const canEdit = hasPermission('governance:policies:edit');
+  const canDelete = hasPermission('governance:policies:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -498,27 +503,33 @@ export default function GovernanceDocumentsPage() {
           <p className="page-description">Manage governance documents, policies, and procedures</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setIsAIDraftModalOpen(true)}
-            className="cw-btn-secondary flex items-center gap-2 whitespace-nowrap"
-          >
-            <Wand2 size={18} />
-            AI Draft Document
-          </button>
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="cw-btn-secondary flex items-center gap-2 whitespace-nowrap"
-          >
-            <Upload size={18} />
-            New Document with File
-          </button>
-          <button
-            onClick={handleCreate}
-            className="cw-btn-primary flex items-center gap-2 whitespace-nowrap"
-          >
-            <Plus size={18} />
-            New Document
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => setIsAIDraftModalOpen(true)}
+              className="cw-btn-secondary flex items-center gap-2 whitespace-nowrap"
+            >
+              <Wand2 size={18} />
+              AI Draft Document
+            </button>
+          )}
+          {canCreate && (
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="cw-btn-secondary flex items-center gap-2 whitespace-nowrap"
+            >
+              <Upload size={18} />
+              New Document with File
+            </button>
+          )}
+          {canCreate && (
+            <button
+              onClick={handleCreate}
+              className="cw-btn-primary flex items-center gap-2 whitespace-nowrap"
+            >
+              <Plus size={18} />
+              New Document
+            </button>
+          )}
         </div>
       </div>
 
@@ -614,13 +625,15 @@ export default function GovernanceDocumentsPage() {
               <FileText className="h-12 w-12 cw-text-muted" />
             </div>
             <p className="empty-state-title">No documents found</p>
-            <button
-              onClick={handleCreate}
-              className="cw-btn-primary flex items-center gap-2"
-            >
-              <Plus size={18} />
-              Create First Document
-            </button>
+            {canCreate && (
+              <button
+                onClick={handleCreate}
+                className="cw-btn-primary flex items-center gap-2"
+              >
+                <Plus size={18} />
+                Create First Document
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -675,13 +688,15 @@ export default function GovernanceDocumentsPage() {
                       >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button
-                        onClick={() => handleEdit(doc)}
-                        className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-                        title="Edit"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
+                      {canEdit && (
+                        <button
+                          onClick={() => handleEdit(doc)}
+                          className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
+                          title="Edit"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      )}
                       {doc.file_name ? (
                         <>
                           <button
@@ -743,14 +758,16 @@ export default function GovernanceDocumentsPage() {
                           <Send className="h-4 w-4" />
                         </button>
                       )}
-                      <button
-                        onClick={() => handleDelete(doc)}
-                        className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-colors"
-                        title="Delete"
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {canDelete && (
+                        <button
+                          onClick={() => handleDelete(doc)}
+                          className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-colors"
+                          title="Delete"
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -829,13 +846,15 @@ export default function GovernanceDocumentsPage() {
                             >
                               <Eye className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={() => handleEdit(doc)}
-                              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-                              title="Edit"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </button>
+                            {canEdit && (
+                              <button
+                                onClick={() => handleEdit(doc)}
+                                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
+                                title="Edit"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                            )}
                             {doc.file_name ? (
                               <>
                                 <button
@@ -897,14 +916,16 @@ export default function GovernanceDocumentsPage() {
                                 <Send className="h-4 w-4" />
                               </button>
                             )}
-                            <button
-                              onClick={() => handleDelete(doc)}
-                              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-colors"
-                              title="Delete"
-                              disabled={deleteMutation.isPending}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {canDelete && (
+                              <button
+                                onClick={() => handleDelete(doc)}
+                                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-colors"
+                                title="Delete"
+                                disabled={deleteMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

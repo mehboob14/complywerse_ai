@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { usePermissions } from '@/hooks/usePermissions';
 import { isProjectsApi } from '@/lib/api';
 import PageHeader from '@/components/ui/PageHeader';
 import {
@@ -92,6 +93,9 @@ interface ISProject {
 export default function ISProjectsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('is_projects:projects:create');
+  const canDelete = hasPermission('is_projects:projects:delete');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -187,14 +191,14 @@ export default function ISProjectsPage() {
             title="IS Projects"
             subtitle="Track and manage information security projects across the organization"
             icon={FolderKanban}
-            actions={(
+            actions={canCreate ? (
               <button
                 onClick={() => setShowCreateModal(true)}
                 className="cw-btn-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
               >
                 <Plus size={16} /> New Project
               </button>
-            )}
+            ) : undefined}
           />
 
       <div className="cw-card p-4">

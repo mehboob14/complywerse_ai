@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
+import { usePermissions } from '@/hooks/usePermissions';
 import apiClient from '@/lib/api';
 import { certificationsApi } from '@/lib/api';
 import { 
@@ -70,6 +71,9 @@ export default function AuditorPortalPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canApprove = hasPermission('auditor_portal:evidence_review:approve');
+  const canReject = hasPermission('auditor_portal:evidence_review:reject');
   const frameworkId = params.frameworkId as string;
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<string>(frameworkId);
 
@@ -449,7 +453,7 @@ export default function AuditorPortalPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => handleReview('approved')}
-                  disabled={reviewMutation.isPending}
+                  disabled={reviewMutation.isPending || !canApprove}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                 >
                   {reviewMutation.isPending ? (
@@ -463,7 +467,7 @@ export default function AuditorPortalPage() {
                 </button>
                 <button
                   onClick={() => handleReview('rejected')}
-                  disabled={reviewMutation.isPending}
+                  disabled={reviewMutation.isPending || !canReject}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 font-medium text-white hover:bg-rose-700 disabled:opacity-50 transition-colors"
                 >
                   {reviewMutation.isPending ? (

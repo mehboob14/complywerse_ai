@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
 import { criticalTasksApi } from '@/lib/api';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
@@ -100,6 +101,9 @@ const SOURCE_MODULES = ['Audit Findings', 'Risk Register', 'Compliance Assessmen
 
 export default function TaskBoardPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('critical_tasks:tasks:create');
+  const canDelete = hasPermission('critical_tasks:tasks:delete');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = useState(false);
@@ -333,10 +337,12 @@ export default function TaskBoardPage() {
             className="cw-btn-secondary flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium">
             <Copy size={14} /> From Template
           </button>
-          <button onClick={() => setShowCreate(true)}
-            className="cw-btn-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium">
-            <Plus size={16} /> New Task
-          </button>
+          {canCreate && (
+            <button onClick={() => setShowCreate(true)}
+              className="cw-btn-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium">
+              <Plus size={16} /> New Task
+            </button>
+          )}
         </div>
       </div>
 

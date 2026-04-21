@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Plus,
   X,
@@ -63,6 +64,9 @@ const CCCE_BORDERS: Record<string, string> = {
 };
 
 export default function AuditFindingsPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
   const router = useRouter();
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -460,6 +464,7 @@ export default function AuditFindingsPage() {
             <Layers className="w-4 h-4" />
             {groupByEngagement ? 'Grouped View' : 'Group by Engagement'}
           </button>
+          {canCreate && (
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
@@ -467,6 +472,7 @@ export default function AuditFindingsPage() {
             <Plus className="w-4 h-4" />
             Create Finding
           </button>
+          )}
         </div>
       </div>
 
@@ -902,12 +908,14 @@ export default function AuditFindingsPage() {
                       >
                         View Details <ChevronRight className="w-3 h-3" />
                       </button>
+                      {canEdit && (
                       <button
                         onClick={(e) => { e.stopPropagation(); openEditFinding(finding); }}
                         className="p-1 text-slate-600 hover:text-blue-400 transition-colors"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
+                      )}
                       <span className="text-slate-600">
                         {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                       </span>

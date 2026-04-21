@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   RiskKRI,
   RiskKRICreate,
@@ -39,6 +40,10 @@ export default function KRIsPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<{ message: string; created: number; skipped: number; errors: string[] } | null>(null);
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('erm:kris:create');
+  const canEdit = hasPermission('erm:kris:edit');
+  const canDelete = hasPermission('erm:kris:delete');
 
   const { data: kris, isLoading } = useQuery({
     queryKey: ['erm-kris'],
@@ -126,20 +131,24 @@ export default function KRIsPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => { setShowUploadModal(true); setUploadResult(null); setUploadFile(null); }}
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm text-slate-900 hover:bg-slate-200"
-          >
-            <Upload className="h-4 w-4" />
-            Upload KRIs
-          </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
-          >
-            <Plus className="h-4 w-4" />
-            Add KRI
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => { setShowUploadModal(true); setUploadResult(null); setUploadFile(null); }}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm text-slate-900 hover:bg-slate-200"
+            >
+              <Upload className="h-4 w-4" />
+              Upload KRIs
+            </button>
+          )}
+          {canCreate && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+            >
+              <Plus className="h-4 w-4" />
+              Add KRI
+            </button>
+          )}
         </div>
       </div>
 
@@ -156,6 +165,8 @@ export default function KRIsPage() {
                   deleteMutation.mutate(kri.id);
                 }
               }}
+              canEdit={canEdit}
+              canDelete={canDelete}
             />
           ))}
         </div>
@@ -299,11 +310,15 @@ function KRICard({
   onMeasure,
   onEdit,
   onDelete,
+  canEdit,
+  canDelete,
 }: {
   kri: RiskKRI;
   onMeasure: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
   const statusColor = KRI_STATUS_COLORS[kri.current_status || 'unknown'];
   const trend = kri.measurements && kri.measurements.length > 1
@@ -321,18 +336,22 @@ function KRICard({
           </div>
         </div>
         <div className="flex gap-1">
-          <button
-            onClick={onEdit}
-            className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-          >
-            <Edit2 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {canEdit && (
+            <button
+              onClick={onEdit}
+              className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            >
+              <Edit2 className="h-4 w-4" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={onDelete}
+              className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 

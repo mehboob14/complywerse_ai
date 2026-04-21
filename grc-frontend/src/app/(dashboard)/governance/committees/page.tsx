@@ -18,6 +18,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Committee {
   id: number;
@@ -66,6 +67,9 @@ const FREQUENCY_OPTIONS = [
 ];
 
 export default function CommitteesPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('governance:committees:create');
+  const canDelete = hasPermission('governance:committees:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -255,10 +259,12 @@ export default function CommitteesPage() {
             <CheckSquare className="h-4 w-4" />
             View All Actions
           </Link>
+          {canCreate && (
           <button onClick={() => setIsModalOpen(true)} className="btn-primary flex items-center gap-2">
             <Plus className="h-4 w-4" />
             New Committee
           </button>
+          )}
         </div>
       </div>
 
@@ -280,6 +286,7 @@ export default function CommitteesPage() {
                     </span>
                   </div>
                 </div>
+                {canDelete && (
                 <button
                   onClick={() => deleteMutation.mutate(committee.id)}
                   className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors"
@@ -287,6 +294,7 @@ export default function CommitteesPage() {
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
+                )}
               </div>
 
               <p className="text-slate-600 text-sm mb-4 line-clamp-2">
@@ -336,10 +344,12 @@ export default function CommitteesPage() {
         <div className="text-center py-12">
           <Users className="h-12 w-12 text-slate-400 mx-auto mb-4" />
           <p className="text-slate-600">No committees found</p>
+          {canCreate && (
           <button onClick={() => setIsModalOpen(true)} className="btn-primary mt-4 inline-flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Create First Committee
           </button>
+          )}
         </div>
       )}
 

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { riskAssessmentApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ClipboardCheck,
   Plus,
@@ -75,6 +76,9 @@ interface Assessment {
 
 export default function RiskAssessmentsPage() {
   const router = useRouter();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('risks:risk_assessment:create');
+  const canDelete = hasPermission('risks:risk_assessment:delete');
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<AssessmentStatus | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -266,6 +270,7 @@ export default function RiskAssessmentsPage() {
             <ClipboardCheck size={18} />
             Framework Risk Assessment
           </Link>
+          {canCreate && (
           <button
             onClick={() => {
               resetUploadForm();
@@ -276,6 +281,8 @@ export default function RiskAssessmentsPage() {
             <Upload size={18} />
             Upload Risk Assessment
           </button>
+          )}
+          {canCreate && (
           <button
             onClick={() => {
               resetForm();
@@ -286,6 +293,7 @@ export default function RiskAssessmentsPage() {
             <Plus size={18} />
             New Assessment
           </button>
+          )}
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { rcsaApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ClipboardList,
   Plus,
@@ -70,6 +71,8 @@ export default function RCSACampaignsPage() {
   const [periodFilter, setPeriodFilter] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(showNewModal);
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('risks:rcsa:create');
 
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ['rcsa-campaigns', statusFilter, periodFilter],
@@ -158,6 +161,7 @@ export default function RCSACampaignsPage() {
             <h1 className="text-2xl font-semibold text-slate-900">RCSA Campaigns</h1>
             <p className="text-slate-600 mt-1">Manage Risk & Control Self-Assessment campaigns</p>
           </div>
+          {canCreate && (
           <button
             onClick={() => setIsModalOpen(true)}
             className="btn-primary flex items-center gap-2"
@@ -165,6 +169,7 @@ export default function RCSACampaignsPage() {
             <Plus className="h-4 w-4" />
             New Campaign
           </button>
+          )}
         </div>
       </div>
 

@@ -6,6 +6,7 @@ import {
   ClipboardList,
   History,
   Loader2,
+  Lock,
   Play,
   Plus,
   Save,
@@ -17,6 +18,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { WorkflowDefinition } from './types';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type Props = {
   definitions: WorkflowDefinition[];
@@ -25,6 +27,7 @@ type Props = {
   name: string;
   isActive: boolean;
   saving: boolean;
+  locked?: boolean;
   onSelectDefinition: (id: number | null) => void;
   onNameChange: (name: string) => void;
   onToggleActive: () => void;
@@ -47,6 +50,7 @@ export function TopToolbar({
   name,
   isActive,
   saving,
+  locked = false,
   onSelectDefinition,
   onNameChange,
   onToggleActive,
@@ -61,6 +65,10 @@ export function TopToolbar({
   onZoomIn,
   onZoomOut,
 }: Props) {
+  const { hasPermission } = usePermissions();
+  const canCreate = !locked && hasPermission('workflows:workflow_management:create');
+  const canEdit   = !locked && hasPermission('workflows:workflow_management:edit');
+  const canDelete = !locked && hasPermission('workflows:workflow_management:delete');
   return (
     <div className="flex items-center gap-2 px-3 py-2 bg-white border-b border-gray-200 h-12 shrink-0">
       {/* Workflow selector */}
@@ -70,20 +78,20 @@ export function TopToolbar({
           value={selectedId ?? ''}
           onChange={(e) => onSelectDefinition(e.target.value ? Number(e.target.value) : null)}
         >
-          <option value="">— New Workflow —</option>
+          {!locked && <option value="">— New Workflow —</option>}
           {definitions.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
             </option>
           ))}
         </select>
-        <button
+        {canCreate && !locked && <button
           onClick={onNewWorkflow}
           className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 transition-colors"
           title="New workflow"
         >
           <Plus size={14} />
-        </button>
+        </button>}
       </div>
 
       <div className="w-px h-5 bg-gray-200 shrink-0" />
@@ -133,7 +141,17 @@ export function TopToolbar({
         <span className="hidden sm:inline">History</span>
       </button>
 
-      {/* AI button */}
+      {/* AI button — locked state */}
+      {locked ? (
+        <button
+          disabled
+          title="AI generation is locked. Contact support to unlock."
+          className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-gray-200 bg-gray-50 text-gray-400 font-semibold cursor-not-allowed"
+        >
+          <Lock size={11} />
+          <span className="hidden sm:inline">AI</span>
+        </button>
+      ) : (
       <button
         onClick={onShowAI}
         className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold transition-colors"
@@ -142,6 +160,7 @@ export function TopToolbar({
         <Sparkles size={13} />
         <span className="hidden sm:inline">AI</span>
       </button>
+      )}
 
       <div className="w-px h-5 bg-gray-200 shrink-0" />
 
@@ -182,24 +201,30 @@ export function TopToolbar({
             <span className="hidden sm:inline">Test Run</span>
           </button>
 
-          <button
+          {canDelete && <button
             onClick={onDelete}
             className="p-1.5 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
             title="Delete workflow"
           >
             <Trash2 size={14} />
-          </button>
+          </button>}
         </>
       )}
 
-      <button
-        onClick={onSave}
-        disabled={saving}
+      {(canCreate || canEdit) && <button
+        onClick={() => {
+          if (locked) {
+            alert('Workflow creation is locked. Please contact support to enable this feature.');
+            return;
+          }
+          onSave();
+        }}
+        disabled={saving || locked}
         className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors disabled:opacity-60"
       >
-        {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+        {saving ? <Loader2 size={13} className="animate-spin" /> : locked ? <Lock size={13} /> : <Save size={13} />}
         {selectedId ? 'Update' : 'Create'}
-      </button>
+      </button>}
     </div>
   );
 }

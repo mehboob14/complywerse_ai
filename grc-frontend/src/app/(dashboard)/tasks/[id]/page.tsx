@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { criticalTasksApi } from '@/lib/api';
 import { apiClient } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
 import {
   ArrowLeft, CheckCircle2, Plus, X,
@@ -140,6 +141,9 @@ export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('tasks:task_management:edit');
+  const canDelete = hasPermission('tasks:task_management:delete');
   const taskId = Number(params.id);
 
   const [activeTab, setActiveTab] = useState<'details' | 'subtasks' | 'comments' | 'evidence' | 'history'>('details');
@@ -338,13 +342,13 @@ export default function TaskDetailPage() {
             className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-100 disabled:opacity-50">
             {aiLoading === 'description' ? <Loader2 className="animate-spin" size={14} /> : <FileText size={14} />} AI Description
           </button>
-          <button onClick={startEdit} className="cw-btn-secondary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
+          {canEdit && <button onClick={startEdit} className="cw-btn-secondary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
             <Pencil size={14} /> Edit
-          </button>
-          <button onClick={() => { if (confirm('Delete this task?')) deleteMutation.mutate(); }}
+          </button>}
+          {canDelete && <button onClick={() => { if (confirm('Delete this task?')) deleteMutation.mutate(); }}
             className="cw-btn-danger flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
             <Trash2 size={14} /> Delete
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -526,9 +530,9 @@ export default function TaskDetailPage() {
                   </span>
                   {st.assigned_owner && <span className="text-xs text-[var(--color-muted)]">{st.assigned_owner.display_name || st.assigned_owner.username}</span>}
                   {st.due_date && <span className="text-xs text-[var(--color-muted)]">{new Date(st.due_date).toLocaleDateString()}</span>}
-                  <button onClick={() => subTaskDeleteMutation.mutate(st.id)} className="text-[var(--color-muted)] hover:text-red-600">
+                  {canDelete && <button onClick={() => subTaskDeleteMutation.mutate(st.id)} className="text-[var(--color-muted)] hover:text-red-600">
                     <Trash2 size={14} />
-                  </button>
+                  </button>}
                 </div>
               ))}
             </div>

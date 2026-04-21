@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient, { frameworksApi, controlsApi, frameworkUploadApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
   ArrowLeft, Loader2, AlertCircle, Shield, Calendar, Tag,
   Edit2, Sparkles, Trash2, Plus, X, Search, Layers, GitMerge,
@@ -154,6 +155,8 @@ const SOURCE_STYLES: Record<string, { bg: string; text: string }> = {
 export default function ControlGroupDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('controls:control_library:edit');
   const groupId = Number(params.id);
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>('controls');
@@ -362,6 +365,7 @@ export default function ControlGroupDetailPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {canEdit && (
           <button
             onClick={() => setShowEditModal(true)}
             className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-black hover:bg-gray-200"
@@ -369,6 +373,7 @@ export default function ControlGroupDetailPage() {
             <Edit2 className="h-4 w-4" />
             Edit
           </button>
+          )}
           <button
             onClick={() => populateFromFrameworksMutation.mutate()}
             disabled={populateFromFrameworksMutation.isPending}

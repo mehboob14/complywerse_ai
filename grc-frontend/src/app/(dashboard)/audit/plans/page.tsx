@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Plus,
   Sparkles,
@@ -64,6 +65,10 @@ const ITEM_STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AuditPlansPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
+  const canDelete = hasPermission('audit:audit_management:delete');
   const router = useRouter();
   const [expandedPlan, setExpandedPlan] = useState<number | null>(null);
   const [filterYear, setFilterYear] = useState('');
@@ -248,6 +253,7 @@ export default function AuditPlansPage() {
             <Globe className="h-4 w-4" />
             From Universe
           </button>
+          {canCreate && (
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
@@ -255,6 +261,7 @@ export default function AuditPlansPage() {
             <Plus className="h-4 w-4" />
             Create Plan
           </button>
+          )}
           <button
             onClick={() => setShowAIModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors"
@@ -343,6 +350,7 @@ export default function AuditPlansPage() {
                               AI Generated
                             </span>
                           )}
+                          {canEdit && (
                           <button
                             onClick={(e) => { e.stopPropagation(); openEditPlan(plan); }}
                             className="p-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors"
@@ -350,6 +358,8 @@ export default function AuditPlansPage() {
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
+                          )}
+                          {canDelete && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -363,6 +373,7 @@ export default function AuditPlansPage() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
+                          )}
                         </div>
                         {plan.description && (
                           <p className="text-sm text-slate-600 mt-1 line-clamp-2">{plan.description}</p>

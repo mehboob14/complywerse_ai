@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Plus,
   X,
@@ -106,6 +107,10 @@ const emptyRuleForm = {
 export default function CCMPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'rules' | 'anomalies'>('rules');
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
+  const canDelete = hasPermission('audit:audit_management:delete');
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [editingRule, setEditingRule] = useState<CCMRule | null>(null);
   const [ruleForm, setRuleForm] = useState(emptyRuleForm);
@@ -298,6 +303,7 @@ export default function CCMPage() {
             <Sparkles className="w-4 h-4" />
             {aiLoading ? 'Analyzing...' : 'Get AI Insights'}
           </button>
+          {canCreate && (
           <button
             onClick={openAddRule}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -305,6 +311,7 @@ export default function CCMPage() {
             <Plus className="w-4 h-4" />
             Add Rule
           </button>
+          )}
         </div>
       </div>
 
@@ -480,12 +487,15 @@ export default function CCMPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
+                          {canEdit && (
                           <button
                             onClick={() => openEditRule(rule)}
                             className="p-1.5 text-slate-600 hover:text-blue-400 hover:bg-slate-100 rounded transition-colors"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
+                          )}
+                          {canDelete && (
                           <button
                             onClick={() => {
                               if (confirm('Delete this rule?')) deleteRuleMutation.mutate(rule.id);
@@ -494,6 +504,7 @@ export default function CCMPage() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
+                          )}
                         </div>
                       </td>
                     </tr>

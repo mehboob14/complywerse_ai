@@ -126,6 +126,7 @@ export default function Header() {
       console.error('Logout failed:', error);
     }
     localStorage.clear();
+    sessionStorage.clear(); // Clear permission cache so next user gets fresh permissions
     setIsUserMenuOpen(false);
     router.push('/login');
     router.refresh();

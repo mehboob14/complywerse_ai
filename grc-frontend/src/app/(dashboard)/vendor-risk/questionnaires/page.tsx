@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vendorRiskApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ClipboardList,
   Loader2,
@@ -137,6 +138,9 @@ const DEFAULT_QUESTIONS: Record<string, Question[]> = {
 
 export default function VendorQuestionnairesPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('vendor_risk:questionnaires:create');
+  const canDelete = hasPermission('vendor_risk:questionnaires:delete');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState<QuestionnaireTemplate | null>(null);
@@ -329,13 +333,15 @@ export default function VendorQuestionnairesPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Questionnaire Templates</h1>
           <p className="text-sm text-gray-500 mt-1">Create and manage vendor assessment questionnaires with evidence requirements</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Create Template
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Create Template
+          </button>
+        )}
       </div>
 
       {/* Search */}
@@ -384,14 +390,16 @@ export default function VendorQuestionnairesPage() {
                     >
                       <Eye className="h-4 w-4" />
                     </button>
-                    <button
-                      onClick={() => {
-                        if (confirm('Delete this template?')) deleteMutation.mutate(template.id);
-                      }}
-                      className="p-1.5 text-gray-400 hover:text-red-600 rounded"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => {
+                          if (confirm('Delete this template?')) deleteMutation.mutate(template.id);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-600 rounded"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 {template.description && (

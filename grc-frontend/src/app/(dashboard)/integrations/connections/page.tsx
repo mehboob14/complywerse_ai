@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { integrationsApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Server,
   Plus,
@@ -70,6 +71,9 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function ConnectionsPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('integrations:connections:create');
+  const canDelete = hasPermission('integrations:connections:delete');
 
   const [showCreate, setShowCreate] = useState(false);
   const [selectedType, setSelectedType] = useState('nexpose');
@@ -164,12 +168,14 @@ export default function ConnectionsPage() {
 
       {/* Action bar */}
       <div className="flex justify-end">
-        <button
-          onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={16} /> Add Connection
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} /> Add Connection
+          </button>
+        )}
       </div>
 
       {/* Add Connection slide-over */}
@@ -482,17 +488,19 @@ export default function ConnectionsPage() {
                     >
                       <Clock size={13} /> History
                     </button>
-                    <button
-                      onClick={() => {
-                        if (confirm('Deactivate this connection? Data will be preserved.')) {
-                          deleteMutation.mutate(conn.id);
-                        }
-                      }}
-                      disabled={!conn.is_active}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50"
-                    >
-                      <Trash2 size={13} /> Deactivate
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => {
+                          if (confirm('Deactivate this connection? Data will be preserved.')) {
+                            deleteMutation.mutate(conn.id);
+                          }
+                        }}
+                        disabled={!conn.is_active}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50"
+                      >
+                        <Trash2 size={13} /> Deactivate
+                      </button>
+                    )}
 
                     {conn.last_sync_at && (
                       <span className="text-xs text-slate-400 ml-auto">

@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
 import apiClient, { frameworksApi } from '@/lib/api';
 import {
   Library,
@@ -88,6 +89,10 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; icon: typeof Che
 
 export default function ControlLibraryPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('controls:control_library:create');
+  const canEdit = hasPermission('controls:control_library:edit');
+  const canDelete = hasPermission('controls:control_library:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [domainFilter, setDomainFilter] = useState('');
@@ -312,13 +317,15 @@ export default function ControlLibraryPage() {
           <p className="text-sm text-gray-600">AI-powered control mapping across frameworks</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
-          >
-            <Plus size={18} />
-            Create Group
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
+            >
+              <Plus size={18} />
+              Create Group
+            </button>
+          )}
           <button
             onClick={() => {
               setAutoGroupResult(null);
@@ -520,13 +527,15 @@ export default function ControlLibraryPage() {
           <h3 className="text-lg font-medium text-black">No control groups found</h3>
           <p className="mt-1 text-gray-600">Create your first control group or use AI auto-grouping</p>
           <div className="mt-4 flex gap-3">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
-            >
-              <Plus size={16} />
-              Create Group
-            </button>
+            {canCreate && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
+              >
+                <Plus size={16} />
+                Create Group
+              </button>
+            )}
             <button
               onClick={() => setShowAutoGroupModal(true)}
               className="flex items-center gap-2 rounded-lg border border-primary-500 px-4 py-2 font-medium text-blue-600 hover:bg-primary-500/10"
@@ -603,13 +612,15 @@ export default function ControlLibraryPage() {
                       >
                         <Eye size={14} />
                       </Link>
-                      <button
-                        title="Edit"
-                        onClick={() => setEditingGroup(group)}
-                        className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
-                      >
-                        <Edit2 size={14} />
-                      </button>
+                      {canEdit && (
+                        <button
+                          title="Edit"
+                          onClick={() => setEditingGroup(group)}
+                          className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                      )}
                       <button
                         title="Generate AI Summary"
                         onClick={() => generateSummaryMutation.mutate(group.id)}
@@ -618,13 +629,15 @@ export default function ControlLibraryPage() {
                       >
                         <Sparkles size={14} />
                       </button>
-                      <button
-                        title="Delete"
-                        onClick={() => handleDeleteGroup(group)}
-                        className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-400"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {canDelete && (
+                        <button
+                          title="Delete"
+                          onClick={() => handleDeleteGroup(group)}
+                          className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-400"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -708,13 +721,15 @@ export default function ControlLibraryPage() {
                         >
                           <Eye size={14} />
                         </Link>
-                        <button
-                          title="Edit"
-                          onClick={() => setEditingGroup(group)}
-                          className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
-                        >
-                          <Edit2 size={14} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            title="Edit"
+                            onClick={() => setEditingGroup(group)}
+                            className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        )}
                         <button
                           title="Generate AI Summary"
                           onClick={() => generateSummaryMutation.mutate(group.id)}
@@ -723,13 +738,15 @@ export default function ControlLibraryPage() {
                         >
                           <Sparkles size={14} />
                         </button>
-                        <button
-                          title="Delete"
-                          onClick={() => handleDeleteGroup(group)}
-                          className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-400"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {canDelete && (
+                          <button
+                            title="Delete"
+                            onClick={() => handleDeleteGroup(group)}
+                            className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-400"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

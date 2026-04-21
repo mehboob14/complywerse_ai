@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Shield,
   Loader2,
@@ -160,6 +161,8 @@ export default function InternalControlDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('erm:internal_controls:create');
   const controlId = Number(params.id);
 
   const [activeTab, setActiveTab] = useState('details');
@@ -524,6 +527,8 @@ export default function InternalControlDetailPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-slate-900">Control Tests</h3>
+            {canCreate && (
+            {canCreate && (
             <button
               onClick={() => setShowTestModal(true)}
               className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
@@ -531,6 +536,8 @@ export default function InternalControlDetailPage() {
               <Plus className="h-4 w-4" />
               Add Test
             </button>
+            )}
+            )}
           </div>
           {(!control.tests || control.tests.length === 0) ? (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
@@ -587,6 +594,8 @@ export default function InternalControlDetailPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-slate-900">Linked Risks</h3>
+            {canCreate && (
+            {canCreate && (
             <button
               onClick={() => setShowRiskModal(true)}
               className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
@@ -594,6 +603,8 @@ export default function InternalControlDetailPage() {
               <Plus className="h-4 w-4" />
               Link Risk
             </button>
+            )}
+            )}
           </div>
           {(!control.risk_links || control.risk_links.length === 0) ? (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
@@ -648,6 +659,8 @@ export default function InternalControlDetailPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-slate-900">Escalation Rules</h3>
+            {canCreate && (
+            {canCreate && (
             <button
               onClick={() => setShowEscalationModal(true)}
               className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
@@ -655,6 +668,8 @@ export default function InternalControlDetailPage() {
               <Plus className="h-4 w-4" />
               Add Escalation
             </button>
+            )}
+            )}
           </div>
           {(!control.escalations || control.escalations.length === 0) ? (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">

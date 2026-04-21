@@ -79,8 +79,9 @@ export default function LoginPage() {
       if (response.ok) {
         const data = await response.json();
         
-        // CRITICAL: Clear ALL previous localStorage to prevent cross-tenant data leakage
+        // CRITICAL: Clear ALL previous localStorage and sessionStorage to prevent cross-user data leakage
         localStorage.clear();
+        sessionStorage.clear(); // Clears permission cache so new user gets fresh permissions
         
         if (data.tenant) {
           localStorage.setItem('tenant_slug', data.tenant.slug || data.tenant.subdomain || '');

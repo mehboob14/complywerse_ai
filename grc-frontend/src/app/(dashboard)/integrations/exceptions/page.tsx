@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { integrationsApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   AlertTriangle,
   Loader2,
@@ -56,6 +57,8 @@ const REASON_LABELS: Record<string, string> = {
 
 export default function ExceptionsPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('integrations:exceptions:edit');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [reviewNotes, setReviewNotes] = useState<Record<number, string>>({});
   const [selectedDetail, setSelectedDetail] = useState<number | null>(null);
@@ -248,7 +251,7 @@ export default function ExceptionsPage() {
                 </div>
               )}
 
-              {exc.status === 'approved' && (
+              {exc.status === 'approved' && canEdit && (
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-end gap-3">
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-slate-600 mb-1">Revoke Reason</label>
@@ -270,7 +273,7 @@ export default function ExceptionsPage() {
                 </div>
               )}
 
-              {exc.status === 'pending_approval' && (
+              {exc.status === 'pending_approval' && canEdit && (
                 <div className="mt-2">
                   <button
                     onClick={() => withdrawMutation.mutate(exc.id)}

@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { certificationsApi, governanceApi, assetsApi } from '@/lib/api';
 import apiClient from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence, ITAsset } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
 import { 
@@ -178,6 +179,10 @@ export default function CertificationJourneyPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const journeyId = parseInt(params.id as string);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('frameworks:framework_library:create');
+  const canEdit = hasPermission('frameworks:framework_library:edit');
+  const canDelete = hasPermission('frameworks:framework_library:delete');
   
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [expandedPhases, setExpandedPhases] = useState<number[]>([1]);
@@ -1500,7 +1505,7 @@ export default function CertificationJourneyPage() {
                     <Paperclip className="h-4 w-4 text-blue-600" />
                     Linked Evidence ({evidenceCount})
                   </h4>
-                  {showUpload && (
+                  {showUpload && canCreate && (
                     <label className="cursor-pointer">
                       <input
                         type="file"
@@ -1570,7 +1575,7 @@ export default function CertificationJourneyPage() {
                           )}
                           {/* Action buttons row */}
                           <div className="mt-3 ml-7 flex items-center gap-2 flex-wrap">
-                            {isPendingReview && (
+                            {isPendingReview && canEdit && (
                               <>
                                 <button
                                   onClick={() => {
@@ -1614,7 +1619,7 @@ export default function CertificationJourneyPage() {
                                 Assess
                               </button>
                             )}
-                            <button
+                            {canDelete && <button
                               onClick={() => {
                                 if (window.confirm('Unlink this evidence from the control? The evidence will remain in your evidence library.')) {
                                   setDeletingEvidenceId(ev.id);
@@ -1631,7 +1636,7 @@ export default function CertificationJourneyPage() {
                                 <Unlink className="h-3 w-3" />
                               )}
                               Unlink
-                            </button>
+                            </button>}
                           </div>
                         </div>
                       );
@@ -2377,7 +2382,7 @@ export default function CertificationJourneyPage() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          {!record || record.is_applicable ? (
+                          {canEdit && (!record || record.is_applicable ? (
                             <button
                               onClick={() => openApplicabilityModal(control, false)}
                               className="rounded-lg bg-orange-50 border border-orange-200 px-2.5 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100 transition-colors"
@@ -2391,8 +2396,8 @@ export default function CertificationJourneyPage() {
                             >
                               Mark Applicable
                             </button>
-                          )}
-                          {record?.status === 'pending' && (
+                          ))}
+                          {canEdit && record?.status === 'pending' && (
                             <>
                               <button
                                 onClick={() => { setReviewingRecord(record); setReviewComment(''); setShowReviewModal(true); }}

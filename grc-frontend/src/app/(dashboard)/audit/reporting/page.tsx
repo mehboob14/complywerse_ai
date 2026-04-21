@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Plus,
   X,
@@ -54,6 +55,8 @@ const OPINIONS = ['satisfactory', 'needs_improvement', 'unsatisfactory', 'adviso
 
 export default function AuditReportingPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
   const [activeTab, setActiveTab] = useState('kpis');
   const [showCreateReportModal, setShowCreateReportModal] = useState(false);
   const [showCreateBoardPackModal, setShowCreateBoardPackModal] = useState(false);
@@ -322,13 +325,13 @@ export default function AuditReportingPage() {
             <Sparkles className="w-4 h-4" />
             Theme Analysis
           </button>
-          <button
+          {canCreate && <button
             onClick={() => setShowCreateReportModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
             Create Report
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -536,13 +539,13 @@ export default function AuditReportingPage() {
       {activeTab === 'board-packs' && (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <button
+            {canCreate && <button
               onClick={() => setShowCreateBoardPackModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors"
             >
               <Plus className="w-4 h-4" />
               Create Board Pack
-            </button>
+            </button>}
           </div>
           {(!boardPacks || (Array.isArray(boardPacks) && boardPacks.length === 0)) ? (
             <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">

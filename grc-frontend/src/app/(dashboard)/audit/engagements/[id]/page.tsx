@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auditApi, apiClient } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
   FileText,
@@ -237,6 +238,10 @@ export default function EngagementDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
+  const canDelete = hasPermission('audit:audit_management:delete');
   const engagementId = Number(params.id);
 
   const [activeTab, setActiveTab] = useState('overview');
@@ -771,12 +776,14 @@ export default function EngagementDetailPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">Workpapers</h2>
+            {canCreate && (
             <button
               onClick={() => { setEditingWp(null); setWpForm({ title: '', description: '', workpaper_type: 'test', reference_number: '' }); setShowWpModal(true); }}
               className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
             >
               <Plus className="h-4 w-4" /> Add Workpaper
             </button>
+            )}
           </div>
           {(workpapers || []).length === 0 ? (
             <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
@@ -836,18 +843,22 @@ export default function EngagementDetailPage() {
                           <CheckCircle2 className="h-4 w-4" />
                         </button>
                       )}
+                      {canEdit && (
                       <button
                         onClick={() => { setEditingWp(wp); setWpForm({ title: wp.title, description: wp.description || '', workpaper_type: wp.workpaper_type || 'test', reference_number: wp.reference_number || '' }); setShowWpModal(true); }}
                         className="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-colors"
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
+                      )}
+                      {canDelete && (
                       <button
                         onClick={() => { if (confirm('Delete this workpaper?')) deleteWpMutation.mutate(wp.id); }}
                         className="p-1.5 text-slate-500 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -925,12 +936,14 @@ export default function EngagementDetailPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">Team Members</h2>
+            {canCreate && (
             <button
               onClick={() => { setTeamForm({ user_id: '', role: 'auditor' }); setShowTeamModal(true); }}
               className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
             >
               <Plus className="h-4 w-4" /> Add Member
             </button>
+            )}
           </div>
           {(engagement.team_members || []).length === 0 ? (
             <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
@@ -951,12 +964,14 @@ export default function EngagementDetailPage() {
                         <p className="text-xs text-slate-500 capitalize">{tm.role}</p>
                       </div>
                     </div>
+                    {canDelete && (
                     <button
                       onClick={() => { if (confirm('Remove team member?')) removeTeamMutation.mutate(tm.id); }}
                       className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
                     >
                       <X className="h-4 w-4" />
                     </button>
+                    )}
                   </div>
                   <div className="mt-3 flex items-center gap-3 text-xs text-slate-500">
                     <span>Availability: {tm.availability_percent}%</span>
@@ -990,12 +1005,14 @@ export default function EngagementDetailPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">Time Tracking</h2>
+            {canCreate && (
             <button
               onClick={() => { setTimeForm({ date: new Date().toISOString().split('T')[0], hours: '', description: '', activity_type: 'fieldwork' }); setShowTimeModal(true); }}
               className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
             >
               <Plus className="h-4 w-4" /> Log Time
             </button>
+            )}
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <div className="grid grid-cols-3 gap-4 text-center mb-4">
@@ -1078,12 +1095,14 @@ export default function EngagementDetailPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-600 max-w-xs truncate">{te.description || '—'}</td>
                       <td className="px-4 py-3 text-right">
+                        {canDelete && (
                         <button
                           onClick={() => { if (confirm('Delete this time entry?')) deleteTimeMutation.mutate(te.id); }}
                           className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
+                        )}
                       </td>
                     </tr>
                   ))}

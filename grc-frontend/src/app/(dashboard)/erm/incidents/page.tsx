@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   RiskIncident,
   RiskIncidentCreate,
@@ -80,6 +81,9 @@ type AIAnalysisResult = {
 };
 
 export default function IncidentsPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('erm:incidents:create');
+  const canDelete = hasPermission('erm:incidents:delete');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingIncident, setEditingIncident] = useState<RiskIncident | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>('all');
@@ -225,6 +229,7 @@ export default function IncidentsPage() {
             ))}
           </select>
         </div>
+        {canCreate && (
         <button
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
@@ -232,6 +237,7 @@ export default function IncidentsPage() {
           <Plus className="h-4 w-4" />
           Report Incident
         </button>
+        )}
       </div>
 
       {incidents && incidents.length > 0 ? (

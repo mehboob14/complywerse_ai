@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileText,
   Plus,
@@ -65,6 +66,10 @@ interface TestScript {
 
 export default function TestScriptsPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
+  const canDelete = hasPermission('audit:audit_management:delete');
   const [search, setSearch] = useState('');
   const [filterArea, setFilterArea] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -279,13 +284,13 @@ export default function TestScriptsPage() {
             </p>
           </div>
         </div>
-        <button
+        {canCreate && <button
           onClick={() => setShowModal(true)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all text-sm"
         >
           <Plus className="h-4 w-4" />
           New Test Script
-        </button>
+        </button>}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -391,7 +396,7 @@ export default function TestScriptsPage() {
                       {tag}
                     </span>
                   ))}
-                  <button
+                  {canEdit && <button
                     onClick={(e) => {
                       e.stopPropagation();
                       openEdit(script);
@@ -399,7 +404,7 @@ export default function TestScriptsPage() {
                     className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
                   >
                     <Edit3 className="h-4 w-4" />
-                  </button>
+                  </button>}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -410,7 +415,7 @@ export default function TestScriptsPage() {
                   >
                     <Copy className="h-4 w-4" />
                   </button>
-                  <button
+                  {canDelete && <button
                     onClick={(e) => {
                       e.stopPropagation();
                       if (confirm('Delete this test script?')) deleteMutation.mutate(script.id);
@@ -418,7 +423,7 @@ export default function TestScriptsPage() {
                     className="p-1.5 rounded-lg text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                   >
                     <Trash2 className="h-4 w-4" />
-                  </button>
+                  </button>}
                   {expandedId === script.id ? (
                     <ChevronUp className="h-4 w-4 text-slate-500" />
                   ) : (

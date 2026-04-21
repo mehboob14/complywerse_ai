@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
 import apiClient, { evidenceAIApi, QuickAssessResponse } from '@/lib/api';
 import { 
@@ -133,6 +134,9 @@ const TYPE_ICONS: Record<string, typeof FileText> = {
 };
 
 export default function EvidencePage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('evidence:evidence_library:create');
+  const canDelete = hasPermission('evidence:evidence_library:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState('');
@@ -404,13 +408,15 @@ export default function EvidencePage() {
                 Batch OCR
               </button>
             )}
-            <button
-              onClick={() => setIsUploadModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
-            >
-              <Upload size={14} />
-              Upload Evidence
-            </button>
+            {canCreate && (
+              <button
+                onClick={() => setIsUploadModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
+              >
+                <Upload size={14} />
+                Upload Evidence
+              </button>
+            )}
           </div>
         </div>
 
@@ -512,13 +518,15 @@ export default function EvidencePage() {
                             <ScanText size={14} />
                           </button>
                         )}
-                        <button
-                          title="Delete"
-                          onClick={() => handleDelete(item)}
-                          className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-600"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {canDelete && (
+                          <button
+                            title="Delete"
+                            onClick={() => handleDelete(item)}
+                            className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -628,13 +636,15 @@ export default function EvidencePage() {
                                   <ScanText size={14} />
                                 </button>
                               )}
-                              <button
-                                title="Delete"
-                                onClick={() => handleDelete(item)}
-                                className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-600"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              {canDelete && (
+                                <button
+                                  title="Delete"
+                                  onClick={() => handleDelete(item)}
+                                  className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-600"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

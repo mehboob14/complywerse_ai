@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { vendorRiskApi, tenantApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
   Loader2,
@@ -146,6 +147,9 @@ export default function VendorDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const vendorId = Number(params.id);
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('vendor_risk:vendors:edit');
+  const canCreate = hasPermission('vendor_risk:vendors:create');
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
@@ -292,6 +296,7 @@ export default function VendorDetailPage() {
             )}
           </div>
         </div>
+        {canEdit && (
         <button
           onClick={() => {
             setEditData({
@@ -314,6 +319,7 @@ export default function VendorDetailPage() {
           <Edit2 className="h-4 w-4" />
           Edit
         </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -405,6 +411,7 @@ export default function VendorDetailPage() {
       {activeTab === 'assessments' && (
         <div className="space-y-4">
           <div className="flex justify-end">
+            {canCreate && (
             <button
               onClick={() => setShowAssessmentModal(true)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
@@ -412,6 +419,7 @@ export default function VendorDetailPage() {
               <Plus className="h-4 w-4" />
               New Assessment
             </button>
+            )}
           </div>
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200">
@@ -500,6 +508,7 @@ export default function VendorDetailPage() {
       {activeTab === 'incidents' && (
         <div className="space-y-4">
           <div className="flex justify-end">
+            {canCreate && (
             <button
               onClick={() => setShowIncidentModal(true)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
@@ -507,6 +516,7 @@ export default function VendorDetailPage() {
               <Plus className="h-4 w-4" />
               Record Incident
             </button>
+            )}
           </div>
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200">

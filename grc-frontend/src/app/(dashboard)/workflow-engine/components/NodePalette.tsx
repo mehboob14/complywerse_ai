@@ -14,6 +14,7 @@ type Props = {
   palette: PaletteItem[];
   onDragStart: (event: React.DragEvent, item: PaletteItem) => void;
   onAddNode: (item: PaletteItem) => void;
+  locked?: boolean;
 };
 
 const GROUP_ORDER = ['triggers', 'actions', 'platform_functions', 'conditions', 'approvals', 'timers', 'control'];
@@ -47,7 +48,7 @@ const GROUP_NODE_PILL: Record<string, string> = {
   control: 'border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700',
 };
 
-export function NodePalette({ palette, onDragStart, onAddNode }: Props) {
+export function NodePalette({ palette, onDragStart, onAddNode, locked = false }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [moduleCollapsed, setModuleCollapsed] = useState<Record<string, boolean>>({});
   const [subgroupCollapsed, setSubgroupCollapsed] = useState<Record<string, boolean>>({});
@@ -122,13 +123,15 @@ export function NodePalette({ palette, onDragStart, onAddNode }: Props) {
                   {group.key !== 'platform_functions' && group.items.map((item) => (
                     <div
                       key={item.key}
-                      draggable
-                      onDragStart={(e) => onDragStart(e, item)}
-                      title={PALETTE_DESCRIPTIONS[item.key] || item.description || item.label}
-                      className={`flex items-center gap-2 px-2 py-1.5 rounded-md border text-xs cursor-grab active:cursor-grabbing select-none transition-colors ${pillColor}`}
+                      draggable={!locked}
+                      onDragStart={locked ? undefined : (e) => onDragStart(e, item)}
+                      onClick={locked ? undefined : () => onAddNode(item)}
+                      title={locked ? 'Workflow creation is locked. Contact support.' : (PALETTE_DESCRIPTIONS[item.key] || item.description || item.label)}
+                      className={`flex items-center gap-2 px-2 py-1.5 rounded-md border text-xs select-none transition-colors ${locked ? 'cursor-not-allowed opacity-60 ' + pillColor : 'cursor-grab active:cursor-grabbing ' + pillColor}`}
                     >
                       <Grip size={10} className="opacity-40 shrink-0" />
                       <span className="truncate font-medium">{item.label}</span>
+                      {locked && <span className="ml-auto text-[10px] opacity-50">🔒</span>}
                     </div>
                   ))}
 
@@ -184,13 +187,15 @@ export function NodePalette({ palette, onDragStart, onAddNode }: Props) {
                                         {subgroupItems.map((item) => (
                                           <div
                                             key={item.key}
-                                            draggable
-                                            onDragStart={(e) => onDragStart(e, item)}
-                                            title={item.label}
-                                            className={`flex items-center gap-2 px-2 py-1.5 rounded-md border text-xs cursor-grab active:cursor-grabbing select-none transition-colors ${pillColor}`}
+                                            draggable={!locked}
+                                            onDragStart={locked ? undefined : (e) => onDragStart(e, item)}
+                                            onClick={locked ? undefined : () => onAddNode(item)}
+                                            title={locked ? 'Workflow creation is locked. Contact support.' : item.label}
+                                            className={`flex items-center gap-2 px-2 py-1.5 rounded-md border text-xs select-none transition-colors ${locked ? 'cursor-not-allowed opacity-60 ' + pillColor : 'cursor-grab active:cursor-grabbing ' + pillColor}`}
                                           >
                                             <Grip size={10} className="opacity-40 shrink-0" />
                                             <span className="truncate font-medium">{item.label}</span>
+                                            {locked && <span className="ml-auto text-[10px] opacity-50">🔒</span>}
                                           </div>
                                         ))}
                                       </div>

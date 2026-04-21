@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { committeeApi, apiClient, frameworkUploadApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Users,
   Calendar,
@@ -238,6 +239,9 @@ function getScoreRingColor(score: number) {
 export default function CommitteeDetailPage() {
   const params = useParams();
   const committeeId = parseInt(params.id as string);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('governance:committees:create');
+  const canDelete = hasPermission('governance:committees:delete');
   const [activeTab, setActiveTab] = useState('overview');
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [isScheduleMeetingModalOpen, setIsScheduleMeetingModalOpen] = useState(false);
@@ -734,10 +738,12 @@ export default function CommitteeDetailPage() {
       {activeTab === 'members' && (
         <div className="space-y-4">
           <div className="flex justify-end">
+            {canCreate && (
             <button onClick={() => setIsAddMemberModalOpen(true)} className="btn-primary flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
               Add Member
             </button>
+            )}
           </div>
           <div className="card overflow-hidden">
             <table className="w-full">
@@ -764,6 +770,7 @@ export default function CommitteeDetailPage() {
                         onClick={() => removeMemberMutation.mutate(member.user_id)}
                         className="text-rose-400 hover:text-rose-300"
                         title="Remove member"
+                        style={{ display: canDelete ? undefined : 'none' }}
                       >
                         <UserMinus className="h-4 w-4" />
                       </button>
@@ -1087,10 +1094,12 @@ export default function CommitteeDetailPage() {
       {activeTab === 'meetings' && (
         <div className="space-y-4">
           <div className="flex justify-end">
+            {canCreate && (
             <button onClick={() => setIsScheduleMeetingModalOpen(true)} className="btn-primary flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Schedule Meeting
             </button>
+            )}
           </div>
           {(meetings || []).map((meeting) => (
             <Link key={meeting.id} href={`/governance/committees/meetings/${meeting.id}`} className="card p-6 block hover:border-primary-500/50 transition-all">
@@ -1133,10 +1142,12 @@ export default function CommitteeDetailPage() {
       {activeTab === 'actions' && (
         <div className="space-y-4">
           <div className="flex justify-end">
+            {canCreate && (
             <button onClick={() => setIsCreateActionModalOpen(true)} className="btn-primary flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Add Action Item
             </button>
+            )}
           </div>
 
           {(!actions || actions.length === 0) && (
@@ -1144,10 +1155,12 @@ export default function CommitteeDetailPage() {
               <CheckSquare className="h-12 w-12 text-slate-500 mx-auto mb-3" />
               <h3 className="text-lg font-medium text-black mb-1">No Action Items Yet</h3>
               <p className="text-slate-600 mb-4">Create manual action items and use AI to reword or summarize action text.</p>
+              {canCreate && (
               <button onClick={() => setIsCreateActionModalOpen(true)} className="btn-primary inline-flex items-center gap-2">
                 <Plus className="h-4 w-4" />
                 Create First Action Item
               </button>
+              )}
             </div>
           )}
 

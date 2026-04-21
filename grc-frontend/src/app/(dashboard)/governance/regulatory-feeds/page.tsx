@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Rss,
   RefreshCw,
@@ -140,6 +141,9 @@ export default function RegulatoryFeedsPage() {
     poll_interval_hours: 24,
   });
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('governance:regulatory_changes:create');
+  const canDelete = hasPermission('governance:regulatory_changes:delete');
 
   const { data: sources, isLoading: sourcesLoading } = useQuery({
     queryKey: ['regulatory-feed-sources'],
@@ -305,6 +309,7 @@ export default function RegulatoryFeedsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canCreate && (
           <button
             onClick={() => setShowAddModal(true)}
             className="btn-secondary flex items-center gap-2"
@@ -312,6 +317,7 @@ export default function RegulatoryFeedsPage() {
             <Plus className="h-4 w-4" />
             Add Custom Feed
           </button>
+          )}
           <button
             onClick={() => seedCBSLMutation.mutate()}
             disabled={seedCBSLMutation.isPending}
@@ -481,10 +487,10 @@ export default function RegulatoryFeedsPage() {
                                   <Play className="h-4 w-4" />
                                 )}
                               </button>
-                              <button className="btn-ghost btn-sm" title="Edit">
+                              {canCreate && <button className="btn-ghost btn-sm" title="Edit">
                                 <Edit className="h-4 w-4" />
-                              </button>
-                              <button
+                              </button>}
+                              {canDelete && <button
                                 onClick={() => {
                                   if (confirm(`Delete "${source.name}" and all its feed items?`)) {
                                     deleteSourceMutation.mutate(source.id);
@@ -499,7 +505,7 @@ export default function RegulatoryFeedsPage() {
                                 ) : (
                                   <Trash2 className="h-4 w-4" />
                                 )}
-                              </button>
+                              </button>}
                             </div>
                           </td>
                         </tr>

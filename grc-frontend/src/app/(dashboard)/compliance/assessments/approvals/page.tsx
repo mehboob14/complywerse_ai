@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import apiClient from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
   FileText,
@@ -72,6 +73,8 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
 
 export default function PendingApprovalsPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('compliance:assessments:edit');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [actionType, setActionType] = useState<string | null>(null);
   const [comments, setComments] = useState('');
@@ -304,6 +307,7 @@ export default function PendingApprovalsPage() {
                   </div>
 
                   <div className="flex flex-col gap-2">
+                    {canEdit && (
                     <button
                       onClick={() => handleAction(approval, 'approve')}
                       disabled={processingId === approval.id}
@@ -316,6 +320,8 @@ export default function PendingApprovalsPage() {
                       )}
                       Approve
                     </button>
+                    )}
+                    {canEdit && (
                     <button
                       onClick={() => handleAction(approval, 'reject')}
                       className="btn-danger flex items-center gap-2 text-sm"
@@ -323,6 +329,8 @@ export default function PendingApprovalsPage() {
                       <ThumbsDown className="h-4 w-4" />
                       Reject
                     </button>
+                    )}
+                    {canEdit && (
                     <button
                       onClick={() => handleAction(approval, 'return')}
                       className="btn-secondary flex items-center gap-2 text-sm"
@@ -330,6 +338,7 @@ export default function PendingApprovalsPage() {
                       <RotateCcw className="h-4 w-4" />
                       Return
                     </button>
+                    )}
                     <button
                       onClick={() => setExpandedId(isExpanded ? null : approval.id)}
                       className="btn-ghost text-sm flex items-center gap-1"

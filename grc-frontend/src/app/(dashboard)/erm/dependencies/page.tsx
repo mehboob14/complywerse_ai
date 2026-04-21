@@ -18,6 +18,7 @@ import {
   Trash2,
   ArrowRight,
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const DEPENDENCY_TYPES: { value: DependencyType; label: string; color: string }[] = [
   { value: 'causes', label: 'Causes', color: 'text-red-400' },
@@ -31,6 +32,9 @@ export default function DependenciesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedRisk, setSelectedRisk] = useState<number | null>(null);
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('erm:risk_assessments:create');
+  const canDelete = hasPermission('erm:risk_assessments:delete');
 
   const { data: dependencies, isLoading } = useQuery({
     queryKey: ['erm-dependencies'],
@@ -94,13 +98,15 @@ export default function DependenciesPage() {
             ))}
           </select>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
-        >
-          <Plus className="h-4 w-4" />
-          Add Dependency
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+          >
+            <Plus className="h-4 w-4" />
+            Add Dependency
+          </button>
+        )}
       </div>
 
       {cascadeAnalysis && (
@@ -152,16 +158,18 @@ export default function DependenciesPage() {
                     <p className="text-sm text-slate-600">Strength</p>
                     <p className="font-medium text-slate-900">{dep.strength}/5</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (confirm('Delete this dependency?')) {
-                        deleteMutation.mutate(dep.id);
-                      }
-                    }}
-                    className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {canDelete && (
+                    <button
+                      onClick={() => {
+                        if (confirm('Delete this dependency?')) {
+                          deleteMutation.mutate(dep.id);
+                        }
+                      }}
+                      className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             );

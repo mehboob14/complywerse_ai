@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Package,
   Loader2,
@@ -114,6 +115,9 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string; i
 };
 
 export default function AuditPackagesPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('evidence:evidence_library:create');
+  const canDelete = hasPermission('evidence:evidence_library:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(0);
@@ -401,6 +405,7 @@ export default function AuditPackagesPage() {
           <h1 className="text-2xl font-bold text-white">Audit Package Builder</h1>
           <p className="text-gray-600">Create and manage audit evidence packages</p>
         </div>
+        {canCreate && (
         <button
           onClick={() => setIsCreateModalOpen(true)}
           className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 transition-colors"
@@ -408,6 +413,7 @@ export default function AuditPackagesPage() {
           <Plus size={18} />
           Create Package
         </button>
+        )}
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -447,6 +453,7 @@ export default function AuditPackagesPage() {
               <div className="flex h-64 flex-col items-center justify-center gap-4 text-gray-600">
                 <Package className="h-12 w-12" />
                 <p>No audit packages found</p>
+                {canCreate && (
                 <button
                   onClick={() => setIsCreateModalOpen(true)}
                   className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
@@ -454,6 +461,7 @@ export default function AuditPackagesPage() {
                   <Plus size={18} />
                   Create First Package
                 </button>
+                )}
               </div>
             ) : (
               <>
@@ -550,7 +558,7 @@ export default function AuditPackagesPage() {
                               >
                                 {pkg.is_legal_hold ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
                               </button>
-                              {pkg.status === 'draft' && !pkg.is_legal_hold && (
+                              {pkg.status === 'draft' && !pkg.is_legal_hold && canDelete && (
                                 <button
                                   onClick={() => handleDelete(pkg)}
                                   disabled={deleteMutation.isPending}

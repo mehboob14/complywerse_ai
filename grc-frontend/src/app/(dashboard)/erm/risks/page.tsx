@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
 import { adminApi, assetsApi, ermApi } from '@/lib/api';
 import { ITAsset, Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
 import { 
@@ -173,6 +174,10 @@ const getHeatmapCellColor = (likelihood: number, impact: number) => {
 };
 
 export default function ERMRisksPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('erm:risks:create');
+  const canEdit = hasPermission('erm:risks:edit');
+  const canDelete = hasPermission('erm:risks:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RiskStatus | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -733,16 +738,18 @@ export default function ERMRisksPage() {
             <Download size={18} />
             Template
           </button>
-          <button
-            onClick={() => {
-              setEditingRisk(null);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
-          >
-            <Plus size={18} />
-            Add Risk
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => {
+                setEditingRisk(null);
+                setIsModalOpen(true);
+              }}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+            >
+              <Plus size={18} />
+              Add Risk
+            </button>
+          )}
         </div>
       </div>
 
@@ -815,25 +822,29 @@ export default function ERMRisksPage() {
                           </p>
                         </div>
                         <div className="flex gap-1">
-                          <button
-                            onClick={() => {
-                              setEditingRisk(risk);
-                              setIsModalOpen(true);
-                            }}
-                            className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this risk?')) {
-                                deleteMutation.mutate(risk.id);
-                              }
-                            }}
-                            className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          {canEdit && (
+                            <button
+                              onClick={() => {
+                                setEditingRisk(risk);
+                                setIsModalOpen(true);
+                              }}
+                              className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              onClick={() => {
+                                if (confirm('Are you sure you want to delete this risk?')) {
+                                  deleteMutation.mutate(risk.id);
+                                }
+                              }}
+                              className="rounded p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

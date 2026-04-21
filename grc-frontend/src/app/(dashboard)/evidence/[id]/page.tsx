@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
   ArrowLeft, Loader2, AlertCircle, FileCheck, Calendar, Clock,
   CheckCircle, XCircle, FileText, Edit, ScanText, Brain, Link2,
@@ -215,6 +216,8 @@ export default function EvidenceDetailPage() {
   const router = useRouter();
   const evidenceId = Number(params.id);
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('evidence:evidence_library:edit');
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | null>(null);
   const [rejectComments, setRejectComments] = useState('');
@@ -720,6 +723,7 @@ export default function EvidenceDetailPage() {
                 Quality: {Math.round(evidence.quality_score)}%
               </span>
             )}
+            {canEdit && (
             <button
               onClick={() => {
                 setEditForm({
@@ -738,6 +742,7 @@ export default function EvidenceDetailPage() {
               <Edit className="h-3.5 w-3.5" />
               Edit
             </button>
+            )}
             {evidence.status === 'draft' && (
               <button
                 onClick={() => submitForReviewMutation.mutate()}

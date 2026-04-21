@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { auditApi, apiClient } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Plus,
   X,
@@ -65,6 +66,9 @@ const FILTER_TABS = [
 
 export default function AuditEngagementsPage() {
   const router = useRouter();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
   const [statusFilter, setStatusFilter] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -315,6 +319,7 @@ export default function AuditEngagementsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Audit Engagements</h1>
           <p className="text-slate-600 mt-1">Manage audit engagements and track progress</p>
         </div>
+        {canCreate && (
         <button
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
@@ -322,6 +327,7 @@ export default function AuditEngagementsPage() {
           <Plus className="w-4 h-4" />
           New Engagement
         </button>
+        )}
       </div>
 
       <div className="flex items-center gap-1 bg-white rounded-lg p-1 border border-slate-200">
@@ -401,12 +407,14 @@ export default function AuditEngagementsPage() {
                   </div>
 
                   <div className="flex items-center gap-2 ml-4">
+                    {canEdit && (
                     <button
                       onClick={(e) => { e.stopPropagation(); openEditEngagement(eng); }}
                       className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg transition-colors"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
+                    )}
                     {nextStatus && (
                       <button
                         onClick={(e) => { e.stopPropagation(); transitionMutation.mutate({ id: eng.id, status: nextStatus }); }}

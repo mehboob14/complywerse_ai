@@ -10,7 +10,7 @@ PERMISSION_MATRIX = [
             },
             {
                 "name": "ai_insights",
-                "display_name": "AI Insights",
+                "display_name": "ComplyChat",
                 "actions": ["view"]
             }
         ]
@@ -385,6 +385,27 @@ PERMISSION_MATRIX = [
             {
                 "name": "dashboard",
                 "display_name": "Portfolio Dashboard",
+                "actions": ["view"]
+            }
+        ]
+    },
+    {
+        "module": "auditor_portal",
+        "display_name": "Auditor Portal",
+        "submodules": [
+            {
+                "name": "evidence_review",
+                "display_name": "Evidence Review",
+                "actions": ["view", "approve", "reject"]
+            },
+            {
+                "name": "audit_reports",
+                "display_name": "Audit Reports",
+                "actions": ["view", "create", "export"]
+            },
+            {
+                "name": "framework_access",
+                "display_name": "Framework Access",
                 "actions": ["view"]
             }
         ]

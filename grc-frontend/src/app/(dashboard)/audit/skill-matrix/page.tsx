@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auditApi, assetsApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Users,
   Search,
@@ -70,6 +71,10 @@ function ProficiencyBar({ level }: { level: string }) {
 
 export default function SkillMatrixPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
+  const canDelete = hasPermission('audit:audit_management:delete');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -251,13 +256,13 @@ export default function SkillMatrixPage() {
             <UserCheck className="h-4 w-4" />
             Find Auditor
           </button>
-          <button
+          {canCreate && <button
             onClick={() => setShowCreateModal(true)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all text-sm"
           >
             <Plus className="h-4 w-4" />
             Add Skill
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -402,13 +407,13 @@ export default function SkillMatrixPage() {
                               )}
                             </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
+                              {canEdit && <button
                                 onClick={() => setEditingSkill(skill)}
                                 className="p-1.5 rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
                               >
                                 <Edit2 className="h-3.5 w-3.5" />
-                              </button>
-                              <button
+                              </button>}
+                              {canDelete && <button
                                 onClick={() => {
                                   if (confirm('Delete this skill?')) {
                                     deleteMutation.mutate(skill.id);
@@ -417,7 +422,7 @@ export default function SkillMatrixPage() {
                                 className="p-1.5 rounded hover:bg-rose-500/20 text-slate-600 hover:text-rose-400 transition-colors"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
-                              </button>
+                              </button>}
                             </div>
                           </div>
                         ))}

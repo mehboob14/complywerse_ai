@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { rcsaApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Loader2, Upload, Download, AlertTriangle } from 'lucide-react';
 
 interface RCSATemplate {
@@ -15,6 +16,8 @@ interface RCSATemplate {
 
 export default function RCSATemplatesPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('erm:rcsa:create');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [templateName, setTemplateName] = useState('');
   const [templateCategory, setTemplateCategory] = useState('operational');
@@ -113,21 +116,25 @@ export default function RCSATemplatesPage() {
               className="hidden"
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
-            >
-              <Upload size={16} />
-              {selectedFile ? 'File Selected' : 'Select File'}
-            </button>
-            <button
-              onClick={handleUpload}
-              disabled={!selectedFile || !templateName.trim() || uploadMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {uploadMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-              Upload Template
-            </button>
+            {canCreate && (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
+              >
+                <Upload size={16} />
+                {selectedFile ? 'File Selected' : 'Select File'}
+              </button>
+            )}
+            {canCreate && (
+              <button
+                onClick={handleUpload}
+                disabled={!selectedFile || !templateName.trim() || uploadMutation.isPending}
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+              >
+                {uploadMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                Upload Template
+              </button>
+            )}
           </div>
         </div>
       </div>

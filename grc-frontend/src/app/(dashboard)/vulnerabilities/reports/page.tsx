@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileText,
   Loader2,
@@ -32,6 +33,8 @@ interface VulnReport {
 
 export default function VulnerabilityReportsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { hasPermission } = usePermissions();
+  const canDelete = hasPermission('vulnerabilities:vulnerability_register:delete');
   const [uploading, setUploading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const queryClient = useQueryClient();
@@ -222,6 +225,7 @@ export default function VulnerabilityReportsPage() {
                         onClick={() => setDeleteConfirm(report.id)}
                         className="p-1.5 rounded-lg cw-text-muted hover:text-red-600 hover:bg-[var(--color-hover)] transition-colors"
                         title="Delete"
+                        style={{ display: canDelete ? undefined : 'none' }}
                       >
                         <Trash2 size={16} />
                       </button>

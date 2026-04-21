@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Plus,
   X,
@@ -58,6 +59,8 @@ export default function QAIPPage() {
   const [applyEngagementId, setApplyEngagementId] = useState('');
   const [applyingTemplateId, setApplyingTemplateId] = useState<number | null>(null);
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
 
   const [newReview, setNewReview] = useState({
     review_type: 'internal',
@@ -150,7 +153,7 @@ export default function QAIPPage() {
           <h1 className="text-2xl font-bold text-slate-900">Quality Assurance & Improvement Program</h1>
           <p className="text-slate-600 mt-1">Monitor audit quality, IIA conformance, and maturity assessments</p>
         </div>
-        {activeTab === 'reviews' && (
+        {activeTab === 'reviews' && canCreate && (
           <button
             onClick={() => setShowCreateReview(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
@@ -159,7 +162,7 @@ export default function QAIPPage() {
             New Review
           </button>
         )}
-        {activeTab === 'templates' && (
+        {activeTab === 'templates' && canCreate && (
           <button
             onClick={() => setShowCreateTemplate(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"

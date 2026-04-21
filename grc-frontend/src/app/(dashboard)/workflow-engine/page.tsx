@@ -55,6 +55,10 @@ import {
   WorkflowVersion,
 } from './components/types';
 
+// ─── Feature flags ──────────────────────────────────────────────────────────
+// Set to false to unlock workflow creation for this tenant.
+const WORKFLOW_CREATION_LOCKED = true;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function normalizeBackendNode(node: BackendNode): FlowNodeData {
@@ -758,6 +762,7 @@ function WorkflowEngineContent() {
 
   // ─── AI operations ────────────────────────────────────────────────────────────
   const generateFromNaturalLanguage = useCallback(async () => {
+    if (WORKFLOW_CREATION_LOCKED) { alert('Workflow creation is locked. Please contact support to enable this feature.'); return; }
     if (!aiPrompt.trim()) return;
     setAiGenerating(true);
     try {
@@ -805,6 +810,7 @@ function WorkflowEngineContent() {
   }, [selectedId]);
 
   const handleUseSuggestion = useCallback((suggestion: AISuggestion) => {
+    if (WORKFLOW_CREATION_LOCKED) { alert('Workflow creation is locked. Please contact support to enable this feature.'); return; }
     // Build nodes & edges — use provided ones or generate from category/trigger
     let rawNodes: BackendNode[] = suggestion.suggested_nodes || [];
     let rawEdges: BackendEdge[] = suggestion.suggested_edges || [];
@@ -970,6 +976,7 @@ function WorkflowEngineContent() {
   );
 
   const onDragStart = useCallback((event: React.DragEvent, item: PaletteItem) => {
+    if (WORKFLOW_CREATION_LOCKED) { event.preventDefault(); return; }
     event.dataTransfer.setData('application/workflow-node', JSON.stringify(item));
     event.dataTransfer.effectAllowed = 'move';
   }, []);
@@ -977,6 +984,7 @@ function WorkflowEngineContent() {
   const onDropCanvas = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
+      if (WORKFLOW_CREATION_LOCKED) return;
       if (!reactFlowInstance || !reactFlowWrapper.current) return;
       const raw = event.dataTransfer.getData('application/workflow-node');
       if (!raw) return;
@@ -1286,6 +1294,7 @@ function WorkflowEngineContent() {
         name={name}
         isActive={isActive}
         saving={saving}
+        locked={WORKFLOW_CREATION_LOCKED}
         onSelectDefinition={setSelectedId}
         onNameChange={setName}
         onToggleActive={() => setIsActive((v) => !v)}
@@ -1307,6 +1316,7 @@ function WorkflowEngineContent() {
         <div className="w-48 shrink-0 flex flex-col min-h-0">
           <NodePalette
             palette={palette}
+            locked={WORKFLOW_CREATION_LOCKED}
             onDragStart={onDragStart}
             onAddNode={(item) => {
               // Click-to-add: place in center of canvas
@@ -1344,12 +1354,15 @@ function WorkflowEngineContent() {
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
+            onNodesChange={WORKFLOW_CREATION_LOCKED ? undefined : onNodesChange}
+            onEdgesChange={WORKFLOW_CREATION_LOCKED ? undefined : onEdgesChange}
+            onConnect={WORKFLOW_CREATION_LOCKED ? undefined : onConnect}
             onInit={setReactFlowInstance}
-            onDrop={onDropCanvas}
-            onDragOver={onDragOverCanvas}
+            onDrop={WORKFLOW_CREATION_LOCKED ? undefined : onDropCanvas}
+            onDragOver={WORKFLOW_CREATION_LOCKED ? undefined : onDragOverCanvas}
+            nodesDraggable={!WORKFLOW_CREATION_LOCKED}
+            nodesConnectable={!WORKFLOW_CREATION_LOCKED}
+            elementsSelectable={!WORKFLOW_CREATION_LOCKED}
             onNodeClick={(_, node) => { setSelectedNodeId(node.id); setSelectedEdgeId(null); }}
             onEdgeClick={(_, edge) => { setSelectedEdgeId(edge.id); setSelectedNodeId(null); }}
             onPaneClick={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
@@ -1389,8 +1402,18 @@ function WorkflowEngineContent() {
             />
           )}
 
+          {/* Locked banner overlay */}
+          {WORKFLOW_CREATION_LOCKED && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 text-amber-800 text-xs font-semibold px-4 py-2 rounded-full shadow-sm">
+                <span>🔒</span>
+                <span>Workflow creation is locked. Contact support to unlock.</span>
+              </div>
+            </div>
+          )}
+
           {/* AI panel overlay */}
-          {showAI && (
+          {!WORKFLOW_CREATION_LOCKED && showAI && (
             <AIPanel
               onClose={() => setShowAI(false)}
               aiPrompt={aiPrompt}
@@ -1405,6 +1428,7 @@ function WorkflowEngineContent() {
             />
           )}
         </div>
+
 
         {/* Right: Config Panel */}
         <div className="w-60 shrink-0 flex flex-col min-h-0">

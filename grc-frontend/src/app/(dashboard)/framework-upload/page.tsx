@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { frameworkUploadApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
 import {
   Upload,
@@ -96,8 +97,8 @@ export default function FrameworkUploadPage() {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
-
-  const { data, isLoading, error } = useQuery({
+  const { hasPermission } = usePermissions();
+  const canDelete = hasPermission('frameworks:framework_upload:delete');
     queryKey: ['uploaded-frameworks'],
     queryFn: async () => {
       const response = await frameworkUploadApi.listFrameworks({});
@@ -576,7 +577,7 @@ export default function FrameworkUploadPage() {
 
                     <button
                       onClick={() => handleDelete(framework)}
-                      disabled={deleteMutation.isPending}
+                      disabled={deleteMutation.isPending || !canDelete}
                       className="btn-secondary btn-sm hover:bg-rose-600 hover:border-rose-600 hover:text-slate-900"
                     >
                       <Trash2 className="h-4 w-4" />

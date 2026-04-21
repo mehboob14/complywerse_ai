@@ -778,7 +778,7 @@ def get_me(
                 # For new admin users who might not have permissions set up yet,
                 # grant all permissions if they have admin role
                 if is_admin:
-                    allowed_modules = ["dashboard", "risks", "erm", "controls", "compliance", "evidence", "governance", "vulnerabilities", "assets", "frameworks", "reports", "admin", "integrations", "workflow_engine", "is_projects", "critical_tasks"]
+                    allowed_modules = ["dashboard", "risks", "erm", "controls", "compliance", "evidence", "governance", "vulnerabilities", "assets", "frameworks", "reports", "admin", "integrations", "workflow_engine", "is_projects", "critical_tasks", "auditor_portal"]
                     permissions = ["*:*:*"]
                 elif role_ids:
                     if IS_SQLITE:
@@ -885,7 +885,7 @@ def get_me(
             "primary_tenant_name": primary_tenant_name,
             "is_admin": True,
             "permissions": [],
-            "allowed_modules": ["dashboard", "risks", "erm", "controls", "compliance", "evidence", "governance", "vulnerabilities", "assets", "frameworks", "reports", "admin", "integrations", "workflow_engine", "is_projects", "critical_tasks"]
+            "allowed_modules": ["dashboard", "risks", "erm", "controls", "compliance", "evidence", "governance", "vulnerabilities", "assets", "frameworks", "reports", "admin", "integrations", "workflow_engine", "is_projects", "critical_tasks", "auditor_portal"]
         }
     }
     

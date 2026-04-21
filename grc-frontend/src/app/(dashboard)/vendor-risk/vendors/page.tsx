@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vendorRiskApi, tenantApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Building2,
   Loader2,
@@ -83,6 +84,8 @@ const getRatingBadge = (rating: string) => {
 
 export default function VendorListPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('vendor_risk:vendors:create');
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [tierFilter, setTierFilter] = useState('all');
@@ -194,13 +197,15 @@ export default function VendorListPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Vendors</h1>
           <p className="text-sm text-gray-500 mt-1">Manage your third-party vendor inventory</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Add Vendor
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Vendor
+          </button>
+        )}
       </div>
 
       {/* Filters */}

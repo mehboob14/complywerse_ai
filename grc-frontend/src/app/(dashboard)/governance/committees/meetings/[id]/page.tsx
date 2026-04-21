@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { committeeApi, apiClient } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
   Calendar,
@@ -179,7 +180,8 @@ export default function MeetingDetailPage() {
   const meetingId = parseInt(params.id as string);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('governance:committees:create');
   const [isAddAgendaOpen,    setIsAddAgendaOpen]    = useState(false);
   const [isAddActionOpen,    setIsAddActionOpen]    = useState(false);
   const [isAutoPopulateOpen, setIsAutoPopulateOpen] = useState(false);
@@ -442,6 +444,7 @@ export default function MeetingDetailPage() {
                 <ListOrdered className="h-5 w-5 text-blue-500" />
                 Agenda
               </h3>
+              {canCreate && (
               <button
                 onClick={() => setIsAddAgendaOpen(true)}
                 className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
@@ -449,6 +452,7 @@ export default function MeetingDetailPage() {
                 <Plus className="h-4 w-4" />
                 Add Item
               </button>
+              )}
             </div>
 
             <div className="divide-y divide-gray-100">
@@ -627,6 +631,7 @@ export default function MeetingDetailPage() {
                 <CheckSquare className="h-5 w-5 text-amber-500" />
                 Actions
               </h3>
+              {canCreate && (
               <button
                 onClick={() => setIsAddActionOpen(true)}
                 className="rounded-lg border border-gray-300 p-1.5 hover:bg-gray-50"
@@ -634,6 +639,7 @@ export default function MeetingDetailPage() {
               >
                 <Plus className="h-4 w-4 text-gray-600" />
               </button>
+              )}
             </div>
 
             <div className="divide-y divide-gray-100">

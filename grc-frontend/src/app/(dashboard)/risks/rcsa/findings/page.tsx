@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rcsaApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   AlertTriangle,
   Search,
@@ -222,8 +223,8 @@ export default function RCSAFindingsPage() {
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
   const [modalType, setModalType] = useState<'risk' | 'control' | 'action' | null>(null);
   const queryClient = useQueryClient();
-
-  const { data: findings, isLoading, error } = useQuery({
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('risks:rcsa:create');
     queryKey: ['rcsa-findings', severityFilter, statusFilter],
     queryFn: async () => {
       try {
@@ -446,13 +447,13 @@ export default function RCSAFindingsPage() {
                       >
                         <Shield className="h-4 w-4" />
                       </button>
-                      <button
+                      {canCreate && <button
                         onClick={() => { setSelectedFinding(finding); setModalType('action'); }}
                         className="p-1.5 rounded-lg text-slate-600 hover:text-green-400 hover:bg-green-500/20"
                         title="Create Action"
                       >
                         <Plus className="h-4 w-4" />
-                      </button>
+                      </button>}
                     </div>
                   </td>
                 </tr>

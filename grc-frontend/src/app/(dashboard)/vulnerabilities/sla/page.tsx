@@ -12,6 +12,7 @@ import {
   Edit2,
   X,
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface SLAConfig {
   id: number;
@@ -47,6 +48,9 @@ export default function SLAConfigPage() {
     remediation_days: 0,
   });
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('vulnerabilities:vulnerability_management:create');
+  const canEdit = hasPermission('vulnerabilities:vulnerability_management:edit');
 
   const { data: slaConfigs, isLoading, error } = useQuery({
     queryKey: ['vuln-sla'],
@@ -239,22 +243,26 @@ export default function SLAConfigPage() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => handleEdit(config)}
-                          className="p-1.5 rounded-lg cw-text-muted hover:text-[var(--color-primary)] hover:bg-[var(--color-hover)] transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 size={16} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => handleEdit(config)}
+                            className="p-1.5 rounded-lg cw-text-muted hover:text-[var(--color-primary)] hover:bg-[var(--color-hover)] transition-colors"
+                            title="Edit"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                        )}
                       )
                     ) : (
-                      <button
-                        onClick={() => handleCreateDefault(severity)}
-                        disabled={createMutation.isPending}
-                        className="text-sm text-primary-600 hover:text-primary-300"
-                      >
-                        Set Default
-                      </button>
+                      {canCreate && (
+                        <button
+                          onClick={() => handleCreateDefault(severity)}
+                          disabled={createMutation.isPending}
+                          className="text-sm text-primary-600 hover:text-primary-300"
+                        >
+                          Set Default
+                        </button>
+                      )}
                     )}
                   </td>
                 </tr>

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { frameworkUploadApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   GitCompare,
   Loader2,
@@ -135,8 +136,9 @@ export default function AlignmentPage() {
   });
   
   const queryClient = useQueryClient();
-
-  const { data: frameworksData } = useQuery({
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('frameworks:framework_upload:create');
+  const canEdit = hasPermission('frameworks:framework_upload:edit');
     queryKey: ['uploaded-frameworks-parsed'],
     queryFn: async () => {
       const response = await frameworkUploadApi.listFrameworks({ limit: 100 });
@@ -312,7 +314,7 @@ export default function AlignmentPage() {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={handleAnalyze}
-            disabled={!effectiveFrameworkId || analyzeMutation.isPending}
+            disabled={!effectiveFrameworkId || analyzeMutation.isPending || !canCreate}
             className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {analyzeMutation.isPending ? (
@@ -326,7 +328,7 @@ export default function AlignmentPage() {
           {summaryData && summaryData.new_controls > 0 && (
             <button
               onClick={handleCreateNewControls}
-              disabled={createNewControlsMutation.isPending}
+              disabled={createNewControlsMutation.isPending || !canCreate}
               className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {createNewControlsMutation.isPending ? (
@@ -531,7 +533,7 @@ export default function AlignmentPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {!alignment.is_confirmed && (
+                      {!alignment.is_confirmed && canCreate && (
                         <button
                           onClick={() => handleConfirmAlignment(alignment)}
                           className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700"
@@ -540,13 +542,13 @@ export default function AlignmentPage() {
                           Confirm
                         </button>
                       )}
-                      <button
+                      {canEdit && <button
                         onClick={() => handleEditAlignment(alignment)}
                         className="flex items-center gap-1.5 rounded-lg bg-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-600 hover:text-slate-900"
                       >
                         <Edit2 className="h-4 w-4" />
                         Edit
-                      </button>
+                      </button>}
                     </div>
                   </div>
                 </div>

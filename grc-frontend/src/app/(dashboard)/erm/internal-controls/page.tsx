@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Shield,
   Loader2,
@@ -302,6 +302,10 @@ function EvidenceLinkSection({ controlId }: { controlId: number }) {
 }
 
 export default function InternalControlsPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('erm:internal_controls:create');
+  const canEdit = hasPermission('erm:internal_controls:edit');
+  const canDelete = hasPermission('erm:internal_controls:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -773,6 +777,7 @@ export default function InternalControlsPage() {
               setIsModalOpen(true);
             }}
             className="flex items-center gap-2 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-500"
+            style={canCreate ? {} : { display: 'none' }}
           >
             <Plus className="h-4 w-4" />
             Add New Control
@@ -877,6 +882,7 @@ export default function InternalControlsPage() {
                           onClick={() => setDeleteConfirm(control.id)}
                           className="rounded p-1 text-slate-600 hover:bg-red-600/20 hover:text-red-400 transition-colors"
                           title="Delete"
+                          style={canDelete ? {} : { display: 'none' }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

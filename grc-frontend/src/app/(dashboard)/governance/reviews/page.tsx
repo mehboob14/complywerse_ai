@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Calendar,
   Clock,
@@ -179,8 +180,8 @@ export default function GovernanceReviewsPage() {
   const [actionStatusFilter, setActionStatusFilter] = useState('pending_review');
   const [completingId, setCompletingId] = useState<number | null>(null);
   const queryClient = useQueryClient();
-
-  const { data: statistics, isLoading: statsLoading } = useQuery({
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('governance:document_management:edit');
     queryKey: ['governance-review-statistics'],
     queryFn: async () => {
       const response = await governanceApi.getReviewStatistics();
@@ -656,7 +657,7 @@ export default function GovernanceReviewsPage() {
                           </div>
                         </div>
 
-                        <button
+                        {canEdit && <button
                           onClick={() => handleCompleteReview(doc.id)}
                           disabled={completingId === doc.id}
                           className={`flex items-center gap-1 whitespace-nowrap rounded px-2.5 py-1 text-xs font-medium transition-colors ${doc.is_overdue
@@ -670,7 +671,7 @@ export default function GovernanceReviewsPage() {
                             <CheckCircle className="h-4 w-4" />
                           )}
                           Complete Review
-                        </button>
+                        </button>}
                       </div>
                     </div>
                   </div>

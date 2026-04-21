@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
   AlertTriangle,
@@ -192,6 +193,9 @@ export default function FindingDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const findingId = Number(params.id);
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
 
   const [activeTab, setActiveTab] = useState<TabKey>('details');
   const [error, setError] = useState<string | null>(null);
@@ -509,12 +513,12 @@ export default function FindingDetailPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-900">Management Responses</h3>
-                <button
+                {canCreate && <button
                   onClick={() => setShowResponseModal(true)}
                   className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors"
                 >
                   <Plus className="h-4 w-4" /> Add Response
-                </button>
+                </button>}
               </div>
 
               {(!finding.management_responses || finding.management_responses.length === 0) ? (
@@ -564,12 +568,12 @@ export default function FindingDetailPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-900">Recommendations & Action Plans</h3>
-                <button
+                {canCreate && <button
                   onClick={() => setShowRecModal(true)}
                   className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors"
                 >
                   <Plus className="h-4 w-4" /> Add Recommendation
-                </button>
+                </button>}
               </div>
 
               {(!finding.recommendations || finding.recommendations.length === 0) ? (
@@ -605,13 +609,13 @@ export default function FindingDetailPage() {
                                 {totalAps > 0 && <span>{completedAps}/{totalAps} action plans complete</span>}
                               </div>
                             </div>
-                            <button
+                            {canCreate && <button
                               onClick={() => { setApRecId(rec.id); setShowApModal(true); }}
                               className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-colors"
                               title="Add Action Plan"
                             >
                               <Plus className="h-4 w-4" />
-                            </button>
+                            </button>}
                           </div>
                           {totalAps > 0 && (
                             <div className="mt-3">
@@ -638,7 +642,7 @@ export default function FindingDetailPage() {
                                     {ap.evidence_of_completion && <span className="text-blue-600">Evidence attached</span>}
                                   </div>
                                 </div>
-                                {ap.status !== 'completed' && (
+                                {ap.status !== 'completed' && canEdit && (
                                   <button
                                     onClick={() => { setCompleteApTarget({ recId: rec.id, apId: ap.id }); setCompleteApForm({ evidence_of_completion: '' }); setShowCompleteApModal(true); }}
                                     className="ml-2 px-2 py-1 text-xs text-emerald-600 hover:bg-emerald-50 rounded border border-emerald-200 transition-colors"
@@ -662,12 +666,12 @@ export default function FindingDetailPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-900">Follow-Up & Retesting</h3>
-                <button
+                {canCreate && <button
                   onClick={() => setShowFollowUpModal(true)}
                   className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors"
                 >
                   <Plus className="h-4 w-4" /> Add Follow-Up
-                </button>
+                </button>}
               </div>
 
               {(!finding.follow_ups || finding.follow_ups.length === 0) ? (

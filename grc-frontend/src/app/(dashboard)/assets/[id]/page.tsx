@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
 import type { ITAsset } from '@/types';
 import { 
@@ -139,6 +140,9 @@ export default function AssetDetailPage() {
   const router = useRouter();
   const assetId = Number(params.id);
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('assets:asset_inventory:edit');
+  const canDelete = hasPermission('assets:asset_inventory:delete');
   const [activeTab, setActiveTab] = useState<TabType>('details');
   const [showLinkControlModal, setShowLinkControlModal] = useState(false);
   const [showLinkEvidenceModal, setShowLinkEvidenceModal] = useState(false);
@@ -413,14 +417,16 @@ export default function AssetDetailPage() {
             {getCriticalityBadge(asset.criticality)}
           </div>
           <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-            <button
-              onClick={() => setShowEditModal(true)}
-              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
-              title="Edit Asset"
-            >
-              <Edit className="h-4 w-4" />
-              Edit
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+                title="Edit Asset"
+              >
+                <Edit className="h-4 w-4" />
+                Edit
+              </button>
+            )}
             <button
               onClick={() => assessRiskMutation.mutate()}
               disabled={assessRiskMutation.isPending}
@@ -434,14 +440,16 @@ export default function AssetDetailPage() {
               )}
               Assess Risk
             </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-600 hover:bg-red-100"
-              title="Delete Asset"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </button>
+            {canDelete && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-600 hover:bg-red-100"
+                title="Delete Asset"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            )}
           </div>
         </div>
       </div>

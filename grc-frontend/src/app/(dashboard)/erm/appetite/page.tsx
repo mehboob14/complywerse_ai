@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { RiskCategory } from '@/types';
 import {
   AlertTriangle,
@@ -116,6 +117,9 @@ const getAppetiteLevelColor = (level: AppetiteLevel) => {
 
 export default function RiskAppetitePage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('risks:risk_appetite:create');
+  const canEdit = hasPermission('risks:risk_appetite:edit');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -380,7 +384,7 @@ export default function RiskAppetitePage() {
           {saveSuccess && (
             <span className="text-sm text-green-600">Configuration saved successfully!</span>
           )}
-          {appetiteConfigs && (
+          {appetiteConfigs && canCreate && (
             <button
               onClick={() => {
                 const existingCategories = appetiteConfigs.map(c => c.category);
@@ -394,18 +398,20 @@ export default function RiskAppetitePage() {
               New Config
             </button>
           )}
-          <button
-            onClick={handleSave}
-            disabled={isSaving || !hasChanges}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-          >
-            {isSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Save Configuration
-          </button>
+          {canEdit && (
+            <button
+              onClick={handleSave}
+              disabled={isSaving || !hasChanges}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            >
+              {isSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Save Configuration
+            </button>
+          )}
         </div>
       </div>
 

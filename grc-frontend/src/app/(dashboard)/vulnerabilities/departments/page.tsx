@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Users,
   Plus,
@@ -66,6 +67,10 @@ interface EscalationPath {
 
 export default function DepartmentsManagementPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('vulnerabilities:vulnerability_register:create');
+  const canEdit = hasPermission('vulnerabilities:vulnerability_register:edit');
+  const canDelete = hasPermission('vulnerabilities:vulnerability_register:delete');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -200,6 +205,7 @@ export default function DepartmentsManagementPage() {
           <h1 className="text-xl font-bold cw-text-default">Vulnerability Departments</h1>
           <p className="text-xs cw-text-muted">Manage departments responsible for vulnerability remediation</p>
         </div>
+        {canCreate && (
         <button
           onClick={() => setShowCreateModal(true)}
           className="btn-primary flex items-center gap-2"
@@ -207,6 +213,7 @@ export default function DepartmentsManagementPage() {
           <Plus size={16} />
           Create Department
         </button>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
@@ -270,6 +277,7 @@ export default function DepartmentsManagementPage() {
                   </button>
                   {activeMenuId === dept.id && (
                     <div className="absolute right-0 mt-1 w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl z-10">
+                      {canEdit && (
                       <button
                         onClick={() => {
                           setSelectedDepartment(dept);
@@ -281,6 +289,7 @@ export default function DepartmentsManagementPage() {
                         <Edit2 size={14} />
                         Edit
                       </button>
+                      )}
                       <button
                         onClick={() => {
                           setSelectedDepartment(dept);
@@ -303,6 +312,7 @@ export default function DepartmentsManagementPage() {
                         <Route size={14} />
                         Escalation Paths
                       </button>
+                      {canDelete && (
                       <button
                         onClick={() => {
                           if (confirm('Are you sure you want to delete this department?')) {
@@ -314,6 +324,7 @@ export default function DepartmentsManagementPage() {
                         <Trash2 size={14} />
                         Delete
                       </button>
+                      )}
                     </div>
                   )}
                 </div>

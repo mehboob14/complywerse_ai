@@ -5,6 +5,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import apiClient, { controlsApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
   Shield, 
   Loader2, 
@@ -103,6 +104,8 @@ interface AIRecommendations {
 
 export default function ControlsPage() {
   const searchParams = useSearchParams();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('controls:control_library:create');
   const initialFrameworkId = searchParams.get('framework');
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -631,7 +634,7 @@ export default function ControlsPage() {
                                 <Sparkles className="h-5 w-5 text-primary-600" />
                                 <h4 className="text-sm font-semibold text-black">AI Recommendations</h4>
                               </div>
-                              {!aiRecommendations[control.id] && (
+                              {!aiRecommendations[control.id] && canCreate && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

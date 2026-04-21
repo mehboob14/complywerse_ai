@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { vendorRiskApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
   Loader2,
@@ -150,6 +151,8 @@ export default function AssessmentDetailPage() {
   const [newRecommendation, setNewRecommendation] = useState('');
   const [approveRating, setApproveRating] = useState('');
   const [scoreResult, setScoreResult] = useState<{ inherent_score: number; residual_score: number; risk_rating: string } | null>(null);
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('vendor_risk:assessments:edit');
 
   // ── Queries ─────────────────────────────────────────────────
 
@@ -762,7 +765,7 @@ export default function AssessmentDetailPage() {
               )}
               <button
                 onClick={() => scoreMutation.mutate()}
-                disabled={scoreMutation.isPending || isApproved}
+                disabled={scoreMutation.isPending || isApproved || !canEdit}
                 className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {scoreMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -808,7 +811,7 @@ export default function AssessmentDetailPage() {
                   )}
                   <button
                     onClick={() => approveMutation.mutate()}
-                    disabled={approveMutation.isPending}
+                    disabled={approveMutation.isPending || !canEdit}
                     className="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {approveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />}

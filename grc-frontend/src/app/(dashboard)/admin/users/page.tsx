@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PageHeader, DataTable } from '@/components/ui';
+import { PageHeader, DataTable, IfPermission } from '@/components/ui';
 import { adminApi, AdminUser, AdminRole } from '@/lib/api';
 
 async function ensureTenantContext(): Promise<boolean> {
@@ -228,18 +228,22 @@ export default function UsersManagementPage() {
       header: 'Actions',
       accessor: (user: AdminUser) => (
         <div className="flex space-x-2">
-          <button
-            onClick={() => handleEdit(user)}
-            className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-black rounded text-sm"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => handleDelete(user)}
-            className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-600 rounded text-sm"
-          >
-            Delete
-          </button>
+          <IfPermission required="admin:users:edit">
+            <button
+              onClick={() => handleEdit(user)}
+              className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-black rounded text-sm"
+            >
+              Edit
+            </button>
+          </IfPermission>
+          <IfPermission required="admin:users:delete">
+            <button
+              onClick={() => handleDelete(user)}
+              className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-600 rounded text-sm"
+            >
+              Delete
+            </button>
+          </IfPermission>
         </div>
       ),
     },
@@ -270,12 +274,14 @@ export default function UsersManagementPage() {
       )}
 
       <div className="flex justify-end">
-        <button
-          onClick={handleCreate}
-          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors"
-        >
-          + Create User
-        </button>
+        <IfPermission required="admin:users:create">
+          <button
+            onClick={handleCreate}
+            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors"
+          >
+            + Create User
+          </button>
+        </IfPermission>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">

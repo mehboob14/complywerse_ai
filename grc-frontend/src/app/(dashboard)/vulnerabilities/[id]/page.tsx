@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi, assetsApi, ermApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Bug,
   Loader2,
@@ -277,6 +278,9 @@ export default function VulnerabilityDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('vulnerabilities:vulnerability_register:edit');
+  const canDelete = hasPermission('vulnerabilities:vulnerability_register:delete');
   const vulnId = Number(params.id);
 
   const [activeTab, setActiveTab] = useState('overview');
@@ -719,10 +723,12 @@ export default function VulnerabilityDetailPage() {
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-semibold cw-text">Linked Assets</h2>
+            {canEdit && (
             <button onClick={() => setShowAssetModal(true)} className="btn-primary flex items-center gap-1.5 text-sm py-1 px-3">
               <Plus size={14} />
               Link Asset
             </button>
+            )}
           </div>
           <div className="cw-card overflow-hidden">
             {(!assetLinks || assetLinks.length === 0) ? (
@@ -744,12 +750,14 @@ export default function VulnerabilityDetailPage() {
                       <td className="px-4 py-3 text-slate-600">{link.asset_type || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{link.relationship_type || 'affected'}</td>
                       <td className="px-4 py-3">
+                        {canDelete && (
                         <button
                           onClick={() => deleteAssetLinkMutation.mutate(link.id)}
                           className="text-slate-600 hover:text-red-600"
                         >
                           <Trash2 size={16} />
                         </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -764,10 +772,12 @@ export default function VulnerabilityDetailPage() {
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-semibold cw-text">Linked Controls</h2>
+            {canEdit && (
             <button onClick={() => setShowControlModal(true)} className="btn-primary flex items-center gap-1.5 text-sm py-1 px-3">
               <Plus size={14} />
               Link Control
             </button>
+            )}
           </div>
           <div className="cw-card overflow-hidden">
             {(!controlLinks || controlLinks.length === 0) ? (
@@ -793,12 +803,14 @@ export default function VulnerabilityDetailPage() {
                       <td className="px-4 py-3 text-slate-600">{displayType}</td>
                       <td className="px-4 py-3 text-slate-600 font-mono text-xs">{displayCode}</td>
                       <td className="px-4 py-3">
+                        {canDelete && (
                         <button
                           onClick={() => deleteControlLinkMutation.mutate(link.id)}
                           className="text-slate-600 hover:text-red-600"
                         >
                           <Trash2 size={16} />
                         </button>
+                        )}
                       </td>
                     </tr>
                     );
@@ -814,10 +826,12 @@ export default function VulnerabilityDetailPage() {
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-semibold cw-text">Department Assignments</h2>
+            {canEdit && (
             <button onClick={() => setShowDeptAssignModal(true)} className="btn-primary flex items-center gap-1.5 text-sm py-1 px-3">
               <Plus size={14} />
               Assign Department
             </button>
+            )}
           </div>
           <div className="cw-card overflow-hidden">
             {(!departmentAssignments || departmentAssignments.length === 0) ? (
@@ -867,12 +881,14 @@ export default function VulnerabilityDetailPage() {
                         {new Date(assignment.assigned_at).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-3">
+                        {canDelete && (
                         <button
                           onClick={() => removeDepartmentAssignmentMutation.mutate(assignment.id)}
                           className="text-slate-600 hover:text-red-600"
                         >
                           <Trash2 size={16} />
                         </button>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient, { frameworksApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Sparkles,
   Loader2,
@@ -101,6 +102,8 @@ const PRIORITY_STYLES: Record<string, { bg: string; text: string; bar: string }>
 
 export default function EvidenceSuggestionsPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('control_library:evidence_library:create');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -271,7 +274,7 @@ export default function EvidenceSuggestionsPage() {
           <h1 className="text-2xl font-bold text-black">Evidence Suggestions & Reuse</h1>
           <p className="text-gray-600">AI-recommended evidence types and reuse metrics</p>
         </div>
-        <button
+        {canCreate && <button
           onClick={() => {
             setBulkProgress(null);
             setShowBulkModal(true);
@@ -280,7 +283,7 @@ export default function EvidenceSuggestionsPage() {
         >
           <Sparkles size={18} />
           Bulk Generate
-        </button>
+        </button>}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

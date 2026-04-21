@@ -24,9 +24,11 @@ import {
   FileText,
   Sparkles,
   CheckCircle,
-  Eye
+  Eye,
+  Search
 } from 'lucide-react';
 import Link from 'next/link';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface UploadedFramework {
   id: number;
@@ -70,6 +72,8 @@ const frameworkDedupeKey = (framework: UploadedFramework): string => {
 
 export default function FrameworksPage() {
   const router = useRouter();
+  const { hasPermission } = usePermissions();
+  const canDelete = hasPermission('frameworks:framework_library:delete');
   const queryClient = useQueryClient();
   const [deleteConfirm, setDeleteConfirm] = useState<UploadedFramework | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -77,6 +81,7 @@ export default function FrameworksPage() {
   const [journeyDeleteError, setJourneyDeleteError] = useState<string | null>(null);
   const [enhancingFrameworkId, setEnhancingFrameworkId] = useState<number | null>(null);
   const [classifyingFrameworkId, setClassifyingFrameworkId] = useState<number | null>(null);
+  const [frameworkSearch, setFrameworkSearch] = useState('');
 
   const deleteMutation = useMutation({
     mutationFn: async (frameworkId: number) => {
@@ -356,6 +361,43 @@ export default function FrameworksPage() {
     (f: UploadedFramework) => !activeCertificationFrameworkIds.has(String(f.id))
   );
 
+  const normalizedSearch = frameworkSearch.trim().toLowerCase();
+
+  const frameworkMatchesSearch = (framework: UploadedFramework) => {
+    if (!normalizedSearch) return true;
+    return [
+      framework.name,
+      stripCertificationPostfix(framework.name),
+      framework.version,
+      framework.framework_type,
+      framework.classification,
+      framework.regulatory_authority,
+      framework.certification_body,
+      framework.framework_purpose,
+    ]
+      .filter(Boolean)
+      .some((value) => value!.toString().toLowerCase().includes(normalizedSearch));
+  };
+
+  const certificationMatchesSearch = (cert: CertificationJourney) => {
+    if (!normalizedSearch) return true;
+    return [
+      cert.name,
+      cert.framework?.name,
+      cert.status,
+    ]
+      .filter(Boolean)
+      .some((value) => value!.toString().toLowerCase().includes(normalizedSearch));
+  };
+
+  const filteredProcessingFrameworks = processingFrameworks.filter(frameworkMatchesSearch);
+  const filteredActiveCertifications = activeCertifications.filter(certificationMatchesSearch);
+  const filteredAvailableFrameworks = availableFrameworks.filter(frameworkMatchesSearch);
+  const hasVisibleResults =
+    filteredProcessingFrameworks.length > 0 ||
+    filteredActiveCertifications.length > 0 ||
+    filteredAvailableFrameworks.length > 0;
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'bg-emerald-50 text-emerald-700';
@@ -406,18 +448,27 @@ export default function FrameworksPage() {
           <h1 className="text-2xl font-bold cw-text-default">Compliance Frameworks</h1>
           <p className="cw-text-muted">Manage frameworks and track certification journeys</p>
         </div>
-        {/* <div className="flex w-full items-center gap-3 lg:w-auto">
-          <Link
-            href="/framework-upload"
-            className="cw-btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium whitespace-nowrap lg:w-auto"
-          >
-            <FileStack className="h-4 w-4" />
-            <span>Upload New Framework</span>
-          </Link>
-        </div> */}
+        <div className="w-full max-w-xs">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={frameworkSearch}
+              onChange={(e) => setFrameworkSearch(e.target.value)}
+              placeholder="Search frameworks..."
+              className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+        </div>
       </div>
 
-      {processingFrameworks.length > 0 && (
+      {normalizedSearch && !hasVisibleResults && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          No frameworks match your search.
+        </div>
+      )}
+
+      {filteredProcessingFrameworks.length > 0 && (
         <section>
           <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold cw-text-default">
             <RefreshCw className={`h-5 w-5 text-purple-600 ${isFetching ? 'animate-spin' : ''}`} />
@@ -442,7 +493,7 @@ export default function FrameworksPage() {
           )}
           
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {processingFrameworks.map((framework: UploadedFramework) => {
+            {filteredProcessingFrameworks.map((framework: UploadedFramework) => {
               const statusInfo = getUploadStatusInfo(framework.upload_status);
               const StatusIcon = statusInfo.icon;
               return (
@@ -517,14 +568,14 @@ export default function FrameworksPage() {
         </section>
       )}
 
-      {activeCertifications.length > 0 && (
+      {filteredActiveCertifications.length > 0 && (
         <section>
           <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold cw-text-default">
             <Target className="h-5 w-5 text-blue-600" />
             Active Certification Journeys
           </h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {activeCertifications.map((cert: CertificationJourney) => {
+            {filteredActiveCertifications.map((cert: CertificationJourney) => {
               const progressData = cert.progress as any;
               const progress = progressData?.readiness_percentage ?? progressData?.completion_percentage ?? 0;
               const implemented = progressData?.implemented_count ?? progressData?.implemented ?? 0;
@@ -551,17 +602,19 @@ export default function FrameworksPage() {
                       <span className={`rounded-lg px-2 py-1 text-xs font-medium whitespace-nowrap ${getStatusColor(cert.status)}`}>
                         {cert.status.replace('_', ' ')}
                       </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setJourneyDeleteConfirm(cert);
-                          setJourneyDeleteError(null);
-                        }}
-                        className="rounded-lg bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100 transition-colors opacity-0 group-hover:opacity-100"
-                        title="Delete Certification Journey"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {canDelete && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setJourneyDeleteConfirm(cert);
+                            setJourneyDeleteError(null);
+                          }}
+                          className="rounded-lg bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Delete Certification Journey"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -629,7 +682,7 @@ export default function FrameworksPage() {
           Available Frameworks
         </h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {availableFrameworks?.map((framework: UploadedFramework) => {
+          {filteredAvailableFrameworks?.map((framework: UploadedFramework) => {
             return (
               <div 
                 key={framework.id} 
@@ -725,6 +778,7 @@ export default function FrameworksPage() {
                       <Play className="h-4 w-4" />
                       Start Journey
                     </button>
+                  {canDelete && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -736,6 +790,7 @@ export default function FrameworksPage() {
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
+                  )}
                   </div>
                   <button
                     onClick={(e) => {
@@ -770,6 +825,14 @@ export default function FrameworksPage() {
             <FileStack className="mb-4 h-12 w-12 cw-text-muted" />
             <h3 className="text-lg font-medium cw-text-default">No frameworks available</h3>
             <p className="mt-1 cw-text-muted">No frameworks uploaded yet. Use Upload New Framework to add your first framework.</p>
+          </div>
+        )}
+
+        {completedFrameworks.length > 0 && filteredAvailableFrameworks.length === 0 && normalizedSearch && (
+          <div className="cw-card p-10 shadow-sm flex flex-col items-center justify-center text-center">
+            <FileStack className="mb-3 h-10 w-10 cw-text-muted" />
+            <h3 className="text-base font-medium cw-text-default">No available frameworks found</h3>
+            <p className="mt-1 text-sm cw-text-muted">Try a different keyword.</p>
           </div>
         )}
       </section>

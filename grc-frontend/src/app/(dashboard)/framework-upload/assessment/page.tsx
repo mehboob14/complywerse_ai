@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { frameworkUploadApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Loader2,
   AlertCircle,
@@ -178,8 +179,8 @@ export default function AssessmentPage() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
-
-  const { data: frameworksData } = useQuery({
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('frameworks:framework_upload:create');
     queryKey: ['uploaded-frameworks-parsed'],
     queryFn: async () => {
       const response = await frameworkUploadApi.listFrameworks({ status: 'parsed' });
@@ -412,13 +413,13 @@ export default function AssessmentPage() {
           </div>
           {assessmentsLoading && <Loader2 className="h-5 w-5 animate-spin text-primary-500" />}
         </div>
-        <button
+        {canCreate && <button
           onClick={() => setIsNewAssessmentModalOpen(true)}
           className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700"
         >
           <Plus className="h-4 w-4" />
           New Assessment
-        </button>
+        </button>}
       </div>
 
       {selectedAssessmentId && dashboard && (
@@ -720,13 +721,13 @@ export default function AssessmentPage() {
           <FileText className="mb-4 h-16 w-16 text-slate-600" />
           <h3 className="mb-2 text-lg font-medium text-black">No Assessment Selected</h3>
           <p className="mb-4 text-slate-600">Select an existing assessment or create a new one to get started</p>
-          <button
+          {canCreate && <button
             onClick={() => setIsNewAssessmentModalOpen(true)}
             className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700"
           >
             <Plus className="h-4 w-4" />
             Create New Assessment
-          </button>
+          </button>}
         </div>
       )}
 

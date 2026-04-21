@@ -1208,10 +1208,12 @@ export default function VulnerabilitiesPage() {
                 className="cw-field w-full py-2 pl-10 pr-4 text-sm"
               />
             </div>
-            <button onClick={() => setShowCreateDeptModal(true)} className="cw-btn-primary flex items-center gap-2 ml-4">
-              <Plus size={16} />
-              Create Department
-            </button>
+            {hasPermission('vulnerabilities:vulnerability_register:create') && (
+              <button onClick={() => setShowCreateDeptModal(true)} className="cw-btn-primary flex items-center gap-2 ml-4">
+                <Plus size={16} />
+                Create Department
+              </button>
+            )}
           </div>
 
           {deptsLoading ? (
@@ -1254,18 +1256,22 @@ export default function VulnerabilitiesPage() {
                         </button>
                         {activeMenuId === dept.id && (
                           <div className="absolute right-0 mt-1 w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl z-10">
-                            <button onClick={() => { setSelectedDepartment(dept); setShowEditDeptModal(true); setActiveMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-sm cw-text-muted hover:bg-[var(--color-hover)]">
-                              <Edit2 size={14} /> Edit
-                            </button>
+                            {hasPermission('vulnerabilities:vulnerability_register:edit') && (
+                              <button onClick={() => { setSelectedDepartment(dept); setShowEditDeptModal(true); setActiveMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-sm cw-text-muted hover:bg-[var(--color-hover)]">
+                                <Edit2 size={14} /> Edit
+                              </button>
+                            )}
                             <button onClick={() => { setSelectedDepartment(dept); setShowMemberModal(true); setActiveMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-sm cw-text-muted hover:bg-[var(--color-hover)]">
                               <UserPlus size={14} /> Members
                             </button>
                             <button onClick={() => { setSelectedDepartment(dept); setShowEscalationModal(true); setActiveMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-sm cw-text-muted hover:bg-[var(--color-hover)]">
                               <Route size={14} /> Escalation Paths
                             </button>
-                            <button onClick={() => { if (confirm('Delete this department?')) { deleteDepartmentMutation.mutate(dept.id); } }} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-[var(--color-hover)]">
-                              <Trash2 size={14} /> Delete
-                            </button>
+                            {hasPermission('vulnerabilities:vulnerability_register:delete') && (
+                              <button onClick={() => { if (confirm('Delete this department?')) { deleteDepartmentMutation.mutate(dept.id); } }} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-[var(--color-hover)]">
+                                <Trash2 size={14} /> Delete
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rcsaApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileText,
   Plus,
@@ -49,6 +50,9 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 export default function RCSATemplatesPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('risks:rcsa:create');
+  const canDelete = hasPermission('risks:rcsa:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -170,6 +174,7 @@ export default function RCSATemplatesPage() {
             <p className="text-slate-600 mt-1">Manage Risk & Control Self-Assessment templates</p>
           </div>
           <div className="flex items-center gap-3">
+            {canCreate && (
             <button
               onClick={() => setIsUploadModalOpen(true)}
               className="btn-secondary flex items-center gap-2"
@@ -177,6 +182,8 @@ export default function RCSATemplatesPage() {
               <Upload className="h-4 w-4" />
               Upload Template
             </button>
+            )}
+            {canCreate && (
             <button
               onClick={() => setIsModalOpen(true)}
               className="btn-primary flex items-center gap-2"
@@ -184,6 +191,7 @@ export default function RCSATemplatesPage() {
               <Plus className="h-4 w-4" />
               New Template
             </button>
+            )}
           </div>
         </div>
       </div>
@@ -278,7 +286,7 @@ export default function RCSATemplatesPage() {
                 <Copy className="h-4 w-4" />
                 Clone
               </button>
-              {template.source === 'custom' && (
+              {template.source === 'custom' && canDelete && (
                 <>
                   <Link
                     href={`/risks/rcsa/templates/${template.id}?edit=true`}

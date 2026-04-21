@@ -12,3 +12,4 @@ export { DataTable, type DataTableProps, type ColumnDef, type BulkAction, type S
 export { Toast, ToastContainer, type ToastProps, type ToastData, type ToastType, type ToastContainerProps } from './Toast';
 export { ToastProvider, useToast, type ToastProviderProps } from './ToastProvider';
 export { RightSlidePanel, type RightSlidePanelProps } from './RightSlidePanel';
+export { default as PermissionGuard, IfPermission } from './PermissionGuard';

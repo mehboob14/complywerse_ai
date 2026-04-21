@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
   Calendar,
@@ -66,6 +67,10 @@ export default function AuditPlanDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('audit:audit_management:create');
+  const canEdit = hasPermission('audit:audit_management:edit');
+  const canDelete = hasPermission('audit:audit_management:delete');
   const planId = Number(params.id);
   const [activeTab, setActiveTab] = useState('items');
   const [showAddItem, setShowAddItem] = useState(false);
@@ -250,9 +255,11 @@ export default function AuditPlanDetailPage() {
         <div className="bg-white rounded-xl border border-slate-200">
           <div className="flex items-center justify-between p-4 border-b border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900">Plan Items ({items.length})</h2>
+            {canCreate && (
             <button onClick={() => setShowAddItem(true)} className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
               <Plus className="w-4 h-4" /> Add Item
             </button>
+            )}
           </div>
           {items.length === 0 ? (
             <div className="p-8 text-center">
@@ -294,8 +301,8 @@ export default function AuditPlanDetailPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => setEditingItem(item)} className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-600"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => { if (confirm('Delete this item?')) deleteItemMutation.mutate(item.id); }} className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                          {canEdit && <button onClick={() => setEditingItem(item)} className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-600"><Edit2 className="w-4 h-4" /></button>}
+                          {canDelete && <button onClick={() => { if (confirm('Delete this item?')) deleteItemMutation.mutate(item.id); }} className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
                         </div>
                       </td>
                     </tr>

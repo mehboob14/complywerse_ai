@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { complianceApi, evidenceApi, governanceApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 
 import {
   FileText,
@@ -133,6 +134,8 @@ const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
 };
 
 export default function PolicyStatementsPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('compliance:statements:create');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
@@ -374,7 +377,7 @@ export default function PolicyStatementsPage() {
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          {selectedStatementIds.length > 0 && (
+          {selectedStatementIds.length > 0 && canCreate && (
             <button
               onClick={() => setIsConvertModalOpen(true)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"

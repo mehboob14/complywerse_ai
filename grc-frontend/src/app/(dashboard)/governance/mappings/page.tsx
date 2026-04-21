@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi, ermApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileText,
   Search,
@@ -110,6 +111,9 @@ export default function GovernanceMappingsPage() {
   const [linkNotes, setLinkNotes] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('governance:mappings:create');
+  const canDelete = hasPermission('governance:mappings:delete');
 
   const { data: documentsData, isLoading: documentsLoading } = useQuery({
     queryKey: ['governance-documents-list', typeFilter, searchTerm],
@@ -389,7 +393,7 @@ export default function GovernanceMappingsPage() {
                 }
               </p>
             </div>
-            {selectedDocumentId && (
+            {selectedDocumentId && canCreate && (
               <button
                 onClick={() => setShowLinkModal(true)}
                 className="btn-primary btn-sm"
@@ -438,14 +442,14 @@ export default function GovernanceMappingsPage() {
                       )}
                     </div>
                   </div>
-                  <button
+                  {canDelete && <button
                     onClick={() => handleUnlinkControl(link.id)}
                     disabled={unlinkMutation.isPending}
                     className="p-2 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
                     title="Unlink control"
                   >
                     <Unlink className="h-4 w-4" />
-                  </button>
+                  </button>}
                 </div>
               ))}
             </div>

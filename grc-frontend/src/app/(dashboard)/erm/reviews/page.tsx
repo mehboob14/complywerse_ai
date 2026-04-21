@@ -19,6 +19,7 @@ import {
   X,
   AlertCircle,
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const REVIEW_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/20 text-yellow-400',
@@ -32,6 +33,8 @@ export default function ReviewsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('erm:risk_assessments:create');
 
   const { data: reviews, isLoading } = useQuery({
     queryKey: ['erm-reviews', statusFilter],
@@ -121,13 +124,15 @@ export default function ReviewsPage() {
           <option value="completed">Completed</option>
           <option value="overdue">Overdue</option>
         </select>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
-        >
-          <Plus className="h-4 w-4" />
-          Schedule Review
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+          >
+            <Plus className="h-4 w-4" />
+            Schedule Review
+          </button>
+        )}
       </div>
 
       {reviews && reviews.length > 0 ? (

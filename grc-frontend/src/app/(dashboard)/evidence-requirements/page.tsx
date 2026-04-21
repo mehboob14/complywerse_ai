@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileCheck,
   Loader2,
@@ -165,6 +166,8 @@ const getTypeBadge = (type: string) => {
 
 export default function EvidenceRequirementsPage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('evidence:evidence_library:edit');
   const [selectedFramework, setSelectedFramework] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
@@ -529,7 +532,7 @@ export default function EvidenceRequirementsPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                          {req.status === 'draft' && (
+                          {req.status === 'draft' && canEdit && (
                             <button
                               onClick={() => submitMutation.mutate(req.id)}
                               disabled={submitMutation.isPending}
@@ -539,7 +542,7 @@ export default function EvidenceRequirementsPage() {
                               Submit
                             </button>
                           )}
-                          {req.status === 'submitted' && (
+                          {req.status === 'submitted' && canEdit && (
                             <button
                               onClick={() => reviewMutation.mutate(req.id)}
                               disabled={reviewMutation.isPending}
@@ -549,7 +552,7 @@ export default function EvidenceRequirementsPage() {
                               Review
                             </button>
                           )}
-                          {req.status === 'pending_review' && (
+                          {req.status === 'pending_review' && canEdit && (
                             <>
                               <button
                                 onClick={() => approveMutation.mutate(req.id)}

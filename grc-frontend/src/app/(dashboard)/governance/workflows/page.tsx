@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { WorkflowDashboard, PendingApprovalItem } from '@/types';
 import {
   FileCheck,
@@ -506,6 +507,10 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
 }
 
 export default function GovernanceWorkflowsPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('governance:workflows:create');
+  const canEdit = hasPermission('governance:workflows:edit');
+  const canDelete = hasPermission('governance:workflows:delete');
   const [mainTab, setMainTab] = useState<MainTabType>('approvals');
   const [activeTab, setActiveTab] = useState<ApprovalTabType>('pending');
   const [modalState, setModalState] = useState<{
@@ -961,6 +966,7 @@ export default function GovernanceWorkflowsPage() {
                 )}
                 Seed Defaults
               </button>
+              {canCreate && (
               <button
                 onClick={() => { setEditingTemplate(null); setTemplateModalOpen(true); }}
                 className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-black hover:bg-primary-700"
@@ -968,6 +974,7 @@ export default function GovernanceWorkflowsPage() {
                 <Plus size={16} />
                 New Template
               </button>
+              )}
             </div>
           </div>
 

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { regulatoryApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileWarning,
   Plus,
@@ -102,6 +103,9 @@ function getPriorityStyle(priority: string) {
 }
 
 export default function RegulatoryChangesPage() {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('governance:regulatory_changes:create');
+  const canDelete = hasPermission('governance:regulatory_changes:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -263,6 +267,7 @@ export default function RegulatoryChangesPage() {
           <h1 className="text-lg font-semibold text-black">Regulatory Change Management</h1>
           <p className="mt-1 text-gray-600">Track and manage regulatory changes and their implementation</p>
         </div>
+        {canCreate && (
         <button
           onClick={() => setIsModalOpen(true)}
           className="btn-primary flex items-center gap-2"
@@ -270,6 +275,7 @@ export default function RegulatoryChangesPage() {
           <Plus className="h-4 w-4" />
           New Change
         </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -416,6 +422,7 @@ export default function RegulatoryChangesPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
+                          {canDelete && (
                           <button
                             onClick={() => deleteMutation.mutate(change.id)}
                             disabled={deleteMutation.isPending}
@@ -424,6 +431,7 @@ export default function RegulatoryChangesPage() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
+                          )}
                         </div>
                       </td>
                     </tr>

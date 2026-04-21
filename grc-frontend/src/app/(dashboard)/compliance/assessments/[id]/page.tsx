@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import apiClient from '@/lib/api';
 import XlsxMaturityViewer from './XlsxMaturityViewer';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
   FileText,
@@ -189,6 +190,8 @@ export default function AssessmentDetailPage() {
   const router = useRouter();
   const assessmentId = Number(params.id);
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('compliance:assessments:edit');
 
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
@@ -786,6 +789,7 @@ export default function AssessmentDetailPage() {
                                         <StatusIcon className="h-3 w-3" />
                                         {itemStatusStyle.label}
                                       </span>
+                                      {canEdit && (
                                       <button
                                         onClick={() => startEditing(item)}
                                         className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -793,6 +797,7 @@ export default function AssessmentDetailPage() {
                                       >
                                         <Edit2 className="h-4 w-4" />
                                       </button>
+                                      )}
                                       <button
                                         onClick={() => toggleEvidencePanel(item.id)}
                                         className={`p-2 rounded-lg transition-colors relative ${isEvidenceExpanded ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}
