@@ -1113,11 +1113,11 @@ function WorkflowEngineContent() {
   }
 
   const TABS = [
-    { key: 'builder' as const, label: 'Builder' },
-    { key: 'workflows' as const, label: 'Workflows' },
-    { key: 'analytics' as const, label: 'Analytics' },
-    { key: 'approvals' as const, label: 'Approvals' },
-    { key: 'schedules' as const, label: 'Schedules & Webhooks' },
+    { key: 'builder' as const, label: 'Builder', locked: false },
+    { key: 'workflows' as const, label: 'Workflows', locked: false },
+    { key: 'analytics' as const, label: 'Analytics', locked: true },
+    { key: 'approvals' as const, label: 'Approvals', locked: true },
+    { key: 'schedules' as const, label: 'Schedules & Webhooks', locked: true },
   ];
 
   const sortedDefinitions = [...definitions].sort((a, b) =>
@@ -1155,13 +1155,23 @@ function WorkflowEngineContent() {
           {TABS.map((t) => (
             <button
               key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                activeTab === t.key
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              onClick={() => {
+                if (t.locked) {
+                  alert('This feature is locked. Please contact support to enable it.');
+                  return;
+                }
+                setActiveTab(t.key);
+              }}
+              title={t.locked ? 'Locked – contact support to unlock' : undefined}
+              className={`flex items-center gap-1 px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                t.locked
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : activeTab === t.key
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
               }`}
             >
+              {t.locked && <span className="text-[10px]">🔒</span>}
               {t.label}
             </button>
           ))}

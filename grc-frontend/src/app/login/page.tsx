@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Shield, LogIn, AlertCircle, Building2 } from 'lucide-react';
+import { AlertCircle, Building2, Lock } from 'lucide-react';
 
 function getTenantSlugFromHost(): string | null {
   if (typeof window === 'undefined') return null;
@@ -114,98 +114,158 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center">
-            <Shield className="h-10 w-10 text-primary-600" />
+      <div className="w-full max-w-sm">
+
+        {/* Logo */}
+        <div className="mb-6 text-center">
+          <div className="inline-flex items-center gap-1.5">
+            <span className="text-2xl font-bold text-slate-900 tracking-tight">
+              Compl<span className="relative inline-block">
+                {/* dotless i via unicode + colored dot above */}
+                <span style={{ fontVariantLigatures: 'none' }}>ı</span>
+                <span
+                  className="absolute left-1/2 -translate-x-1/2 rounded-full"
+                  style={{ top: '-3px', width: '5px', height: '5px', background: 'var(--color-base, #14b8a6)' }}
+                />
+              </span>verse
+            </span>
+            <span className="text-sm font-medium text-slate-400 self-end mb-0.5">AI</span>
           </div>
-          <h1 className="text-2xl font-semibold text-slate-900">ComplyVerse</h1>
-          <p className="mt-2 text-slate-500">Sign in to your account</p>
+          <p className="mt-1.5 text-xs text-slate-500">Sign in to your GRC workspace</p>
         </div>
 
+        {/* Tenant badge */}
         {tenantSlug && (
-          <div className="mb-4 rounded-lg border border-primary-200 bg-primary-50 p-4">
+          <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Building2 className="h-5 w-5 text-primary-600" />
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-blue-500 shrink-0" />
                 <div>
-                  <p className="text-sm text-slate-500">Signing in to</p>
-                  <p className="font-medium text-slate-800">{tenantName || tenantSlug}</p>
+                  <p className="text-[11px] text-slate-500">Signing in to</p>
+                  <p className="text-xs font-semibold text-slate-800">{tenantName || tenantSlug}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={clearTenantContext}
-                className="text-xs text-primary-600 hover:text-primary-700 underline"
+                className="text-[11px] text-blue-600 hover:text-blue-700 underline"
               >
-                Switch company
+                Switch
               </button>
             </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white p-8 shadow-card space-y-6">
-          {error && (
-            <div className="flex items-center gap-2 rounded-lg bg-rose-50 border border-rose-200 p-3 text-rose-700">
-              <AlertCircle size={18} />
-              <span className="text-sm">{error}</span>
-            </div>
-          )}
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-700">
-              Email address
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              placeholder="you@example.com"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              placeholder="Enter your password"
-              required
-            />
-          </div>
-
+          {/* Microsoft SSO — locked */}
           <button
-            type="submit"
-            disabled={isLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+            type="button"
+            disabled
+            title="Microsoft SSO coming soon. Contact support to enable."
+            className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-500 cursor-not-allowed opacity-60 mb-5"
           >
-            {isLoading ? (
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            ) : (
-              <>
-                <LogIn size={18} />
-                Sign in
-              </>
-            )}
+            {/* Official Microsoft logo SVG */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 23 23">
+              <path fill="#f3f3f3" d="M0 0h23v23H0z"/>
+              <path fill="#f35325" d="M1 1h10v10H1z"/>
+              <path fill="#81bc06" d="M12 1h10v10H12z"/>
+              <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+              <path fill="#ffba08" d="M12 12h10v10H12z"/>
+            </svg>
+            <span>Sign in with Microsoft</span>
+            <Lock size={13} className="ml-auto opacity-60" />
           </button>
 
-          <div className="mt-6 text-center">
-            <p className="text-slate-500">
-              Don&apos;t have an account?{' '}
-              <a href="/register" className="text-primary-600 hover:text-primary-700 font-medium">
-                Register your company
-              </a>
-            </p>
+          {/* Divider */}
+          <div className="flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px bg-slate-100" />
+            <span className="text-[11px] text-slate-400 font-medium">or sign in with email</span>
+            <div className="flex-1 h-px bg-slate-100" />
           </div>
-        </form>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="flex items-start gap-2 rounded-lg bg-rose-50 border border-rose-200 px-3 py-2.5 text-rose-700">
+                <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                <span className="text-xs">{error}</span>
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="email" className="block text-xs font-medium text-slate-600 mb-1">
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="block w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/20 focus:bg-white transition-colors"
+                placeholder="name@companydomain.com"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-xs font-medium text-slate-600 mb-1">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="block w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/20 focus:bg-white transition-colors"
+                placeholder="Enter your password"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors mt-1"
+            >
+              {isLoading ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                'Sign in'
+              )}
+            </button>
+          </form>
+
+          <p className="mt-5 text-center text-xs text-slate-400">
+            Don&apos;t have an account?{' '}
+            <a href="/register" className="text-blue-600 hover:text-blue-700 font-medium">
+              Register your company
+            </a>
+          </p>
+        </div>
+
+        {/* Footer */}
+        <p className="mt-5 text-center text-[11px] text-slate-400 leading-relaxed px-2">
+          By signing in, you agree to Compliverse&apos;s{' '}
+          <a
+            href="https://compliverse.ai/privacy-policy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-slate-600"
+          >
+            Privacy Policy
+          </a>
+          {' '}and{' '}
+          <a
+            href="https://compliverse.ai/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-slate-600"
+          >
+            Terms of Service
+          </a>
+          . Your data is protected with enterprise-grade security.
+        </p>
+
       </div>
     </div>
   );

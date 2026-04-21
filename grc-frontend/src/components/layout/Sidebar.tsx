@@ -469,9 +469,20 @@ export default function Sidebar() {
         collapsed ? 'px-3 justify-center' : 'px-4'
       )}>
         <div className="flex items-center gap-2">
-          <Shield {...navIconProps} className="text-[var(--color-base)] flex-shrink-0" />
-          {!collapsed && (
-            <span className="whitespace-nowrap text-base font-semibold text-[var(--color-text)]">Compliverse AI</span>
+          {collapsed ? (
+            /* Collapsed: show just styled "C" mark */
+            <span className="text-base font-bold text-[var(--color-text)] select-none">C</span>
+          ) : (
+            <span className="whitespace-nowrap text-base font-semibold text-[var(--color-text)] flex items-baseline gap-0.5">
+              Compl<span className="relative inline-block leading-none">
+                <span style={{ fontVariantLigatures: 'none' }}>ı</span>
+                <span
+                  className="absolute left-1/2 -translate-x-1/2 rounded-full"
+                  style={{ top: '-3px', width: '5px', height: '5px', background: 'var(--color-base, #14b8a6)' }}
+                />
+              </span>verse
+              <span className="ml-1 text-xs font-medium text-[var(--color-base)] opacity-70">AI</span>
+            </span>
           )}
         </div>
       </div>
