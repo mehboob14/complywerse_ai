@@ -487,10 +487,15 @@ function ActionModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const submissionData = {
+      ...formData,
+      due_date: formData.due_date || new Date().toISOString().split('T')[0],
+    };
+
     if (action) {
-      updateMutation.mutate({ id: action.id, updates: formData });
+      updateMutation.mutate({ id: action.id, updates: submissionData });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(submissionData);
     }
   };
 
@@ -650,7 +655,7 @@ function ActionModal({
               <label className="block text-sm text-slate-600">Due Date</label>
               <input
                 type="date"
-                value={formData.due_date}
+                value={formData.due_date || ''}
                 onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
               />

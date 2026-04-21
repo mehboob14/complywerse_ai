@@ -68,12 +68,19 @@ def list_dependencies(
 
 @router.post("", response_model=RiskDependencyResponse, status_code=status.HTTP_201_CREATED)
 def create_dependency(
-    source_risk_id: int,
     dependency: RiskDependencyCreate,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
+
+    # Accept source_risk_id from body
+    source_risk_id = dependency.source_risk_id
+    if not source_risk_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="source_risk_id is required"
+        )
     
     source_risk = db.query(Risk).filter(
         Risk.id == source_risk_id,

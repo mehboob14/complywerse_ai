@@ -97,7 +97,7 @@ Inherent Likelihood: {risk.inherent_likelihood or 'N/A'}
 Inherent Impact: {risk.inherent_impact or 'N/A'}
 Residual Likelihood: {risk.residual_likelihood or 'N/A'}
 Residual Impact: {risk.residual_impact or 'N/A'}
-Current Treatment Status: {risk.treatment_status or 'N/A'}
+Current Treatment Status: {risk.status or 'N/A'}
 Existing Controls: {', '.join(existing_controls[:10]) if existing_controls else 'None identified'}
 Existing Mitigation Actions: {', '.join(existing_action_titles) if existing_action_titles else 'None yet'}
 

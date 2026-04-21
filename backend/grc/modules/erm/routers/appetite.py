@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -12,7 +12,7 @@ from ....models import (
 from ....schemas import (
     RiskAppetiteConfigCreate, RiskAppetiteConfigUpdate, RiskAppetiteConfigResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/appetite")
 
@@ -205,10 +205,16 @@ def create_appetite_config(
     ).first()
     
     if existing:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Appetite config already exists for category {config.category}"
-        )
+        # Upsert: update existing config
+        existing.appetite_level = config.appetite_level
+        existing.max_acceptable_score = config.max_acceptable_score
+        existing.tolerance_threshold = config.tolerance_threshold
+        existing.escalation_owner_id = config.escalation_owner_id
+        existing.alert_enabled = config.alert_enabled
+        existing.description = config.description
+        db.commit()
+        db.refresh(existing)
+        return existing
     
     db_config = RiskAppetiteConfig(
         tenant_id=tenant_id,
@@ -279,15 +285,18 @@ def delete_appetite_config(
 
 @router.post("/seed-defaults")
 def seed_default_appetite_configs(
-    tenant_id: int,
+    tenant_id: Optional[int] = Query(None),
     current_user: GRCUser = Depends(require_auth),
     db: Session = Depends(get_db)
 ):
     """Seed default appetite configurations for all categories"""
     tenant_ids = get_user_tenants(current_user, db)
-    
-    if tenant_id not in tenant_ids:
-        raise HTTPException(status_code=403, detail="Not authorized for this tenant")
+    if not tenant_ids:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+
+    # If tenant_id not provided or not in user's tenants, use primary tenant
+    if not tenant_id or tenant_id not in tenant_ids:
+        tenant_id = get_user_primary_tenant(current_user, db) or tenant_ids[0]
     
     created = []
     

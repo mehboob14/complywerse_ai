@@ -41,6 +41,7 @@ type Props = {
   onSetEdgePriority: (v: number) => void;
   onDeleteSelected: () => void;
   onClose: () => void;
+  locked?: boolean;
 };
 
 function SectionLabel({ label }: { label: string }) {
@@ -192,6 +193,7 @@ export function ConfigPanel({
   onSetEdgePriority,
   onDeleteSelected,
   onClose,
+  locked = false,
 }: Props) {
   if (!selectedNode && !selectedEdge) {
     return (
@@ -215,7 +217,8 @@ export function ConfigPanel({
         <div className="flex items-center gap-1">
           <button
             onClick={onDeleteSelected}
-            className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+            disabled={locked}
+            className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Delete"
           >
             <Trash2 size={13} />
@@ -231,7 +234,7 @@ export function ConfigPanel({
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <div className={`flex-1 overflow-y-auto px-3 py-3 ${locked ? 'pointer-events-none opacity-60' : ''}`}>
         {selectedNode && (
           <NodeConfigBody
             node={selectedNode}
@@ -262,7 +265,8 @@ export function ConfigPanel({
       <div className="px-3 py-2.5 border-t border-gray-200">
         <button
           onClick={selectedNode ? onApplyNodeConfig : onApplyEdgeConfig}
-          className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2 rounded-md transition-colors"
+          disabled={locked}
+          className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Save size={12} />
           Apply Changes

@@ -99,8 +99,9 @@ export default function Header() {
   };
 
   const timeAgo = (iso: string) => {
-    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-    if (diff < 60) return `${diff}s ago`;
+    const normalized = iso && !/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? `${iso}Z` : iso;
+    const diff = Math.floor((Date.now() - new Date(normalized).getTime()) / 1000);
+    if (Number.isNaN(diff) || diff < 60) return 'now';
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     return `${Math.floor(diff / 86400)}d ago`;

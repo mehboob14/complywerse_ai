@@ -1454,7 +1454,7 @@ class RiskMitigationActionBase(BaseModel):
 
 
 class RiskMitigationActionCreate(RiskMitigationActionBase):
-    risk_id: int
+    risk_id: Optional[int] = None
 
 
 class RiskMitigationActionUpdate(BaseModel):

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from ....models import get_db, Framework, VulnerabilitySLAConfig, GRCUser, TenantUser, Role
-from ....routers.auth_router import require_tenant_permission, require_auth, get_user_primary_tenant
+from ....routers.auth_router import require_tenant_permission, require_auth, get_user_primary_tenant, get_user_tenants
 
 from ..services.catalog import (
     ACTION_NODE_TYPES,
@@ -160,15 +160,15 @@ def list_actor_users(
     _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
 ):
     """List tenant users available as workflow actors (approvers, assignees, recipients)."""
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
         return {"users": []}
 
     query = (
         db.query(GRCUser)
         .join(TenantUser, TenantUser.user_id == GRCUser.id)
         .filter(
-            TenantUser.tenant_id == tenant_id,
+            TenantUser.tenant_id.in_(tenant_ids),
             GRCUser.is_active.is_(True),
         )
         .distinct()
@@ -201,20 +201,18 @@ def list_actor_roles(
     _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
 ):
     """List tenant roles available as workflow actors."""
-    tenant_id = get_user_primary_tenant(current_user, db)
-    if not tenant_id:
-        return {"roles": []}
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        return []
 
     roles = (
         db.query(Role)
-        .filter(or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)))
+        .filter(Role.tenant_id.in_(tenant_ids))
         .order_by(Role.name)
         .all()
     )
 
-    return {
-        "roles": [
-            {"id": r.id, "name": r.name, "description": getattr(r, "description", None)}
-            for r in roles
-        ]
-    }
+    return [
+        {"id": r.id, "name": r.name, "description": getattr(r, "description", None)}
+        for r in roles
+    ]

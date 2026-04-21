@@ -3,7 +3,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from ....models import ApprovalRequest, Role, UserRole, WorkflowAuditLog, WorkflowEngineStep, WorkflowInstance
-from .action_handlers import WorkflowActionHandlers
+from .action_handlers import WorkflowActionHandlers, _build_template_context, _resolve_template
 from .condition_evaluator import ConditionEvaluator
 from .notification_service import send_workflow_notification
 
@@ -153,6 +153,9 @@ class StepExecutor:
                 config.get("message") or config.get("body")
                 or "A workflow notification has been triggered."
             )
+            template_context = _build_template_context(db, instance, definition)
+            subject = _resolve_template(subject, template_context)
+            message = _resolve_template(message, template_context)
             send_workflow_notification(
                 db,
                 tenant_id=instance.tenant_id,
@@ -253,6 +256,9 @@ class StepExecutor:
                 )
                 subject = config.get("subject") or f"Alert: {definition.name}"
                 message = config.get("message") or "You have a new workflow alert."
+                template_context = _build_template_context(db, instance, definition)
+                subject = _resolve_template(subject, template_context)
+                message = _resolve_template(message, template_context)
                 send_workflow_notification(
                     db,
                     tenant_id=instance.tenant_id,

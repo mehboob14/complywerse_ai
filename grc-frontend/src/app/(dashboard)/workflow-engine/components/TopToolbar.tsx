@@ -98,6 +98,7 @@ export function TopToolbar({
 
       {/* Workflow name input */}
       <input
+        disabled={locked}
         className="text-xs font-semibold border-0 outline-none bg-transparent min-w-[140px] max-w-[200px] text-gray-800 placeholder-gray-300"
         value={name}
         onChange={(e) => onNameChange(e.target.value)}
@@ -106,8 +107,9 @@ export function TopToolbar({
 
       {/* Active toggle */}
       <button
+        disabled={locked}
         onClick={onToggleActive}
-        className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors ${
+        className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
           isActive
             ? 'bg-green-50 border-green-300 text-green-700'
             : 'bg-gray-50 border-gray-200 text-gray-500'
@@ -123,8 +125,9 @@ export function TopToolbar({
 
       {/* Version & Template buttons */}
       <button
+        disabled={locked}
         onClick={onShowTemplates}
-        className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors"
+        className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         title="Browse templates"
       >
         <ClipboardList size={13} />
@@ -132,9 +135,9 @@ export function TopToolbar({
       </button>
 
       <button
+        disabled={locked || !selectedId}
         onClick={onShowVersions}
-        disabled={!selectedId}
-        className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors disabled:opacity-40"
+        className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         title="Version history"
       >
         <History size={13} />
@@ -220,7 +223,7 @@ export function TopToolbar({
           onSave();
         }}
         disabled={saving || locked}
-        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors disabled:opacity-60"
+        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {saving ? <Loader2 size={13} className="animate-spin" /> : locked ? <Lock size={13} /> : <Save size={13} />}
         {selectedId ? 'Update' : 'Create'}

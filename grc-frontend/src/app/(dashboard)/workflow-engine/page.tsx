@@ -56,8 +56,8 @@ import {
 } from './components/types';
 
 // ─── Feature flags ──────────────────────────────────────────────────────────
-// Set to false to unlock workflow creation for this tenant.
-const WORKFLOW_CREATION_LOCKED = true;
+// Set to true to lock workflow creation for this tenant.
+const WORKFLOW_CREATION_LOCKED = false;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -617,6 +617,10 @@ function WorkflowEngineContent() {
 
   // ─── CRUD operations ─────────────────────────────────────────────────────────
   const saveDefinition = useCallback(async () => {
+    if (WORKFLOW_CREATION_LOCKED) {
+      alert('Workflow changes are locked. Please contact support to enable editing.');
+      return;
+    }
     setSaving(true);
     try {
       const payload = buildPayload();
@@ -644,10 +648,18 @@ function WorkflowEngineContent() {
   }, [selectedId, loadAll, resetDraft]);
 
   const configureEmailSettings = useCallback(() => {
+    if (WORKFLOW_CREATION_LOCKED) {
+      alert('SMTP configuration is locked. Please contact support to enable editing.');
+      return;
+    }
     setShowSmtpModal(true);
   }, []);
 
   const handleSmtpSubmit = useCallback(async () => {
+    if (WORKFLOW_CREATION_LOCKED) {
+      alert('SMTP configuration is locked. Please contact support to enable editing.');
+      return;
+    }
     setSmtpSaving(true);
     try {
       await workflowEngineApi.notifications.createEmailConfig({
@@ -1030,6 +1042,7 @@ function WorkflowEngineContent() {
 
   const updateSelectedNode = useCallback(
     (field: string, value: unknown) => {
+      if (WORKFLOW_CREATION_LOCKED) return;
       setNodes((nds) =>
         nds.map((n) => {
           if (n.id !== selectedNodeId) return n;
@@ -1055,6 +1068,7 @@ function WorkflowEngineContent() {
   );
 
   const applyNodeConfig = useCallback(() => {
+    if (WORKFLOW_CREATION_LOCKED) return;
     try {
       const parsed = JSON.parse(nodeConfigText);
       setNodes((nds) =>
@@ -1079,6 +1093,7 @@ function WorkflowEngineContent() {
   }, [nodeConfigText, selectedNodeId, setNodes]);
 
   const applyEdgeConfig = useCallback(() => {
+    if (WORKFLOW_CREATION_LOCKED) return;
     try {
       const parsed = JSON.parse(edgeConditionText);
       setEdges((eds) =>
@@ -1201,8 +1216,9 @@ function WorkflowEngineContent() {
             </div>
             <div className="flex items-center gap-2">
               <button
+                disabled={WORKFLOW_CREATION_LOCKED}
                 onClick={configureEmailSettings}
-                className="text-xs px-3 py-1.5 border border-blue-300 text-blue-700 rounded bg-blue-50 hover:bg-blue-100"
+                className="text-xs px-3 py-1.5 border border-blue-300 text-blue-700 rounded bg-blue-50 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Configure SMTP
               </button>
@@ -1463,6 +1479,7 @@ function WorkflowEngineContent() {
             onSetEdgePriority={setEdgePriority}
             onDeleteSelected={deleteSelected}
             onClose={() => { setSelectedNodeId(null); setSelectedEdgeId(null); }}
+            locked={WORKFLOW_CREATION_LOCKED}
           />
         </div>
       </div>
@@ -1492,6 +1509,7 @@ function WorkflowEngineContent() {
                   type="text"
                   className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
                   value={smtpForm.config_name}
+                  disabled={WORKFLOW_CREATION_LOCKED}
                   onChange={(e) => setSmtpForm((f) => ({ ...f, config_name: e.target.value }))}
                 />
               </div>
@@ -1503,6 +1521,7 @@ function WorkflowEngineContent() {
                     placeholder="smtp.gmail.com"
                     className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
                     value={smtpForm.smtp_host}
+                    disabled={WORKFLOW_CREATION_LOCKED}
                     onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_host: e.target.value }))}
                   />
                 </div>
@@ -1513,6 +1532,7 @@ function WorkflowEngineContent() {
                     placeholder="587"
                     className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
                     value={smtpForm.smtp_port}
+                    disabled={WORKFLOW_CREATION_LOCKED}
                     onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_port: e.target.value }))}
                   />
                 </div>
@@ -1524,6 +1544,7 @@ function WorkflowEngineContent() {
                   placeholder="you@gmail.com"
                   className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
                   value={smtpForm.smtp_username}
+                  disabled={WORKFLOW_CREATION_LOCKED}
                   onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_username: e.target.value }))}
                 />
               </div>
@@ -1534,6 +1555,7 @@ function WorkflowEngineContent() {
                   placeholder="••••••••"
                   className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
                   value={smtpForm.smtp_password}
+                  disabled={WORKFLOW_CREATION_LOCKED}
                   onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_password: e.target.value }))}
                 />
               </div>
@@ -1544,6 +1566,7 @@ function WorkflowEngineContent() {
                   placeholder="noreply@yourcompany.com"
                   className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
                   value={smtpForm.from_email}
+                  disabled={WORKFLOW_CREATION_LOCKED}
                   onChange={(e) => setSmtpForm((f) => ({ ...f, from_email: e.target.value }))}
                 />
               </div>
@@ -1554,6 +1577,7 @@ function WorkflowEngineContent() {
                   placeholder="ComplyVerse"
                   className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-900"
                   value={smtpForm.from_name}
+                  disabled={WORKFLOW_CREATION_LOCKED}
                   onChange={(e) => setSmtpForm((f) => ({ ...f, from_name: e.target.value }))}
                 />
               </div>
@@ -1562,6 +1586,7 @@ function WorkflowEngineContent() {
                   type="checkbox"
                   id="use_tls"
                   checked={smtpForm.use_tls}
+                  disabled={WORKFLOW_CREATION_LOCKED}
                   onChange={(e) => setSmtpForm((f) => ({ ...f, use_tls: e.target.checked }))}
                   className="rounded border-gray-300"
                 />
@@ -1577,7 +1602,7 @@ function WorkflowEngineContent() {
               </button>
               <button
                 onClick={handleSmtpSubmit}
-                disabled={smtpSaving || !smtpForm.smtp_host || !smtpForm.smtp_username || !smtpForm.smtp_password}
+                disabled={WORKFLOW_CREATION_LOCKED || smtpSaving || !smtpForm.smtp_host || !smtpForm.smtp_username || !smtpForm.smtp_password}
                 className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {smtpSaving ? 'Saving…' : 'Save Configuration'}

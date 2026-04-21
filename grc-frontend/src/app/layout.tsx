@@ -2,11 +2,11 @@ import Providers from '@/components/Providers';
 import './globals.css';
 
 export const metadata = {
-  title: 'Compliverse',
+  title: 'CompliverseAI',
   description: 'Enterprise Governance, Risk, and Compliance Platform',
   icons: {
     icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icon.png',  },
     ],
   },
 };

@@ -133,6 +133,10 @@ const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
   low: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
 };
 
+function getStatementDisplayText(statement: Statement | StatementDetail) {
+  return statement.statement_summary || statement.statement_text?.slice(0, 80) + '...' || '-';
+}
+
 export default function PolicyStatementsPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('compliance:statements:create');
@@ -485,7 +489,7 @@ export default function PolicyStatementsPage() {
                       <td className="px-4 py-3 font-mono text-xs text-gray-700">{stmt.statement_code || '-'}</td>
                       <td className="px-4 py-3 max-w-xs">
                         <p className="truncate text-sm text-black">
-                          {stmt.statement_summary || stmt.statement_text?.slice(0, 80) + '...' || '-'}
+                          {getStatementDisplayText(stmt)}
                         </p>
                       </td>
                       <td className="px-4 py-3">
@@ -638,7 +642,7 @@ export default function PolicyStatementsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Statement Text</label>
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700">
-                  {selectedStatement.statement_text || 'No text available'}
+                  {getStatementDisplayText(selectedStatement)}
                 </div>
               </div>
 

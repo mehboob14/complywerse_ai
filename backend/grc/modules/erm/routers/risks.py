@@ -20,7 +20,7 @@ from ....models import (
     RiskFrameworkControlLink, RiskGovernanceLink, RiskAuditFindingLink,
     NormalizedControl, FrameworkControl, ITAsset, Evidence,
     GovernanceObjective, Issue, GRCUser, Tenant, get_db,
-    ParsedFrameworkControl, UploadedFramework
+    ParsedFrameworkControl, UploadedFramework, RiskMitigationAction
 )
 from ....schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
@@ -28,7 +28,8 @@ from ....schemas import (
     RiskControlLinkCreate, RiskAssetLinkCreate, RiskEvidenceLinkCreate,
     RiskFrameworkControlLinkCreate, RiskGovernanceLinkCreate,
     RiskDetailResponse, RiskHeatmapData, MessageResponse,
-    RiskAuditFindingLinkCreate, RiskAuditFindingLinkResponse
+    RiskAuditFindingLinkCreate, RiskAuditFindingLinkResponse,
+    RiskMitigationActionCreate, RiskMitigationActionResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -1653,6 +1654,51 @@ GUIDELINES:
 5. ONLY recommend controls that exist in the provided list - use exact IDs
 
 Return ONLY valid JSON, no additional text."""
+
+
+@router.get("/{risk_id}/mitigation-actions", response_model=List[RiskMitigationActionResponse])
+def get_risk_mitigation_actions(
+    risk_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    risk = db.query(Risk).filter(Risk.id == risk_id, Risk.tenant_id.in_(user_tenants)).first()
+    if not risk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+    actions = db.query(RiskMitigationAction).filter(
+        RiskMitigationAction.risk_id == risk_id
+    ).order_by(RiskMitigationAction.created_at.desc()).all()
+    return actions
+
+
+@router.post("/{risk_id}/mitigation-actions", response_model=RiskMitigationActionResponse, status_code=status.HTTP_201_CREATED)
+def create_risk_mitigation_action(
+    risk_id: int,
+    data: RiskMitigationActionCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    risk = db.query(Risk).filter(Risk.id == risk_id, Risk.tenant_id.in_(user_tenants)).first()
+    if not risk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+    action = RiskMitigationAction(
+        risk_id=risk_id,
+        title=data.title,
+        description=data.description,
+        action_type=data.action_type,
+        priority=data.priority,
+        owner_id=data.owner_id,
+        due_date=data.due_date,
+        expected_residual_reduction=data.expected_residual_reduction,
+        notes=data.notes,
+        status="pending",
+    )
+    db.add(action)
+    db.commit()
+    db.refresh(action)
+    return action
 
 
 @router.post("/ai-suggest", response_model=RiskAISuggestionResponse)

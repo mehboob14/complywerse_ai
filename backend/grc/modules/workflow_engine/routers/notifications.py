@@ -13,6 +13,14 @@ from ..schemas import EmailConfigCreate, EmailConfigUpdate, EmailConfigResponse
 router = APIRouter(prefix="/notifications", tags=["Workflow Notifications"])
 
 
+def _to_utc_iso(value):
+    if value is None:
+        return None
+    if getattr(value, "tzinfo", None) is not None:
+        return value.isoformat()
+    return value.isoformat() + "Z"
+
+
 def _resolve_tenant_id(current_user: GRCUser, db: Session) -> int:
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
@@ -273,8 +281,8 @@ def list_in_app_notifications(
                 "subject": item.subject,
                 "message": item.message,
                 "is_read": item.is_read,
-                "read_at": item.read_at,
-                "created_at": item.created_at,
+                "read_at": _to_utc_iso(item.read_at),
+                "created_at": _to_utc_iso(item.created_at),
             }
             for item in items
         ],
