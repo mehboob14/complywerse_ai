@@ -2,8 +2,13 @@ import Providers from '@/components/Providers';
 import './globals.css';
 
 export const metadata = {
-  title: 'ComplyVerse',
+  title: 'Compliverse',
   description: 'Enterprise Governance, Risk, and Compliance Platform',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+  },
 };
 
 export default function RootLayout({

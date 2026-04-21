@@ -477,7 +477,7 @@ export default function Sidebar() {
               Compl<span className="relative inline-block leading-none">
                 <span style={{ fontVariantLigatures: 'none' }}>ı</span>
                 <span
-                  className="absolute left-1/2 -translate-x-1/2 rounded-full"
+                  className="logo-dot absolute left-1/2 rounded-full"
                   style={{ top: '-3px', width: '5px', height: '5px', background: 'var(--color-base, #14b8a6)' }}
                 />
               </span>verse

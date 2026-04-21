@@ -804,6 +804,17 @@ export default function VulnerabilitiesPage() {
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
+                  // Validate file type
+                  const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'text/csv'];
+                  const validExts = ['.xlsx', '.xls', '.csv'];
+                  const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+                  if (!validTypes.includes(file.type) && !validExts.includes(ext)) {
+                    setBulkUploadState('error');
+                    setBulkUploadMsg(`"${file.name}" is not a supported format. Please upload an Excel (.xlsx, .xls) or CSV (.csv) file. Download the template to get the correct format.`);
+                    if (bulkFileRef.current) bulkFileRef.current.value = '';
+                    setTimeout(() => { setBulkUploadState('idle'); setBulkUploadMsg(null); }, 7000);
+                    return;
+                  }
                   setBulkUploadState('uploading');
                   setBulkUploadMsg(null);
                   try {
@@ -812,16 +823,43 @@ export default function VulnerabilitiesPage() {
                     queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
                     queryClient.invalidateQueries({ queryKey: ['vuln-dashboard'] });
                     setBulkUploadState('done');
-                    setBulkUploadMsg(`Imported ${d.created} vulnerabilities${d.skipped ? `, ${d.skipped} skipped` : ''}${d.errors?.length ? `. Errors: ${d.errors.slice(0,2).join('; ')}` : ''}`);
-                  } catch {
+                    setBulkUploadMsg(`Successfully imported ${d.created} vulnerabilit${d.created === 1 ? 'y' : 'ies'}${d.skipped ? ` · ${d.skipped} skipped (duplicates)` : ''}${d.errors?.length ? ` · ${d.errors.length} row error${d.errors.length > 1 ? 's' : ''}: ${d.errors.slice(0,2).join('; ')}` : ''}.`);
+                  } catch (err: unknown) {
                     setBulkUploadState('error');
-                    setBulkUploadMsg('Upload failed. Check file format.');
+                    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+                    if (msg?.includes('column') || msg?.includes('header') || msg?.includes('format')) {
+                      setBulkUploadMsg(`File structure mismatch: ${msg}. Please use the provided template.`);
+                    } else if (msg?.includes('empty')) {
+                      setBulkUploadMsg('The uploaded file appears to be empty. Please add data rows and try again.');
+                    } else {
+                      setBulkUploadMsg(msg || 'Upload failed. Ensure the file matches the template format (Excel or CSV) and try again.');
+                    }
                   } finally {
                     if (bulkFileRef.current) bulkFileRef.current.value = '';
-                    setTimeout(() => { setBulkUploadState('idle'); setBulkUploadMsg(null); }, 5000);
+                    setTimeout(() => { setBulkUploadState('idle'); setBulkUploadMsg(null); }, 7000);
                   }
                 }}
               />
+              <button
+                onClick={() => {
+                  // Generate and download CSV template
+                  const headers = ['title','description','severity','status','cvss_score','cve_id','affected_asset','affected_asset_type','remediation','due_date','assigned_to_email'];
+                  const example = ['Example SQL Injection','SQL injection vulnerability in login form','high','open','8.5','CVE-2024-1234','web-server-01','server','Apply input validation and parameterized queries','2026-06-30','security@company.com'];
+                  const csv = [headers.join(','), example.join(',')].join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'vulnerability_upload_template.csv';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+                title="Download CSV template for bulk upload"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Template
+              </button>
               <button
                 onClick={() => bulkFileRef.current?.click()}
                 disabled={bulkUploadState === 'uploading'}

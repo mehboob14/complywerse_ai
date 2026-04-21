@@ -23,18 +23,6 @@ import {
   Trash2,
   Sparkles,
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from 'recharts';
 
 interface Assessment {
   id: number;
@@ -91,13 +79,6 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   in_progress: { bg: 'bg-[var(--color-base-soft)]', text: 'text-[var(--color-status-review)]', label: 'In Progress' },
   completed: { bg: 'bg-[var(--color-success-soft)]', text: 'text-[var(--color-status-published)]', label: 'Completed' },
   archived: { bg: 'bg-[var(--color-subtle)]', text: 'text-[var(--color-status-archived)]', label: 'Archived' },
-};
-
-const STATUS_CHART_COLORS: Record<string, string> = {
-  draft: '#94A3B8',
-  in_progress: '#3B82F6',
-  completed: '#10B981',
-  archived: '#6B7280',
 };
 
 function getScoreColor(score: number | null): { bg: string; text: string } {
@@ -281,40 +262,6 @@ export default function AssessmentsPage() {
       )
     : assessments;
 
-  const statusChartData = Object.entries(
-    filteredAssessments.reduce<Record<string, number>>((acc, assessment) => {
-      acc[assessment.status] = (acc[assessment.status] || 0) + 1;
-      return acc;
-    }, {})
-  )
-    .map(([status, value]) => ({
-      name: STATUS_STYLES[status]?.label || status.replace(/_/g, ' '),
-      status,
-      value,
-      color: STATUS_CHART_COLORS[status] || '#64748B',
-    }))
-    .sort((a, b) => b.value - a.value);
-
-  const progressByStatusData = Object.entries(
-    filteredAssessments.reduce<Record<string, { totalScore: number; count: number }>>((acc, assessment) => {
-      if (assessment.overall_score === null) {
-        return acc;
-      }
-      const existing = acc[assessment.status] || { totalScore: 0, count: 0 };
-      acc[assessment.status] = {
-        totalScore: existing.totalScore + assessment.overall_score,
-        count: existing.count + 1,
-      };
-      return acc;
-    }, {})
-  )
-    .map(([status, metric]) => ({
-      name: STATUS_STYLES[status]?.label || status.replace(/_/g, ' '),
-      status,
-      averageScore: Math.round(metric.totalScore / metric.count),
-    }))
-    .sort((a, b) => b.averageScore - a.averageScore);
-
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -346,50 +293,40 @@ export default function AssessmentsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
             placeholder="Search assessments..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black placeholder-gray-400"
+            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black placeholder-slate-400 text-sm"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 ml-auto">
           <select
             value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value);
-              setPage(0);
-            }}
-            className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[150px]"
+            onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
           >
             {TYPE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
           <select
             value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(0);
-            }}
-            className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[130px]"
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
           >
             {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
           <Link
             href="/compliance/assessments/approvals"
-            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 font-medium"
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
           >
             <Clock className="h-4 w-4" />
             Pending Approvals
@@ -397,7 +334,7 @@ export default function AssessmentsPage() {
           {canCreate && (
             <button
               onClick={() => setIsUploadModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
             >
               <Upload className="h-4 w-4" />
               Upload Assessment
@@ -406,124 +343,149 @@ export default function AssessmentsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-blue-50 p-3">
-              <FileText className="h-6 w-6 text-blue-600" />
+      {/* Compact stat row — assets-style */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50">
+              <FileText className="h-4 w-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-black">{data?.summary?.total_assessments || 0}</p>
+              <p className="text-xs text-slate-500">Total Assessments</p>
             </div>
           </div>
-          <p className="text-3xl font-bold text-black mt-4">{data?.summary?.total_assessments || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">Total Assessments</p>
         </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-purple-50 p-3">
-              <Clock className="h-6 w-6 text-purple-600" />
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-purple-50">
+              <Clock className="h-4 w-4 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-black">{data?.summary?.total_items || 0}</p>
+              <p className="text-xs text-slate-500">Total Items</p>
             </div>
           </div>
-          <p className="text-3xl font-bold text-black mt-4">{data?.summary?.total_items || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">Total Items</p>
         </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-emerald-50 p-3">
-              <CheckCircle className="h-6 w-6 text-emerald-600" />
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50">
+              <CheckCircle className="h-4 w-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-black">{data?.summary?.total_complied || 0}</p>
+              <p className="text-xs text-slate-500">Complied</p>
             </div>
           </div>
-          <p className="text-3xl font-bold text-black mt-4">{data?.summary?.total_complied || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">Complied Items</p>
         </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-rose-50 p-3">
-              <XCircle className="h-6 w-6 text-rose-600" />
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-rose-50">
+              <XCircle className="h-4 w-4 text-rose-600" />
             </div>
-          </div>
-          <p className="text-3xl font-bold text-black mt-4">{data?.summary?.total_not_complied || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">Non-Complied Items</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="mb-3">
-            <h3 className="text-sm font-semibold text-black">Assessment Status Distribution</h3>
-            <p className="text-xs text-gray-600">Based on currently loaded assessments</p>
-          </div>
-          <div className="h-64">
-            {statusChartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                No status data available
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusChartData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={82}
-                    innerRadius={48}
-                    label
-                  >
-                    {statusChartData.map((entry) => (
-                      <Cell key={entry.status} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="mb-3">
-            <h3 className="text-sm font-semibold text-black">Average Progress by Status</h3>
-            <p className="text-xs text-gray-600">Average assessment completion score (%)</p>
-          </div>
-          <div className="h-64">
-            {progressByStatusData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                No progress data available
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={progressByStatusData} margin={{ top: 8, right: 8, left: 0, bottom: 6 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#4B5563' }} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#4B5563' }} />
-                  <Tooltip formatter={(value) => [`${value}%`, 'Average Progress']} />
-                  <Bar dataKey="averageScore" fill="#2563EB" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+            <div>
+              <p className="text-xl font-bold text-black">{data?.summary?.total_not_complied || 0}</p>
+              <p className="text-xs text-slate-500">Non-Complied</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* Items per assessment — stacked bar chart */}
+      {filteredAssessments.some((a) => (a.total_items || 0) > 0) && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Items per Assessment</p>
+          <div className="space-y-3">
+            {filteredAssessments
+              .filter((a) => (a.total_items || 0) > 0)
+              .map((assessment) => {
+                const total = assessment.total_items || 1;
+                const complied = assessment.complied_count || 0;
+                const partial = assessment.partially_complied_count || 0;
+                const notComplied = assessment.not_complied_count || 0;
+                const inProgress = assessment.in_progress_count || 0;
+                const na = assessment.na_count || 0;
+                return (
+                  <div key={assessment.id}>
+                    <div className="flex items-center justify-between mb-1">
+                      <Link
+                        href={`/compliance/assessments/${assessment.id}`}
+                        className="text-xs font-medium text-slate-700 hover:text-blue-600 transition-colors truncate max-w-[55%]"
+                      >
+                        {assessment.name}
+                      </Link>
+                      <span className="text-[11px] text-slate-400 flex-shrink-0">{total} items</span>
+                    </div>
+                    <div className="flex h-4 w-full overflow-hidden rounded-full bg-slate-100">
+                      {complied > 0 && (
+                        <div
+                          className="bg-emerald-500 transition-all"
+                          style={{ width: `${(complied / total) * 100}%` }}
+                          title={`Complied: ${complied}`}
+                        />
+                      )}
+                      {partial > 0 && (
+                        <div
+                          className="bg-amber-400 transition-all"
+                          style={{ width: `${(partial / total) * 100}%` }}
+                          title={`Partial: ${partial}`}
+                        />
+                      )}
+                      {inProgress > 0 && (
+                        <div
+                          className="bg-blue-400 transition-all"
+                          style={{ width: `${(inProgress / total) * 100}%` }}
+                          title={`In Progress: ${inProgress}`}
+                        />
+                      )}
+                      {na > 0 && (
+                        <div
+                          className="bg-slate-300 transition-all"
+                          style={{ width: `${(na / total) * 100}%` }}
+                          title={`N/A: ${na}`}
+                        />
+                      )}
+                      {notComplied > 0 && (
+                        <div
+                          className="bg-rose-400 transition-all"
+                          style={{ width: `${(notComplied / total) * 100}%` }}
+                          title={`Not Complied: ${notComplied}`}
+                        />
+                      )}
+                    </div>
+                    <div className="flex gap-3 mt-1 flex-wrap">
+                      {complied > 0 && <span className="text-[10px] text-emerald-600">✓ {complied} complied</span>}
+                      {partial > 0 && <span className="text-[10px] text-amber-600">~ {partial} partial</span>}
+                      {inProgress > 0 && <span className="text-[10px] text-blue-500">● {inProgress} in progress</span>}
+                      {notComplied > 0 && <span className="text-[10px] text-rose-500">✗ {notComplied} not complied</span>}
+                      {na > 0 && <span className="text-[10px] text-slate-400">— {na} N/A</span>}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* REMOVED: Assessment Status Distribution chart */}
+      {/* REMOVED: Average Progress by Status chart */}
+
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Type</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Source</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Progress</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Due Date</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Assessor</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Name</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Type</th>
+                <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:table-cell">Source</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
+                <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">Progress</th>
+                <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:table-cell">Due Date</th>
+                <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">Assessor</th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
                   <td colSpan={8} className="text-center py-8">
@@ -533,9 +495,9 @@ export default function AssessmentsPage() {
               ) : filteredAssessments.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-8">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-600">No assessments found</p>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                    <p className="text-slate-500">No assessments found</p>
+                    <p className="text-xs text-slate-400 mt-1">
                       Upload an Excel or CSV file to create a new assessment
                     </p>
                   </td>
@@ -547,80 +509,80 @@ export default function AssessmentsPage() {
                   const dueDateStatus = getDueDateStatus(assessment.due_date);
 
                   return (
-                    <tr key={assessment.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3">
+                    <tr key={assessment.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-3 py-2.5">
                         <Link
                           href={`/compliance/assessments/${assessment.id}`}
-                          className="font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                          className="font-medium text-blue-600 hover:text-blue-700 transition-colors text-sm"
                         >
                           {assessment.name}
                         </Link>
-                        <p className="text-xs text-gray-500">{assessment.file_name}</p>
+                        <p className="text-xs text-slate-400">{assessment.file_name}</p>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm capitalize text-gray-700">
+                      <td className="px-3 py-2.5">
+                        <span className="text-xs capitalize text-slate-600">
                           {assessment.assessment_type.replace(/_/g, ' ')}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm text-gray-600">
+                      <td className="hidden px-3 py-2.5 md:table-cell">
+                        <span className="text-xs text-slate-500">
                           {assessment.source || '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 text-xs font-medium rounded ${statusStyle.bg} ${statusStyle.text}`}>
+                      <td className="px-3 py-2.5">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
                           {statusStyle.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 min-w-[120px]">
-                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <td className="hidden px-3 py-2.5 lg:table-cell">
+                        <div className="flex items-center gap-2 min-w-[100px]">
+                          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                             <div
                               className={`h-full ${getScoreBarColor(assessment.overall_score)} transition-all`}
                               style={{ width: `${assessment.overall_score || 0}%` }}
                             />
                           </div>
-                          <span className={`text-sm font-medium ${scoreColor.text}`}>
+                          <span className={`text-xs font-medium ${scoreColor.text}`}>
                             {assessment.overall_score !== null
                               ? `${Math.round(assessment.overall_score)}%`
                               : '-'}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="hidden px-3 py-2.5 md:table-cell">
                         <div className="flex flex-col">
-                          <span className="text-sm text-gray-700">{formatDate(assessment.due_date)}</span>
+                          <span className="text-xs text-slate-600">{formatDate(assessment.due_date)}</span>
                           {dueDateStatus && (
-                            <span className={`text-xs font-medium ${dueDateStatus.color}`}>
+                            <span className={`text-[10px] font-medium ${dueDateStatus.color}`}>
                               {dueDateStatus.text}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          <span className="text-sm text-gray-600">
+                      <td className="hidden px-3 py-2.5 lg:table-cell">
+                        <div className="flex items-center gap-1.5">
+                          <User className="h-3 w-3 text-slate-400" />
+                          <span className="text-xs text-slate-500">
                             {assessment.assessor || '-'}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center justify-end gap-1">
                           <Link
                             href={`/compliance/assessments/${assessment.id}`}
-                            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="View Assessment"
                           >
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-3.5 w-3.5" />
                           </Link>
                           {canDelete && (
                             <button
                               onClick={() => handleDeleteClick(assessment)}
-                              className="p-2 text-gray-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                               title="Delete Assessment"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           )}
                         </div>
@@ -635,10 +597,9 @@ export default function AssessmentsPage() {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3 shadow-sm">
-          <p className="text-sm text-gray-600">
-            Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, total)} of{' '}
-            {total} assessments
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs text-slate-500">
+            Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total} assessments
           </p>
           <div className="flex items-center gap-2">
             <button

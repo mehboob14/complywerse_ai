@@ -255,11 +255,17 @@ export default function ControlsPage() {
 
   const selectedFramework = summaryData?.frameworks.find(f => f.id === frameworkFilter);
 
+  // Fallback: derive framework name from loaded controls when not in summaryData (e.g. status=draft/classified)
+  const fallbackFrameworkName = !selectedFramework && frameworkFilter && data?.controls?.length
+    ? data.controls[0]?.framework_name
+    : null;
+  const effectiveFrameworkName = selectedFramework?.name || fallbackFrameworkName;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          {frameworkFilter && selectedFramework ? (
+          {frameworkFilter && (selectedFramework || effectiveFrameworkName) ? (
             <>
               <div className="flex items-center gap-2 mb-1">
                 <Link 
@@ -272,10 +278,10 @@ export default function ControlsPage() {
               </div>
               <h1 className="text-2xl font-bold text-black flex items-center gap-2">
                 <FileStack className="h-6 w-6 text-black" />
-                {selectedFramework.name}
+                {effectiveFrameworkName}
               </h1>
               <p className="text-slate-600">
-                {selectedFramework.control_count} controls extracted from this framework
+                {selectedFramework ? `${selectedFramework.control_count} controls extracted from this framework` : `Controls for this framework`}
               </p>
             </>
           ) : (
@@ -425,6 +431,10 @@ export default function ControlsPage() {
               className="rounded-lg border  border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Frameworks</option>
+              {/* Fallback option when the URL-specified framework isn't yet in summaryData */}
+              {frameworkFilter && !summaryData?.frameworks.find(f => f.id === frameworkFilter) && effectiveFrameworkName && (
+                <option value={frameworkFilter}>{effectiveFrameworkName}</option>
+              )}
               {summaryData?.frameworks.map((fw) => (
                 <option key={fw.id} value={fw.id}>
                   {fw.name} ({fw.control_count})

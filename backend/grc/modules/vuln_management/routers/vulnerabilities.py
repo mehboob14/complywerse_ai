@@ -1,6 +1,8 @@
 from typing import List, Optional
+import io
+import csv
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
@@ -219,6 +221,129 @@ def create_vulnerability(
     return _build_vulnerability_response(vuln)
 
 
+@router.post("/vulnerabilities/bulk-upload")
+async def bulk_upload_vulnerabilities(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:create"))
+):
+    """Bulk import vulnerabilities from CSV or Excel file."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        user_tenants = get_user_tenants(current_user, db)
+        if not user_tenants:
+            raise HTTPException(status_code=403, detail="User not associated with any tenant")
+        tenant_id = user_tenants[0]
+
+    filename = file.filename or ""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in ("csv", "xlsx", "xls"):
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '.{ext}'. Please upload a CSV or Excel file.")
+
+    contents = await file.read()
+
+    rows: list[dict] = []
+    try:
+        if ext == "csv":
+            decoded = contents.decode("utf-8-sig")
+            reader = csv.DictReader(io.StringIO(decoded))
+            rows = [dict(r) for r in reader]
+        else:
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
+            ws = wb.active
+            headers = [str(c.value).strip() if c.value is not None else "" for c in next(ws.iter_rows(min_row=1, max_row=1))]
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                rows.append({headers[i]: (str(v).strip() if v is not None else "") for i, v in enumerate(row)})
+            wb.close()
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not parse file: {str(e)}. Ensure it matches the template format.")
+
+    if not rows:
+        raise HTTPException(status_code=422, detail="The file is empty or contains no data rows.")
+
+    VALID_SEVERITIES = {"critical", "high", "medium", "low", "info"}
+    VALID_STATUSES = {"open", "in_progress", "remediated", "verified", "closed", "accepted", "false_positive"}
+
+    created = 0
+    skipped = 0
+    errors: list[str] = []
+
+    # Calculate base count once so each row in this batch gets a unique ID
+    existing_count = db.query(Vulnerability).filter(Vulnerability.tenant_id == tenant_id).count()
+    id_counter = existing_count
+
+    for idx, row in enumerate(rows, start=2):
+        title = (row.get("title") or "").strip()
+        if not title:
+            skipped += 1
+            continue
+
+        severity = (row.get("severity") or "medium").strip().lower()
+        if severity not in VALID_SEVERITIES:
+            errors.append(f"Row {idx}: invalid severity '{severity}' — using 'medium'")
+            severity = "medium"
+
+        vul_status = (row.get("status") or "open").strip().lower()
+        if vul_status not in VALID_STATUSES:
+            vul_status = "open"
+
+        cvss_raw = row.get("cvss_score") or ""
+        try:
+            cvss_score = float(cvss_raw) if cvss_raw else None
+        except ValueError:
+            cvss_score = None
+
+        due_date_raw = (row.get("due_date") or "").strip()
+        due_date = None
+        if due_date_raw:
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
+                try:
+                    due_date = datetime.strptime(due_date_raw, fmt)
+                    break
+                except ValueError:
+                    continue
+        if not due_date:
+            sla_days = get_sla_days(tenant_id, severity, db)
+            due_date = datetime.utcnow() + timedelta(days=sla_days)
+
+        id_counter += 1
+        vuln_id_str = f"VULN-{id_counter:05d}"
+        # If this ID already exists for the tenant (e.g. from a prior partial import), keep incrementing
+        while db.query(Vulnerability).filter(
+            Vulnerability.tenant_id == tenant_id,
+            Vulnerability.vuln_id == vuln_id_str
+        ).count() > 0:
+            id_counter += 1
+            vuln_id_str = f"VULN-{id_counter:05d}"
+
+        vuln = Vulnerability(
+            tenant_id=tenant_id,
+            vuln_id=vuln_id_str,
+            title=title,
+            description=(row.get("description") or "").strip() or None,
+            severity=severity,
+            status=vul_status,
+            cvss_score=cvss_score,
+            cve_id=(row.get("cve_id") or "").strip() or None,
+            affected_component=(row.get("affected_asset") or row.get("affected_component") or "").strip() or None,
+            recommendation=(row.get("remediation") or row.get("recommendation") or "").strip() or None,
+            discovered_at=datetime.utcnow(),
+            due_date=due_date,
+        )
+        db.add(vuln)
+        created += 1
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error while saving vulnerabilities: {str(e)}")
+
+    return {"created": created, "skipped": skipped, "errors": errors}
+
+
 @router.get("/vulnerabilities/{vuln_id}", response_model=VulnerabilityResponse)
 def get_vulnerability(
     vuln_id: int,
@@ -320,7 +445,6 @@ def assign_vulnerability(
     ).filter(Vulnerability.id == vuln.id).first()
 
     return _build_vulnerability_response(vuln)
-
 
 @router.post("/vulnerabilities/{vuln_id}/status", response_model=VulnerabilityResponse)
 def change_vulnerability_status(

@@ -366,30 +366,46 @@ def list_framework_controls(
     """Get all parsed controls from uploaded frameworks with framework info"""
     user_tenants = get_user_tenants(current_user, db)
 
-    # Dedup: prefer tenant-specific frameworks; exclude null-tenant copy when tenant copy exists
-    tenant_specific_names_sq = db.query(UploadedFramework.name).filter(
-        UploadedFramework.tenant_id.in_(user_tenants),
-        UploadedFramework.is_active == True
-    ) if user_tenants else db.query(UploadedFramework.name).filter(False)
-
-    dedup_filter = or_(
-        UploadedFramework.tenant_id.in_(user_tenants),
-        and_(
-            UploadedFramework.tenant_id.is_(None),
-            ~UploadedFramework.name.in_(tenant_specific_names_sq)
-        )
-    )
-
-    query = db.query(ParsedFrameworkControl).join(
-        UploadedFramework,
-        ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
-    ).filter(
-        dedup_filter,
-        UploadedFramework.is_active == True
-    )
-    
     if framework_id:
-        query = query.filter(ParsedFrameworkControl.uploaded_framework_id == framework_id)
+        # Direct lookup: user specified a framework ID explicitly.
+        # Skip the dedup filter and just verify the framework is accessible
+        # (either belongs to this tenant or is a shared null-tenant framework).
+        access_filter = or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.tenant_id.is_(None)
+        ) if user_tenants else UploadedFramework.tenant_id.is_(None)
+
+        query = db.query(ParsedFrameworkControl).join(
+            UploadedFramework,
+            ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
+        ).filter(
+            access_filter,
+            UploadedFramework.is_active == True,
+            ParsedFrameworkControl.uploaded_framework_id == framework_id
+        )
+    else:
+        # General listing: apply dedup so we don't show duplicate null-tenant
+        # frameworks when the tenant has their own copy.
+        tenant_specific_names_sq = db.query(UploadedFramework.name).filter(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.is_active == True
+        ) if user_tenants else db.query(UploadedFramework.name).filter(False)
+
+        dedup_filter = or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            and_(
+                UploadedFramework.tenant_id.is_(None),
+                ~UploadedFramework.name.in_(tenant_specific_names_sq)
+            )
+        )
+
+        query = db.query(ParsedFrameworkControl).join(
+            UploadedFramework,
+            ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
+        ).filter(
+            dedup_filter,
+            UploadedFramework.is_active == True
+        )
     
     if domain:
         query = query.filter(ParsedFrameworkControl.domain.ilike(f"%{domain}%"))

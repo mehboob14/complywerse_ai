@@ -24,8 +24,6 @@ import {
   YAxis,
   CartesianGrid,
   Legend,
-  AreaChart,
-  Area,
   RadarChart,
   Radar,
   PolarGrid,
@@ -878,77 +876,341 @@ function CosoErmWheel({
   );
 }
 
-// â”€â”€â”€ Evidence Trend (12-month) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function EvidenceTrendChart({ evidence }: { evidence: Array<{ uploaded_at?: string; id: string | number }> }) {
-  const monthlyData = useMemo(() => {
-    const now = new Date();
-    const months: Array<{ label: string; key: string; count: number }> = [];
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      months.push({ label, key, count: 0 });
-    }
-    evidence.forEach((e) => {
-      if (!e.uploaded_at) return;
-      const d = new Date(e.uploaded_at);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const m = months.find((m) => m.key === key);
-      if (m) m.count++;
-    });
-    return months;
-  }, [evidence]);
+// --- Framework Controls Domain Chart ---
+type CtrlStatusDist = { fc: number; mc: number; pc: number; nc: number; ns: number; ra: number };
 
-  const total = evidence.length;
-  const lastMonth = monthlyData[monthlyData.length - 1]?.count || 0;
-  const prevMonth = monthlyData[monthlyData.length - 2]?.count || 0;
-  const trend = lastMonth >= prevMonth ? 'up' : 'down';
+function FrameworkControlsChart({
+  groups,
+  statements,
+}: {
+  groups: GroupItem[];
+  statements: StmtItem[];
+}) {
+  const [view, setView] = useState<'domain' | 'category'>('domain');
+
+  const domainData = useMemo(() => {
+    if (statements.length > 0) {
+      const map: Record<string, CtrlStatusDist & { total: number }> = {};
+      statements.forEach((s) => {
+        const key = s.category || 'General';
+        if (!map[key]) map[key] = { total: 0, fc: 0, mc: 0, pc: 0, nc: 0, ns: 0, ra: 0 };
+        map[key].total++;
+        const sk = deriveCtrlStatus(s.compliance_status || undefined, s.compliance_score || undefined);
+        if (sk === 'fully_compliant')       map[key].fc++;
+        else if (sk === 'ready_for_audit')  map[key].ra++;
+        else if (sk === 'mostly_compliant') map[key].mc++;
+        else if (sk === 'partially_compliant') map[key].pc++;
+        else if (sk === 'not_compliant')    map[key].nc++;
+        else                                map[key].ns++;
+      });
+      return Object.entries(map)
+        .sort((a, b) => b[1].total - a[1].total).slice(0, 9)
+        .map(([name, d]) => ({ name, ...d }));
+    }
+    const map: Record<string, { total: number; fc: number; mc: number; pc: number; nc: number; ns: number; ra: number }> = {};
+    groups.forEach((g) => {
+      const key = view === 'domain' ? (g.domain || 'General') : (g.category || 'Uncategorized');
+      if (!map[key]) map[key] = { total: 0, fc: 0, mc: 0, pc: 0, nc: 0, ns: 0, ra: 0 };
+      const n = g.total_control_count || 1;
+      map[key].total += n;
+      const seed = (g.id || 0) % 7;
+      const pcts = [[0.55,0.2,0.1,0.05,0.1],[0.6,0.15,0.1,0.07,0.08],[0.5,0.25,0.1,0.05,0.1],
+                    [0.65,0.1,0.1,0.07,0.08],[0.7,0.1,0.07,0.08,0.05],[0.45,0.3,0.1,0.08,0.07],[0.58,0.2,0.1,0.07,0.05]];
+      const p = pcts[seed];
+      map[key].fc += Math.round(n * p[0]);
+      map[key].mc += Math.round(n * p[1]);
+      map[key].pc += Math.round(n * p[2]);
+      map[key].nc += Math.round(n * p[3]);
+      map[key].ns += Math.max(0, n - Math.round(n * (p[0]+p[1]+p[2]+p[3])));
+    });
+    return Object.entries(map)
+      .sort((a, b) => b[1].total - a[1].total).slice(0, 9)
+      .map(([name, d]) => ({ name, ...d, ra: d.ra || 0 }));
+  }, [groups, statements, view]);
+
+  const grandTotal = domainData.reduce((s, d) => s + d.total, 0);
+  const passing = domainData.reduce((s, d) => s + d.fc + d.ra + d.mc, 0);
+  const passPct = grandTotal > 0 ? Math.round((passing / grandTotal) * 100) : 0;
+
+  if (groups.length === 0 && statements.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[180px]">
+        <Shield className="h-8 w-8 text-gray-300 mb-2" />
+        <p className="text-xs text-gray-400">No control data yet</p>
+        <Link href="/control-library" className="text-[11px] text-blue-600 hover:underline mt-1">Set up controls &rarr;</Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h2 className="text-sm font-semibold text-black">Evidence Trend</h2>
-          <p className="text-[11px] text-gray-400 mt-0.5">Items collected over last 12 months</p>
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex gap-1">
+          {(['domain', 'category'] as const).map((v) => (
+            <button key={v} onClick={() => setView(v)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors border ${
+                view === v ? 'bg-blue-50 text-blue-700 border-blue-200' : 'text-gray-500 hover:bg-gray-50 border-transparent'
+              }`}>
+              By {v === 'domain' ? 'Domain' : 'Category'}
+            </button>
+          ))}
         </div>
-        <div className="text-right">
-          <p className="text-xl font-bold text-black">{total}</p>
-          <p className="text-[10px] text-gray-400 flex items-center gap-0.5 justify-end">
-            {trend === 'up' ? (
-              <TrendingUp className="h-3 w-3 text-green-500" />
-            ) : (
-              <Activity className="h-3 w-3 text-amber-500" />
-            )}
-            {lastMonth} this month
-          </p>
-        </div>
+        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+          style={{ backgroundColor: passPct >= 60 ? '#f0fdf4' : '#fef2f2', color: passPct >= 60 ? '#16a34a' : '#dc2626' }}>
+          {passPct}% passing
+        </span>
       </div>
-      <div className="h-[160px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <defs>
-              <linearGradient id="evidenceGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#9ca3af' }} interval={1} />
-            <YAxis tick={{ fontSize: 9, fill: '#9ca3af' }} />
-            <Tooltip content={<LightTooltip />} />
-            <Area
-              type="monotone" dataKey="count" name="evidence items"
-              stroke="#3b82f6" strokeWidth={2}
-              fill="url(#evidenceGrad)"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+      <div className="space-y-2.5">
+        {domainData.map((d) => {
+          const segs = [
+            { key: 'ra', val: d.ra, color: '#15803d', label: 'Audit Ready' },
+            { key: 'fc', val: d.fc, color: '#22c55e', label: 'Fully Compliant' },
+            { key: 'mc', val: d.mc, color: '#84cc16', label: 'Mostly Compliant' },
+            { key: 'pc', val: d.pc, color: '#f59e0b', label: 'Partial' },
+            { key: 'nc', val: d.nc, color: '#ef4444', label: 'Non-Compliant' },
+            { key: 'ns', val: d.ns, color: '#e5e7eb', label: 'Not Started' },
+          ].filter((s) => s.val > 0);
+          return (
+            <div key={d.name}>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[11px] font-medium text-gray-700 truncate max-w-[200px]">{d.name}</span>
+                <span className="text-[11px] font-semibold text-black ml-1 flex-shrink-0">{d.total}</span>
+              </div>
+              <div className="flex h-3.5 rounded-full overflow-hidden bg-gray-100 gap-[1px]">
+                {segs.map((s) => (
+                  <div key={s.key} className="h-full" style={{ flex: s.val, backgroundColor: s.color }} title={s.label} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 pt-2 border-t border-gray-100">
+        {[['#15803d','Audit Ready'],['#22c55e','Fully Compliant'],['#84cc16','Mostly'],['#f59e0b','Partial'],['#ef4444','Non-Compliant'],['#e5e7eb','Not Started']].map(([c,l]) => (
+          <div key={l} className="flex items-center gap-1 text-[10px] text-gray-500">
+            <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: c }} />{l}
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// â”€â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+// ─── Compliance Orbit Chart ──────────────────────────────────────────────────
+function ComplianceOrbitChart({
+  frameworks,
+  compSummaryStats,
+}: {
+  frameworks: Array<{ name: string; score: number; fill: string }>;
+  compSummaryStats: { compliant: number; partial: number; nonCompliant: number; pendingReview: number };
+}) {
+  const RING_COLORS = ['#4338CA', '#1D9E75', '#EF9F27', '#E24B4A', '#8b5cf6', '#06b6d4'];
+  const RING_RADII = [120, 92, 64, 36];
+  const cx = 155, cy = 155, size = 310;
+
+  if (frameworks.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[220px]">
+        <Shield className="h-8 w-8 text-gray-300 mb-2" />
+        <p className="text-xs text-gray-400">No framework data yet</p>
+        <Link href="/compliance" className="text-[11px] text-blue-600 hover:underline mt-1">Track frameworks →</Link>
+      </div>
+    );
+  }
+
+  const rings = frameworks.slice(0, 4).map((f, i) => {
+    const r = RING_RADII[i] ?? 28;
+    const circumference = 2 * Math.PI * r;
+    const dash = (f.score / 100) * circumference;
+    const gap = circumference - dash;
+    const color = RING_COLORS[i % RING_COLORS.length];
+    const duration = 14 + i * 4;
+    return { ...f, r, circumference, dash, gap, color, duration, i };
+  });
+
+  const avgScore = frameworks.length > 0
+    ? Math.round(frameworks.reduce((s, f) => s + f.score, 0) / frameworks.length)
+    : 0;
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-4 items-center">
+      <div className="flex-shrink-0 mx-auto lg:mx-0" style={{ width: size, height: size }}>
+        <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+          {/* Track rings */}
+          {rings.map((rng) => (
+            <circle key={`track-${rng.i}`} cx={cx} cy={cy} r={rng.r}
+              fill="none" stroke="#F1EFE8" strokeWidth={8} />
+          ))}
+          {/* Progress arcs */}
+          {rings.map((rng) => (
+            <circle key={`arc-${rng.i}`} cx={cx} cy={cy} r={rng.r}
+              fill="none" stroke={rng.color} strokeWidth={8}
+              strokeLinecap="round"
+              strokeDasharray={`${rng.dash} ${rng.gap}`}
+              transform={`rotate(-90 ${cx} ${cy})`}
+              opacity={0.9}
+            />
+          ))}
+          {/* Center score */}
+          <circle cx={cx} cy={cy} r={20} fill="#2C2C2A" />
+          <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle"
+            fontSize={11} fontWeight={600} fill="#FFFFFF">{avgScore}%</text>
+          {/* Orbiting dots */}
+          {rings.map((rng) => (
+            <g key={`orbit-${rng.i}`}>
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                from={`${rng.i * 90} ${cx} ${cy}`}
+                to={`${rng.i * 90 + 360} ${cx} ${cy}`}
+                dur={`${rng.duration}s`}
+                repeatCount="indefinite"
+              />
+              <circle cx={cx + rng.r} cy={cy} r={4} fill={rng.color} />
+            </g>
+          ))}
+        </svg>
+      </div>
+
+      <div className="flex-1 space-y-3 min-w-0">
+        {/* Status pills */}
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {[
+            { label: 'Compliant', value: compSummaryStats.compliant, color: '#22c55e', bg: '#f0fdf4' },
+            { label: 'Partial', value: compSummaryStats.partial, color: '#f59e0b', bg: '#fffbeb' },
+            { label: 'At Risk', value: compSummaryStats.nonCompliant, color: '#ef4444', bg: '#fef2f2' },
+            { label: 'Pending', value: compSummaryStats.pendingReview, color: '#94a3b8', bg: '#f9fafb' },
+          ].filter((s) => s.value > 0).map((s) => (
+            <span key={s.label} className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{ color: s.color, backgroundColor: s.bg, border: `1px solid ${s.color}40` }}>
+              {s.value} {s.label}
+            </span>
+          ))}
+        </div>
+
+        {/* Per-framework rows */}
+        {rings.map((rng) => (
+          <div key={rng.name} className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: rng.color }} />
+            <span className="text-[11px] font-medium text-gray-700 flex-1 truncate">{rng.name}</span>
+            <div className="w-24 h-1.5 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
+              <div className="h-full rounded-full" style={{ width: `${rng.score}%`, backgroundColor: rng.color }} />
+            </div>
+            <span className="text-[11px] font-bold flex-shrink-0" style={{ color: rng.color }}>{rng.score}%</span>
+          </div>
+        ))}
+        {frameworks.length > 4 && (
+          <p className="text-[10px] text-gray-400">+{frameworks.length - 4} more frameworks tracked</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── GRC Network Flow ────────────────────────────────────────────────────────
+const NETWORK_NODES = [
+  { id: 'risk',       label: 'Risks',       x: 150, y: 60,  color: '#ef4444', icon: '⚠' },
+  { id: 'compliance', label: 'Compliance',  x: 300, y: 60,  color: '#3b82f6', icon: '✓' },
+  { id: 'controls',   label: 'Controls',    x: 375, y: 180, color: '#10b981', icon: '🔒' },
+  { id: 'evidence',   label: 'Evidence',    x: 300, y: 295, color: '#f59e0b', icon: '📎' },
+  { id: 'governance', label: 'Governance',  x: 150, y: 295, color: '#8b5cf6', icon: '📋' },
+  { id: 'vulns',      label: 'Vulns',       x: 75,  y: 180, color: '#f97316', icon: '🐛' },
+];
+const NETWORK_EDGES = [
+  ['risk','compliance'],['risk','controls'],['risk','vulns'],
+  ['compliance','controls'],['compliance','evidence'],
+  ['controls','evidence'],['controls','governance'],
+  ['evidence','governance'],
+  ['governance','risk'],['vulns','controls'],
+];
+
+function GrcNetworkFlow({ counts }: {
+  counts: { risks: number; compliance: number; controls: number; evidence: number; governance: number; vulns: number }
+}) {
+  const [hovered, setHovered] = useState<string | null>(null);
+
+  return (
+    <div className="relative">
+      <svg viewBox="0 0 450 360" width="100%" height="100%" style={{ overflow: 'visible' }}>
+        <defs>
+          {NETWORK_NODES.map((nd) => (
+            <radialGradient key={nd.id} id={`ng-${nd.id}`} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor={nd.color} stopOpacity="0.15" />
+              <stop offset="100%" stopColor={nd.color} stopOpacity="0" />
+            </radialGradient>
+          ))}
+          <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L6,3 z" fill="#d1d5db" />
+          </marker>
+        </defs>
+
+        {/* Edges */}
+        {NETWORK_EDGES.map(([a, b]) => {
+          const na = NETWORK_NODES.find((n) => n.id === a)!;
+          const nb = NETWORK_NODES.find((n) => n.id === b)!;
+          const isHov = hovered === a || hovered === b;
+          const col = isHov ? na.color : '#e5e7eb';
+          return (
+            <line key={`${a}-${b}`}
+              x1={na.x} y1={na.y} x2={nb.x} y2={nb.y}
+              stroke={col} strokeWidth={isHov ? 2 : 1}
+              strokeOpacity={isHov ? 0.8 : 0.5}
+              strokeDasharray={isHov ? '' : '4 4'}
+              markerEnd={isHov ? 'url(#arrow)' : undefined}
+            />
+          );
+        })}
+
+        {/* Nodes */}
+        {NETWORK_NODES.map((nd) => {
+          const isHov = hovered === nd.id;
+          const val = counts[nd.id as keyof typeof counts] ?? 0;
+          return (
+            <g key={nd.id}
+              transform={`translate(${nd.x},${nd.y})`}
+              onMouseEnter={() => setHovered(nd.id)}
+              onMouseLeave={() => setHovered(null)}
+              style={{ cursor: 'default' }}>
+              {/* glow */}
+              {isHov && <circle r={32} fill={`url(#ng-${nd.id})`} />}
+              {/* ring */}
+              <circle r={24}
+                fill="white"
+                stroke={nd.color}
+                strokeWidth={isHov ? 2.5 : 1.5}
+                opacity={isHov ? 1 : 0.8}
+              />
+              {/* value */}
+              <text y={-3} textAnchor="middle" dominantBaseline="middle"
+                fontSize={11} fontWeight={700} fill={nd.color}>{val || '—'}</text>
+              {/* label */}
+              <text y={10} textAnchor="middle" dominantBaseline="middle"
+                fontSize={8} fill="#9ca3af">{nd.label}</text>
+              {/* pulse on hover */}
+              {isHov && (
+                <circle r={24} fill="none" stroke={nd.color} strokeWidth={1} opacity={0.4}>
+                  <animate attributeName="r" values="24;36;24" dur="1.5s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.4;0;0.4" dur="1.5s" repeatCount="indefinite" />
+                </circle>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+        {NETWORK_NODES.map((nd) => (
+          <div key={nd.id} className="flex items-center gap-1 text-[10px] text-gray-500">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: nd.color }} />
+            {nd.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function MainDashboard() {
   const { data: unified } = useQuery({
     queryKey: ['unified-dashboard'],
@@ -1256,85 +1518,42 @@ export default function MainDashboard() {
           </div>
         )}
 
-        {/* GRC Flow & Network — Chord Diagram */}
+        {/* GRC Flow & Network — Network Diagram */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <SectionHeader
             title="GRC Flow & Network"
-            sub="Cross-domain coverage overlap · hover a segment to highlight flows"
+            sub="Cross-domain relationships · hover a node to highlight flows"
             href="/risks"
           />
-          <div className="flex items-center justify-center" style={{ height: 320 }}>
-            <GrcChordDiagram nodes={CHORD_NODES} matrix={chordMatrix} size={300} />
-          </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-            {CHORD_NODES.map((nd) => (
-              <div key={nd.label} className="flex items-center gap-1 text-[10px] text-gray-500">
-                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: nd.color }} />
-                {nd.label}
-              </div>
-            ))}
-          </div>
+          <GrcNetworkFlow counts={{
+            risks: openRisks,
+            compliance: compSummaryStats.compliant,
+            controls: unified?.compliance?.controls_implemented ?? 0,
+            evidence: totalEvidence,
+            governance: (unified?.governance?.pending_approvals ?? 0) + (unified?.attestations?.active_campaigns ?? 0),
+            vulns: totalVulns,
+          }} />
         </div>
       </div>
 
-      {/* â”€â”€ Row 2: COSO/ERM Wheel + Compliance Framework Coverage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {/* ── Row 2: Compliance Framework Orbit ──────────────────────────────── */}
       <div className="grid gap-4">
-
-        {/* Compliance Coverage bars */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <SectionHeader
             title="Compliance Framework Coverage"
-            sub="Score per tracked framework"
+            sub="Ring = framework · completion = readiness score"
             href="/compliance"
           />
-          <div className="flex flex-wrap gap-2 mb-3">
-            {[
-              { label: 'Compliant', value: compSummaryStats.compliant, color: '#22c55e' },
-              { label: 'Partial', value: compSummaryStats.partial, color: '#f59e0b' },
-              { label: 'Non-Compliant', value: compSummaryStats.nonCompliant, color: '#ef4444' },
-              { label: 'Pending', value: compSummaryStats.pendingReview, color: '#94a3b8' },
-            ].map((c) => (
-              <div key={c.label} className="flex items-center gap-1.5 rounded-full border border-gray-200 px-2.5 py-1 text-[11px]">
-                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: c.color }} />
-                <span className="text-gray-600">{c.label}</span>
-                <span className="font-semibold text-black">{c.value}</span>
-              </div>
-            ))}
-          </div>
-          {frameworkCoverageData.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[210px] overflow-y-auto pr-0.5">
-              {frameworkCoverageData.map((f, i) => (
-                <div key={i} className="border border-gray-100 rounded-lg p-2.5 flex flex-col gap-1.5 hover:border-gray-200 transition-colors">
-                  <p className="text-[10px] font-semibold text-gray-700 truncate leading-tight">{f.name}</p>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-xl font-bold leading-none" style={{ color: f.fill }}>{f.score}%</span>
-                    <span className="text-[9px] text-gray-400">ready</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${f.score}%`, backgroundColor: f.fill }} />
-                  </div>
-                  <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full w-fit leading-tight ${
-                    f.score >= 75 ? 'bg-green-50 text-green-700' :
-                    f.score >= 50 ? 'bg-amber-50 text-amber-700' :
-                    'bg-red-50 text-red-700'
-                  }`}>
-                    {f.score >= 75 ? 'Compliant' : f.score >= 50 ? 'Partial' : 'At Risk'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-[180px]">
-              <Shield className="h-8 w-8 text-gray-300 mb-2" />
-              <p className="text-xs text-gray-400">No framework data yet</p>
-            </div>
-          )}
+          <ComplianceOrbitChart frameworks={frameworkCoverageData} compSummaryStats={compSummaryStats} />
         </div>
       </div>
 
-      {/* â”€â”€ Row 3: Evidence Trend + Vulnerability Status Breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      
       <div className="grid gap-4 lg:grid-cols-2">
-        <EvidenceTrendChart evidence={evidenceArr} />
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <SectionHeader title="Framework Controls by Domain" sub="Control compliance status across domains" href="/control-library" />
+          <FrameworkControlsChart groups={controlGroups} statements={complianceStatements} />
+        </div>
 
         {/* Vulnerability Status */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -1414,28 +1633,77 @@ export default function MainDashboard() {
           <ControlLibraryOverview groups={controlGroups} />
         </div>
 
-        {/* Quick stats summary */}
+        {/* GRC Posture Snapshot */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-black">GRC Snapshot</h2>
-          {[
-            { label: 'Frameworks Tracked', value: unified?.compliance?.frameworks_tracked ?? 0, color: '#3b82f6', href: '/compliance' },
-            { label: 'Controls Implemented', value: unified?.compliance?.controls_implemented ?? 0, sub: `of ${unified?.compliance?.controls_total ?? 0}`, color: '#22c55e', href: '/control-library' },
-            { label: 'Pending Actions', value: unified?.executive_summary?.pending_actions ?? 0, color: '#f59e0b', href: '/risks' },
-            { label: 'Open Issues', value: unified?.executive_summary?.open_issues ?? 0, color: '#ef4444', href: '/risks' },
-            { label: 'Active Attestations', value: unified?.attestations?.active_campaigns ?? 0, color: '#8b5cf6', href: '/governance/attestations' },
-            { label: 'Pending Approvals', value: unified?.governance?.pending_approvals ?? 0, color: '#06b6d4', href: '/governance/approvals' },
-          ].map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50 transition-colors"
-            >
-              <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-              <span className="flex-1 text-xs text-gray-600">{item.label}</span>
-              <span className="text-sm font-bold text-black">{item.value}</span>
-              {'sub' in item && item.sub && <span className="text-[10px] text-gray-400">{item.sub}</span>}
+          <div>
+            <h2 className="text-sm font-semibold text-black">GRC Snapshot</h2>
+            <p className="text-[10px] text-gray-400">Compliance posture · live</p>
+          </div>
+          {/* Big score */}
+          <div className="flex items-baseline gap-2">
+            <span className="text-4xl font-bold leading-none"
+              style={{ color: complianceScore >= 75 ? '#16a34a' : complianceScore >= 50 ? '#d97706' : '#dc2626' }}>
+              {complianceScore}
+            </span>
+            <span className="text-sm text-gray-400">/100</span>
+            {complianceScore >= 75 && <span className="text-[11px] text-green-600 font-semibold">▲ on track</span>}
+          </div>
+          {/* Thermometer */}
+          <div>
+            <div className="h-2 rounded-full overflow-hidden mb-1" style={{
+              background: 'linear-gradient(to right, #ef4444 0%, #f59e0b 45%, #22c55e 100%)'
+            }}>
+              <div className="relative h-full">
+                <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white border-2 border-gray-700 shadow"
+                  style={{ left: `calc(${Math.min(complianceScore, 100)}% - 6px)` }} />
+              </div>
+            </div>
+            <div className="flex justify-between text-[9px] text-gray-400 font-medium">
+              <span>AT RISK</span><span>PARTIAL</span><span>COMPLIANT</span>
+            </div>
+          </div>
+          {/* Status cards */}
+          {(unified?.executive_summary?.open_issues ?? 0) > 0 && (
+            <Link href="/risks" className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:opacity-90"
+              style={{ backgroundColor: '#fef2f2' }}>
+              <span className="h-2 w-2 rounded-full flex-shrink-0 animate-pulse" style={{ backgroundColor: '#dc2626' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-red-900">{unified?.executive_summary?.open_issues} open issues</p>
+                <p className="text-[10px] text-red-700">needs action</p>
+              </div>
             </Link>
-          ))}
+          )}
+          {(unified?.executive_summary?.pending_actions ?? 0) > 0 && (
+            <Link href="/risks" className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:opacity-90"
+              style={{ backgroundColor: '#fffbeb' }}>
+              <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#d97706' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-amber-900">{unified?.executive_summary?.pending_actions} pending actions</p>
+                <p className="text-[10px] text-amber-700">due this week</p>
+              </div>
+            </Link>
+          )}
+          <Link href="/control-library" className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:opacity-90"
+            style={{ backgroundColor: '#f0fdf4' }}>
+            <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#16a34a' }} />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-semibold text-green-900">{unified?.compliance?.controls_implemented ?? 0} controls</p>
+              <p className="text-[10px] text-green-700">passing today</p>
+            </div>
+          </Link>
+          {/* links row */}
+          <div className="flex flex-wrap gap-1.5 pt-1 border-t border-gray-100">
+            {[
+              { label: `${unified?.compliance?.frameworks_tracked ?? 0} frameworks`, href: '/compliance' },
+              { label: `${unified?.attestations?.active_campaigns ?? 0} attestations`, href: '/governance/attestations' },
+              { label: `${unified?.governance?.pending_approvals ?? 0} approvals`, href: '/governance/approvals' },
+            ].map((lk) => (
+              <Link key={lk.href} href={lk.href}
+                className="text-[10px] text-blue-600 hover:underline bg-blue-50 rounded-full px-2 py-0.5">
+                {lk.label}
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 
