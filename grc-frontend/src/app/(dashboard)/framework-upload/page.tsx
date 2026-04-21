@@ -99,6 +99,8 @@ export default function FrameworkUploadPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canDelete = hasPermission('frameworks:framework_upload:delete');
+
+  const { data, isLoading, error } = useQuery({
     queryKey: ['uploaded-frameworks'],
     queryFn: async () => {
       const response = await frameworkUploadApi.listFrameworks({});

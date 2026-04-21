@@ -69,6 +69,8 @@ export default function RCSAAssessmentsPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('risks:rcsa:edit');
+
+  const { data: assessments, isLoading } = useQuery({
     queryKey: ['rcsa-assessments', statusFilter, campaignFilter, businessUnitFilter],
     queryFn: async () => {
       try {
@@ -130,16 +132,16 @@ export default function RCSAAssessmentsPage() {
   const getActionButton = (assessment: Assessment) => {
     switch (assessment.status) {
       case 'not_started':
-        return (
-          {canEdit ? <button
+        return canEdit ? (
+          <button
             onClick={() => startMutation.mutate(assessment.id)}
             disabled={startMutation.isPending}
             className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30"
           >
             <Play className="h-3.5 w-3.5" />
             Start
-          </button> : null}
-        );
+          </button>
+        ) : null;
       case 'in_progress':
         return (
           <Link

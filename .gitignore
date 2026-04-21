@@ -23,7 +23,7 @@ yarn-error.log*
 .npm
 
 # Database
-*.db
+# *.db  <-- removed so backend/grc.db and backend/grc_app.db are tracked
 *.sqlite
 *.sqlite3
 

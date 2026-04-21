@@ -181,6 +181,8 @@ export default function AssessmentPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('frameworks:framework_upload:create');
+
+  const { data: frameworksData } = useQuery({
     queryKey: ['uploaded-frameworks-parsed'],
     queryFn: async () => {
       const response = await frameworkUploadApi.listFrameworks({ status: 'parsed' });

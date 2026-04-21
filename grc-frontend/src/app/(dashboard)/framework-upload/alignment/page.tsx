@@ -139,6 +139,8 @@ export default function AlignmentPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('frameworks:framework_upload:create');
   const canEdit = hasPermission('frameworks:framework_upload:edit');
+
+  const { data: frameworksData } = useQuery({
     queryKey: ['uploaded-frameworks-parsed'],
     queryFn: async () => {
       const response = await frameworkUploadApi.listFrameworks({ limit: 100 });

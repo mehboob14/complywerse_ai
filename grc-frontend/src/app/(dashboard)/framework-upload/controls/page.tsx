@@ -146,6 +146,8 @@ export default function ParsedControlsPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('frameworks:framework_upload:edit');
+
+  const { data: frameworksData } = useQuery({
     queryKey: ['uploaded-frameworks-parsed'],
     queryFn: async () => {
       const response = await frameworkUploadApi.getFrameworks({ limit: 100 });

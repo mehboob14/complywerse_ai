@@ -51,7 +51,7 @@ export default function FrameworkRiskAssessmentsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('erm:risk_assessments:create');
+  const canCreatePermission = hasPermission('erm:risk_assessments:create');
   const canDelete = hasPermission('erm:risk_assessments:delete');
   const [activeTab, setActiveTab] = useState<'assessments' | 'assigned'>('assessments');
   const [frameworkId, setFrameworkId] = useState('');
@@ -196,7 +196,7 @@ export default function FrameworkRiskAssessmentsPage() {
           <button
             className="cw-btn-primary inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium"
             onClick={() => createMutation.mutate()}
-            disabled={!canCreate}
+            disabled={!canCreate || !canCreatePermission}
           >
             {createMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
             Create & Generate {Number(questionCount) || 20} Questions

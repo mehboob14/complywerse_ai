@@ -119,7 +119,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="mb-6 text-center">
           <div className="inline-flex items-center gap-1.5">
-            <span className="text-2xl font-bold text-slate-900 tracking-tight">
+            <span className="text-2xl font-bold text-slate-950 tracking-tight">
               Compl<span className="relative inline-block">
                 {/* dotless i via unicode + colored dot above */}
                 <span style={{ fontVariantLigatures: 'none' }}>ı</span>
@@ -129,7 +129,7 @@ export default function LoginPage() {
                 />
               </span>verse
             </span>
-            <span className="text-sm font-medium text-slate-400 self-end mb-0.5">AI</span>
+            <span className="text-sm font-medium text-slate-950 self-end mb-0.5">AI</span>
           </div>
           <p className="mt-1.5 text-xs text-slate-500">Sign in to your GRC workspace</p>
         </div>
@@ -236,9 +236,16 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-5 text-center text-xs text-slate-400">
-            Don&apos;t have an account?{' '}
-            <a href="/register" className="text-blue-600 hover:text-blue-700 font-medium">
+            Want to join?{' '}
+            <span
+              title="Registration is currently restricted."
+              className="text-slate-400 cursor-not-allowed line-through"
+            >
               Register your company
+            </span>
+            {' '}&mdash; contact{' '}
+            <a href="mailto:support@compliverse.ai" className="text-blue-600 hover:text-blue-700">
+              support
             </a>
           </p>
         </div>

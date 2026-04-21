@@ -243,7 +243,7 @@ export default function SLAConfigPage() {
                           </button>
                         </div>
                       ) : (
-                        {canEdit && (
+                        <>{canEdit && (
                           <button
                             onClick={() => handleEdit(config)}
                             className="p-1.5 rounded-lg cw-text-muted hover:text-[var(--color-primary)] hover:bg-[var(--color-hover)] transition-colors"
@@ -251,10 +251,10 @@ export default function SLAConfigPage() {
                           >
                             <Edit2 size={16} />
                           </button>
-                        )}
+                        )}</>
                       )
                     ) : (
-                      {canCreate && (
+                      <>{canCreate && (
                         <button
                           onClick={() => handleCreateDefault(severity)}
                           disabled={createMutation.isPending}
@@ -262,7 +262,7 @@ export default function SLAConfigPage() {
                         >
                           Set Default
                         </button>
-                      )}
+                      )}</>
                     )}
                   </td>
                 </tr>

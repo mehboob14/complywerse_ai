@@ -182,6 +182,8 @@ export default function GovernanceReviewsPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('governance:document_management:edit');
+
+  const { data: statistics, isLoading: statsLoading } = useQuery({
     queryKey: ['governance-review-statistics'],
     queryFn: async () => {
       const response = await governanceApi.getReviewStatistics();

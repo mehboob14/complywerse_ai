@@ -225,6 +225,8 @@ export default function RCSAFindingsPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('risks:rcsa:create');
+
+  const { data: findings, isLoading, error } = useQuery({
     queryKey: ['rcsa-findings', severityFilter, statusFilter],
     queryFn: async () => {
       try {
