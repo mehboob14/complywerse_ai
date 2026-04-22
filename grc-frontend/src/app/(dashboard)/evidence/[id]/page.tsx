@@ -407,6 +407,9 @@ export default function EvidenceDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
       queryClient.invalidateQueries({ queryKey: ['evidence-assessment', evidenceId] });
+      // Ensure AI suggested clause mappings and link status refresh immediately
+      queryClient.invalidateQueries({ queryKey: ['evidence-clause-mappings', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-ai-link-status', evidenceId] });
       refetchAssessment();
     },
   });

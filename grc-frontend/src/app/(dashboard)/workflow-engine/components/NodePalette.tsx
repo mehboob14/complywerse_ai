@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronRight, Grip } from 'lucide-react';
+import { ChevronDown, ChevronRight, Grip, Lock } from 'lucide-react';
 import { useState } from 'react';
 import { NODE_GROUP_COLORS, PALETTE_DESCRIPTIONS, PaletteItem } from './types';
 
@@ -127,9 +127,11 @@ export function NodePalette({ palette, onDragStart, onAddNode, locked = false }:
                       onDragStart={locked ? undefined : (e) => onDragStart(e, item)}
                       onClick={locked ? undefined : () => onAddNode(item)}
                       title={locked ? 'Workflow creation is locked. Contact support.' : (PALETTE_DESCRIPTIONS[item.key] || item.description || item.label)}
-                      className={`flex items-center gap-2 px-2 py-1.5 rounded-md border text-xs select-none transition-colors ${locked ? 'cursor-not-allowed opacity-60 ' + pillColor : 'cursor-grab active:cursor-grabbing ' + pillColor}`}
+                      className={`flex items-center pointer-events-none gap-2 px-2 py-1.5 rounded-md border text-xs select-none transition-colors ${locked ? 'cursor-not-allowed opacity-60 ' + pillColor : 'cursor-grab active:cursor-grabbing ' + pillColor}`}
                     >
-                      <Grip size={10} className="opacity-40 shrink-0" />
+                      <Lock size={10} className="shrink-0" color='red'/>
+
+                      {/* <Grip size={10} className="opacity-40 shrink-0" /> */}
                       <span className="truncate font-medium">{item.label}</span>
                       {locked && <span className="ml-auto text-[10px] opacity-50">🔒</span>}
                     </div>
@@ -191,9 +193,11 @@ export function NodePalette({ palette, onDragStart, onAddNode, locked = false }:
                                             onDragStart={locked ? undefined : (e) => onDragStart(e, item)}
                                             onClick={locked ? undefined : () => onAddNode(item)}
                                             title={locked ? 'Workflow creation is locked. Contact support.' : item.label}
-                                            className={`flex items-center gap-2 px-2 py-1.5 rounded-md border text-xs select-none transition-colors ${locked ? 'cursor-not-allowed opacity-60 ' + pillColor : 'cursor-grab active:cursor-grabbing ' + pillColor}`}
+                                            className={`flex items-center pointer-events-none gap-2 px-2 py-1.5 rounded-md border text-xs select-none transition-colors ${locked ? 'cursor-not-allowed opacity-60 ' + pillColor : 'cursor-grab active:cursor-grabbing ' + pillColor}`}
                                           >
-                                            <Grip size={10} className="opacity-40 shrink-0" />
+                      <Lock size={10} className="shrink-0" color='red'/>
+
+                                            {/* <Grip size={10} className="opacity-40 shrink-0" /> */}
                                             <span className="truncate font-medium">{item.label}</span>
                                             {locked && <span className="ml-auto text-[10px] opacity-50">🔒</span>}
                                           </div>

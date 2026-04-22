@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { riskAssessmentApi } from '@/lib/api';
+import { riskAssessmentApi, ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ClipboardCheck,
@@ -74,6 +74,36 @@ interface Assessment {
   updated_at?: string;
 }
 
+interface FrameworkAssessment {
+  id: number;
+  name: string;
+  description?: string | null;
+  status: string;
+  framework_name?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  questions_count?: number;
+}
+
+type CombinedAssessment =
+  | (Assessment & { source: 'risk' })
+  | (FrameworkAssessment & { source: 'framework' });
+
+const FRAMEWORK_STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
+  in_progress: { label: 'In Progress', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+  completed: { label: 'Completed', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
+  archived: { label: 'Archived', color: 'text-slate-700', bgColor: 'bg-slate-500/20' },
+  not_started: { label: 'Not Started', color: 'text-slate-700', bgColor: 'bg-slate-500/20' },
+  blocked: { label: 'Blocked', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
+};
+
+const FRAMEWORK_STATUS_TO_STANDARD: Partial<Record<string, AssessmentStatus>> = {
+  in_progress: 'in_progress',
+  completed: 'approved',
+  archived: 'closed',
+  not_started: 'draft',
+};
+
 export default function RiskAssessmentsPage() {
   const router = useRouter();
   const { hasPermission } = usePermissions();
@@ -120,6 +150,14 @@ export default function RiskAssessmentsPage() {
     },
   });
 
+  const { data: frameworkAssessments } = useQuery({
+    queryKey: ['framework-risk-assessments-for-risk-assessments-page'],
+    queryFn: async () => {
+      const response = await ermApi.frameworkRiskAssessments.getAll();
+      return response.data as FrameworkAssessment[];
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => riskAssessmentApi.create(data),
     onSuccess: () => {
@@ -133,6 +171,15 @@ export default function RiskAssessmentsPage() {
     mutationFn: (id: number) => riskAssessmentApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['risk-assessments'] });
+      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessments-for-risk-assessments-page'] });
+    },
+  });
+
+  const deleteFrameworkMutation = useMutation({
+    mutationFn: (id: number) => ermApi.frameworkRiskAssessments.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['risk-assessments'] });
+      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessments-for-risk-assessments-page'] });
     },
   });
 
@@ -210,21 +257,46 @@ export default function RiskAssessmentsPage() {
     createMutation.mutate(payload);
   };
 
-  const handleDelete = (e: React.MouseEvent, id: number) => {
+  const handleDelete = (e: React.MouseEvent, assessment: CombinedAssessment) => {
     e.stopPropagation();
     if (confirm('Are you sure you want to delete this assessment?')) {
-      deleteMutation.mutate(id);
+      if (assessment.source === 'framework') {
+        deleteFrameworkMutation.mutate(assessment.id);
+        return;
+      }
+      deleteMutation.mutate(assessment.id);
     }
   };
 
-  const filteredAssessments = (assessments || []).filter((a) => {
+  const combinedAssessments: CombinedAssessment[] = [
+    ...((assessments || []).map((a) => ({ ...a, source: 'risk' as const }))),
+    ...((frameworkAssessments || []).map((a) => ({ ...a, source: 'framework' as const }))),
+  ].sort((a, b) => {
+    const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bDate = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bDate - aDate;
+  });
+
+  const filteredAssessments = combinedAssessments.filter((a) => {
+    if (statusFilter !== 'all') {
+      if (a.source === 'framework') {
+        const mapped = FRAMEWORK_STATUS_TO_STANDARD[a.status];
+        if (a.status !== statusFilter && mapped !== statusFilter) return false;
+      } else if (a.status !== statusFilter) {
+        return false;
+      }
+    }
+
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
-    return (
-      a.name.toLowerCase().includes(term) ||
-      a.description?.toLowerCase().includes(term) ||
-      a.scope?.toLowerCase().includes(term)
-    );
+    if (a.source === 'framework') {
+      return (
+        a.name.toLowerCase().includes(term) ||
+        a.description?.toLowerCase().includes(term) ||
+        a.framework_name?.toLowerCase().includes(term)
+      );
+    }
+    return a.name.toLowerCase().includes(term) || a.description?.toLowerCase().includes(term) || a.scope?.toLowerCase().includes(term);
   });
 
   const formatDate = (dateStr?: string) => {
@@ -357,13 +429,21 @@ export default function RiskAssessmentsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredAssessments.map((assessment) => {
-            const statusStyle = STATUS_CONFIG[assessment.status] || STATUS_CONFIG.draft;
-            const typeStyle = TYPE_CONFIG[assessment.assessment_type] || TYPE_CONFIG.periodic;
+            const isFrameworkAssessment = assessment.source === 'framework';
+            const statusStyle = isFrameworkAssessment
+              ? (FRAMEWORK_STATUS_CONFIG[assessment.status] || FRAMEWORK_STATUS_CONFIG.in_progress)
+              : (STATUS_CONFIG[assessment.status] || STATUS_CONFIG.draft);
+            const typeStyle = isFrameworkAssessment
+              ? { label: 'Framework', color: 'text-violet-400', bgColor: 'bg-violet-500/20' }
+              : (TYPE_CONFIG[assessment.assessment_type] || TYPE_CONFIG.periodic);
+            const destination = isFrameworkAssessment
+              ? `/erm/risk-assessments/framework/${assessment.id}`
+              : `/erm/risk-assessments/${assessment.id}`;
 
             return (
               <div
                 key={assessment.id}
-                onClick={() => router.push(`/erm/risk-assessments/${assessment.id}`)}
+                onClick={() => router.push(destination)}
                 className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-5 transition-all hover:border-slate-300 hover:bg-slate-750 hover:shadow-lg"
               >
                 <div className="mb-3 flex items-start justify-between">
@@ -378,7 +458,7 @@ export default function RiskAssessmentsPage() {
                     )}
                   </div>
                   <button
-                      onClick={(e) => handleDelete(e, assessment.id)}
+                      onClick={(e) => handleDelete(e, assessment)}
                       className="ml-2 rounded p-1 text-slate-500 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                       title="Delete assessment"
                     >
@@ -396,14 +476,14 @@ export default function RiskAssessmentsPage() {
                 </div>
 
                 <div className="space-y-2 text-sm">
-                  {assessment.methodology && (
+                  {!isFrameworkAssessment && assessment.methodology && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <Filter size={14} className="shrink-0" />
                       <span>{METHODOLOGY_LABELS[assessment.methodology] || assessment.methodology}</span>
                     </div>
                   )}
 
-                  {(assessment.assessment_period_start || assessment.assessment_period_end) && (
+                  {!isFrameworkAssessment && (assessment.assessment_period_start || assessment.assessment_period_end) && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <Calendar size={14} className="shrink-0" />
                       <span>
@@ -412,10 +492,16 @@ export default function RiskAssessmentsPage() {
                     </div>
                   )}
 
-                  {assessment.lead_assessor_name && (
+                  {!isFrameworkAssessment && assessment.lead_assessor_name && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <Users size={14} className="shrink-0" />
                       <span>{assessment.lead_assessor_name}</span>
+                    </div>
+                  )}
+                  {isFrameworkAssessment && assessment.framework_name && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <ClipboardCheck size={14} className="shrink-0" />
+                      <span>{assessment.framework_name}</span>
                     </div>
                   )}
 
@@ -423,7 +509,9 @@ export default function RiskAssessmentsPage() {
                     <div className="flex items-center gap-1 text-slate-500">
                       <AlertTriangle size={14} />
                       <span className="text-xs">
-                        {assessment.assessed_risks_count ?? 0} risks assessed
+                        {isFrameworkAssessment
+                          ? `${assessment.questions_count ?? 0} questions`
+                          : `${assessment.assessed_risks_count ?? 0} risks assessed`}
                       </span>
                     </div>
                     <span className="text-xs text-slate-500">

@@ -18,7 +18,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { Loader2, AlertCircle, BookOpen, BarChart2, List, Globe, Edit2, Save, X } from 'lucide-react';
+import { Loader2, AlertCircle, BookOpen, BarChart2, List, Globe, Edit2, Save, X, Sparkles } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +44,7 @@ interface Detail {
   references: string[];
   policy_maturity: number | null;
   practice_maturity: number | null;
+  recommended_evidence_generated_at?: string;
   recommended_evidence?: {
     evidence_type: string;
     artifact_name?: string;
@@ -173,6 +174,8 @@ export default function XlsxMaturityViewer({ assessmentId }: { assessmentId: num
   const [editingSummaryDraft, setEditingSummaryDraft] = useState<SummaryRowDraft | null>(null);
   const [editingDetailIndex, setEditingDetailIndex] = useState<number | null>(null);
   const [editingDetailDraft, setEditingDetailDraft] = useState<DetailRowDraft | null>(null);
+  const [generatingRecommendationRow, setGeneratingRecommendationRow] = useState<number | null>(null);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery<XlsxData>({
     queryKey: ['assessmentXlsxData', assessmentId],
@@ -193,6 +196,28 @@ export default function XlsxMaturityViewer({ assessmentId }: { assessmentId: num
       setEditingSummaryDraft(null);
       setEditingDetailIndex(null);
       setEditingDetailDraft(null);
+    },
+  });
+
+  const generateRecommendationMutation = useMutation({
+    mutationFn: async ({ rowIndex, force }: { rowIndex: number; force: boolean }) => {
+      const res = await apiClient.post(
+        `/compliance/assessments/${assessmentId}/xlsx-data/details/${rowIndex}/ai-recommendation`,
+        null,
+        { params: { force } }
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assessmentXlsxData', assessmentId] });
+      setRecommendationError(null);
+    },
+    onError: (err: any) => {
+      const message = err?.response?.data?.detail || 'Failed to generate recommendation.';
+      setRecommendationError(message);
+    },
+    onSettled: () => {
+      setGeneratingRecommendationRow(null);
     },
   });
 
@@ -239,6 +264,13 @@ export default function XlsxMaturityViewer({ assessmentId }: { assessmentId: num
     const parsed = Number(trimmed);
     if (Number.isNaN(parsed)) return null;
     return Math.max(0, Math.min(5, parsed));
+  };
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return '';
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return '';
+    return dt.toLocaleString();
   };
 
   const toggleExpandedCell = (key: string) => {
@@ -346,6 +378,11 @@ export default function XlsxMaturityViewer({ assessmentId }: { assessmentId: num
     });
   };
 
+  const handleGenerateRecommendation = (rowIndex: number, force: boolean) => {
+    setGeneratingRecommendationRow(rowIndex);
+    generateRecommendationMutation.mutate({ rowIndex, force });
+  };
+
   // ── Radar data ───────────────────────────────────────────────────────────
   const radarData = categories.map((c) => ({
     subject: abbreviate(c.category),
@@ -437,6 +474,12 @@ export default function XlsxMaturityViewer({ assessmentId }: { assessmentId: num
           );
         })}
       </div>
+
+      {recommendationError && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {recommendationError}
+        </div>
+      )}
 
       {/* ── Overview Tab ───────────────────────────────────────────────────── */}
       {activeTab === 'overview' && (
@@ -651,9 +694,10 @@ export default function XlsxMaturityViewer({ assessmentId }: { assessmentId: num
                     const recommendedEvidence = Array.isArray(d.recommended_evidence) ? d.recommended_evidence.slice(0, 5) : [];
                     const refsExpanded = expandedCells.has(`refs-${d._rowIndex}`);
                     const visibleReferences = refsExpanded ? normalizedReferences : normalizedReferences.slice(0, 3);
+                    const isGeneratingRecommendation = generatingRecommendationRow === d._rowIndex && generateRecommendationMutation.isPending;
                     return (
                       <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2 align-top">
                           <span
                             className="inline-block px-2 py-0.5 rounded text-xs font-bold text-white"
                             style={{ backgroundColor: fnColor }}
@@ -676,7 +720,7 @@ export default function XlsxMaturityViewer({ assessmentId }: { assessmentId: num
                         <td className="px-4 py-2 align-top text-gray-800">
                           {renderExpandableText(parsedSubcategory.description || d.subcategory, `subcategory-${d._rowIndex}`, 'leading-5')}
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2 flex items-start justify-start">
                           {normalizedReferences.length === 0 ? (
                             <span className="text-xs text-gray-400">-</span>
                           ) : (
@@ -704,30 +748,51 @@ export default function XlsxMaturityViewer({ assessmentId }: { assessmentId: num
                           )}
                         </td>
                         <td className="px-4 py-2 align-top">
-                          {recommendedEvidence.length === 0 ? (
-                            <span className="text-xs text-gray-400">Generating or unavailable</span>
-                          ) : (
-                            <div className="space-y-2">
-                              {recommendedEvidence.map((rec, recIdx) => (
-                                <div key={`${d._rowIndex}-rec-${recIdx}`} className="rounded border border-gray-200 bg-gray-50 p-2">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-xs font-semibold text-gray-800">{rec.evidence_type}</span>
-                                    <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-blue-700">
-                                      {(rec.priority || 'medium').toUpperCase()}
-                                    </span>
-                                  </div>
-                                  {rec.artifact_name && (
-                                    <div className="mt-1 text-xs text-gray-700">{rec.artifact_name}</div>
-                                  )}
-                                  {rec.why_auditable && (
-                                    <div className="mt-1 text-[11px] leading-4 text-gray-500">{rec.why_auditable}</div>
-                                  )}
-                                </div>
-                              ))}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <button
+                                onClick={() => handleGenerateRecommendation(d._rowIndex, recommendedEvidence.length > 0)}
+                                disabled={isGeneratingRecommendation}
+                                className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isGeneratingRecommendation ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3" />
+                                )}
+                                {recommendedEvidence.length > 0 ? 'Regenerate' : 'Get AI'}
+                              </button>
+                              {d.recommended_evidence_generated_at && (
+                                <span className="text-[10px] text-gray-500" title={d.recommended_evidence_generated_at}>
+                                  {formatDateTime(d.recommended_evidence_generated_at)}
+                                </span>
+                              )}
                             </div>
-                          )}
+                            {recommendedEvidence.length === 0 ? (
+                              <span className="text-xs text-gray-400">No AI recommendation yet.</span>
+                            ) : (
+                              <div className="space-y-2 ">
+                                {recommendedEvidence.map((rec, recIdx) => (
+                                  <div key={`${d._rowIndex}-rec-${recIdx}`} className="rounded border border-gray-200 bg-gray-50 p-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-semibold text-gray-800">{rec.evidence_type}</span>
+                                      <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-blue-700">
+                                        {(rec.priority || 'medium').toUpperCase()}
+                                      </span>
+                                    </div>
+                                    {rec.artifact_name && (
+                                      <div className="mt-1 text-xs text-gray-700">{rec.artifact_name}</div>
+                                    )}
+                                    {rec.why_auditable && (
+                                      <div className="mt-1 text-[11px] leading-4 text-gray-500">{rec.why_auditable}</div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </td>
-                        <td className="px-4 py-2 text-right">
+                        <td className="px-4 py-2 align-top text-right">
                           {isEditing ? (
                             <input
                               type="number"
@@ -740,7 +805,7 @@ export default function XlsxMaturityViewer({ assessmentId }: { assessmentId: num
                             />
                           ) : maturityBadge(d.policy_maturity)}
                         </td>
-                        <td className="px-4 py-2 text-right">
+                        <td className="px-4 py-2 align-top text-right">
                           {isEditing ? (
                             <input
                               type="number"
@@ -753,7 +818,7 @@ export default function XlsxMaturityViewer({ assessmentId }: { assessmentId: num
                             />
                           ) : maturityBadge(d.practice_maturity)}
                         </td>
-                        <td className="px-4 py-2 text-right">
+                        <td className="px-4 py-2 align-top text-right">
                           {isEditing ? (
                             <div className="flex justify-end gap-2">
                               <button

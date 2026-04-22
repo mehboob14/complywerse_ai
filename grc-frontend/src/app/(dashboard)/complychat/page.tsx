@@ -433,7 +433,7 @@ export default function ComplyChatPage() {
       const errorResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: '❌ Sorry, I encountered an error connecting to the backend. Please ensure the server is running and try again.',
+        content: 'Sorry for the inconvenience, Something went wrong on our end. Please try again Later.',
         timestamp: new Date(),
       };
 
