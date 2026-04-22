@@ -1114,14 +1114,14 @@ export default function VulnerabilitiesPage() {
               <button 
                 type="button" 
                 onClick={() => setIsModalOpen(false)} 
-                className="cw-btn-secondary"
+                className="cw-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity"
               >
                 Cancel
               </button>
               <button 
                 type="submit" 
                 disabled={createMutation.isPending} 
-                className="cw-btn-primary disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                className="cw-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity"
               >
                 {createMutation.isPending && <Loader2 size={16} className="animate-spin" />}
                 {createMutation.isPending ? 'Creating...' : 'Create'}
@@ -1211,7 +1211,7 @@ export default function VulnerabilitiesPage() {
                 <button 
                   type="button" 
                   onClick={() => setShowBulkAssignModal(false)} 
-                  className="cw-btn-secondary"
+                  className="cw-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity"
                 >
                   Cancel
                 </button>
@@ -1247,7 +1247,7 @@ export default function VulnerabilitiesPage() {
               />
             </div>
             {hasPermission('vulnerabilities:vulnerability_register:create') && (
-              <button onClick={() => setShowCreateDeptModal(true)} className="cw-btn-primary flex items-center gap-2 ml-4">
+              <button onClick={() => setShowCreateDeptModal(true)} className="cw-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity">
                 <Plus size={16} />
                 Create Department
               </button>
@@ -1265,7 +1265,7 @@ export default function VulnerabilitiesPage() {
                   <Building2 className="h-10 w-10 mx-auto cw-text-muted mb-3" />
                   <h3 className="text-base font-medium cw-text mb-1">No departments found</h3>
                   <p className="text-sm cw-text-muted mb-3">Create your first department to start assigning vulnerabilities</p>
-                  <button onClick={() => setShowCreateDeptModal(true)} className="cw-btn-primary inline-flex items-center gap-2">
+                  <button onClick={() => setShowCreateDeptModal(true)} className="cw-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity ">
                     <Plus size={16} />
                     Create Department
                   </button>
@@ -1363,12 +1363,12 @@ export default function VulnerabilitiesPage() {
                   <button onClick={() => setShowCreateDeptModal(false)} className="cw-text-muted hover:cw-text"><X size={20} /></button>
                 </div>
                 <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); createDepartmentMutation.mutate({ name: fd.get('name') as string, code: fd.get('code') as string || undefined, description: fd.get('description') as string || undefined }); }} className="space-y-4">
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Name *</label><input type="text" name="name" required className="cw-field w-full" placeholder="e.g., Security Operations" /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Code</label><input type="text" name="code" className="cw-field w-full" placeholder="e.g., SEC-OPS" /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Description</label><textarea name="description" rows={3} className="cw-field w-full" placeholder="Department responsibilities..." /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Name *</label><input type="text" name="name" required className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" placeholder="e.g., Security Operations" /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Code</label><input type="text" name="code" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" placeholder="e.g., SEC-OPS" /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Description</label><textarea name="description" rows={3} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" placeholder="Department responsibilities..." /></div>
                   <div className="flex justify-end gap-3">
-                    <button type="button" onClick={() => setShowCreateDeptModal(false)} className="cw-btn-secondary">Cancel</button>
-                    <button type="submit" disabled={createDepartmentMutation.isPending} className="cw-btn-primary">{createDepartmentMutation.isPending ? 'Creating...' : 'Create Department'}</button>
+                    <button type="button" onClick={() => setShowCreateDeptModal(false)} className="cw-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity">Cancel</button>
+                    <button type="submit" disabled={createDepartmentMutation.isPending} className="cw-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity">{createDepartmentMutation.isPending ? 'Creating...' : 'Create Department'}</button>
                   </div>
                 </form>
               </div>
@@ -1384,12 +1384,12 @@ export default function VulnerabilitiesPage() {
                   <button onClick={() => { setShowEditDeptModal(false); setSelectedDepartment(null); }} className="cw-text-muted hover:cw-text"><X size={20} /></button>
                 </div>
                 <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); updateDepartmentMutation.mutate({ id: selectedDepartment.id, data: { name: fd.get('name') as string, code: fd.get('code') as string || undefined, description: fd.get('description') as string || undefined } }); }} className="space-y-4">
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Name *</label><input type="text" name="name" required defaultValue={selectedDepartment.name} className="cw-field w-full" /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Code</label><input type="text" name="code" defaultValue={selectedDepartment.code || ''} className="cw-field w-full" /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Description</label><textarea name="description" rows={3} defaultValue={selectedDepartment.description || ''} className="cw-field w-full" /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Name *</label><input type="text" name="name" required defaultValue={selectedDepartment.name} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Department Code</label><input type="text" name="code" defaultValue={selectedDepartment.code || ''} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1">Description</label><textarea name="description" rows={3} defaultValue={selectedDepartment.description || ''} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" /></div>
                   <div className="flex justify-end gap-3">
-                    <button type="button" onClick={() => { setShowEditDeptModal(false); setSelectedDepartment(null); }} className="cw-btn-secondary">Cancel</button>
-                    <button type="submit" disabled={updateDepartmentMutation.isPending} className="cw-btn-primary">{updateDepartmentMutation.isPending ? 'Saving...' : 'Save Changes'}</button>
+                    <button type="button" onClick={() => { setShowEditDeptModal(false); setSelectedDepartment(null); }} className="cw-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity">Cancel</button>
+                    <button type="submit" disabled={updateDepartmentMutation.isPending} className="cw-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity">{updateDepartmentMutation.isPending ? 'Saving...' : 'Save Changes'}</button>
                   </div>
                 </form>
               </div>

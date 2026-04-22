@@ -267,26 +267,18 @@ export default function RegulatoryChangesPage() {
           <h1 className="text-lg font-semibold text-black">Regulatory Change Management</h1>
           <p className="mt-1 text-gray-600">Track and manage regulatory changes and their implementation</p>
         </div>
-        {canCreate && (
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          New Change
-        </button>
-        )}
+
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <div
             key={stat.name}
-            className="rounded-xl border border-gray-300 bg-white p-5"
+            className="rounded-xl border border-slate-200 border-l-4 border-l-emerald-500 bg-white p-3"
           >
-            <div className="flex items-start justify-between mb-4">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${stat.bgColor}`}>
-                <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
+            <div className="flex items-start justify-between mb-2">
+              <div className={`flex h-6 w-6 items-center justify-center rounded-xl bg-gradient-to-br ${stat.bgColor}`}>
+                <stat.icon className={`h-4 w-4 ${stat.iconColor}`} />
               </div>
             </div>
             <p className="text-3xl font-bold text-black">{stat.value}</p>
@@ -296,7 +288,8 @@ export default function RegulatoryChangesPage() {
       </div>
 
       <div className="rounded-xl border border-gray-300 bg-white">
-        <div className="flex flex-col gap-4 border-b border-gray-300 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className='flex items-center justify-between border-b border-gray-300 p-4'>
+        <div className="flex flex-col gap-4   lg:flex-row lg:items-center">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-600" />
             <input
@@ -338,6 +331,17 @@ export default function RegulatoryChangesPage() {
               ))}
             </select>
           </div>
+        </div>
+
+                {canCreate && (
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          New Change
+        </button>
+        )}
         </div>
 
         <div className="overflow-x-auto">

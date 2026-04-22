@@ -34,6 +34,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import RightSlidePanel from '@/components/RightSlidePanel';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -399,7 +400,7 @@ export default function PolicyExceptionsPage() {
   ];
 
   return (
-    <div className="governance-exceptions space-y-3 px-1 py-2">
+    <div className="governance-exceptions space-y-3 rounded-md p-6">
       {/* Header row */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -666,329 +667,320 @@ export default function PolicyExceptionsPage() {
         </table>
       </div>
 
-      {(showCreateModal || editingException) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-2xl overflow-y-auto rounded-xl border border-gray-300 bg-white max-h-[82vh] shadow-xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <div>
-                <h2 className="text-base font-semibold text-black">
-                  {editingException ? 'Edit Exception Request' : 'New Exception Request'}
-                </h2>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  {editingException ? 'Update the exception details' : 'Create a new policy exception request'}
-                </p>
-              </div>
-              <button
-                onClick={() => { setShowCreateModal(false); setEditingException(null); resetForm(); }}
-                className="btn-ghost btn-sm"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="px-5 py-4 space-y-3.5">
-              <div>
-                <label className="label">Title *</label>
-                <input
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="input"
-                  placeholder="Exception request title"
-                />
-               
-              </div>
+   <RightSlidePanel
+  isOpen={showCreateModal || !!editingException}
+  onClose={() => { setShowCreateModal(false); setEditingException(null); resetForm(); }}
+  title={editingException ? 'Edit Exception Request' : 'New Exception Request'}
+  widthClassName="w-[780px]"
+  showBackdrop
+>
+  <div className="space-y-3.5">
+    <div className='flex items-center w-full gap-2'>
+      <div className='w-2/4'>
 
-              <div>
-                <label className="label">Policy</label>
-                <select
-                  value={formData.document_id}
-                  onChange={(e) => setFormData({ ...formData, document_id: e.target.value })}
-                  className="select"
-                >
-                  <option value="">Select a policy...</option>
-                  {(documents || []).map((doc: GovernancePolicyOption) => (
-                    <option key={doc.id} value={doc.id}>
-                      {doc.title} ({doc.document_code || doc.doc_type})
-                    </option>
-                  ))}
-                </select>
-              </div>
-               {showCreateModal && !editingException && (
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      onClick={() => suggestContentMutation.mutate({ title: normalizedTitle, document_id: selectedDocumentId })}
-                      disabled={!selectedDocumentId || !normalizedTitle || suggestContentMutation.isPending}
-                      className="btn-secondary inline-flex items-center gap-2"
-                    >
-                      {suggestContentMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4" />
-                      )}
-                      AI Assist
-                    </button>
-                    <p className="mt-1 text-xs text-gray-600">
-                      Select a policy and enter title, then use AI Assist to fill suggested details.
-                    </p>
-                  </div>
-                )}
+      <label className="label">Title *</label>
+      <input
+        type="text"
+        value={formData.title}
+        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+        className="block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 w-full"
+        placeholder="Exception request title"
+        />
+        </div>
+        <div className='w-2/4'>
 
-                {showCreateModal && !editingException && suggestContentMutation.isPending && (
-                <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 flex items-center gap-3">
-                  <div className="relative flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                      <Sparkles className="h-5 w-5 text-blue-600 animate-pulse" />
-                    </div>
-                    <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-blue-900">AI is working...</p>
-                    <p className="text-xs text-blue-700 mt-0.5">Generating suggested justification and risk details...</p>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                  </div>
-                </div>
-              )}
+      <label className="label">Policy</label>
+      <select
+        value={formData.document_id}
+        onChange={(e) => setFormData({ ...formData, document_id: e.target.value })}
+        className="appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2394a3b8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.5rem_1.5rem] bg-[right_0.5rem_center] bg-no-repeat pr-10 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 w-full"
+      >
+        <option value="">Select a policy...</option>
+        {(documents || []).map((doc: GovernancePolicyOption) => (
+          <option key={doc.id} value={doc.id}>
+            {doc.title} ({doc.document_code || doc.doc_type})
+          </option>
+        ))}
+      </select>
+        </div>
+    </div>
 
-              <div>
-                <label className="label">Justification *</label>
-                <textarea
-                  value={formData.justification}
-                  onChange={(e) => setFormData({ ...formData, justification: e.target.value })}
-                  className="input min-h-[100px]"
-                  placeholder="Explain why this exception is needed"
-                />
-              </div>
+    {/* <div> */}
+    {/* </div> */}
 
-              <div>
-                <label className="label">Risk Assessment</label>
-                <textarea
-                  value={formData.risk_assessment}
-                  onChange={(e) => setFormData({ ...formData, risk_assessment: e.target.value })}
-                  className="input min-h-[80px]"
-                  placeholder="Describe the risk associated with this exception"
-                />
-              </div>
+    {showCreateModal && !editingException && (
+      <div>
+        <button
+          type="button"
+          onClick={() => suggestContentMutation.mutate({ title: normalizedTitle, document_id: selectedDocumentId })}
+          disabled={!selectedDocumentId || !normalizedTitle || suggestContentMutation.isPending}
+          className="btn-secondary inline-flex items-center gap-2"
+        >
+          {suggestContentMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
+          )}
+          AI Assist
+        </button>
+        <p className="mt-1 text-xs text-gray-600">
+          Select a policy and enter title, then use AI Assist to fill suggested details.
+        </p>
+      </div>
+    )}
 
-              <div>
-                <label className="label">Compensating Controls</label>
-                <textarea
-                  value={formData.compensating_controls}
-                  onChange={(e) => setFormData({ ...formData, compensating_controls: e.target.value })}
-                  className="input min-h-[80px]"
-                  placeholder="Describe compensating controls in place"
-                />
-              </div>
-
-              <div>
-                <label className="label">Priority</label>
-                <select
-                  value={formData.priority}
-                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                  className="select"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Effective Date</label>
-                  <input
-                    type="date"
-                    value={formData.effective_date}
-                    onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
-                    className="input"
-                  />
-                </div>
-                <div>
-                  <label className="label">Expiry Date</label>
-                  <input
-                    type="date"
-                    value={formData.expiry_date}
-                    onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })}
-                    className="input"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2.5 px-5 py-4 border-t border-gray-200">
-              <button
-                onClick={() => { setShowCreateModal(false); setEditingException(null); resetForm(); }}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmitForm}
-                disabled={!formData.title || !formData.justification || createMutation.isPending || updateMutation.isPending}
-                className="btn-primary flex items-center gap-2"
-              >
-                {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
-                {editingException ? 'Update Exception' : 'Create Exception'}
-              </button>
-            </div>
+    {showCreateModal && !editingException && suggestContentMutation.isPending && (
+      <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 flex items-center gap-3">
+        <div className="relative flex-shrink-0">
+          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+            <Sparkles className="h-5 w-5 text-blue-600 animate-pulse" />
           </div>
+          <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-blue-900">AI is working...</p>
+          <p className="text-xs text-blue-700 mt-0.5">Generating suggested justification and risk details...</p>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+          <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+          <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+        </div>
+      </div>
+    )}
+
+    <div>
+      <label className="label">Justification *</label>
+      <textarea
+        value={formData.justification}
+        onChange={(e) => setFormData({ ...formData, justification: e.target.value })}
+        className="input"
+        placeholder="Explain why this exception is needed"
+      />
+    </div>
+
+    <div>
+      <label className="label">Risk Assessment</label>
+      <textarea
+        value={formData.risk_assessment}
+        onChange={(e) => setFormData({ ...formData, risk_assessment: e.target.value })}
+        className="input"
+        placeholder="Describe the risk associated with this exception"
+      />
+    </div>
+
+    <div>
+      <label className="label">Compensating Controls</label>
+      <textarea
+        value={formData.compensating_controls}
+        onChange={(e) => setFormData({ ...formData, compensating_controls: e.target.value })}
+        className="input"
+        placeholder="Describe compensating controls in place"
+      />
+    </div>
+
+    <div>
+      <label className="label">Priority</label>
+      <select
+        value={formData.priority}
+        onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+        className="select"
+      >
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="critical">Critical</option>
+      </select>
+    </div>
+
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="label">Effective Date</label>
+        <input
+          type="date"
+          value={formData.effective_date}
+          onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
+          className="input"
+        />
+      </div>
+      <div>
+        <label className="label">Expiry Date</label>
+        <input
+          type="date"
+          value={formData.expiry_date}
+          onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })}
+          className="input"
+        />
+      </div>
+    </div>
+
+    <div className="flex items-center justify-end gap-2.5 border-t border-gray-200 pt-4">
+      <button
+        onClick={() => { setShowCreateModal(false); setEditingException(null); resetForm(); }}
+        className="btn-secondary"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={handleSubmitForm}
+        disabled={!formData.title || !formData.justification || createMutation.isPending || updateMutation.isPending}
+        className="btn-primary flex items-center gap-2"
+      >
+        {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
+        {editingException ? 'Update Exception' : 'Create Exception'}
+      </button>
+    </div>
+  </div>
+</RightSlidePanel>
+
+<RightSlidePanel
+  isOpen={!!viewingException}
+  onClose={() => setViewingException(null)}
+  title={
+    viewingException ? (
+      <div>
+        <span>{viewingException.title}</span>
+        <div className="flex items-center gap-2 mt-1">
+          {(() => {
+            const ss = STATUS_STYLES[viewingException.status] || STATUS_STYLES.draft;
+            return (
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ss.bg} ${ss.text}`}>
+                {ss.label}
+              </span>
+            );
+          })()}
+          {(() => {
+            const ps = PRIORITY_STYLES[viewingException.priority] || PRIORITY_STYLES.medium;
+            return (
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ps.bg} ${ps.text}`}>
+                {ps.label} Priority
+              </span>
+            );
+          })()}
+        </div>
+      </div>
+    ) : ''
+  }
+  widthClassName="w-[780px]"
+  showBackdrop
+>
+  {viewingException && (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wide">Policy</label>
+          <p className="text-black mt-1">{viewingException.document_title || viewingException.policy_name || '-'}</p>
+        </div>
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wide">Requested By</label>
+          <p className="text-black mt-1">{viewingException.requested_by_name || viewingException.requested_by || '-'}</p>
+        </div>
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wide">Effective Date</label>
+          <p className="text-black mt-1">{formatDate(viewingException.effective_date)}</p>
+        </div>
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wide">Expiry Date</label>
+          <p className="text-black mt-1">{formatDate(viewingException.expiry_date)}</p>
+        </div>
+        <div>
+          <label className="text-xs text-gray-600 uppercase tracking-wide">Created</label>
+          <p className="text-black mt-1">{formatDate(viewingException.created_at)}</p>
+        </div>
+        {viewingException.approved_by_name && (
+          <div>
+            <label className="text-xs text-gray-600 uppercase tracking-wide">Approved By</label>
+            <p className="text-black mt-1">{viewingException.approved_by_name}</p>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label className="text-xs text-gray-600 uppercase tracking-wide">Justification</label>
+        <p className="text-gray-800 mt-1 whitespace-pre-wrap">{viewingException.justification || '-'}</p>
+      </div>
+
+      <div>
+        <label className="text-xs text-gray-600 uppercase tracking-wide">Risk Assessment</label>
+        <p className="text-gray-800 mt-1 whitespace-pre-wrap">{viewingException.risk_assessment || '-'}</p>
+      </div>
+
+      <div>
+        <label className="text-xs text-gray-600 uppercase tracking-wide">Compensating Controls</label>
+        <p className="text-gray-800 mt-1 whitespace-pre-wrap">{viewingException.compensating_controls || '-'}</p>
+      </div>
+
+      {viewingException.rejection_reason && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3.5">
+          <label className="text-xs text-red-700 uppercase tracking-wide font-medium">Rejection Reason</label>
+          <p className="text-red-800 mt-1">{viewingException.rejection_reason}</p>
         </div>
       )}
 
-      {viewingException && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-3xl overflow-y-auto rounded-xl border border-gray-300 bg-white max-h-[82vh] shadow-xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <div>
-                <h2 className="text-base font-semibold text-black">{viewingException.title}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  {(() => {
-                    const ss = STATUS_STYLES[viewingException.status] || STATUS_STYLES.draft;
-                    return (
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ss.bg} ${ss.text}`}>
-                        {ss.label}
-                      </span>
-                    );
-                  })()}
-                  {(() => {
-                    const ps = PRIORITY_STYLES[viewingException.priority] || PRIORITY_STYLES.medium;
-                    return (
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ps.bg} ${ps.text}`}>
-                        {ps.label} Priority
-                      </span>
-                    );
-                  })()}
-                </div>
-              </div>
-              <button
-                onClick={() => setViewingException(null)}
-                className="btn-ghost btn-sm"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="px-5 py-4 space-y-4.5">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-600 uppercase tracking-wide">Policy</label>
-                  <p className="text-black mt-1">{viewingException.document_title || viewingException.policy_name || '-'}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600 uppercase tracking-wide">Requested By</label>
-                  <p className="text-black mt-1">{viewingException.requested_by_name || viewingException.requested_by || '-'}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600 uppercase tracking-wide">Effective Date</label>
-                  <p className="text-black mt-1">{formatDate(viewingException.effective_date)}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600 uppercase tracking-wide">Expiry Date</label>
-                  <p className="text-black mt-1">{formatDate(viewingException.expiry_date)}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600 uppercase tracking-wide">Created</label>
-                  <p className="text-black mt-1">{formatDate(viewingException.created_at)}</p>
-                </div>
-                {viewingException.approved_by_name && (
-                  <div>
-                    <label className="text-xs text-gray-600 uppercase tracking-wide">Approved By</label>
-                    <p className="text-black mt-1">{viewingException.approved_by_name}</p>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-600 uppercase tracking-wide">Justification</label>
-                <p className="text-gray-800 mt-1 whitespace-pre-wrap">{viewingException.justification || '-'}</p>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-600 uppercase tracking-wide">Risk Assessment</label>
-                <p className="text-gray-800 mt-1 whitespace-pre-wrap">{viewingException.risk_assessment || '-'}</p>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-600 uppercase tracking-wide">Compensating Controls</label>
-                <p className="text-gray-800 mt-1 whitespace-pre-wrap">{viewingException.compensating_controls || '-'}</p>
-              </div>
-
-              {viewingException.rejection_reason && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3.5">
-                  <label className="text-xs text-red-700 uppercase tracking-wide font-medium">Rejection Reason</label>
-                  <p className="text-red-800 mt-1">{viewingException.rejection_reason}</p>
-                </div>
-              )}
-
-              {viewingException.approval_comments && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3.5">
-                  <label className="text-xs text-green-700 uppercase tracking-wide font-medium">Approval Comments</label>
-                  <p className="text-green-800 mt-1">{viewingException.approval_comments}</p>
-                </div>
-              )}
-
-              <div className="border-t border-gray-200 pt-3.5">
-                <h3 className="text-sm font-semibold text-black flex items-center gap-2 mb-3">
-                  <MessageSquare className="h-4 w-4 text-gray-600" />
-                  Comments
-                </h3>
-                {commentsLoading ? (
-                  <div className="flex justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
-                  </div>
-                ) : (
-                  <div className="space-y-2.5 mb-3.5">
-                    {(!comments || comments.length === 0) && (
-                      <p className="text-sm text-gray-600 text-center py-2">No comments yet</p>
-                    )}
-                    {(comments || []).map((comment) => (
-                      <div key={comment.id} className="bg-gray-100 rounded-lg p-2.5">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-black">{comment.user_name}</span>
-                          <span className="text-xs text-gray-600">{formatDate(comment.created_at)}</span>
-                        </div>
-                        <p className="text-sm text-gray-800">{comment.comment}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    className="input flex-1"
-                    placeholder="Add a comment..."
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newComment.trim()) {
-                        addCommentMutation.mutate({ id: viewingException.id, data: { comment: newComment.trim() } });
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={() => {
-                      if (newComment.trim()) {
-                        addCommentMutation.mutate({ id: viewingException.id, data: { comment: newComment.trim() } });
-                      }
-                    }}
-                    disabled={!newComment.trim() || addCommentMutation.isPending}
-                    className="btn-primary"
-                  >
-                    {addCommentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+      {viewingException.approval_comments && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3.5">
+          <label className="text-xs text-green-700 uppercase tracking-wide font-medium">Approval Comments</label>
+          <p className="text-green-800 mt-1">{viewingException.approval_comments}</p>
         </div>
       )}
+
+      <div className="border-t border-gray-200 pt-3.5">
+        <h3 className="text-sm font-semibold text-black flex items-center gap-2 mb-3">
+          <MessageSquare className="h-4 w-4 text-gray-600" />
+          Comments
+        </h3>
+        {commentsLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
+          </div>
+        ) : (
+          <div className="space-y-2.5 mb-3.5">
+            {(!comments || comments.length === 0) && (
+              <p className="text-sm text-gray-600 text-center py-2">No comments yet</p>
+            )}
+            {(comments || []).map((comment) => (
+              <div key={comment.id} className="bg-gray-100 rounded-lg p-2.5">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-black">{comment.user_name}</span>
+                  <span className="text-xs text-gray-600">{formatDate(comment.created_at)}</span>
+                </div>
+                <p className="text-sm text-gray-800">{comment.comment}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            className="input flex-1"
+            placeholder="Add a comment..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newComment.trim()) {
+                addCommentMutation.mutate({ id: viewingException.id, data: { comment: newComment.trim() } });
+              }
+            }}
+          />
+          <button
+            onClick={() => {
+              if (newComment.trim()) {
+                addCommentMutation.mutate({ id: viewingException.id, data: { comment: newComment.trim() } });
+              }
+            }}
+            disabled={!newComment.trim() || addCommentMutation.isPending}
+            className="btn-primary"
+          >
+            {addCommentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+</RightSlidePanel>
 
       {approveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
