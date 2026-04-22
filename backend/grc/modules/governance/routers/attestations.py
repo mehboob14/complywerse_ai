@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from ....models import (
     GRCUser, Tenant, GovernanceDocument, GovernanceDocumentVersion,
-    PolicyAttestation, Evidence, get_db
+    PolicyAttestation, Evidence, TenantUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -98,9 +98,11 @@ async def request_attestations(
     created_attestations = []
     
     for user_id in attestation_data.user_ids:
-        user = db.query(GRCUser).filter(
+        user = db.query(GRCUser).join(
+            TenantUser, TenantUser.user_id == GRCUser.id
+        ).filter(
             GRCUser.id == user_id,
-            GRCUser.tenant_id.in_(user_tenants)
+            TenantUser.tenant_id.in_(user_tenants)
         ).first()
         
         if not user:

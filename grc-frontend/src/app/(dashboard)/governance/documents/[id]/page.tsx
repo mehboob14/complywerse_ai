@@ -474,12 +474,25 @@ export default function PolicyDetailPage() {
 
   const handleDownload = async () => {
     try {
-      const response = await governanceApi.downloadDocumentFile(id);
-      const blob = new Blob([response.data]);
+      let blob: Blob;
+      let fileName = document?.file_name || `${document?.title || `document_${id}`}.html`;
+
+      if (document?.has_file) {
+        const response = await governanceApi.downloadDocumentFile(id);
+        blob = new Blob([response.data]);
+      } else {
+        const response = await governanceApi.getDocumentViewHtml(id);
+        const html = response.data?.html || '';
+        blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        if (!fileName.toLowerCase().endsWith('.html')) {
+          fileName = `${fileName}.html`;
+        }
+      }
+
       const url = window.URL.createObjectURL(blob);
       const a = window.document.createElement('a');
       a.href = url;
-      a.download = document?.file_name || `document_${id}`;
+      a.download = fileName;
       window.document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -650,15 +663,13 @@ export default function PolicyDetailPage() {
               Publish
             </button>
           )}
-          {document.has_file && (
-            <button
-              onClick={handleDownload}
-              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:text-black hover:bg-gray-100 transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              Download File
-            </button>
-          )}
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:text-black hover:bg-gray-100 transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            {document.has_file ? 'Download File' : 'Download Draft'}
+          </button>
           <button
             onClick={handleEditOpen}
             className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:text-black hover:bg-gray-100 transition-colors"

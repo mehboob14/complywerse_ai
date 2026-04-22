@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, case, and_
+from sqlalchemy import func, case, and_, or_
 from typing import Optional, List
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -504,10 +504,41 @@ def my_tasks(
         joinedload(CriticalTask.created_by),
     ).filter(
         CriticalTask.tenant_id.in_(user_tenants),
-        CriticalTask.assigned_owner_id == current_user.id,
+        or_(
+            CriticalTask.assigned_owner_id == current_user.id,
+            CriticalTask.reviewer_id == current_user.id,
+        ),
     )
     tasks = query.order_by(CriticalTask.due_date.asc().nullslast(), CriticalTask.priority.desc()).all()
     return [_serialize_task(t) for t in tasks]
+
+
+@router.get("/tenant-users")
+def get_tenant_users(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    users = (
+        db.query(GRCUser)
+        .join(TenantUser, TenantUser.user_id == GRCUser.id)
+        .filter(
+            TenantUser.tenant_id.in_(user_tenants),
+            GRCUser.is_active == True,
+        )
+        .distinct()
+        .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "display_name": u.display_name or u.username,
+            "email": u.email,
+        }
+        for u in users
+    ]
 
 
 @router.get("/reports/summary")
@@ -1796,5 +1827,4 @@ def ai_balance_workload(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
-
 

@@ -154,7 +154,7 @@ const navigation: NavEntry[] = [
     { name: 'IT Assets', href: '/assets', icon: Bot, requiredPermissions: ['dashboard:assets*'] },
 
   {
-    name: 'IS Projects',
+    name: 'Projects',
     href: '/is-projects',
     icon: FolderKanban,
     requiredModules: ['is_projects'],
@@ -460,7 +460,7 @@ export default function Sidebar() {
   return (
     <aside
       className={clsx(
-        'flex flex-col bg-[var(--sidebar-bg)] border-r border-slate-200 shadow-sidebar transition-all duration-300 ease-out',
+        'flex flex-col bg-white border-r border-slate-200 shadow-sidebar transition-all duration-300 ease-out',
         collapsed ? 'w-[60px]' : 'w-56'
       )}
     >

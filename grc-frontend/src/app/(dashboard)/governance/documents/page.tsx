@@ -405,19 +405,31 @@ export default function GovernanceDocumentsPage() {
 
   const handleDownload = async (doc: DocumentItem) => {
     try {
-      const response = await governanceApi.downloadDocumentFile(doc.id);
-      const blob = new Blob([response.data]);
+      let blob: Blob;
+      let filename = doc.file_name || `${doc.title || `document_${doc.id}`}.html`;
+
+      if (doc.file_name) {
+        const response = await governanceApi.downloadDocumentFile(doc.id);
+        blob = new Blob([response.data]);
+      } else {
+        const response = await governanceApi.getDocumentViewHtml(doc.id);
+        const html = response.data?.html || '';
+        blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        if (!filename.toLowerCase().endsWith('.html')) {
+          filename = `${filename}.html`;
+        }
+      }
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = doc.file_name || `document_${doc.id}`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (error) {
-      console.error('Download failed:', error);
-      alert('Failed to download file');
+    } catch {
+      toast({ type: 'error', title: 'Download Failed', message: 'Could not download this document.' });
     }
   };
 
@@ -697,35 +709,33 @@ export default function GovernanceDocumentsPage() {
                           <Edit2 className="h-4 w-4" />
                         </button>
                       )}
+                      <button
+                        onClick={() => handleDownload(doc)}
+                        className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
+                        title={doc.file_name ? 'Download File' : 'Download Draft as HTML'}
+                      >
+                        <Download className="h-4 w-4" />
+                      </button>
                       {doc.file_name ? (
-                        <>
-                          <button
-                            onClick={() => handleDownload(doc)}
-                            className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
-                            title="Download File"
-                          >
-                            <Download className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => parsePolicyMutation.mutate(doc.id)}
-                            className={`rounded p-1.5 transition-colors ${
-                              doc.policy_statement_count && doc.policy_statement_count > 0
-                                ? 'text-[var(--color-success)] hover:bg-[var(--color-success-soft)]'
-                                : 'text-[var(--color-base)] hover:bg-[var(--color-base-soft)]'
-                            }`}
-                            title={doc.policy_statement_count && doc.policy_statement_count > 0
-                              ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
-                              : 'Parse Policy Statements'
-                            }
-                            disabled={parsingDocumentId === doc.id}
-                          >
-                            {parsingDocumentId === doc.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Wand2 className="h-4 w-4" />
-                            )}
-                          </button>
-                        </>
+                        <button
+                          onClick={() => parsePolicyMutation.mutate(doc.id)}
+                          className={`rounded p-1.5 transition-colors ${
+                            doc.policy_statement_count && doc.policy_statement_count > 0
+                              ? 'text-[var(--color-success)] hover:bg-[var(--color-success-soft)]'
+                              : 'text-[var(--color-base)] hover:bg-[var(--color-base-soft)]'
+                          }`}
+                          title={doc.policy_statement_count && doc.policy_statement_count > 0
+                            ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
+                            : 'Parse Policy Statements'
+                          }
+                          disabled={parsingDocumentId === doc.id}
+                        >
+                          {parsingDocumentId === doc.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Wand2 className="h-4 w-4" />
+                          )}
+                        </button>
                       ) : (
                         <button
                           onClick={() => setUploadingToDocumentId(doc.id)}
@@ -855,35 +865,33 @@ export default function GovernanceDocumentsPage() {
                                 <Edit2 className="h-4 w-4" />
                               </button>
                             )}
+                            <button
+                              onClick={() => handleDownload(doc)}
+                              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
+                              title={doc.file_name ? 'Download File' : 'Download Draft as HTML'}
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
                             {doc.file_name ? (
-                              <>
-                                <button
-                                  onClick={() => handleDownload(doc)}
-                                  className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
-                                  title="Download File"
-                                >
-                                  <Download className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => parsePolicyMutation.mutate(doc.id)}
-                                  className={`rounded p-1.5 transition-colors ${
-                                    doc.policy_statement_count && doc.policy_statement_count > 0
-                                        ? 'text-[var(--color-success)] hover:bg-[var(--color-success-soft)]'
-                                        : 'text-[var(--color-base)] hover:bg-[var(--color-base-soft)]'
-                                  }`}
-                                  title={doc.policy_statement_count && doc.policy_statement_count > 0 
-                                    ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
-                                    : 'Parse Policy Statements'
-                                  }
-                                  disabled={parsingDocumentId === doc.id}
-                                >
-                                  {parsingDocumentId === doc.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Wand2 className="h-4 w-4" />
-                                  )}
-                                </button>
-                              </>
+                              <button
+                                onClick={() => parsePolicyMutation.mutate(doc.id)}
+                                className={`rounded p-1.5 transition-colors ${
+                                  doc.policy_statement_count && doc.policy_statement_count > 0
+                                      ? 'text-[var(--color-success)] hover:bg-[var(--color-success-soft)]'
+                                      : 'text-[var(--color-base)] hover:bg-[var(--color-base-soft)]'
+                                }`}
+                                title={doc.policy_statement_count && doc.policy_statement_count > 0 
+                                  ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
+                                  : 'Parse Policy Statements'
+                                }
+                                disabled={parsingDocumentId === doc.id}
+                              >
+                                {parsingDocumentId === doc.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Wand2 className="h-4 w-4" />
+                                )}
+                              </button>
                             ) : (
                               <button
                                 onClick={() => setUploadingToDocumentId(doc.id)}

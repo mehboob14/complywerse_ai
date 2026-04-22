@@ -1,3 +1,5 @@
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const BACKEND_URL = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:4000').replace(/\/$/, '');
 
@@ -41,6 +43,14 @@ const nextConfig = {
       ],
     }
   },
-}
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.resolve = config.resolve || {};
+      config.resolve.alias = config.resolve.alias || {};
+      config.resolve.alias['recharts'] = path.resolve(__dirname, 'src/lib/recharts-mock.js');
+    }
+    return config;
+  },
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

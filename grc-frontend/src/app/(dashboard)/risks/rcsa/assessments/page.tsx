@@ -70,7 +70,7 @@ export default function RCSAAssessmentsPage() {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('risks:rcsa:edit');
 
-  const { data: assessments, isLoading } = useQuery({
+  const { data: assessments, isLoading, error } = useQuery({
     queryKey: ['rcsa-assessments', statusFilter, campaignFilter, businessUnitFilter],
     queryFn: async () => {
       try {

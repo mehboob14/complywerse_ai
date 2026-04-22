@@ -4,7 +4,8 @@ import json
 import logging
 from typing import Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, subqueryload
 from sqlalchemy import or_, func
 
@@ -19,6 +20,8 @@ from .auth_router import require_auth, get_user_primary_tenant, require_tenant_p
 
 MILESTONE_EVIDENCE_DIR = "backend/uploads/is_project_milestone_evidence"
 os.makedirs(MILESTONE_EVIDENCE_DIR, exist_ok=True)
+IS_PROJECT_DOCUMENT_DIR = "backend/uploads/is_project_documents"
+os.makedirs(IS_PROJECT_DOCUMENT_DIR, exist_ok=True)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,29 @@ def safe_parse_date(val):
         return datetime.fromisoformat(str(val).replace("Z", "+00:00"))
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail=f"Invalid date format: {val}")
+
+
+def _recalculate_project_completion(db: Session, project: ISProject) -> None:
+    tasks = db.query(ISProjectTask).filter(ISProjectTask.project_id == project.id).all()
+    if not tasks:
+        project.completion_percentage = 0
+        return
+
+    total = 0.0
+    for task in tasks:
+        if task.status in ("Done", "Completed"):
+            task_progress = 100.0
+        elif task.progress is not None and float(task.progress) > 0:
+            task_progress = max(0, min(100, float(task.progress)))
+        elif task.status in ("In Review", "Under Review"):
+            task_progress = 75.0
+        elif task.status == "In Progress":
+            task_progress = 50.0
+        else:
+            task_progress = 0.0
+        total += task_progress
+
+    project.completion_percentage = round(total / len(tasks), 2)
 
 
 def serialize_project(p: ISProject) -> dict:
@@ -157,6 +183,8 @@ def serialize_risk(r: ISProjectRisk) -> dict:
 
 
 def serialize_document(d: ISProjectDocument) -> dict:
+    is_uploaded_file = d.reference_type == "uploaded_file" and bool(d.reference_id)
+    file_name = d.url if is_uploaded_file else None
     return {
         "id": d.id,
         "project_id": d.project_id,
@@ -166,6 +194,9 @@ def serialize_document(d: ISProjectDocument) -> dict:
         "url": d.url,
         "reference_id": d.reference_id,
         "reference_type": d.reference_type,
+        "is_uploaded_file": is_uploaded_file,
+        "file_name": file_name,
+        "download_url": f"/api/is-projects/{d.project_id}/documents/{d.id}/download" if is_uploaded_file else None,
         "created_at": d.created_at.isoformat() if d.created_at else None,
         "created_by_name": d.created_by_name,
     }
@@ -946,7 +977,11 @@ def create_task(
         progress=data.get("progress", 0),
         sort_order=data.get("sort_order", 0),
     )
+    if task.status in ("Done", "Completed") and not task.completed_date:
+        task.completed_date = datetime.utcnow()
     db.add(task)
+    _recalculate_project_completion(db, project)
+    project.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(task)
     return serialize_task(task)
@@ -977,7 +1012,14 @@ def update_task(
         task.due_date = safe_parse_date(data["due_date"])
     if "completed_date" in data:
         task.completed_date = safe_parse_date(data["completed_date"])
+    if "status" in data and "completed_date" not in data:
+        if task.status in ("Done", "Completed") and not task.completed_date:
+            task.completed_date = datetime.utcnow()
+        elif task.status not in ("Done", "Completed"):
+            task.completed_date = None
     task.updated_at = datetime.utcnow()
+    _recalculate_project_completion(db, project)
+    project.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(task)
     return serialize_task(task)
@@ -1000,6 +1042,8 @@ def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     db.delete(task)
+    _recalculate_project_completion(db, project)
+    project.updated_at = datetime.utcnow()
     db.commit()
     return {"message": "Task deleted"}
 
@@ -1288,6 +1332,12 @@ def delete_risk(
 
 # ─── Documents CRUD ─────────────────────────────────────────────────────────
 
+def _project_document_path(tenant_id: int, project_id: int, stored_name: str) -> str:
+    project_dir = os.path.join(IS_PROJECT_DOCUMENT_DIR, str(tenant_id), str(project_id))
+    os.makedirs(project_dir, exist_ok=True)
+    return os.path.join(project_dir, stored_name)
+
+
 @router.get("/{project_id}/documents")
 def list_documents(
     project_id: int,
@@ -1329,6 +1379,86 @@ def add_document(
     db.commit()
     db.refresh(doc)
     return serialize_document(doc)
+
+
+@router.post("/{project_id}/documents/upload")
+async def upload_document(
+    project_id: int,
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    document_type: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    project = db.query(ISProject).filter(ISProject.id == project_id, ISProject.tenant_id == tenant_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    original_name = file.filename or "document"
+    _, ext = os.path.splitext(original_name)
+    stored_name = f"{uuid.uuid4().hex}{ext.lower()}"
+    file_path = _project_document_path(tenant_id, project_id, stored_name)
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    doc = ISProjectDocument(
+        project_id=project_id,
+        title=(title or os.path.splitext(original_name)[0] or "Document").strip(),
+        description=description,
+        document_type=document_type or "Reference",
+        url=original_name,
+        reference_id=stored_name,
+        reference_type="uploaded_file",
+        created_by_name=current_user.email,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return serialize_document(doc)
+
+
+@router.get("/{project_id}/documents/{document_id}/download")
+def download_document(
+    project_id: int,
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    project = db.query(ISProject).filter(ISProject.id == project_id, ISProject.tenant_id == tenant_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    doc = db.query(ISProjectDocument).filter(
+        ISProjectDocument.id == document_id,
+        ISProjectDocument.project_id == project_id,
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.reference_type != "uploaded_file" or not doc.reference_id:
+        raise HTTPException(status_code=400, detail="Document is not an uploaded file")
+
+    file_path = _project_document_path(tenant_id, project_id, doc.reference_id)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    download_name = (doc.url or doc.title or "document").strip()
+    if "." not in os.path.basename(download_name):
+        _, stored_ext = os.path.splitext(doc.reference_id)
+        if stored_ext:
+            download_name += stored_ext
+
+    return FileResponse(
+        path=file_path,
+        filename=download_name,
+        media_type="application/octet-stream",
+    )
 
 
 @router.put("/{project_id}/documents/{document_id}")
@@ -1373,8 +1503,16 @@ def remove_document(
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    file_path = None
+    if doc.reference_type == "uploaded_file" and doc.reference_id:
+        file_path = _project_document_path(tenant_id, project_id, doc.reference_id)
     db.delete(doc)
     db.commit()
+    if file_path and os.path.isfile(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
     return {"message": "Document removed"}
 
 

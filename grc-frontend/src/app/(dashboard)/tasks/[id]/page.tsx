@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { criticalTasksApi } from '@/lib/api';
-import { apiClient } from '@/lib/api';
+import { criticalTasksApi, risksApi, ermApi, vulnManagementApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
 import {
@@ -15,7 +14,7 @@ import {
 
 interface TaskUser {
   id: number;
-  username: string;
+  username?: string | null;
   display_name: string | null;
   email: string;
 }
@@ -153,13 +152,68 @@ export default function TaskDetailPage() {
   const [editForm, setEditForm] = useState<Record<string, string | number | null>>({});
   const [transitionComment, setTransitionComment] = useState('');
   const [users, setUsers] = useState<TaskUser[]>([]);
+  const [riskOptions, setRiskOptions] = useState<Array<{ id: number; label: string }>>([]);
+  const [controlOptions, setControlOptions] = useState<Array<{ id: number; label: string }>>([]);
+  const [vulnOptions, setVulnOptions] = useState<Array<{ id: number; label: string }>>([]);
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [aiRootCause, setAiRootCause] = useState<Record<string, unknown> | null>(null);
   const [aiDescription, setAiDescription] = useState<Record<string, unknown> | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
 
   useEffect(() => {
-    apiClient.get('/auth/users').then(r => setUsers(r.data || [])).catch(() => {});
+    criticalTasksApi.getTenantUsers().then(r => setUsers(r.data || [])).catch(() => setUsers([]));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const normalizeList = (value: unknown): Record<string, unknown>[] => {
+      if (Array.isArray(value)) return value as Record<string, unknown>[];
+      const maybeItems = (value as Record<string, unknown> | undefined)?.items;
+      return Array.isArray(maybeItems) ? (maybeItems as Record<string, unknown>[]) : [];
+    };
+
+    Promise.all([
+      risksApi.getAll().then(r => normalizeList(r.data)).catch(() => []),
+      ermApi.internalControls.getAll().then(r => normalizeList(r.data)).catch(() => []),
+      vulnManagementApi.vulnerabilities.getAll().then(r => normalizeList(r.data)).catch(() => []),
+    ]).then(([risks, controls, vulnerabilities]) => {
+      if (!active) return;
+      setRiskOptions(
+        risks
+          .map((r) => {
+            const id = Number(r.id);
+            if (!id) return null;
+            const label = String(r.title || r.name || r.risk_event || r.risk_description || `Risk #${id}`);
+            return { id, label };
+          })
+          .filter(Boolean) as Array<{ id: number; label: string }>
+      );
+      setControlOptions(
+        controls
+          .map((c) => {
+            const id = Number(c.id);
+            if (!id) return null;
+            const base = String(c.name || c.control_name || c.title || `Control #${id}`);
+            const code = c.control_id ? `${String(c.control_id)} - ` : '';
+            return { id, label: `${code}${base}` };
+          })
+          .filter(Boolean) as Array<{ id: number; label: string }>
+      );
+      setVulnOptions(
+        vulnerabilities
+          .map((v) => {
+            const id = Number(v.id);
+            if (!id) return null;
+            const label = String(v.title || v.vulnerability_name || v.cve_id || `Vulnerability #${id}`);
+            return { id, label };
+          })
+          .filter(Boolean) as Array<{ id: number; label: string }>
+      );
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const { data: task, isLoading } = useQuery<CriticalTaskDetail>({
@@ -269,7 +323,9 @@ export default function TaskDetailPage() {
       evidence_notes: task.evidence_notes || '',
       source_module: task.source_module || '',
       source_entity_type: task.source_entity_type || '',
-      source_entity_id: task.source_entity_id ? String(task.source_entity_id) : '',
+      linked_risk_id: task.linked_risk_id ? String(task.linked_risk_id) : '',
+      linked_control_id: task.linked_control_id ? String(task.linked_control_id) : '',
+      linked_vulnerability_id: task.linked_vulnerability_id ? String(task.linked_vulnerability_id) : '',
     });
     setEditing(true);
   };
@@ -282,8 +338,12 @@ export default function TaskDetailPage() {
     else payload.reviewer_id = null;
     if (payload.sla_days) payload.sla_days = Number(payload.sla_days);
     else payload.sla_days = null;
-    if (payload.source_entity_id) payload.source_entity_id = Number(payload.source_entity_id);
-    else payload.source_entity_id = null;
+    if (payload.linked_risk_id) payload.linked_risk_id = Number(payload.linked_risk_id);
+    else payload.linked_risk_id = null;
+    if (payload.linked_control_id) payload.linked_control_id = Number(payload.linked_control_id);
+    else payload.linked_control_id = null;
+    if (payload.linked_vulnerability_id) payload.linked_vulnerability_id = Number(payload.linked_vulnerability_id);
+    else payload.linked_vulnerability_id = null;
     if (!payload.severity) payload.severity = null;
     if (!payload.source_module) payload.source_module = null;
     if (!payload.source_entity_type) payload.source_entity_type = null;
@@ -771,11 +831,6 @@ export default function TaskDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Source Entity ID</label>
-                  <input type="number" value={(editForm.source_entity_id as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, source_entity_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm" placeholder="ID from source module" />
-                </div>
-                <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Owner</label>
                   <select value={(editForm.assigned_owner_id as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, assigned_owner_id: e.target.value }))}
                     className="cw-field w-full px-3 py-2 text-sm">
@@ -806,6 +861,32 @@ export default function TaskDetailPage() {
                 <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Evidence / Notes</label>
                 <textarea value={(editForm.evidence_notes as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, evidence_notes: e.target.value }))}
                   className="cw-field w-full px-3 py-2 text-sm" rows={2} />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Risk</label>
+                  <select value={(editForm.linked_risk_id as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, linked_risk_id: e.target.value }))}
+                    className="cw-field w-full px-3 py-2 text-sm">
+                    <option value="">None</option>
+                    {riskOptions.map((risk) => <option key={risk.id} value={risk.id}>{risk.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Internal Control</label>
+                  <select value={(editForm.linked_control_id as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, linked_control_id: e.target.value }))}
+                    className="cw-field w-full px-3 py-2 text-sm">
+                    <option value="">None</option>
+                    {controlOptions.map((control) => <option key={control.id} value={control.id}>{control.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Vulnerability</label>
+                  <select value={(editForm.linked_vulnerability_id as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, linked_vulnerability_id: e.target.value }))}
+                    className="cw-field w-full px-3 py-2 text-sm">
+                    <option value="">None</option>
+                    {vulnOptions.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">

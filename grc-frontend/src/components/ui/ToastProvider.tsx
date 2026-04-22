@@ -32,9 +32,13 @@ export interface ToastProviderProps {
 
 export function ToastProvider({ children, maxToasts = 5 }: ToastProviderProps) {
   const [toasts, setToasts] = useState<ToastData[]>([]);
+  const suppressToasts = true;
 
   const toast = useCallback((options: ToastOptions): string => {
     const id = generateToastId();
+    if (suppressToasts) {
+      return id;
+    }
     const newToast: ToastData = {
       id,
       title: options.title,
@@ -52,7 +56,7 @@ export function ToastProvider({ children, maxToasts = 5 }: ToastProviderProps) {
     });
 
     return id;
-  }, [maxToasts]);
+  }, [maxToasts, suppressToasts]);
 
   const dismiss = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, LogOut, UserCircle, Users } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
@@ -54,12 +54,17 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const { data: me } = useQuery({
     queryKey: ['current-user'],
     queryFn: () => apiClient.get('/auth/me').then((r) => r.data),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const currentUser = me?.user;
@@ -128,6 +133,7 @@ export default function Header() {
     }
     localStorage.clear();
     sessionStorage.clear(); // Clear permission cache so next user gets fresh permissions
+    queryClient.clear();
     setIsUserMenuOpen(false);
     router.push('/login');
     router.refresh();

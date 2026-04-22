@@ -3,12 +3,28 @@
 import { useQuery } from '@tanstack/react-query';
 import { enrichedDashboardApi } from '@/lib/api';
 import {
-  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell,
   LineChart, Line, Legend,
   BarChart, Bar,
 } from 'recharts';
 import { Target, Zap, TrendingDown, BarChart3 } from 'lucide-react';
+
+import dynamic from 'next/dynamic';
+
+const { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } = {
+  ResponsiveContainer: dynamic(
+    () => import('recharts').then((mod) => mod.ResponsiveContainer),
+    { ssr: false }
+  ),
+  PieChart: dynamic(
+    () => import('recharts').then((mod) => mod.PieChart),
+    { ssr: false }
+  ),
+  Pie: dynamic(() => import('recharts').then((mod) => mod.Pie), { ssr: false }),
+  Cell: dynamic(() => import('recharts').then((mod) => mod.Cell), { ssr: false }),
+  Tooltip: dynamic(() => import('recharts').then((mod) => mod.Tooltip), { ssr: false }),
+};
 
 const STRATEGY_COLORS: Record<string, string> = {
   avoid: '#ef4444',

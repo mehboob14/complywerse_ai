@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Building2, Lock } from 'lucide-react';
 
 function getTenantSlugFromHost(): string | null {
@@ -41,6 +42,7 @@ function getTenantSlug(): string | null {
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -88,8 +90,12 @@ export default function LoginPage() {
           localStorage.setItem('tenant_name', data.tenant.name || '');
           localStorage.setItem('tenant_id', String(data.tenant.id || ''));
         }
-        
-        router.push('/dashboard');
+
+        // Ensure no stale user/session data survives cross-account login.
+        queryClient.clear();
+
+        router.replace('/dashboard');
+        router.refresh();
       } else {
         const data = await response.json();
         if (response.status === 409) {

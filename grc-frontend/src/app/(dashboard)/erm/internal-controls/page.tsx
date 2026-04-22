@@ -26,7 +26,22 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { evidenceApi } from '@/lib/api';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
+import dynamic from 'next/dynamic';
+
+const { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } = {
+  ResponsiveContainer: dynamic(
+    () => import('recharts').then((mod) => mod.ResponsiveContainer),
+    { ssr: false }
+  ),
+  PieChart: dynamic(
+    () => import('recharts').then((mod) => mod.PieChart),
+    { ssr: false }
+  ),
+  Pie: dynamic(() => import('recharts').then((mod) => mod.Pie), { ssr: false }),
+  Cell: dynamic(() => import('recharts').then((mod) => mod.Cell), { ssr: false }),
+  Tooltip: dynamic(() => import('recharts').then((mod) => mod.Tooltip), { ssr: false }),
+};
+
 
 interface InternalControl {
   id: number;

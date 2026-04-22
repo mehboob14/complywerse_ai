@@ -638,12 +638,14 @@ def login(
 
 @router.post("/logout")
 def logout():
+    is_production = os.environ.get("REPL_DEPLOYMENT", "") == "1"
     response = JSONResponse(content={"message": "Logged out successfully"})
     response.delete_cookie(
         key="grc_auth_token",
         httponly=True,
-        secure=True,
-        samesite="lax"
+        secure=is_production,
+        samesite="lax",
+        path="/"
     )
     return response
 
@@ -696,7 +698,9 @@ def refresh_token(
 
 @router.get("/me")
 def get_me(
+    request: Request,
     token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
 ):
     if not token:
@@ -857,7 +861,7 @@ def get_me(
         except Exception:
             pass
     
-    user = get_current_user(request=request, token=token, authorization=request.headers.get("authorization"), db=db)
+    user = get_current_user(request=request, token=token, authorization=authorization, db=db)
     if not user:
         return {"authenticated": False, "user": None}
     

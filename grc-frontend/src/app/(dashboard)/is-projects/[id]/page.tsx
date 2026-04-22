@@ -32,6 +32,7 @@ import {
   Receipt,
   Paperclip,
   Upload,
+  Download,
 } from 'lucide-react';
 
 const TABS = [
@@ -209,6 +210,7 @@ export default function ProjectDetailPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('overview');
   const [showModal, setShowModal] = useState<string | null>(null);
+  const [documentUploadFile, setDocumentUploadFile] = useState<File | null>(null);
   const [editingProject, setEditingProject] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
 
@@ -300,13 +302,38 @@ export default function ProjectDetailPage() {
 
   const addDocMut = useMutation({
     mutationFn: (data: Record<string, unknown>) => isProjectsApi.addDocument(projectId, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['is-project', projectId] }); setShowModal(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['is-project', projectId] }); setDocumentUploadFile(null); setShowModal(null); },
+  });
+  const addDocUploadMut = useMutation({
+    mutationFn: (formData: FormData) => isProjectsApi.uploadDocument(projectId, formData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['is-project', projectId] });
+      setDocumentUploadFile(null);
+      setShowModal(null);
+    },
   });
 
   const removeDocMut = useMutation({
     mutationFn: (id: number) => isProjectsApi.removeDocument(projectId, id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['is-project', projectId] }),
   });
+
+  const handleDownloadDocument = async (docId: number, fileName?: string) => {
+    try {
+      const response = await isProjectsApi.downloadDocument(projectId, docId);
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = url;
+      a.download = fileName || `project-document-${docId}`;
+      window.document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      window.document.body.removeChild(a);
+    } catch {
+      // noop: keep UI stable; backend error is reflected in network panel
+    }
+  };
 
   const { data: budgetData, refetch: refetchBudget } = useQuery({
     queryKey: ['is-project-budget', projectId],
@@ -1012,7 +1039,7 @@ export default function ProjectDetailPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-[var(--color-text)]">Documents</h3>
-            <button onClick={() => { setShowModal('document'); setModalForm({ title: '', description: '', document_type: 'Reference', url: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
+            <button onClick={() => { setShowModal('document'); setDocumentUploadFile(null); setModalForm({ title: '', description: '', document_type: 'Reference', url: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
               <Plus size={14} /> Add Document
             </button>
           </div>
@@ -1023,7 +1050,7 @@ export default function ProjectDetailPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {project.documents.map((d: { id: number; title: string; description: string; document_type: string; url: string; created_by_name: string; created_at: string }) => (
+              {project.documents.map((d: { id: number; title: string; description: string; document_type: string; url: string; is_uploaded_file?: boolean; file_name?: string; created_by_name: string; created_at: string }) => (
                 <div key={d.id} className="cw-card p-4 flex items-center gap-4">
                   <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
                     <FileText size={18} className="text-blue-600" />
@@ -1038,11 +1065,15 @@ export default function ProjectDetailPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {d.url && (
+                    {d.is_uploaded_file ? (
+                      <button onClick={() => handleDownloadDocument(d.id, d.file_name || d.title)} className="p-2 hover:bg-[var(--color-subtle)] rounded text-blue-600" title="Download file">
+                        <Download size={14} />
+                      </button>
+                    ) : d.url ? (
                       <a href={d.url} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-[var(--color-subtle)] rounded text-blue-600">
                         <Link2 size={14} />
                       </a>
-                    )}
+                    ) : null}
                     <button onClick={() => removeDocMut.mutate(d.id)} className="p-2 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
                   </div>
                 </div>
@@ -1406,7 +1437,7 @@ export default function ProjectDetailPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 cw-overlay flex items-center justify-center z-50 p-4" onClick={() => { setShowModal(null); setEditingId(null); }}>
+        <div className="fixed inset-0 cw-overlay flex items-center justify-center z-50 p-4" onClick={() => { setShowModal(null); setEditingId(null); setDocumentUploadFile(null); }}>
           <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
               <h2 className="text-lg font-semibold text-[var(--color-text)]">
@@ -1421,7 +1452,7 @@ export default function ProjectDetailPage() {
                 {showModal === 'lesson' && (editingId ? 'Edit Lesson Learned' : 'Add Lesson Learned')}
                 {showModal === 'dependency' && (editingId ? 'Edit Dependency' : 'Add Dependency')}
               </h2>
-              <button onClick={() => { setShowModal(null); setEditingId(null); }} className="p-1 hover:bg-[var(--color-subtle)] rounded"><X size={18} /></button>
+              <button onClick={() => { setShowModal(null); setEditingId(null); setDocumentUploadFile(null); }} className="p-1 hover:bg-[var(--color-subtle)] rounded"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-4">
               {showModal === 'milestone' && (
@@ -1483,7 +1514,16 @@ export default function ProjectDetailPage() {
                   <div><label className="cw-label block text-sm font-medium mb-1">Title <span className="cw-required">*</span></label><input type="text" value={modalForm.title || ''} onChange={e => setModalForm({ ...modalForm, title: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" /></div>
                   <div><label className="cw-label block text-sm font-medium mb-1">Description</label><textarea value={modalForm.description || ''} onChange={e => setModalForm({ ...modalForm, description: e.target.value })} rows={2} className="cw-field w-full px-3 py-2 text-sm" /></div>
                   <div><label className="cw-label block text-sm font-medium mb-1">Type</label><input type="text" value={modalForm.document_type || ''} onChange={e => setModalForm({ ...modalForm, document_type: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="e.g., Policy, Deliverable, Reference" /></div>
-                  <div><label className="cw-label block text-sm font-medium mb-1">URL</label><input type="url" value={modalForm.url || ''} onChange={e => setModalForm({ ...modalForm, url: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="https://..." /></div>
+                  <div><label className="cw-label block text-sm font-medium mb-1">URL (Optional)</label><input type="url" value={modalForm.url || ''} onChange={e => setModalForm({ ...modalForm, url: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="https://..." /></div>
+                  <div>
+                    <label className="cw-label block text-sm font-medium mb-1">Browse File (Optional)</label>
+                    <input
+                      type="file"
+                      onChange={e => setDocumentUploadFile(e.target.files?.[0] || null)}
+                      className="cw-field w-full px-3 py-2 text-sm"
+                    />
+                    <p className="mt-1 text-xs text-[var(--color-muted)]">If a file is selected, it will be uploaded and stored with this project document.</p>
+                  </div>
                 </>
               )}
               {showModal === 'budget' && (
@@ -1542,7 +1582,7 @@ export default function ProjectDetailPage() {
               )}
             </div>
             <div className="flex items-center justify-end gap-3 p-5 border-t border-[var(--color-border)]">
-              <button onClick={() => { setShowModal(null); setEditingId(null); }} className="cw-btn-secondary px-4 py-2 rounded-lg text-sm">Cancel</button>
+              <button onClick={() => { setShowModal(null); setEditingId(null); setDocumentUploadFile(null); }} className="cw-btn-secondary px-4 py-2 rounded-lg text-sm">Cancel</button>
               <button
                 onClick={() => {
                   if (showModal === 'milestone') {
@@ -1556,7 +1596,18 @@ export default function ProjectDetailPage() {
                   if (showModal === 'team') addTeamMut.mutate(modalForm);
                   if (showModal === 'risk') createRiskMut.mutate(modalForm);
                   if (showModal === 'update') createUpdateMut.mutate(modalForm);
-                  if (showModal === 'document') addDocMut.mutate(modalForm);
+                  if (showModal === 'document') {
+                    if (documentUploadFile) {
+                      const formData = new FormData();
+                      formData.append('file', documentUploadFile);
+                      if (modalForm.title) formData.append('title', String(modalForm.title));
+                      if (modalForm.description) formData.append('description', String(modalForm.description));
+                      if (modalForm.document_type) formData.append('document_type', String(modalForm.document_type));
+                      addDocUploadMut.mutate(formData);
+                    } else {
+                      addDocMut.mutate(modalForm);
+                    }
+                  }
                   if (showModal === 'budget') {
                     const payload = { ...modalForm, amount: parseFloat(modalForm.amount || '0') };
                     editingId ? updateBudgetMut.mutate({ id: editingId, data: payload }) : createBudgetMut.mutate(payload);

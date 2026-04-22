@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
-import { criticalTasksApi } from '@/lib/api';
-import { apiClient } from '@/lib/api';
+import { criticalTasksApi, risksApi, ermApi, vulnManagementApi } from '@/lib/api';
 import Link from 'next/link';
 import MyTasksPage from './my-tasks/page';
 import TaskReportsPage from './reports/page';
@@ -16,7 +15,7 @@ import {
 
 interface TaskUser {
   id: number;
-  username: string;
+  username?: string | null;
   display_name: string | null;
   email: string;
 }
@@ -126,17 +125,72 @@ export default function TaskBoardPage() {
   const [aiResult, setAiResult] = useState<Record<string, unknown> | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDescLoading, setAiDescLoading] = useState(false);
+  const [riskOptions, setRiskOptions] = useState<Array<{ id: number; label: string }>>([]);
+  const [controlOptions, setControlOptions] = useState<Array<{ id: number; label: string }>>([]);
+  const [vulnOptions, setVulnOptions] = useState<Array<{ id: number; label: string }>>([]);
   const [newTask, setNewTask] = useState({
     title: '', description: '', source: 'Manual', priority: 'Medium',
     severity: '', category: 'Other', assigned_owner_id: '',
     reviewer_id: '', due_date: '', sla_days: '', evidence_notes: '',
-    source_module: '', source_entity_id: '', source_entity_type: '',
-    linked_risk_id: '', linked_control_id: '', linked_finding_id: '', linked_vulnerability_id: '',
+    source_module: '', source_entity_type: '',
+    linked_risk_id: '', linked_control_id: '', linked_vulnerability_id: '',
     recurrence_pattern: '', recurrence_interval: '1', approval_required: false,
   });
 
   useEffect(() => {
-    apiClient.get('/auth/users').then(r => setUsers(r.data || [])).catch(() => {});
+    criticalTasksApi.getTenantUsers().then(r => setUsers(r.data || [])).catch(() => setUsers([]));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const normalizeList = (value: unknown): Record<string, unknown>[] => {
+      if (Array.isArray(value)) return value as Record<string, unknown>[];
+      const maybeItems = (value as Record<string, unknown> | undefined)?.items;
+      return Array.isArray(maybeItems) ? (maybeItems as Record<string, unknown>[]) : [];
+    };
+
+    Promise.all([
+      risksApi.getAll().then(r => normalizeList(r.data)).catch(() => []),
+      ermApi.internalControls.getAll().then(r => normalizeList(r.data)).catch(() => []),
+      vulnManagementApi.vulnerabilities.getAll().then(r => normalizeList(r.data)).catch(() => []),
+    ]).then(([risks, controls, vulnerabilities]) => {
+      if (!active) return;
+      setRiskOptions(
+        risks
+          .map((r) => {
+            const id = Number(r.id);
+            if (!id) return null;
+            const label = String(r.title || r.name || r.risk_event || r.risk_description || `Risk #${id}`);
+            return { id, label };
+          })
+          .filter(Boolean) as Array<{ id: number; label: string }>
+      );
+      setControlOptions(
+        controls
+          .map((c) => {
+            const id = Number(c.id);
+            if (!id) return null;
+            const base = String(c.name || c.control_name || c.title || `Control #${id}`);
+            const code = c.control_id ? `${String(c.control_id)} - ` : '';
+            return { id, label: `${code}${base}` };
+          })
+          .filter(Boolean) as Array<{ id: number; label: string }>
+      );
+      setVulnOptions(
+        vulnerabilities
+          .map((v) => {
+            const id = Number(v.id);
+            if (!id) return null;
+            const label = String(v.title || v.vulnerability_name || v.cve_id || `Vulnerability #${id}`);
+            return { id, label };
+          })
+          .filter(Boolean) as Array<{ id: number; label: string }>
+      );
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const { data: templates } = useQuery({
@@ -210,8 +264,8 @@ export default function TaskBoardPage() {
         title: '', description: '', source: 'Manual', priority: 'Medium',
         severity: '', category: 'Other', assigned_owner_id: '',
         reviewer_id: '', due_date: '', sla_days: '', evidence_notes: '',
-        source_module: '', source_entity_id: '', source_entity_type: '',
-        linked_risk_id: '', linked_control_id: '', linked_finding_id: '', linked_vulnerability_id: '',
+        source_module: '', source_entity_type: '',
+        linked_risk_id: '', linked_control_id: '', linked_vulnerability_id: '',
         recurrence_pattern: '', recurrence_interval: '1', approval_required: false,
       });
     },
@@ -235,11 +289,9 @@ export default function TaskBoardPage() {
     else delete payload.reviewer_id;
     if (payload.sla_days) payload.sla_days = Number(payload.sla_days);
     else delete payload.sla_days;
-    if (payload.source_entity_id) payload.source_entity_id = Number(payload.source_entity_id);
-    else delete payload.source_entity_id;
     if (!payload.source_module) delete payload.source_module;
     if (!payload.source_entity_type) delete payload.source_entity_type;
-    ['linked_risk_id', 'linked_control_id', 'linked_finding_id', 'linked_vulnerability_id'].forEach(k => {
+    ['linked_risk_id', 'linked_control_id', 'linked_vulnerability_id'].forEach(k => {
       if (payload[k]) payload[k] = Number(payload[k]);
       else delete payload[k];
     });
@@ -657,11 +709,6 @@ export default function TaskBoardPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Source Entity ID</label>
-                  <input type="number" value={newTask.source_entity_id} onChange={e => setNewTask(f => ({ ...f, source_entity_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm" placeholder="ID from source module" />
-                </div>
-                <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Assigned Owner</label>
                   <select value={newTask.assigned_owner_id} onChange={e => setNewTask(f => ({ ...f, assigned_owner_id: e.target.value }))}
                     className="cw-field w-full px-3 py-2 text-sm">
@@ -731,24 +778,28 @@ export default function TaskBoardPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Linked Risk ID</label>
-                  <input type="number" value={newTask.linked_risk_id} onChange={e => setNewTask(f => ({ ...f, linked_risk_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm" placeholder="Optional" />
+                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Risk</label>
+                  <select value={newTask.linked_risk_id} onChange={e => setNewTask(f => ({ ...f, linked_risk_id: e.target.value }))}
+                    className="cw-field w-full px-3 py-2 text-sm">
+                    <option value="">None</option>
+                    {riskOptions.map((risk) => <option key={risk.id} value={risk.id}>{risk.label}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Linked Control ID</label>
-                  <input type="number" value={newTask.linked_control_id} onChange={e => setNewTask(f => ({ ...f, linked_control_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm" placeholder="Optional" />
+                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Internal Control</label>
+                  <select value={newTask.linked_control_id} onChange={e => setNewTask(f => ({ ...f, linked_control_id: e.target.value }))}
+                    className="cw-field w-full px-3 py-2 text-sm">
+                    <option value="">None</option>
+                    {controlOptions.map((control) => <option key={control.id} value={control.id}>{control.label}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Linked Finding ID</label>
-                  <input type="number" value={newTask.linked_finding_id} onChange={e => setNewTask(f => ({ ...f, linked_finding_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm" placeholder="Optional" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Linked Vulnerability ID</label>
-                  <input type="number" value={newTask.linked_vulnerability_id} onChange={e => setNewTask(f => ({ ...f, linked_vulnerability_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm" placeholder="Optional" />
+                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Vulnerability</label>
+                  <select value={newTask.linked_vulnerability_id} onChange={e => setNewTask(f => ({ ...f, linked_vulnerability_id: e.target.value }))}
+                    className="cw-field w-full px-3 py-2 text-sm">
+                    <option value="">None</option>
+                    {vulnOptions.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                  </select>
                 </div>
               </div>
             </div>

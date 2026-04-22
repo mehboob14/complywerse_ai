@@ -579,6 +579,14 @@ export const isProjectsApi = {
     apiClient.delete(`/is-projects/${projectId}/risks/${riskId}`),
   addDocument: (projectId: number, data: Record<string, unknown>) =>
     apiClient.post(`/is-projects/${projectId}/documents`, data),
+  uploadDocument: (projectId: number, formData: FormData) =>
+    apiClient.post(`/is-projects/${projectId}/documents/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  downloadDocument: (projectId: number, documentId: number) =>
+    apiClient.get(`/is-projects/${projectId}/documents/${documentId}/download`, {
+      responseType: 'blob',
+    }),
   updateDocument: (projectId: number, documentId: number, data: Record<string, unknown>) =>
     apiClient.put(`/is-projects/${projectId}/documents/${documentId}`, data),
   removeDocument: (projectId: number, documentId: number) =>
@@ -626,6 +634,7 @@ export const isProjectsApi = {
 export const criticalTasksApi = {
   list: (params?: Record<string, unknown>) => apiClient.get('/critical-tasks', { params }),
   myTasks: () => apiClient.get('/critical-tasks/my-tasks'),
+  getTenantUsers: () => apiClient.get('/critical-tasks/tenant-users'),
   get: (id: number) => apiClient.get(`/critical-tasks/${id}`),
   create: (data: Record<string, unknown>) => apiClient.post('/critical-tasks', data),
   update: (id: number, data: Record<string, unknown>) => apiClient.put(`/critical-tasks/${id}`, data),
