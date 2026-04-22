@@ -1601,17 +1601,6 @@ def get_assessment_xlsx_data(
             # Keep serving stored data if re-parse fails.
             pass
 
-    # Backfill AI-recommended evidence for each detail row (max 5 per item).
-    try:
-        recommendations_changed = _ensure_xlsx_detail_recommendations(data)
-        if recommendations_changed:
-            assessment.xlsx_data = data
-            flag_modified(assessment, "xlsx_data")
-            db.commit()
-    except Exception:
-        # Do not fail the viewer payload if recommendation generation has issues.
-        pass
-
     return data
 
 
@@ -1679,6 +1668,84 @@ def update_assessment_xlsx_data(
     db.refresh(assessment)
 
     return data
+
+
+@router.post("/{assessment_id}/xlsx-data/details/{row_index}/ai-recommendation")
+def generate_xlsx_detail_ai_recommendation(
+    assessment_id: int,
+    row_index: int,
+    force: bool = Query(False, description="Regenerate recommendation even if already present"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    assessment = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.id == assessment_id,
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
+    if getattr(assessment, "assessment_format", "standard") != "xlsx_maturity":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assessment is not in xlsx_maturity format")
+
+    raw = getattr(assessment, "xlsx_data", None)
+    if raw is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No xlsx data stored for this assessment")
+
+    data = raw if isinstance(raw, dict) else json.loads(raw)
+    sheets = data.get("sheets") or {}
+    details = sheets.get("details") or []
+    if not isinstance(details, list):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid details structure in xlsx data")
+    if row_index < 0 or row_index >= len(details):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid details row index")
+
+    row = details[row_index]
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid details row data")
+
+    existing = row.get("recommended_evidence")
+    if not force and isinstance(existing, list) and existing:
+        return {
+            "assessment_id": assessment_id,
+            "row_index": row_index,
+            "recommendations": existing[:5],
+            "generated_at": row.get("recommended_evidence_generated_at"),
+            "cached": True,
+        }
+
+    framework_name = str(data.get("framework_name") or "NIST CSF").strip() or "NIST CSF"
+    payload = [{
+        "row_index": row_index,
+        "function": str(row.get("function") or ""),
+        "category": str(row.get("category") or ""),
+        "subcategory": str(row.get("subcategory") or ""),
+        "references": [str(r).strip() for r in (row.get("references") or []) if str(r).strip()][:4],
+        "policy_maturity": row.get("policy_maturity"),
+        "practice_maturity": row.get("practice_maturity"),
+    }]
+
+    ai_map = _generate_detail_recommendations_batch_ai(framework_name, payload)
+    recommendations = ai_map.get(row_index) or _fallback_detail_recommendations(row, framework_name)
+    recommendations = recommendations[:5]
+    generated_at = datetime.utcnow().isoformat()
+
+    row["recommended_evidence"] = recommendations
+    row["recommended_evidence_generated_at"] = generated_at
+
+    assessment.xlsx_data = data
+    flag_modified(assessment, "xlsx_data")
+    assessment.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "assessment_id": assessment_id,
+        "row_index": row_index,
+        "recommendations": recommendations,
+        "generated_at": generated_at,
+        "cached": False,
+    }
 
 
 @router.get("/{assessment_id}")

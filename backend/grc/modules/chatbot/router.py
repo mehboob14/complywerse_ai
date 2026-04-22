@@ -7,8 +7,10 @@ import os
 import sys
 import json
 import logging
+import hashlib
+import re
 from io import BytesIO
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Sequence, Tuple
 from pathlib import Path
 from collections import deque
 from datetime import datetime
@@ -35,6 +37,14 @@ langchain_histories: Dict[str, Any] = {}
 MAX_HISTORY_LENGTH = 10
 CHAT_UPLOAD_ROOT = Path(__file__).resolve().parents[3] / "uploads" / "complychat"
 CHAT_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+VECTOR_INDEX_STATE: Dict[int, Dict[str, str]] = {}
+VECTOR_MATCH_LIMIT = int(os.getenv("COMPLYCHAT_VECTOR_MATCH_LIMIT", "16"))
+VECTOR_SCORE_THRESHOLD = float(os.getenv("COMPLYCHAT_VECTOR_SCORE_THRESHOLD", "0.18"))
+VECTOR_ROUTE_TERMS = (
+    "document", "policy", "charter", "framework", "control", "clause", "section",
+    "requirement", "obligation", "assessment", "evidence", "uploaded", "excel", "sheet",
+    "pdf", "docx", "what does", "what says", "based on", "from",
+)
 # IMPORTANT: Only terms that have NO database tables (truly removed UI features).
 # Audit findings, plans, engagements, reports ARE in the DB — route those to database instead.
 # This list is intentionally narrow to avoid blocking valid DB queries.
@@ -352,6 +362,18 @@ try:
     LANGCHAIN_HISTORY_AVAILABLE = True
 except Exception as langchain_error:
     logger.warning(f"LangChain history module unavailable: {langchain_error}")
+
+try:
+    from .qdrant_service import (
+        IndexedSourceDocument,
+        QdrantComplyChatService,
+        extract_text_from_path,
+    )
+except Exception as qdrant_import_error:
+    IndexedSourceDocument = None  # type: ignore[assignment]
+    QdrantComplyChatService = None  # type: ignore[assignment]
+    extract_text_from_path = None  # type: ignore[assignment]
+    logger.warning("Qdrant service module unavailable: %s", qdrant_import_error)
 
 
 def normalize_chat_message(value: str) -> str:
@@ -1139,9 +1161,27 @@ except Exception as e:
 from ...models import (
     GRCUser,
     get_db,
+    Framework,
+    FrameworkControl,
+    ControlObjective,
+    FrameworkDomain,
     UploadedFramework,
+    ParsedFrameworkControl,
     CertificationJourney,
     ControlImplementation,
+    GovernanceDocument,
+    GovernanceDocumentVersion,
+    GovernanceCommittee,
+    CommitteeCharter,
+    RiskAssessment,
+    FrameworkRiskAssessment,
+    FrameworkRiskQuestion,
+    GRCComplianceAssessment,
+    ComplianceProgram,
+    ComplianceAssessmentDocument,
+    ComplianceAssessmentDocumentItem,
+    RiskAssessmentRisk,
+    Risk,
     Evidence,
     EvidenceControlMapping,
 )
@@ -1235,6 +1275,900 @@ class TriggerEmbeddingRequest(BaseModel):
 
 
 # ============================================================================
+# QDRANT VECTOR RAG HELPERS
+# ============================================================================
+
+_qdrant_service_singleton: Optional[Any] = None
+
+
+def get_qdrant_service() -> Optional[Any]:
+    global _qdrant_service_singleton
+    if QdrantComplyChatService is None:
+        return None
+    if _qdrant_service_singleton is None:
+        try:
+            _qdrant_service_singleton = QdrantComplyChatService()
+        except Exception as exc:
+            logger.warning("Failed to initialize Qdrant service: %s", exc)
+            _qdrant_service_singleton = None
+    return _qdrant_service_singleton
+
+
+def _to_iso(value: Any) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _json_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (dict, list)):
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except Exception:
+            return str(value).strip()
+    return str(value).strip()
+
+
+def _merge_text(*parts: Any) -> str:
+    cleaned = [str(part).strip() for part in parts if part and str(part).strip()]
+    return "\n\n".join(cleaned)
+
+
+def _catalog_entry(
+    *,
+    source_type: str,
+    source_id: str,
+    title: str,
+    description: str = "",
+    updated_at: str = "",
+    tenant_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    return {
+        "source_type": source_type,
+        "source_id": source_id,
+        "title": title.strip(),
+        "description": description.strip(),
+        "updated_at": updated_at,
+        "tenant_id": tenant_id,
+    }
+
+
+def _build_vector_catalog(
+    db: Session,
+    tenant_ids: List[int],
+    uploaded_files: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    entries: List[Dict[str, Any]] = []
+    seen: set[Tuple[str, str]] = set()
+
+    def add(entry: Dict[str, Any]) -> None:
+        key = (entry["source_type"], entry["source_id"])
+        if key in seen:
+            return
+        if not entry.get("title"):
+            return
+        seen.add(key)
+        entries.append(entry)
+
+    if tenant_ids:
+        governance_docs = (
+            db.query(GovernanceDocument)
+            .filter(GovernanceDocument.tenant_id.in_(tenant_ids))
+            .order_by(GovernanceDocument.updated_at.desc())
+            .limit(400)
+            .all()
+        )
+        for item in governance_docs:
+            add(
+                _catalog_entry(
+                    source_type="governance_document",
+                    source_id=str(item.id),
+                    title=item.title or f"Governance Document {item.id}",
+                    description=_merge_text(item.doc_type, item.status, item.description)[:800],
+                    updated_at=_to_iso(item.updated_at or item.created_at),
+                    tenant_id=item.tenant_id,
+                )
+            )
+
+        charters = (
+            db.query(CommitteeCharter)
+            .filter(CommitteeCharter.tenant_id.in_(tenant_ids))
+            .order_by(CommitteeCharter.created_at.desc())
+            .limit(300)
+            .all()
+        )
+        for item in charters:
+            committee_name = item.committee.name if item.committee else ""
+            add(
+                _catalog_entry(
+                    source_type="committee_charter",
+                    source_id=str(item.id),
+                    title=item.title or committee_name or f"Committee Charter {item.id}",
+                    description=_merge_text(committee_name, item.version, item.status)[:800],
+                    updated_at=_to_iso(item.created_at),
+                    tenant_id=item.tenant_id,
+                )
+            )
+
+        risk_assessments = (
+            db.query(RiskAssessment)
+            .filter(RiskAssessment.tenant_id.in_(tenant_ids))
+            .order_by(RiskAssessment.updated_at.desc())
+            .limit(300)
+            .all()
+        )
+        for item in risk_assessments:
+            add(
+                _catalog_entry(
+                    source_type="risk_assessment",
+                    source_id=str(item.id),
+                    title=item.name or f"Risk Assessment {item.id}",
+                    description=_merge_text(item.assessment_type, item.status, item.description)[:800],
+                    updated_at=_to_iso(item.updated_at or item.created_at),
+                    tenant_id=item.tenant_id,
+                )
+            )
+
+        framework_risk_assessments = (
+            db.query(FrameworkRiskAssessment)
+            .filter(FrameworkRiskAssessment.tenant_id.in_(tenant_ids))
+            .order_by(FrameworkRiskAssessment.updated_at.desc())
+            .limit(250)
+            .all()
+        )
+        for item in framework_risk_assessments:
+            framework_name = ""
+            if item.uploaded_framework and item.uploaded_framework.name:
+                framework_name = item.uploaded_framework.name
+            elif item.framework and item.framework.name:
+                framework_name = item.framework.name
+            add(
+                _catalog_entry(
+                    source_type="framework_risk_assessment",
+                    source_id=str(item.id),
+                    title=item.name or f"Framework Risk Assessment {item.id}",
+                    description=_merge_text(framework_name, item.status, item.description)[:800],
+                    updated_at=_to_iso(item.updated_at or item.created_at),
+                    tenant_id=item.tenant_id,
+                )
+            )
+
+        compliance_docs = (
+            db.query(ComplianceAssessmentDocument)
+            .filter(ComplianceAssessmentDocument.tenant_id.in_(tenant_ids))
+            .order_by(ComplianceAssessmentDocument.updated_at.desc())
+            .limit(350)
+            .all()
+        )
+        for item in compliance_docs:
+            add(
+                _catalog_entry(
+                    source_type="compliance_assessment_document",
+                    source_id=str(item.id),
+                    title=item.name or f"Compliance Assessment {item.id}",
+                    description=_merge_text(item.assessment_type, item.status, item.source, item.notes)[:800],
+                    updated_at=_to_iso(item.updated_at or item.created_at),
+                    tenant_id=item.tenant_id,
+                )
+            )
+
+        evidence_rows = (
+            db.query(Evidence)
+            .filter(Evidence.tenant_id.in_(tenant_ids))
+            .order_by(Evidence.uploaded_at.desc())
+            .limit(300)
+            .all()
+        )
+        for item in evidence_rows:
+            add(
+                _catalog_entry(
+                    source_type="evidence_file",
+                    source_id=str(item.id),
+                    title=item.name or item.file_name or f"Evidence {item.id}",
+                    description=_merge_text(item.description, item.evidence_type, item.content_summary)[:800],
+                    updated_at=_to_iso(item.uploaded_at),
+                    tenant_id=item.tenant_id,
+                )
+            )
+
+    uploaded_frameworks = (
+        db.query(UploadedFramework)
+        .filter(UploadedFramework.is_active == True)
+        .order_by(UploadedFramework.updated_at.desc())
+        .limit(250)
+        .all()
+    )
+    for item in uploaded_frameworks:
+        add(
+            _catalog_entry(
+                source_type="uploaded_framework",
+                source_id=str(item.id),
+                title=item.name or f"Uploaded Framework {item.id}",
+                description=_merge_text(
+                    item.framework_type,
+                    item.classification,
+                    item.version,
+                    item.description,
+                    item.framework_scope,
+                )[:900],
+                updated_at=_to_iso(item.updated_at or item.created_at),
+                tenant_id=item.tenant_id,
+            )
+        )
+
+    frameworks = (
+        db.query(Framework)
+        .filter(Framework.is_active == True)
+        .order_by(Framework.name.asc())
+        .limit(200)
+        .all()
+    )
+    for item in frameworks:
+        add(
+            _catalog_entry(
+                source_type="seeded_framework",
+                source_id=str(item.id),
+                title=item.name or f"Framework {item.id}",
+                description=_merge_text(item.short_code, item.version, item.regulator, item.description)[:900],
+                updated_at="",
+                tenant_id=None,
+            )
+        )
+
+    for item in uploaded_files or []:
+        file_id = str(item.get("id") or uuid4().hex)
+        title = str(item.get("filename") or "Uploaded File")
+        add(
+            _catalog_entry(
+                source_type="chat_upload",
+                source_id=file_id,
+                title=title,
+                description=str(item.get("excerpt") or "")[:700],
+                updated_at=str(item.get("uploaded_at") or ""),
+                tenant_id=None,
+            )
+        )
+
+    return entries
+
+
+def _title_match_score(question: str, title: str) -> float:
+    if not title:
+        return 0.0
+    q_norm = normalize_question(question.lower())
+    t_norm = normalize_question(title.lower())
+    if not t_norm:
+        return 0.0
+    if t_norm in q_norm:
+        return 1.0
+
+    q_tokens = {token for token in re.findall(r"[a-z0-9]{3,}", q_norm)}
+    t_tokens = {token for token in re.findall(r"[a-z0-9]{3,}", t_norm)}
+    if not q_tokens or not t_tokens:
+        return 0.0
+    overlap = len(q_tokens.intersection(t_tokens))
+    if overlap == 0:
+        return 0.0
+    return overlap / max(1, len(t_tokens))
+
+
+def _select_vector_catalog_matches(
+    question: str,
+    catalog: List[Dict[str, Any]],
+    max_results: int = VECTOR_MATCH_LIMIT,
+) -> List[Dict[str, Any]]:
+    if not catalog:
+        return []
+
+    normalized_question = normalize_question((question or "").lower())
+    has_vector_intent = any(term in normalized_question for term in VECTOR_ROUTE_TERMS)
+
+    scored: List[Tuple[float, Dict[str, Any]]] = []
+    for entry in catalog:
+        title_score = _title_match_score(question, entry.get("title", ""))
+        desc_score = _title_match_score(question, entry.get("description", ""))
+        score = max(title_score, desc_score * 0.65)
+        if has_vector_intent and entry.get("source_type") in {
+            "governance_document",
+            "committee_charter",
+            "uploaded_framework",
+            "seeded_framework",
+            "compliance_assessment_document",
+            "risk_assessment",
+            "framework_risk_assessment",
+            "chat_upload",
+            "evidence_file",
+        }:
+            score = max(score, 0.12)
+        if score > 0:
+            scored.append((score, entry))
+
+    if not scored:
+        return []
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [entry for _, entry in scored[:max_results]]
+
+
+def _entry_tenants(entry: Dict[str, Any], tenant_ids: List[int]) -> List[int]:
+    tenant_id = entry.get("tenant_id")
+    if tenant_id:
+        return [int(tenant_id)]
+    return list(tenant_ids)
+
+
+def _collect_documents_for_matches(
+    db: Session,
+    tenant_ids: List[int],
+    matches: List[Dict[str, Any]],
+    uploaded_files: Optional[List[Dict[str, Any]]] = None,
+) -> List[Any]:
+    if IndexedSourceDocument is None:
+        return []
+
+    documents: List[Any] = []
+    upload_lookup = {str(item.get("id")): item for item in (uploaded_files or [])}
+
+    for entry in matches:
+        source_type = entry.get("source_type")
+        source_id = str(entry.get("source_id"))
+        tenants = _entry_tenants(entry, tenant_ids)
+        if not tenants:
+            continue
+
+        if source_type == "governance_document":
+            row = db.query(GovernanceDocument).filter(GovernanceDocument.id == int(source_id)).first()
+            if not row:
+                continue
+            file_text = extract_text_from_path(row.file_path) if extract_text_from_path else ""
+            base_text = _merge_text(
+                row.title,
+                row.description,
+                row.content,
+                file_text,
+            )
+            if not base_text.strip():
+                continue
+            for tenant_id in tenants:
+                documents.append(
+                    IndexedSourceDocument(
+                        tenant_id=tenant_id,
+                        source_type="governance_document",
+                        source_id=source_id,
+                        title=row.title or f"Governance Document {source_id}",
+                        description=_merge_text(row.doc_type, row.status),
+                        text=base_text,
+                        updated_at=_to_iso(row.updated_at or row.created_at),
+                        metadata={"doc_type": row.doc_type or "", "status": row.status or ""},
+                    )
+                )
+
+        elif source_type == "committee_charter":
+            row = db.query(CommitteeCharter).filter(CommitteeCharter.id == int(source_id)).first()
+            if not row:
+                continue
+            committee_name = row.committee.name if row.committee else ""
+            file_text = extract_text_from_path(row.file_path) if extract_text_from_path else ""
+            base_text = _merge_text(row.title, committee_name, row.content, file_text)
+            if not base_text.strip():
+                continue
+            for tenant_id in tenants:
+                documents.append(
+                    IndexedSourceDocument(
+                        tenant_id=tenant_id,
+                        source_type="committee_charter",
+                        source_id=source_id,
+                        title=row.title or committee_name or f"Committee Charter {source_id}",
+                        description=_merge_text(committee_name, row.version, row.status),
+                        text=base_text,
+                        updated_at=_to_iso(row.created_at),
+                        metadata={"committee": committee_name, "status": row.status or ""},
+                    )
+                )
+
+        elif source_type == "uploaded_framework":
+            row = db.query(UploadedFramework).filter(UploadedFramework.id == int(source_id)).first()
+            if not row:
+                continue
+            file_text = extract_text_from_path(row.file_path) if extract_text_from_path else ""
+            base_text = _merge_text(
+                row.name,
+                row.description,
+                row.framework_purpose,
+                row.framework_scope,
+                row.classification_reasoning,
+                _json_text(row.framework_objectives),
+                _json_text(row.adoption_approach),
+                _json_text(row.hierarchy_structure),
+                file_text,
+            )
+            if base_text.strip():
+                for tenant_id in tenants:
+                    documents.append(
+                        IndexedSourceDocument(
+                            tenant_id=tenant_id,
+                            source_type="uploaded_framework",
+                            source_id=source_id,
+                            title=row.name or f"Uploaded Framework {source_id}",
+                            description=_merge_text(row.framework_type, row.classification, row.version),
+                            text=base_text,
+                            updated_at=_to_iso(row.updated_at or row.created_at),
+                            metadata={"framework_type": row.framework_type or "", "version": row.version or ""},
+                        )
+                    )
+
+            controls = (
+                db.query(ParsedFrameworkControl)
+                .filter(ParsedFrameworkControl.uploaded_framework_id == row.id)
+                .order_by(ParsedFrameworkControl.control_id.asc())
+                .limit(140)
+                .all()
+            )
+            for control in controls:
+                control_text = _merge_text(
+                    control.control_id,
+                    control.title,
+                    control.description,
+                    control.full_text,
+                    control.domain,
+                    control.category,
+                    _json_text(control.evidence_requirements),
+                )
+                if not control_text.strip():
+                    continue
+                for tenant_id in tenants:
+                    documents.append(
+                        IndexedSourceDocument(
+                            tenant_id=tenant_id,
+                            source_type="parsed_framework_control",
+                            source_id=str(control.id),
+                            title=f"{row.name} - {control.control_id} {control.title}".strip(),
+                            description=_merge_text(control.domain, control.category),
+                            text=control_text,
+                            updated_at=_to_iso(control.updated_at or control.created_at),
+                            metadata={
+                                "framework_name": row.name or "",
+                                "control_id": control.control_id or "",
+                                "domain": control.domain or "",
+                            },
+                        )
+                    )
+
+        elif source_type == "seeded_framework":
+            row = db.query(Framework).filter(Framework.id == int(source_id)).first()
+            if not row:
+                continue
+            controls = (
+                db.query(FrameworkControl, ControlObjective, FrameworkDomain)
+                .join(ControlObjective, FrameworkControl.objective_id == ControlObjective.id)
+                .join(FrameworkDomain, ControlObjective.domain_id == FrameworkDomain.id)
+                .filter(FrameworkDomain.framework_id == row.id)
+                .order_by(FrameworkControl.code.asc())
+                .limit(180)
+                .all()
+            )
+            control_lines: List[str] = []
+            for control, objective, domain in controls:
+                control_lines.append(
+                    _merge_text(
+                        f"{control.code}: {control.name}",
+                        control.statement,
+                        f"Domain: {domain.name}",
+                        f"Objective: {objective.name}",
+                        control.implementation_guidance,
+                        control.testing_guidance,
+                    )
+                )
+            base_text = _merge_text(
+                row.name,
+                row.description,
+                row.regulator,
+                row.jurisdiction,
+                row.version,
+                "\n\n".join(control_lines),
+            )
+            if not base_text.strip():
+                continue
+            for tenant_id in tenants:
+                documents.append(
+                    IndexedSourceDocument(
+                        tenant_id=tenant_id,
+                        source_type="seeded_framework",
+                        source_id=source_id,
+                        title=row.name or f"Framework {source_id}",
+                        description=_merge_text(row.short_code, row.version, row.regulator),
+                        text=base_text,
+                        updated_at="",
+                        metadata={"short_code": row.short_code or "", "version": row.version or ""},
+                    )
+                )
+
+        elif source_type == "risk_assessment":
+            row = db.query(RiskAssessment).filter(RiskAssessment.id == int(source_id)).first()
+            if not row:
+                continue
+            risk_rows = (
+                db.query(RiskAssessmentRisk, Risk)
+                .join(Risk, RiskAssessmentRisk.risk_id == Risk.id)
+                .filter(RiskAssessmentRisk.assessment_id == row.id)
+                .limit(160)
+                .all()
+            )
+            risk_summary = "\n".join(
+                _merge_text(
+                    f"Risk: {risk_record.name}",
+                    f"Treatment: {assessment_risk.treatment_decision or 'n/a'}",
+                    f"Rating: {assessment_risk.risk_rating or 'n/a'}",
+                    assessment_risk.rationale,
+                    assessment_risk.notes,
+                )
+                for assessment_risk, risk_record in risk_rows
+            )
+            text_blob = _merge_text(
+                row.name,
+                row.description,
+                row.scope,
+                row.methodology,
+                row.notes,
+                risk_summary,
+            )
+            if not text_blob.strip():
+                continue
+            for tenant_id in tenants:
+                documents.append(
+                    IndexedSourceDocument(
+                        tenant_id=tenant_id,
+                        source_type="risk_assessment",
+                        source_id=source_id,
+                        title=row.name or f"Risk Assessment {source_id}",
+                        description=_merge_text(row.assessment_type, row.status),
+                        text=text_blob,
+                        updated_at=_to_iso(row.updated_at or row.created_at),
+                        metadata={"assessment_type": row.assessment_type or "", "status": row.status or ""},
+                    )
+                )
+
+        elif source_type == "framework_risk_assessment":
+            row = db.query(FrameworkRiskAssessment).filter(FrameworkRiskAssessment.id == int(source_id)).first()
+            if not row:
+                continue
+            question_rows = (
+                db.query(FrameworkRiskQuestion)
+                .filter(FrameworkRiskQuestion.assessment_id == row.id)
+                .order_by(FrameworkRiskQuestion.order_index.asc())
+                .limit(260)
+                .all()
+            )
+            questions_text = "\n".join(
+                _merge_text(question.question_text, f"Status: {question.status}") for question in question_rows
+            )
+            framework_name = ""
+            if row.uploaded_framework and row.uploaded_framework.name:
+                framework_name = row.uploaded_framework.name
+            elif row.framework and row.framework.name:
+                framework_name = row.framework.name
+            text_blob = _merge_text(
+                row.name,
+                row.description,
+                framework_name,
+                questions_text,
+            )
+            if not text_blob.strip():
+                continue
+            for tenant_id in tenants:
+                documents.append(
+                    IndexedSourceDocument(
+                        tenant_id=tenant_id,
+                        source_type="framework_risk_assessment",
+                        source_id=source_id,
+                        title=row.name or f"Framework Risk Assessment {source_id}",
+                        description=_merge_text(framework_name, row.status),
+                        text=text_blob,
+                        updated_at=_to_iso(row.updated_at or row.created_at),
+                        metadata={"framework_name": framework_name, "status": row.status or ""},
+                    )
+                )
+
+        elif source_type == "compliance_assessment_document":
+            row = db.query(ComplianceAssessmentDocument).filter(ComplianceAssessmentDocument.id == int(source_id)).first()
+            if not row:
+                continue
+            item_rows = (
+                db.query(ComplianceAssessmentDocumentItem)
+                .filter(ComplianceAssessmentDocumentItem.assessment_id == row.id)
+                .order_by(ComplianceAssessmentDocumentItem.id.asc())
+                .limit(300)
+                .all()
+            )
+            item_text = "\n".join(
+                _merge_text(
+                    item.item_number,
+                    item.area_domain,
+                    item.control_description,
+                    f"Status: {item.compliance_status}",
+                    item.gaps_identified,
+                    item.proposed_solution,
+                    item.remarks,
+                )
+                for item in item_rows
+            )
+            file_text = extract_text_from_path(row.file_path) if extract_text_from_path else ""
+            text_blob = _merge_text(
+                row.name,
+                row.notes,
+                row.assessment_type,
+                row.source,
+                _json_text(row.xlsx_data),
+                item_text,
+                file_text,
+            )
+            if not text_blob.strip():
+                continue
+            for tenant_id in tenants:
+                documents.append(
+                    IndexedSourceDocument(
+                        tenant_id=tenant_id,
+                        source_type="compliance_assessment_document",
+                        source_id=source_id,
+                        title=row.name or f"Compliance Assessment Document {source_id}",
+                        description=_merge_text(row.assessment_type, row.status, row.source),
+                        text=text_blob,
+                        updated_at=_to_iso(row.updated_at or row.created_at),
+                        metadata={"assessment_type": row.assessment_type or "", "status": row.status or ""},
+                    )
+                )
+
+        elif source_type == "evidence_file":
+            row = db.query(Evidence).filter(Evidence.id == int(source_id)).first()
+            if not row:
+                continue
+            file_text = extract_text_from_path(row.file_path) if extract_text_from_path else ""
+            text_blob = _merge_text(
+                row.name,
+                row.description,
+                row.content_summary,
+                row.ocr_content,
+                file_text,
+            )
+            if not text_blob.strip():
+                continue
+            for tenant_id in tenants:
+                documents.append(
+                    IndexedSourceDocument(
+                        tenant_id=tenant_id,
+                        source_type="evidence_file",
+                        source_id=source_id,
+                        title=row.name or row.file_name or f"Evidence {source_id}",
+                        description=_merge_text(row.evidence_type, row.status),
+                        text=text_blob,
+                        updated_at=_to_iso(row.uploaded_at),
+                        metadata={"evidence_type": row.evidence_type or "", "status": row.status or ""},
+                    )
+                )
+
+        elif source_type == "chat_upload":
+            uploaded = upload_lookup.get(source_id)
+            if not uploaded:
+                continue
+            upload_text = _merge_text(
+                uploaded.get("excerpt"),
+                extract_text_from_path(uploaded.get("path")) if extract_text_from_path else "",
+            )
+            if not upload_text.strip():
+                continue
+            for tenant_id in tenants:
+                documents.append(
+                    IndexedSourceDocument(
+                        tenant_id=tenant_id,
+                        source_type="chat_upload",
+                        source_id=source_id,
+                        title=str(uploaded.get("filename") or f"Chat Upload {source_id}"),
+                        description="Session uploaded file",
+                        text=upload_text,
+                        updated_at=str(uploaded.get("uploaded_at") or ""),
+                        metadata={"filename": str(uploaded.get("filename") or "")},
+                    )
+                )
+
+    return documents
+
+
+def _vector_doc_signature(doc: Any) -> str:
+    raw = f"{doc.source_type}|{doc.source_id}|{doc.updated_at}|{len(doc.text)}|{doc.title}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _sync_docs_to_qdrant(service: Any, docs: List[Any], *, force: bool = False) -> int:
+    if not docs:
+        return 0
+    to_upsert: List[Any] = []
+    updated_cache: List[Tuple[int, str, str]] = []
+
+    for doc in docs:
+        cache_key = f"{doc.source_type}:{doc.source_id}"
+        signature = _vector_doc_signature(doc)
+        tenant_cache = VECTOR_INDEX_STATE.setdefault(doc.tenant_id, {})
+        if not force and tenant_cache.get(cache_key) == signature:
+            continue
+        try:
+            service.delete_source_points(doc.tenant_id, doc.source_type, str(doc.source_id))
+        except Exception:
+            # Best effort: continue with upsert.
+            pass
+        to_upsert.append(doc)
+        updated_cache.append((doc.tenant_id, cache_key, signature))
+
+    if not to_upsert:
+        return 0
+
+    indexed_points = service.upsert_documents(to_upsert)
+    for tenant_id, cache_key, signature in updated_cache:
+        VECTOR_INDEX_STATE.setdefault(tenant_id, {})[cache_key] = signature
+    return indexed_points
+
+
+def _query_qdrant_hits(
+    service: Any,
+    tenant_ids: List[int],
+    question: str,
+    *,
+    limit: int = 8,
+    source_types: Optional[Sequence[str]] = None,
+) -> List[Dict[str, Any]]:
+    all_hits: List[Dict[str, Any]] = []
+    for tenant_id in tenant_ids:
+        try:
+            tenant_hits = service.search(
+                tenant_id=tenant_id,
+                query=question,
+                limit=limit,
+                source_types=source_types,
+            )
+            all_hits.extend(tenant_hits)
+        except Exception as exc:
+            logger.warning("Qdrant search failed for tenant %s: %s", tenant_id, exc)
+
+    deduped: Dict[str, Dict[str, Any]] = {}
+    for hit in all_hits:
+        point_id = str(hit.get("id"))
+        if point_id not in deduped or float(hit.get("score") or 0.0) > float(deduped[point_id].get("score") or 0.0):
+            deduped[point_id] = hit
+
+    sorted_hits = sorted(deduped.values(), key=lambda item: float(item.get("score") or 0.0), reverse=True)
+    return [item for item in sorted_hits if float(item.get("score") or 0.0) >= VECTOR_SCORE_THRESHOLD][:limit]
+
+
+def _vector_hits_to_sources(hits: List[Dict[str, Any]]) -> List[ChatSource]:
+    sources: List[ChatSource] = []
+    for index, hit in enumerate(hits, start=1):
+        payload = hit.get("payload") or {}
+        source_type = str(payload.get("source_type") or "vector_context")
+        source_id = str(payload.get("source_id") or "")
+        title = str(payload.get("title") or "")
+        snippet = str(payload.get("snippet") or payload.get("text") or "")[:280]
+        score_value = float(hit.get("score") or 0.0)
+        sources.append(
+            ChatSource(
+                rank=index,
+                entity_type=source_type,
+                entity_id=source_id,
+                framework_code=source_type.replace("_", " ").title(),
+                control_code=source_id or None,
+                control_name=title or None,
+                relevance_score=score_value,
+                snippet=snippet,
+            )
+        )
+    return sources
+
+
+def _answer_with_vector_context(
+    question: str,
+    hits: List[Dict[str, Any]],
+    *,
+    context_summary: str = "",
+    uploaded_context: str = "",
+) -> str:
+    if not hits:
+        return ""
+
+    context_blocks: List[str] = []
+    for index, hit in enumerate(hits[:10], start=1):
+        payload = hit.get("payload") or {}
+        title = str(payload.get("title") or "Untitled Source")
+        source_type = str(payload.get("source_type") or "source")
+        snippet = str(payload.get("text") or payload.get("snippet") or "")
+        context_blocks.append(
+            f"[Source {index}] {title} ({source_type})\n{snippet[:1800]}"
+        )
+
+    db_context = "Retrieved platform document context:\n\n" + "\n\n".join(context_blocks)
+    return answer_grc_knowledge_question(
+        question=question,
+        context_summary=context_summary,
+        uploaded_context=uploaded_context,
+        db_context=db_context,
+    )
+
+
+def try_qdrant_rag_answer(
+    *,
+    question: str,
+    request_mode: str,
+    db: Session,
+    tenant_ids: List[int],
+    context_summary: str,
+    uploaded_context: str,
+    uploaded_files: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[Tuple[str, List[ChatSource]]]:
+    if request_mode in {"database", "framework_progress", "evidence_gaps"}:
+        return None
+    if not tenant_ids:
+        return None
+
+    service = get_qdrant_service()
+    if not service or not getattr(service, "is_available", False):
+        return None
+
+    catalog = _build_vector_catalog(db, tenant_ids, uploaded_files)
+    matches = _select_vector_catalog_matches(question, catalog)
+    normalized = normalize_question((question or "").lower())
+    has_vector_intent = any(term in normalized for term in VECTOR_ROUTE_TERMS)
+    if not matches and not has_vector_intent:
+        return None
+
+    if not matches and has_vector_intent:
+        matches = sorted(
+            catalog,
+            key=lambda entry: str(entry.get("updated_at") or ""),
+            reverse=True,
+        )[: min(12, len(catalog))]
+
+    docs = _collect_documents_for_matches(db, tenant_ids, matches, uploaded_files)
+    if not docs:
+        return None
+    if len(docs) > 260:
+        docs = docs[:260]
+
+    try:
+        indexed_count = _sync_docs_to_qdrant(service, docs, force=False)
+        if indexed_count:
+            logger.info("[QDRANT] Indexed %s point(s) for %s source document(s).", indexed_count, len(docs))
+    except Exception as exc:
+        logger.warning("Qdrant indexing failed: %s", exc)
+        return None
+
+    source_types = sorted({entry.get("source_type") for entry in matches if entry.get("source_type")})
+    hits = _query_qdrant_hits(
+        service=service,
+        tenant_ids=tenant_ids,
+        question=question,
+        limit=8,
+        source_types=source_types,
+    )
+    if not hits:
+        return None
+
+    answer = _answer_with_vector_context(
+        question=question,
+        hits=hits,
+        context_summary=context_summary,
+        uploaded_context=uploaded_context,
+    )
+    if not answer.strip():
+        return None
+
+    sources = _vector_hits_to_sources(hits)
+    return answer, sources
+
+
+# ============================================================================
 # ENDPOINTS
 # ============================================================================
 
@@ -1246,13 +2180,13 @@ async def ask_compliance_question(
     current_user: GRCUser = Depends(require_auth)
 ):
     """
-    Ask ANY question and get AI-powered answers from direct SQL queries.
+    Ask ANY question and get AI-powered answers from hybrid retrieval.
     
-    **PURE SQL INTELLIGENCE - No ChromaDB, No Embeddings**
-    - ALL queries (data + compliance) go through SQL Agent
-    - Queries actual database tables for 100% accurate, real-time answers
-    - No sync delays, no embedding confusion, just direct data
-    - **Conversation context**: Last 10 queries are remembered for follow-up questions
+    **HYBRID INTELLIGENCE**
+    - Live platform data questions route to SQL Agent (real-time database answers)
+    - Document/policy/framework content questions route to Qdrant vector retrieval when relevant
+    - Title-based routing decides whether vector search is needed
+    - Conversation context is retained for follow-up questions
     
     **Example Questions:**
     - "List all critical vulnerabilities" [>] Direct SQL query
@@ -1394,6 +2328,35 @@ async def ask_compliance_question(
                 timestamp=datetime.utcnow().isoformat(),
                 has_more=False,
                 total_count=0,
+                current_offset=0
+            )
+
+        vector_rag_result = try_qdrant_rag_answer(
+            question=request.message,
+            request_mode=request_mode,
+            db=db,
+            tenant_ids=tenant_ids,
+            context_summary=context_summary,
+            uploaded_context=uploaded_context,
+            uploaded_files=uploaded_files,
+        )
+        if vector_rag_result is not None:
+            answer, vector_sources = vector_rag_result
+            store_chat_exchange(
+                current_user.id,
+                session_id,
+                request.message,
+                answer,
+                offset=request.offset,
+                sources=[source.model_dump() for source in vector_sources],
+            )
+            return ChatResponse(
+                answer=answer,
+                sources=vector_sources if request.include_sources else [],
+                framework_filter="QDRANT_VECTOR_RAG",
+                timestamp=datetime.utcnow().isoformat(),
+                has_more=False,
+                total_count=len(vector_sources),
                 current_offset=0
             )
 
@@ -1985,22 +2948,50 @@ def trigger_embedding_update(
     current_user: GRCUser = Depends(require_auth)
 ):
     """
-    **DEPRECATED**: This endpoint is no longer needed.
-    
-    Embeddings are now generated automatically when data is created/uploaded:
-    - Evidence uploads [>] auto-embedded
-    - Documents [>] auto-embedded
-    - Risks [>] auto-embedded
-    - Governance data [>] auto-embedded
-    - AI responses [>] auto-embedded
-    
-    To regenerate ALL embeddings from scratch, run:
-    `python complychat/scripts/regenerate_local_embeddings.py`
+    Force-sync vector embeddings to Qdrant for the authenticated tenant(s).
     """
+    service = get_qdrant_service()
+    if not service or not getattr(service, "is_available", False):
+        return {
+            "status": "unavailable",
+            "message": "Qdrant/OpenAI vector service is not configured.",
+            "indexed_points": 0,
+            "indexed_documents": 0,
+        }
+
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        return {
+            "status": "ok",
+            "message": "No tenant scope found for current user.",
+            "indexed_points": 0,
+            "indexed_documents": 0,
+        }
+
+    catalog = _build_vector_catalog(db, tenant_ids, uploaded_files=[])
+    requested_types = {item.strip().lower() for item in (request.entity_types or []) if item and item.strip()}
+    if requested_types:
+        selected = [
+            entry for entry in catalog
+            if str(entry.get("source_type", "")).strip().lower() in requested_types
+        ]
+    else:
+        selected = catalog
+
+    documents = _collect_documents_for_matches(
+        db=db,
+        tenant_ids=tenant_ids,
+        matches=selected,
+        uploaded_files=[],
+    )
+    indexed_points = _sync_docs_to_qdrant(service, documents, force=True)
+
     return {
-        "status": "deprecated",
-        "message": "Auto-embedding is now active on all upload/create endpoints",
-        "info": "No manual regeneration needed - embeddings generate automatically"
+        "status": "ok",
+        "message": "Qdrant vector sync completed.",
+        "indexed_points": indexed_points,
+        "indexed_documents": len(documents),
+        "selected_source_types": sorted({entry.get("source_type") for entry in selected}),
     }
 
 
@@ -2017,16 +3008,26 @@ def trigger_embedding_update(
 @router.get("/health")
 def health_check():
     """Check if SQL Agent service is healthy and ready"""
+    qdrant_state = {"available": False, "reason": "not_initialized"}
+    service = get_qdrant_service()
+    if service:
+        try:
+            qdrant_state = service.health()
+        except Exception as exc:
+            qdrant_state = {"available": False, "reason": str(exc)}
+
     if not SQL_AGENT_ENABLED:
         return {
             "status": "unavailable",
             "message": "SQL Agent not initialized.",
-            "ready": False
+            "ready": False,
+            "vector": qdrant_state,
         }
     
     return {
         "status": "healthy",
-        "message": "SQL Agent service is operational (ChromaDB disabled)",
+        "message": "SQL Agent service is operational with optional Qdrant vector retrieval",
         "ready": True,
-        "mode": "pure_sql"
+        "mode": "hybrid_sql_qdrant" if qdrant_state.get("available") else "pure_sql",
+        "vector": qdrant_state,
     }
