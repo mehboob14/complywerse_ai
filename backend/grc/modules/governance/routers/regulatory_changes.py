@@ -1,5 +1,5 @@
-from typing import List, Optional
-from datetime import datetime
+from typing import Any, List, Optional
+from datetime import datetime, timezone
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -28,6 +28,53 @@ from ....schemas import (
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/regulatory-changes", tags=["Governance - Regulatory Change Management"])
+
+
+def normalize_optional_datetime(value: Any, field_name: str) -> Optional[datetime]:
+    """Normalize optional datetime inputs, accepting datetime or ISO strings (including empty strings)."""
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid {field_name}. Use ISO 8601 date/datetime format."
+            )
+        if parsed.tzinfo is not None:
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Invalid {field_name}. Expected datetime or ISO date string."
+    )
+
+
+def split_legacy_recommendations(impact_description: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """Split legacy recommendations encoded inside impact_description."""
+    if not impact_description:
+        return None, None
+
+    marker = "\n\nRecommendations:"
+    if marker in impact_description:
+        areas, recs = impact_description.split(marker, 1)
+        return areas.strip() or None, recs.strip() or None
+
+    if impact_description.startswith("Recommendations:"):
+        return None, impact_description.replace("Recommendations:", "", 1).strip() or None
+
+    return impact_description, None
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -90,6 +137,7 @@ def create_audit_log_entry(
 
 def serialize_regulatory_change(change: RegulatoryChange) -> RegulatoryChangeResponse:
     completed_tasks = sum(1 for t in change.implementation_tasks if t.status == "completed")
+    gap_count = sum(1 for a in change.impact_assessments if a.gap_identified)
     return RegulatoryChangeResponse(
         id=change.id,
         tenant_id=change.tenant_id,
@@ -97,10 +145,15 @@ def serialize_regulatory_change(change: RegulatoryChange) -> RegulatoryChangeRes
         description=change.description,
         source=change.source,
         regulation_reference=change.regulation_reference,
+        reference_number=change.regulation_reference,
         effective_date=change.effective_date,
         published_date=change.published_date,
+        publication_date=change.published_date,
         status=change.status,
         priority=change.priority,
+        regulatory_body=None,
+        impact_summary=None,
+        gap_count=gap_count,
         assigned_to=change.assigned_to,
         assignee_name=change.assignee.display_name if change.assignee else None,
         created_by=change.created_by,
@@ -124,22 +177,31 @@ def serialize_impact_assessment(assessment: RegulatoryImpactAssessment, db: Sess
     elif assessment.impacted_item_type == "control" and assessment.impacted_item_id:
         ctrl = db.query(NormalizedControl).filter(NormalizedControl.id == assessment.impacted_item_id).first()
         impacted_item_name = ctrl.name if ctrl else None
+
+    affected_areas, recommendations = split_legacy_recommendations(assessment.impact_description)
     
     return RegulatoryImpactAssessmentResponse(
         id=assessment.id,
         tenant_id=assessment.tenant_id,
         regulatory_change_id=assessment.regulatory_change_id,
+        change_id=assessment.regulatory_change_id,
         assessment_type=assessment.assessment_type,
         impacted_item_id=assessment.impacted_item_id,
         impacted_item_type=assessment.impacted_item_type,
         impacted_item_name=impacted_item_name,
         impact_level=assessment.impact_level,
         impact_description=assessment.impact_description,
+        affected_areas=affected_areas,
         gap_identified=assessment.gap_identified,
         gap_description=assessment.gap_description,
+        compliance_gaps=assessment.gap_description,
+        recommendations=recommendations,
         assessed_by=assessment.assessed_by,
+        assessor_id=assessment.assessed_by,
         assessor_name=assessment.assessor.display_name if assessment.assessor else None,
-        assessed_at=assessment.assessed_at
+        assessed_at=assessment.assessed_at,
+        assessment_date=assessment.assessed_at,
+        status="completed"
     )
 
 
@@ -259,22 +321,31 @@ def create_regulatory_change(
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
     
+    source = (change.source or "custom").strip() if isinstance(change.source, str) else "custom"
+    status_value = (change.status or "identified").strip() if isinstance(change.status, str) else "identified"
+    priority_value = (change.priority or "medium").strip() if isinstance(change.priority, str) else "medium"
+
+    effective_date = normalize_optional_datetime(change.effective_date, "effective_date")
+    published_date_raw = change.published_date if change.published_date is not None else change.publication_date
+    published_date = normalize_optional_datetime(published_date_raw, "published_date")
+    regulation_reference = change.regulation_reference or change.reference_number
+
     valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "custom"]
-    if change.source not in valid_sources:
+    if source not in valid_sources:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid source. Must be one of: {', '.join(valid_sources)}"
         )
     
     valid_statuses = ["identified", "under_assessment", "implementation", "completed", "closed", "not_applicable"]
-    if change.status not in valid_statuses:
+    if status_value not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
         )
     
     valid_priorities = ["critical", "high", "medium", "low"]
-    if change.priority not in valid_priorities:
+    if priority_value not in valid_priorities:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid priority. Must be one of: {', '.join(valid_priorities)}"
@@ -284,12 +355,12 @@ def create_regulatory_change(
         tenant_id=tenant_id,
         title=change.title,
         description=change.description,
-        source=change.source,
-        regulation_reference=change.regulation_reference,
-        effective_date=change.effective_date,
-        published_date=change.published_date,
-        status=change.status,
-        priority=change.priority,
+        source=source,
+        regulation_reference=regulation_reference,
+        effective_date=effective_date,
+        published_date=published_date,
+        status=status_value,
+        priority=priority_value,
         assigned_to=change.assigned_to,
         created_by=current_user.id
     )
@@ -319,33 +390,62 @@ def update_regulatory_change(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
     
     update_data = change.model_dump(exclude_unset=True)
-    
+
+    if "reference_number" in update_data and not update_data.get("regulation_reference"):
+        update_data["regulation_reference"] = update_data.get("reference_number")
+    if "publication_date" in update_data and "published_date" not in update_data:
+        update_data["published_date"] = update_data.get("publication_date")
+
+    if "effective_date" in update_data:
+        update_data["effective_date"] = normalize_optional_datetime(update_data.get("effective_date"), "effective_date")
+    if "published_date" in update_data:
+        update_data["published_date"] = normalize_optional_datetime(update_data.get("published_date"), "published_date")
+
     if "source" in update_data:
+        source_value = update_data.get("source")
+        if isinstance(source_value, str):
+            source_value = source_value.strip() or "custom"
+            update_data["source"] = source_value
         valid_sources = ["OCC", "Fed", "EBA", "PRA", "SEC", "FINRA", "custom"]
-        if update_data["source"] not in valid_sources:
+        if source_value not in valid_sources:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid source. Must be one of: {', '.join(valid_sources)}"
             )
     
     if "status" in update_data:
+        status_value = update_data.get("status")
+        if isinstance(status_value, str):
+            status_value = status_value.strip()
+            update_data["status"] = status_value
         valid_statuses = ["identified", "under_assessment", "implementation", "completed", "closed", "not_applicable"]
-        if update_data["status"] not in valid_statuses:
+        if status_value not in valid_statuses:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
             )
     
     if "priority" in update_data:
+        priority_value = update_data.get("priority")
+        if isinstance(priority_value, str):
+            priority_value = priority_value.strip()
+            update_data["priority"] = priority_value
         valid_priorities = ["critical", "high", "medium", "low"]
-        if update_data["priority"] not in valid_priorities:
+        if priority_value not in valid_priorities:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid priority. Must be one of: {', '.join(valid_priorities)}"
             )
-    
+
+    # Remove non-model legacy aliases that should not be persisted directly.
+    update_data.pop("reference_number", None)
+    update_data.pop("publication_date", None)
+    update_data.pop("regulatory_body", None)
+    update_data.pop("impact_summary", None)
+
     for key, value in update_data.items():
-        setattr(db_change, key, value)
+        if hasattr(RegulatoryChange, key):
+            setattr(db_change, key, value)
     
     db.commit()
     db.refresh(db_change)
@@ -437,38 +537,52 @@ def create_impact_assessment(
     if not change:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
     
+    assessment_type = (assessment.assessment_type or "process").strip() if isinstance(assessment.assessment_type, str) else "process"
     valid_types = ["policy", "control", "process", "technology"]
-    if assessment.assessment_type not in valid_types:
+    if assessment_type not in valid_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid assessment_type. Must be one of: {', '.join(valid_types)}"
         )
-    
-    valid_levels = ["high", "medium", "low", "none"]
-    if assessment.impact_level not in valid_levels:
+
+    impact_level = (assessment.impact_level or "medium").strip().lower() if isinstance(assessment.impact_level, str) else "medium"
+    valid_levels = ["critical", "high", "medium", "low", "none"]
+    if impact_level not in valid_levels:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid impact_level. Must be one of: {', '.join(valid_levels)}"
         )
-    
+
     if assessment.impacted_item_type and assessment.impacted_item_type not in ["policy", "control", "asset", "process"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid impacted_item_type. Must be one of: policy, control, asset, process"
         )
+
+    impact_description = assessment.impact_description or assessment.affected_areas
+    recommendations = (assessment.recommendations or "").strip() if assessment.recommendations else ""
+    if recommendations:
+        if impact_description:
+            impact_description = f"{impact_description}\n\nRecommendations: {recommendations}"
+        else:
+            impact_description = f"Recommendations: {recommendations}"
+
+    gap_description = assessment.gap_description or assessment.compliance_gaps
+    gap_identified = bool(assessment.gap_identified) or bool((gap_description or "").strip())
+    assessed_at = normalize_optional_datetime(assessment.assessment_date, "assessment_date") or datetime.utcnow()
     
     db_assessment = RegulatoryImpactAssessment(
         tenant_id=change.tenant_id,
         regulatory_change_id=change_id,
-        assessment_type=assessment.assessment_type,
+        assessment_type=assessment_type,
         impacted_item_id=assessment.impacted_item_id,
         impacted_item_type=assessment.impacted_item_type,
-        impact_level=assessment.impact_level,
-        impact_description=assessment.impact_description,
-        gap_identified=assessment.gap_identified,
-        gap_description=assessment.gap_description,
+        impact_level=impact_level,
+        impact_description=impact_description,
+        gap_identified=gap_identified,
+        gap_description=gap_description,
         assessed_by=current_user.id,
-        assessed_at=datetime.utcnow()
+        assessed_at=assessed_at
     )
     
     db.add(db_assessment)

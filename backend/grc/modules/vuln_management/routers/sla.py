@@ -84,6 +84,8 @@ def get_sla_config(
             tenant_id=c.tenant_id,
             severity=c.severity,
             remediation_days=c.remediation_days,
+            notification_days=c.notification_days,
+            escalation_days=c.escalation_days,
             is_active=c.is_active,
             created_at=c.created_at,
             updated_at=c.updated_at
@@ -124,6 +126,8 @@ def set_sla_config(
         
         if existing:
             existing.remediation_days = config_data.remediation_days
+            existing.notification_days = config_data.notification_days
+            existing.escalation_days = config_data.escalation_days
             existing.updated_at = datetime.utcnow()
             db.commit()
             db.refresh(existing)
@@ -133,6 +137,8 @@ def set_sla_config(
                 tenant_id=tenant_id,
                 severity=config_data.severity,
                 remediation_days=config_data.remediation_days,
+                notification_days=config_data.notification_days,
+                escalation_days=config_data.escalation_days,
                 is_active=True
             )
             db.add(new_config)
@@ -146,6 +152,8 @@ def set_sla_config(
             tenant_id=c.tenant_id,
             severity=c.severity,
             remediation_days=c.remediation_days,
+            notification_days=c.notification_days,
+            escalation_days=c.escalation_days,
             is_active=c.is_active,
             created_at=c.created_at,
             updated_at=c.updated_at
@@ -188,6 +196,8 @@ def update_sla_for_severity(
         raise HTTPException(status_code=404, detail="SLA config not found")
     
     config.remediation_days = request.remediation_days
+    config.notification_days = request.notification_days
+    config.escalation_days = request.escalation_days
     config.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(config)
@@ -197,6 +207,8 @@ def update_sla_for_severity(
         tenant_id=config.tenant_id,
         severity=config.severity,
         remediation_days=config.remediation_days,
+        notification_days=config.notification_days,
+        escalation_days=config.escalation_days,
         is_active=config.is_active,
         created_at=config.created_at,
         updated_at=config.updated_at

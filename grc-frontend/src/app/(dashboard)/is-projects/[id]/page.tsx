@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
-import { isProjectsApi } from '@/lib/api';
+import { assetsApi, isProjectsApi, risksApi } from '@/lib/api';
 import {
   Loader2,
   AlertCircle,
@@ -96,6 +96,55 @@ const priorityBadge = (p: string) => {
     'Low': 'bg-green-50 text-green-700 border-green-200',
   };
   return map[p] || 'bg-gray-50 text-gray-600 border-gray-200';
+};
+
+type TenantUserOption = {
+  id: number;
+  displayName: string;
+  email: string;
+};
+
+type TenantRiskOption = {
+  id: number;
+  title: string;
+  description: string;
+  severity: string;
+  mitigation: string;
+  ownerName: string;
+};
+
+const normalizeSeverity = (value: unknown): string => {
+  if (typeof value === 'number') {
+    if (value >= 16) return 'Critical';
+    if (value >= 12) return 'High';
+    if (value >= 6) return 'Medium';
+    return 'Low';
+  }
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'critical') return 'Critical';
+  if (raw === 'high') return 'High';
+  if (raw === 'medium') return 'Medium';
+  if (raw === 'low') return 'Low';
+  return 'Medium';
+};
+
+const normalizeTenantUser = (raw: unknown): TenantUserOption | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  const nested = row.user && typeof row.user === 'object' ? (row.user as Record<string, unknown>) : null;
+  const id = Number(row.id ?? row.user_id ?? nested?.id);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const email = String(row.email ?? nested?.email ?? '').trim();
+  const displayName = String(
+    (
+      row.display_name ??
+      row.username ??
+      nested?.display_name ??
+      nested?.username ??
+      email
+    ) || `User ${id}`
+  ).trim();
+  return { id, displayName: displayName || `User ${id}`, email };
 };
 
 const formatDate = (d: string | null) => {
@@ -213,6 +262,8 @@ export default function ProjectDetailPage() {
   const [documentUploadFile, setDocumentUploadFile] = useState<File | null>(null);
   const [editingProject, setEditingProject] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
+  const [teamUserSearch, setTeamUserSearch] = useState('');
+  const [riskSearch, setRiskSearch] = useState('');
 
   const { data: project, isLoading, error } = useQuery({
     queryKey: ['is-project', projectId],
@@ -221,6 +272,56 @@ export default function ProjectDetailPage() {
       return res.data;
     },
   });
+
+  const { data: tenantUsersRaw = [] } = useQuery({
+    queryKey: ['is-project-tenant-users', projectId],
+    queryFn: async () => {
+      const res = await assetsApi.getTenantUsers();
+      return Array.isArray(res.data) ? res.data : [];
+    },
+  });
+
+  const tenantUsers = useMemo(() => {
+    const deduped = new Map<number, TenantUserOption>();
+    for (const row of tenantUsersRaw) {
+      const normalized = normalizeTenantUser(row);
+      if (normalized) deduped.set(normalized.id, normalized);
+    }
+    return Array.from(deduped.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [tenantUsersRaw]);
+
+  const tenantUsersById = useMemo(
+    () => new Map<number, TenantUserOption>(tenantUsers.map((u) => [u.id, u])),
+    [tenantUsers]
+  );
+
+  const { data: tenantRisksRaw = [] } = useQuery({
+    queryKey: ['is-project-tenant-risks', projectId],
+    queryFn: async () => {
+      const res = await risksApi.getAll();
+      return Array.isArray(res.data) ? res.data : [];
+    },
+  });
+
+  const tenantRisks = useMemo(() => {
+    const normalized: TenantRiskOption[] = [];
+    for (const row of tenantRisksRaw as Array<Record<string, unknown>>) {
+      const id = Number(row?.id);
+      const title = String(row?.title || '').trim();
+      if (!Number.isFinite(id) || id <= 0 || !title) continue;
+      const ownerFromId = Number(row?.owner_id ?? row?.business_owner_id);
+      const ownerFromUser = Number.isFinite(ownerFromId) ? tenantUsersById.get(ownerFromId)?.displayName : '';
+      normalized.push({
+        id,
+        title,
+        description: String(row?.description || '').trim(),
+        severity: normalizeSeverity(row?.severity ?? row?.risk_level ?? row?.residual_score),
+        mitigation: String(row?.treatment_plan ?? row?.mitigation ?? '').trim(),
+        ownerName: String(row?.owner_name ?? row?.business_owner_name ?? ownerFromUser ?? '').trim(),
+      });
+    }
+    return normalized.sort((a, b) => a.title.localeCompare(b.title));
+  }, [tenantRisksRaw, tenantUsersById]);
 
   const updateProjectMut = useMutation({
     mutationFn: (data: Record<string, unknown>) => isProjectsApi.update(projectId, data),
@@ -523,6 +624,22 @@ export default function ProjectDetailPage() {
 
   const [modalForm, setModalForm] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  const filteredTenantUsers = useMemo(() => {
+    const term = teamUserSearch.trim().toLowerCase();
+    if (!term) return tenantUsers;
+    return tenantUsers.filter(
+      (u) => u.displayName.toLowerCase().includes(term) || u.email.toLowerCase().includes(term)
+    );
+  }, [teamUserSearch, tenantUsers]);
+
+  const filteredTenantRisks = useMemo(() => {
+    const term = riskSearch.trim().toLowerCase();
+    if (!term) return tenantRisks.slice(0, 20);
+    return tenantRisks
+      .filter((r) => r.title.toLowerCase().includes(term) || r.description.toLowerCase().includes(term))
+      .slice(0, 20);
+  }, [riskSearch, tenantRisks]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
@@ -875,7 +992,7 @@ export default function ProjectDetailPage() {
               <button onClick={() => runAi('suggest-team', () => isProjectsApi.aiSuggestTeam(projectId), 'AI Team Suggestions')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
                 {aiLoading === 'suggest-team' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI Suggest
               </button>
-              <button onClick={() => { setShowModal('team'); setModalForm({ user_name: '', email: '', role: 'Member', responsibilities: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
+              <button onClick={() => { setTeamUserSearch(''); setShowModal('team'); setModalForm({ user_id: '', user_name: '', email: '', role: 'Member', responsibilities: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
                 <Plus size={14} /> Add Member
               </button>
             </div>
@@ -916,7 +1033,7 @@ export default function ProjectDetailPage() {
               <button onClick={() => runAi('assess-risks', () => isProjectsApi.aiAssessRisks(projectId), 'AI Risk Assessment')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
                 {aiLoading === 'assess-risks' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI Assess
               </button>
-              <button onClick={() => { setShowModal('risk'); setModalForm({ title: '', description: '', type: 'Risk', severity: 'Medium', mitigation: '', owner_name: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
+              <button onClick={() => { setRiskSearch(''); setShowModal('risk'); setModalForm({ linked_risk_id: '', title: '', description: '', type: 'Risk', severity: 'Medium', mitigation: '', owner_user_id: '', owner_name: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
                 <Plus size={14} /> Add Risk/Issue
               </button>
             </div>
@@ -1437,7 +1554,7 @@ export default function ProjectDetailPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 cw-overlay flex items-center justify-center z-50 p-4" onClick={() => { setShowModal(null); setEditingId(null); setDocumentUploadFile(null); }}>
+        <div className="fixed inset-0 cw-overlay flex items-center justify-center z-50 p-4" onClick={() => { setShowModal(null); setEditingId(null); setDocumentUploadFile(null); setTeamUserSearch(''); setRiskSearch(''); }}>
           <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
               <h2 className="text-lg font-semibold text-[var(--color-text)]">
@@ -1452,7 +1569,7 @@ export default function ProjectDetailPage() {
                 {showModal === 'lesson' && (editingId ? 'Edit Lesson Learned' : 'Add Lesson Learned')}
                 {showModal === 'dependency' && (editingId ? 'Edit Dependency' : 'Add Dependency')}
               </h2>
-              <button onClick={() => { setShowModal(null); setEditingId(null); setDocumentUploadFile(null); }} className="p-1 hover:bg-[var(--color-subtle)] rounded"><X size={18} /></button>
+              <button onClick={() => { setShowModal(null); setEditingId(null); setDocumentUploadFile(null); setTeamUserSearch(''); setRiskSearch(''); }} className="p-1 hover:bg-[var(--color-subtle)] rounded"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-4">
               {showModal === 'milestone' && (
@@ -1482,14 +1599,94 @@ export default function ProjectDetailPage() {
               )}
               {showModal === 'team' && (
                 <>
-                  <div><label className="cw-label block text-sm font-medium mb-1">Name <span className="cw-required">*</span></label><input type="text" value={modalForm.user_name || ''} onChange={e => setModalForm({ ...modalForm, user_name: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" /></div>
-                  <div><label className="cw-label block text-sm font-medium mb-1">Email</label><input type="email" value={modalForm.email || ''} onChange={e => setModalForm({ ...modalForm, email: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" /></div>
+                  <div>
+                    <label className="cw-label block text-sm font-medium mb-1">User <span className="cw-required">*</span></label>
+                    <input
+                      type="text"
+                      value={teamUserSearch}
+                      onChange={(e) => setTeamUserSearch(e.target.value)}
+                      className="cw-field w-full px-3 py-2 text-sm mb-2"
+                      placeholder="Search users by name or email"
+                    />
+                    <select
+                      value={modalForm.user_id || ''}
+                      onChange={(e) => {
+                        const selectedId = Number(e.target.value);
+                        const selectedUser = tenantUsersById.get(selectedId);
+                        setModalForm({
+                          ...modalForm,
+                          user_id: e.target.value,
+                          user_name: selectedUser?.displayName || '',
+                          email: selectedUser?.email || '',
+                        });
+                      }}
+                      className="cw-field w-full px-3 py-2 text-sm"
+                    >
+                      <option value="">Select a tenant user</option>
+                      {filteredTenantUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.displayName}{user.email ? ` (${user.email})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {filteredTenantUsers.length === 0 && (
+                      <p className="text-xs text-[var(--color-muted)] mt-1">No matching users found.</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="cw-label block text-sm font-medium mb-1">Linked Email</label>
+                    <input type="text" value={modalForm.email || ''} readOnly className="cw-field w-full px-3 py-2 text-sm opacity-70 cursor-not-allowed" />
+                  </div>
                   <div><label className="cw-label block text-sm font-medium mb-1">Role</label><select value={modalForm.role || 'Member'} onChange={e => setModalForm({ ...modalForm, role: e.target.value })} className="cw-field w-full px-3 py-2 text-sm">{TEAM_ROLES.map(r => <option key={r}>{r}</option>)}</select></div>
                   <div><label className="cw-label block text-sm font-medium mb-1">Responsibilities</label><textarea value={modalForm.responsibilities || ''} onChange={e => setModalForm({ ...modalForm, responsibilities: e.target.value })} rows={2} className="cw-field w-full px-3 py-2 text-sm" /></div>
                 </>
               )}
               {showModal === 'risk' && (
                 <>
+                  <div>
+                    <label className="cw-label block text-sm font-medium mb-1">Choose Existing Risk (Optional)</label>
+                    <input
+                      type="text"
+                      value={riskSearch}
+                      onChange={(e) => setRiskSearch(e.target.value)}
+                      className="cw-field w-full px-3 py-2 text-sm mb-2"
+                      placeholder="Search existing tenant risks"
+                    />
+                    <div className="max-h-36 overflow-y-auto border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)]">
+                      {filteredTenantRisks.map((risk) => (
+                        <button
+                          key={risk.id}
+                          type="button"
+                          onClick={() => {
+                            const ownerMatch = tenantUsers.find((u) => {
+                              const owner = risk.ownerName.toLowerCase();
+                              return !!owner && (u.displayName.toLowerCase() === owner || u.email.toLowerCase() === owner);
+                            });
+                            setModalForm({
+                              ...modalForm,
+                              linked_risk_id: String(risk.id),
+                              title: risk.title,
+                              description: risk.description || '',
+                              type: 'Risk',
+                              severity: risk.severity || 'Medium',
+                              mitigation: risk.mitigation || '',
+                              owner_user_id: ownerMatch ? String(ownerMatch.id) : '',
+                              owner_name: ownerMatch?.displayName || risk.ownerName || '',
+                            });
+                          }}
+                          className={`w-full text-left px-3 py-2 hover:bg-[var(--color-subtle)] transition-colors ${modalForm.linked_risk_id === String(risk.id) ? 'bg-[var(--color-subtle)]' : ''}`}
+                        >
+                          <p className="text-sm font-medium text-[var(--color-text)]">{risk.title}</p>
+                          <p className="text-xs text-[var(--color-muted)]">
+                            {risk.severity}{risk.ownerName ? ` • Owner: ${risk.ownerName}` : ''}
+                          </p>
+                        </button>
+                      ))}
+                      {filteredTenantRisks.length === 0 && (
+                        <p className="px-3 py-2 text-xs text-[var(--color-muted)]">No matching risks found.</p>
+                      )}
+                    </div>
+                  </div>
                   <div><label className="cw-label block text-sm font-medium mb-1">Title <span className="cw-required">*</span></label><input type="text" value={modalForm.title || ''} onChange={e => setModalForm({ ...modalForm, title: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" /></div>
                   <div><label className="cw-label block text-sm font-medium mb-1">Description</label><textarea value={modalForm.description || ''} onChange={e => setModalForm({ ...modalForm, description: e.target.value })} rows={2} className="cw-field w-full px-3 py-2 text-sm" /></div>
                   <div className="grid grid-cols-2 gap-3">
@@ -1497,7 +1694,29 @@ export default function ProjectDetailPage() {
                     <div><label className="cw-label block text-sm font-medium mb-1">Severity</label><select value={modalForm.severity || 'Medium'} onChange={e => setModalForm({ ...modalForm, severity: e.target.value })} className="cw-field w-full px-3 py-2 text-sm">{SEVERITY_LEVELS.map(s => <option key={s}>{s}</option>)}</select></div>
                   </div>
                   <div><label className="cw-label block text-sm font-medium mb-1">Mitigation</label><textarea value={modalForm.mitigation || ''} onChange={e => setModalForm({ ...modalForm, mitigation: e.target.value })} rows={2} className="cw-field w-full px-3 py-2 text-sm" /></div>
-                  <div><label className="cw-label block text-sm font-medium mb-1">Owner</label><input type="text" value={modalForm.owner_name || ''} onChange={e => setModalForm({ ...modalForm, owner_name: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" /></div>
+                  <div>
+                    <label className="cw-label block text-sm font-medium mb-1">Owner</label>
+                    <select
+                      value={modalForm.owner_user_id || ''}
+                      onChange={(e) => {
+                        const selectedId = Number(e.target.value);
+                        const selectedUser = tenantUsersById.get(selectedId);
+                        setModalForm({
+                          ...modalForm,
+                          owner_user_id: e.target.value,
+                          owner_name: selectedUser?.displayName || '',
+                        });
+                      }}
+                      className="cw-field w-full px-3 py-2 text-sm"
+                    >
+                      <option value="">Select owner</option>
+                      {tenantUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.displayName}{user.email ? ` (${user.email})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </>
               )}
               {showModal === 'update' && (
@@ -1582,7 +1801,7 @@ export default function ProjectDetailPage() {
               )}
             </div>
             <div className="flex items-center justify-end gap-3 p-5 border-t border-[var(--color-border)]">
-              <button onClick={() => { setShowModal(null); setEditingId(null); setDocumentUploadFile(null); }} className="cw-btn-secondary px-4 py-2 rounded-lg text-sm">Cancel</button>
+              <button onClick={() => { setShowModal(null); setEditingId(null); setDocumentUploadFile(null); setTeamUserSearch(''); setRiskSearch(''); }} className="cw-btn-secondary px-4 py-2 rounded-lg text-sm">Cancel</button>
               <button
                 onClick={() => {
                   if (showModal === 'milestone') {
@@ -1593,8 +1812,27 @@ export default function ProjectDetailPage() {
                     const payload = { ...modalForm, progress: parseFloat(modalForm.progress || '0'), dependencies: (modalForm.dependencies || '').split('\n').map((s: string) => s.trim()).filter(Boolean) };
                     createTaskMut.mutate(payload);
                   }
-                  if (showModal === 'team') addTeamMut.mutate(modalForm);
-                  if (showModal === 'risk') createRiskMut.mutate(modalForm);
+                  if (showModal === 'team') {
+                    const selectedUser = tenantUsersById.get(Number(modalForm.user_id || 0));
+                    const payload = {
+                      ...modalForm,
+                      user_id: selectedUser?.id || Number(modalForm.user_id || 0) || undefined,
+                      user_name: selectedUser?.displayName || modalForm.user_name || '',
+                      email: selectedUser?.email || modalForm.email || '',
+                    };
+                    addTeamMut.mutate(payload);
+                  }
+                  if (showModal === 'risk') {
+                    const selectedOwner = tenantUsersById.get(Number(modalForm.owner_user_id || 0));
+                    const rest = { ...modalForm };
+                    delete rest.owner_user_id;
+                    delete rest.linked_risk_id;
+                    const payload = {
+                      ...rest,
+                      owner_name: selectedOwner?.displayName || modalForm.owner_name || '',
+                    };
+                    createRiskMut.mutate(payload);
+                  }
                   if (showModal === 'update') createUpdateMut.mutate(modalForm);
                   if (showModal === 'document') {
                     if (documentUploadFile) {
@@ -1622,7 +1860,11 @@ export default function ProjectDetailPage() {
                     editingId ? updateDepMut.mutate({ id: editingId, data: modalForm }) : createDepMut.mutate(modalForm);
                   }
                 }}
-                className="cw-btn-primary px-4 py-2 rounded-lg text-sm font-medium"
+                disabled={
+                  (showModal === 'team' && !modalForm.user_id) ||
+                  (showModal === 'risk' && !String(modalForm.title || '').trim())
+                }
+                className="cw-btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
               >
                 {editingId ? 'Update' : 'Save'}
               </button>

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 
 
@@ -2144,10 +2144,14 @@ class VulnerabilityAIJobResponse(BaseModel):
 class VulnerabilitySLAConfigCreate(BaseModel):
     severity: str
     remediation_days: int
+    notification_days: Optional[int] = None
+    escalation_days: Optional[int] = None
 
 
 class VulnerabilitySLAConfigUpdate(BaseModel):
     remediation_days: int
+    notification_days: Optional[int] = None
+    escalation_days: Optional[int] = None
 
 
 class VulnerabilitySLAConfigResponse(BaseModel):
@@ -2155,6 +2159,8 @@ class VulnerabilitySLAConfigResponse(BaseModel):
     tenant_id: int
     severity: str
     remediation_days: int
+    notification_days: Optional[int] = None
+    escalation_days: Optional[int] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -3320,13 +3326,17 @@ class AttestationEscalateResponse(BaseModel):
 class RegulatoryChangeCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    source: str  # OCC, Fed, EBA, PRA, SEC, FINRA, custom
+    source: Optional[str] = "custom"  # OCC, Fed, EBA, PRA, SEC, FINRA, custom
     regulation_reference: Optional[str] = None
-    effective_date: Optional[datetime] = None
-    published_date: Optional[datetime] = None
-    status: str = "identified"
-    priority: str = "medium"
+    reference_number: Optional[str] = None  # legacy alias for regulation_reference
+    effective_date: Optional[Union[datetime, str]] = None
+    published_date: Optional[Union[datetime, str]] = None
+    publication_date: Optional[Union[datetime, str]] = None  # legacy alias for published_date
+    status: Optional[str] = "identified"
+    priority: Optional[str] = "medium"
     assigned_to: Optional[int] = None
+    regulatory_body: Optional[str] = None
+    impact_summary: Optional[str] = None
 
 
 class RegulatoryChangeUpdate(BaseModel):
@@ -3334,11 +3344,15 @@ class RegulatoryChangeUpdate(BaseModel):
     description: Optional[str] = None
     source: Optional[str] = None
     regulation_reference: Optional[str] = None
-    effective_date: Optional[datetime] = None
-    published_date: Optional[datetime] = None
+    reference_number: Optional[str] = None  # legacy alias for regulation_reference
+    effective_date: Optional[Union[datetime, str]] = None
+    published_date: Optional[Union[datetime, str]] = None
+    publication_date: Optional[Union[datetime, str]] = None  # legacy alias for published_date
     status: Optional[str] = None
     priority: Optional[str] = None
     assigned_to: Optional[int] = None
+    regulatory_body: Optional[str] = None
+    impact_summary: Optional[str] = None
 
 
 class RegulatoryChangeResponse(BaseModel):
@@ -3348,10 +3362,15 @@ class RegulatoryChangeResponse(BaseModel):
     description: Optional[str]
     source: str
     regulation_reference: Optional[str]
+    reference_number: Optional[str] = None  # legacy alias for regulation_reference
     effective_date: Optional[datetime]
     published_date: Optional[datetime]
+    publication_date: Optional[datetime] = None  # legacy alias for published_date
     status: str
     priority: str
+    regulatory_body: Optional[str] = None
+    impact_summary: Optional[str] = None
+    gap_count: int = 0
     assigned_to: Optional[int]
     assignee_name: Optional[str] = None
     created_by: Optional[int]
@@ -3370,30 +3389,42 @@ class RegulatoryChangeResponse(BaseModel):
 
 
 class RegulatoryImpactAssessmentCreate(BaseModel):
-    assessment_type: str  # policy, control, process, technology
+    assessment_type: Optional[str] = "process"  # policy, control, process, technology
     impacted_item_id: Optional[int] = None
     impacted_item_type: Optional[str] = None  # policy, control, asset, process
-    impact_level: str = "medium"
+    impact_level: Optional[str] = "medium"
     impact_description: Optional[str] = None
-    gap_identified: bool = False
+    affected_areas: Optional[str] = None  # legacy alias for impact_description
+    compliance_gaps: Optional[str] = None  # legacy alias for gap_description
+    recommendations: Optional[str] = None  # legacy field
+    gap_identified: Optional[bool] = False
     gap_description: Optional[str] = None
+    status: Optional[str] = None  # legacy UI field
+    assessment_date: Optional[Union[datetime, str]] = None  # legacy alias for assessed_at
 
 
 class RegulatoryImpactAssessmentResponse(BaseModel):
     id: int
     tenant_id: int
     regulatory_change_id: int
+    change_id: int  # legacy alias for regulatory_change_id
     assessment_type: str
     impacted_item_id: Optional[int]
     impacted_item_type: Optional[str]
     impacted_item_name: Optional[str] = None
     impact_level: str
     impact_description: Optional[str]
+    affected_areas: Optional[str] = None  # legacy alias for impact_description
     gap_identified: bool
     gap_description: Optional[str]
+    compliance_gaps: Optional[str] = None  # legacy alias for gap_description
+    recommendations: Optional[str] = None  # legacy field extracted from impact_description
     assessed_by: Optional[int]
+    assessor_id: Optional[int] = None  # legacy alias for assessed_by
     assessor_name: Optional[str] = None
     assessed_at: datetime
+    assessment_date: datetime  # legacy alias for assessed_at
+    status: str = "completed"  # legacy UI field
 
     class Config:
         from_attributes = True

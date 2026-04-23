@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { Fragment, useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import apiClient, { controlsApi } from '@/lib/api';
+import { controlsApi, evidenceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { 
   Shield, 
@@ -24,6 +24,11 @@ import {
   Paperclip,
   HelpCircle,
   Sparkles,
+  Link2,
+  Link2Off,
+  ExternalLink,
+  Upload,
+  ArrowUpDown,
   ClipboardList,
   FolderOpen,
   AlertTriangle,
@@ -102,17 +107,304 @@ interface AIRecommendations {
   audit_focus_areas: string[];
 }
 
+type SortField =
+  | 'control_id'
+  | 'title'
+  | 'framework_name'
+  | 'domain'
+  | 'priority'
+  | 'evidence_count'
+  | 'status';
+
+interface FrameworkControlEvidenceLink {
+  id: number;
+  evidence_id: number;
+  title?: string;
+  description?: string;
+  evidence_type?: string;
+  status?: string;
+  file_name?: string;
+  linked_at?: string;
+}
+
+interface EvidenceOption {
+  id: number;
+  name?: string;
+  title?: string;
+  file_name?: string;
+  evidence_type?: string;
+  status?: string;
+}
+
+function FrameworkControlEvidenceLinkSection({ controlId }: { controlId: number }) {
+  const queryClient = useQueryClient();
+  const [showPicker, setShowPicker] = useState(false);
+  const [showUploader, setShowUploader] = useState(false);
+  const [searchEv, setSearchEv] = useState('');
+  const [uploadName, setUploadName] = useState('');
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState('');
+
+  const { data: linkedEvidence, isLoading: loadingLinked } = useQuery({
+    queryKey: ['framework-control-evidence', controlId],
+    queryFn: async () => {
+      const res = await controlsApi.getFrameworkControlEvidence(controlId);
+      return res.data as FrameworkControlEvidenceLink[];
+    },
+  });
+
+  const { data: allEvidence } = useQuery({
+    queryKey: ['evidence-all'],
+    queryFn: async () => {
+      const res = await evidenceApi.getAll();
+      return res.data as EvidenceOption[];
+    },
+    enabled: showPicker,
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: (evidenceId: number) =>
+      controlsApi.linkFrameworkControlEvidence(controlId, { evidence_id: evidenceId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['framework-control-evidence', controlId] });
+      queryClient.invalidateQueries({ queryKey: ['framework-controls'] });
+      setShowPicker(false);
+      setSearchEv('');
+    },
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: (linkId: number) => controlsApi.unlinkFrameworkControlEvidence(controlId, linkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['framework-control-evidence', controlId] });
+      queryClient.invalidateQueries({ queryKey: ['framework-controls'] });
+    },
+  });
+
+  const uploadAndLinkMutation = useMutation({
+    mutationFn: async () => {
+      if (!uploadFile) {
+        throw new Error('Please select a file to upload.');
+      }
+
+      const formData = new FormData();
+      formData.append('name', uploadName.trim() || uploadFile.name);
+      if (uploadDescription.trim()) {
+        formData.append('description', uploadDescription.trim());
+      }
+      formData.append('file', uploadFile);
+
+      const uploadRes = await evidenceApi.create(formData);
+      const uploadedEvidenceId = uploadRes.data?.id;
+      if (!uploadedEvidenceId) {
+        throw new Error('Evidence uploaded but no evidence ID was returned.');
+      }
+
+      await controlsApi.linkFrameworkControlEvidence(controlId, { evidence_id: uploadedEvidenceId });
+      return uploadedEvidenceId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['framework-control-evidence', controlId] });
+      queryClient.invalidateQueries({ queryKey: ['framework-controls'] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-all'] });
+      setShowUploader(false);
+      setUploadError('');
+      setUploadName('');
+      setUploadDescription('');
+      setUploadFile(null);
+    },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.detail;
+      setUploadError(typeof detail === 'string' ? detail : (error?.message || 'Failed to upload and link evidence.'));
+    },
+  });
+
+  const linkedIds = new Set((linkedEvidence ?? []).map((l) => l.evidence_id));
+  const filteredAll = (allEvidence ?? []).filter((ev) => {
+    const label = ev.name || ev.title || ev.file_name || '';
+    return label.toLowerCase().includes(searchEv.toLowerCase());
+  });
+
+  return (
+    <div className="mt-6 border-t border-slate-200 pt-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-800">Linked Evidence</h3>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPicker(!showPicker)}
+            className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+          >
+            <Link2 className="h-3 w-3" />
+            {showPicker ? 'Close Existing' : 'Link Existing'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowUploader(!showUploader);
+              setUploadError('');
+            }}
+            className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+          >
+            <Upload className="h-3 w-3" />
+            {showUploader ? 'Close Upload' : 'Upload New'}
+          </button>
+        </div>
+      </div>
+
+      {showPicker && (
+        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <input
+            type="text"
+            value={searchEv}
+            onChange={(e) => setSearchEv(e.target.value)}
+            placeholder="Search evidence..."
+            className="mb-2 w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+          />
+          <div className="max-h-48 space-y-1 overflow-y-auto">
+            {filteredAll.length === 0 && (
+              <p className="py-2 text-center text-xs text-slate-500">No evidence found</p>
+            )}
+            {filteredAll.map((ev) => {
+              const alreadyLinked = linkedIds.has(ev.id);
+              const name = ev.name || ev.title || ev.file_name || `Evidence #${ev.id}`;
+              return (
+                <div
+                  key={ev.id}
+                  className="flex items-center justify-between rounded border border-slate-100 bg-white px-3 py-2"
+                >
+                  <div>
+                    <p className="text-xs font-medium text-slate-800">{name}</p>
+                    {ev.evidence_type && (
+                      <p className="text-[11px] text-slate-500">{ev.evidence_type}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={alreadyLinked || linkMutation.isPending}
+                    onClick={() => linkMutation.mutate(ev.id)}
+                    className="rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {alreadyLinked ? 'Linked' : 'Link'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {showUploader && (
+        <form
+          className="mb-4 space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setUploadError('');
+            uploadAndLinkMutation.mutate();
+          }}
+        >
+          <input
+            type="text"
+            value={uploadName}
+            onChange={(e) => setUploadName(e.target.value)}
+            placeholder="Evidence name (optional, file name will be used)"
+            className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
+          />
+          <textarea
+            value={uploadDescription}
+            onChange={(e) => setUploadDescription(e.target.value)}
+            placeholder="Description (optional)"
+            rows={2}
+            className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
+          />
+          <input
+            type="file"
+            required
+            onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+            className="w-full text-xs text-slate-600 file:mr-2 file:rounded file:border file:border-slate-300 file:bg-white file:px-2 file:py-1 file:text-xs file:text-slate-700"
+          />
+          {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={uploadAndLinkMutation.isPending}
+              className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {uploadAndLinkMutation.isPending ? 'Uploading...' : 'Upload & Link'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loadingLinked ? (
+        <div className="flex justify-center py-4">
+          <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+        </div>
+      ) : (linkedEvidence ?? []).length === 0 ? (
+        <p className="text-xs text-slate-500">No evidence linked yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {(linkedEvidence ?? []).map((lnk) => (
+            <div
+              key={lnk.id}
+              className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <Link
+                  href={`/evidence/${lnk.evidence_id}`}
+                  className="block truncate text-xs font-medium text-blue-600 hover:underline"
+                >
+                  {lnk.title || lnk.file_name || `Evidence #${lnk.evidence_id}`}
+                </Link>
+                {lnk.evidence_type && (
+                  <span className="text-[11px] text-slate-500">{lnk.evidence_type}</span>
+                )}
+              </div>
+              <div className="ml-2 flex flex-shrink-0 items-center gap-1">
+                <Link
+                  href={`/evidence/${lnk.evidence_id}`}
+                  className="rounded p-1 text-slate-400 hover:text-blue-600"
+                  title="View evidence"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => unlinkMutation.mutate(lnk.id)}
+                  disabled={unlinkMutation.isPending}
+                  className="rounded p-1 text-slate-400 hover:text-red-500"
+                  title="Unlink"
+                >
+                  {unlinkMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Link2Off className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ControlsPage() {
   const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('controls:control_library:create');
   const initialFrameworkId = searchParams.get('framework');
   
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [frameworkFilter, setFrameworkFilter] = useState<number | null>(
     initialFrameworkId ? Number(initialFrameworkId) : null
   );
   const [domainFilter, setDomainFilter] = useState('');
+  const [sortBy, setSortBy] = useState<SortField>('control_id');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedControl, setExpandedControl] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const [showInfoModal, setShowInfoModal] = useState(false);
@@ -182,29 +474,85 @@ export default function ControlsPage() {
     }
   }, [initialFrameworkId]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearchTerm(searchInput.trim());
+      setPage(0);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
   const { data: summaryData } = useQuery({
     queryKey: ['framework-controls-summary'],
     queryFn: async () => {
-      const response = await apiClient.get('/controls/framework-controls/summary');
+      const response = await controlsApi.getFrameworkControlsSummary();
       return response.data as FrameworkSummaryResponse;
     },
   });
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['framework-controls', frameworkFilter, domainFilter, searchTerm, page],
+    queryKey: ['framework-controls', frameworkFilter, domainFilter, searchTerm, sortBy, sortOrder, page],
     queryFn: async () => {
-      const params: Record<string, any> = {
+      const params: {
+        skip: number;
+        limit: number;
+        framework_id?: number;
+        domain?: string;
+        search?: string;
+        sort_by?: string;
+        sort_order?: 'asc' | 'desc';
+      } = {
         skip: page * pageSize,
         limit: pageSize,
       };
       if (frameworkFilter) params.framework_id = frameworkFilter;
       if (domainFilter) params.domain = domainFilter;
       if (searchTerm) params.search = searchTerm;
+      params.sort_by = sortBy;
+      params.sort_order = sortOrder;
       
-      const response = await apiClient.get('/controls/framework-controls', { params });
+      const response = await controlsApi.getFrameworkControls(params);
       return response.data as FrameworkControlsResponse;
     },
+    placeholderData: (previousData) => previousData,
   });
+
+  const handleSort = (field: SortField) => {
+    setPage(0);
+    if (sortBy === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortBy(field);
+    setSortOrder(field === 'evidence_count' ? 'desc' : 'asc');
+  };
+
+  const renderSortHeader = (
+    label: string,
+    field: SortField,
+    align: 'left' | 'center' | 'right' = 'left'
+  ) => {
+    const justifyClass =
+      align === 'center' ? 'justify-center' :
+      align === 'right' ? 'justify-end' :
+      'justify-start';
+    const isActive = sortBy === field;
+
+    return (
+      <button
+        type="button"
+        onClick={() => handleSort(field)}
+        className={`inline-flex w-full items-center gap-1 ${justifyClass} text-slate-600 hover:text-black`}
+      >
+        <span>{label}</span>
+        {isActive ? (
+          <span className="text-xs">{sortOrder === 'asc' ? '^' : 'v'}</span>
+        ) : (
+          <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+        )}
+      </button>
+    );
+  };
 
   const getPriorityBadge = (priority: string) => {
     const colors: Record<string, string> = {
@@ -236,7 +584,7 @@ export default function ControlsPage() {
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
@@ -410,11 +758,8 @@ export default function ControlsPage() {
           <input
             type="text"
             placeholder="Search controls by ID, title, or description..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setPage(0);
-            }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
           />
         </div>
@@ -449,13 +794,13 @@ export default function ControlsPage() {
         <table className="w-full">
           <thead className="bg-white">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Control ID</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Title</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 md:table-cell">Framework</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 lg:table-cell">Domain</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Priority</th>
-              <th className="px-4 py-3 text-center text-sm font-medium text-slate-600">Evidence</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Control ID', 'control_id')}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Title', 'title')}</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium md:table-cell">{renderSortHeader('Framework', 'framework_name')}</th>
+              <th className="hidden px-4 py-3 text-left text-sm font-medium lg:table-cell">{renderSortHeader('Domain', 'domain')}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Priority', 'priority')}</th>
+              <th className="px-4 py-3 text-center text-sm font-medium">{renderSortHeader('Evidence', 'evidence_count', 'center')}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Status', 'status')}</th>
               <th className="px-4 py-3 text-right text-sm font-medium text-slate-600"></th>
             </tr>
           </thead>
@@ -463,9 +808,8 @@ export default function ControlsPage() {
             {data?.controls.map((control) => {
               const isExpanded = expandedControl === control.id;
               return (
-                <>
+                <Fragment key={control.id}>
                   <tr 
-                    key={control.id}
                     className="bg-white/50 hover:bg-slate-50 cursor-pointer"
                     onClick={() => setExpandedControl(isExpanded ? null : control.id)}
                   >
@@ -517,7 +861,7 @@ export default function ControlsPage() {
                     </td>
                   </tr>
                   {isExpanded && (
-                    <tr key={`${control.id}-details`} className="bg-slate-50">
+                    <tr className="bg-slate-50">
                       <td colSpan={8} className="px-4 py-4 border-t border-slate-200">
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -540,13 +884,10 @@ export default function ControlsPage() {
                                 <span className={`text-sm font-medium ${control.evidence_count > 0 ? 'text-emerald-600' : 'text-slate-600'}`}>
                                   {control.evidence_count} document{control.evidence_count !== 1 ? 's' : ''}
                                 </span>
-                                <Link
-                                  href={`/evidence?control_id=${control.id}`}
-                                  className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs text-text hover:bg-primary-100 transition-colors"
-                                >
+                                <span className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs text-text">
                                   <Paperclip className="h-3 w-3" />
-                                  {control.evidence_count > 0 ? 'View Evidence' : 'Link Evidence'}
-                                </Link>
+                                  Manage Below
+                                </span>
                               </div>
                             </div>
                             {control.section_number && (
@@ -561,6 +902,7 @@ export default function ControlsPage() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    setSearchInput(control.parent_section || '');
                                     setSearchTerm(control.parent_section || '');
                                     setPage(0);
                                   }}
@@ -586,6 +928,8 @@ export default function ControlsPage() {
                               <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{control.full_text}</p>
                             </div>
                           )}
+
+                          <FrameworkControlEvidenceLinkSection controlId={control.id} />
 
                           {control.evidence_requirements && control.evidence_requirements.length > 0 && (
                             <div>
@@ -768,7 +1112,7 @@ export default function ControlsPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>

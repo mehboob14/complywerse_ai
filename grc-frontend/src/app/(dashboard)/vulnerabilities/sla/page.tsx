@@ -61,8 +61,8 @@ export default function SLAConfigPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
-      vulnManagementApi.sla.update(id, data),
+    mutationFn: ({ severity, data }: { severity: string; data: Record<string, unknown> }) =>
+      vulnManagementApi.sla.update(severity, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vuln-sla'] });
       setEditingId(null);
@@ -87,7 +87,9 @@ export default function SLAConfigPage() {
 
   const handleSave = () => {
     if (editingId) {
-      updateMutation.mutate({ id: editingId, data: editValues });
+      const config = slaConfigs?.find((s) => s.id === editingId);
+      if (!config) return;
+      updateMutation.mutate({ severity: config.severity, data: editValues });
     }
   };
 

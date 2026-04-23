@@ -143,7 +143,23 @@ export const controlsApi = {
       }>;
       key_risks_addressed: string[];
       audit_focus_areas: string[];
-    }>('/controls/ai-recommendations', data),
+      }>('/controls/ai-recommendations', data),
+  getFrameworkControlsSummary: () => apiClient.get('/controls/framework-controls/summary'),
+  getFrameworkControls: (params?: {
+    framework_id?: number;
+    domain?: string;
+    search?: string;
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
+    skip?: number;
+    limit?: number;
+  }) => apiClient.get('/controls/framework-controls', { params }),
+  getFrameworkControlEvidence: (frameworkControlId: number) =>
+    apiClient.get(`/controls/framework-control/${frameworkControlId}/evidence`),
+  linkFrameworkControlEvidence: (frameworkControlId: number, data: { evidence_id: number }) =>
+    apiClient.post(`/controls/framework-control/${frameworkControlId}/evidence`, data),
+  unlinkFrameworkControlEvidence: (frameworkControlId: number, linkId: number) =>
+    apiClient.delete(`/controls/framework-control/${frameworkControlId}/evidence/${linkId}`),
 };
 
 export const evidenceApi = {
@@ -1464,10 +1480,10 @@ export const vulnManagementApi = {
   },
   sla: {
     get: () => apiClient.get('/vuln-management/sla'),
-    create: (data: Record<string, unknown>) => 
-      apiClient.post('/vuln-management/sla', data),
-    update: (id: number, data: Record<string, unknown>) => 
-      apiClient.put(`/vuln-management/sla/${id}`, data),
+    create: (data: Record<string, unknown> | Array<Record<string, unknown>>) =>
+      apiClient.post('/vuln-management/sla', Array.isArray(data) ? data : [data]),
+    update: (severity: string, data: Record<string, unknown>) =>
+      apiClient.put(`/vuln-management/sla/${encodeURIComponent(severity)}`, data),
   },
   exceptions: {
     list: () => 

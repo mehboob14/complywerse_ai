@@ -431,14 +431,19 @@ export default function VendorDetailPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rating</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assessor</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Questions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {(assessments ?? []).length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">No assessments found</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">No assessments found</td></tr>
                 ) : (
                   (assessments ?? []).map((a) => (
-                    <tr key={a.id} className="hover:bg-gray-50 cursor-pointer">
+                    <tr
+                      key={a.id}
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => router.push(`/vendor-risk/assessments/${a.id}?tab=questionnaire`)}
+                    >
                       <td className="px-4 py-3 text-sm text-gray-900 capitalize">{a.assessment_type?.replace(/_/g, ' ')}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusBadge(a.status)}`}>
@@ -457,6 +462,18 @@ export default function VendorDetailPage() {
                         {typeof a.assessor === 'object' && a.assessor ? a.assessor.full_name : (a.assessor ? String(a.assessor) : '-')}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500">{a.due_date ? new Date(a.due_date).toLocaleDateString() : '-'}</td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/vendor-risk/assessments/${a.id}?tab=questionnaire`);
+                          }}
+                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100"
+                        >
+                          View Linked Questions
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}

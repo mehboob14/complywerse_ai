@@ -370,8 +370,8 @@ export default function VulnerabilitiesPage() {
 
   // SLA mutations
   const updateSlaMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
-      vulnManagementApi.sla.update(id, data),
+    mutationFn: ({ severity, data }: { severity: string; data: Record<string, unknown> }) =>
+      vulnManagementApi.sla.update(severity, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vuln-sla'] });
       setEditingId(null);
@@ -391,7 +391,12 @@ export default function VulnerabilitiesPage() {
     setEditingId(config.id);
     setEditValues({ remediation_days: config.remediation_days, notification_days: config.notification_days, escalation_days: config.escalation_days });
   };
-  const handleSlaSave = () => { if (editingId) updateSlaMutation.mutate({ id: editingId, data: editValues }); };
+  const handleSlaSave = () => {
+    if (!editingId) return;
+    const config = slaConfigs?.find((s) => s.id === editingId);
+    if (!config) return;
+    updateSlaMutation.mutate({ severity: config.severity, data: editValues });
+  };
   const handleSlaCancel = () => { setEditingId(null); setEditValues({ remediation_days: 0 }); };
   const handleCreateDefaultSla = (severity: string) => {
     createSlaMutation.mutate({ severity, remediation_days: DEFAULT_SLA[severity] });

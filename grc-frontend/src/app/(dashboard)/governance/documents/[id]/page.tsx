@@ -1551,6 +1551,8 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
     onSuccess: () => {
       toast({ type: 'success', title: 'Statement Updated' });
       queryClient.invalidateQueries({ queryKey: ['document-policy-statements', documentId] });
+      queryClient.invalidateQueries({ queryKey: ['statement-versions', documentId] });
+      queryClient.invalidateQueries({ queryKey: ['statement-diff', documentId] });
       setEditingStmtId(null);
     },
     onError: (error: any) => {

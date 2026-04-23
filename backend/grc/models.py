@@ -2960,7 +2960,8 @@ class PolicyStatementVersion(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     statement_id = Column(Integer, ForeignKey("grc_policy_statements.id"), nullable=False, index=True)
-    version_number = Column(Integer, nullable=False, default=1)
+    # Version numbering is zero-based: initial snapshot is version 0.
+    version_number = Column(Integer, nullable=False, default=0)
 
     statement_text = Column(Text, nullable=False)
     statement_summary = Column(String(500), nullable=True)
@@ -3890,6 +3891,8 @@ class VulnerabilitySLAConfig(Base):
     
     severity = Column(String(20), nullable=False)  # critical, high, medium, low, info
     remediation_days = Column(Integer, nullable=False)  # Days to remediate
+    notification_days = Column(Integer, nullable=True)  # Optional days before due date for reminders
+    escalation_days = Column(Integer, nullable=True)  # Optional days after due date for escalations
     
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -7487,6 +7490,24 @@ def _add_missing_columns():
             logger.debug("grc_framework_risk_assessments table not found - will be created")
         else:
             logger.error(f"Error fixing framework_id nullable: {e}")
+
+    # Ensure vulnerability SLA config has notification/escalation columns
+    try:
+        sla_columns = {col['name'] for col in inspector.get_columns('grc_vulnerability_sla_config')}
+        with engine.begin() as conn:
+            if 'notification_days' not in sla_columns:
+                logger.warning("Adding missing 'notification_days' column to grc_vulnerability_sla_config...")
+                conn.execute(text("ALTER TABLE grc_vulnerability_sla_config ADD COLUMN notification_days INTEGER"))
+                logger.info("✓ Successfully added notification_days column")
+            if 'escalation_days' not in sla_columns:
+                logger.warning("Adding missing 'escalation_days' column to grc_vulnerability_sla_config...")
+                conn.execute(text("ALTER TABLE grc_vulnerability_sla_config ADD COLUMN escalation_days INTEGER"))
+                logger.info("✓ Successfully added escalation_days column")
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            logger.debug("grc_vulnerability_sla_config table not found - will be created")
+        else:
+            logger.error(f"Error checking/adding SLA columns: {e}")
 
 
 def init_grc_db():

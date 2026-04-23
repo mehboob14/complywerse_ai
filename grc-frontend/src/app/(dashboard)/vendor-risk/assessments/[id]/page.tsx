@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -69,6 +69,7 @@ interface TemplateQuestion {
   evidence_required: boolean;
   weight: number;
   options?: string[];
+  category?: string;
 }
 
 interface EvidenceFile {
@@ -87,6 +88,13 @@ interface QuestionnaireResponse {
   submitted_at: string | null;
   questions?: TemplateQuestion[];
   evidence?: Record<string, EvidenceFile[]>;
+}
+
+interface QuestionnaireTemplateLite {
+  id: number;
+  name: string;
+  category: string;
+  questions: TemplateQuestion[];
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -136,15 +144,46 @@ const formatAssessmentType = (type: string) =>
 
 type TabType = 'overview' | 'questionnaire' | 'scoring';
 
+const QUESTION_PREFIX_CATEGORY: Record<string, string> = {
+  s: 'Security',
+  p: 'Privacy',
+  c: 'Compliance',
+  o: 'Operational',
+  f: 'Financial',
+};
+
+const getAssessmentCategory = (assessmentType?: string): string => {
+  const v = String(assessmentType || '').toLowerCase();
+  if (v.includes('privacy')) return 'Privacy';
+  if (v.includes('compliance')) return 'Compliance';
+  if (v.includes('operational')) return 'Operational';
+  if (v.includes('financial')) return 'Financial';
+  if (v.includes('cyber') || v.includes('security')) return 'Security';
+  return 'General';
+};
+
+const getQuestionCategory = (q: TemplateQuestion, assessmentType?: string): string => {
+  const explicit = String(q.category || '').trim();
+  if (explicit) return explicit.charAt(0).toUpperCase() + explicit.slice(1);
+  const id = String(q.id || '').trim().toLowerCase();
+  const prefix = id.charAt(0);
+  if (QUESTION_PREFIX_CATEGORY[prefix]) return QUESTION_PREFIX_CATEGORY[prefix];
+  return getAssessmentCategory(assessmentType);
+};
+
 // ─── Component ──────────────────────────────────────────────────
 
 export default function AssessmentDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const assessmentId = Number(params.id);
+  const initialTab = (searchParams.get('tab') as TabType) || 'overview';
 
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>(
+    ['overview', 'questionnaire', 'scoring'].includes(initialTab) ? initialTab : 'overview'
+  );
   const [editFindings, setEditFindings] = useState<string[] | null>(null);
   const [editRecommendations, setEditRecommendations] = useState<string[] | null>(null);
   const [newFinding, setNewFinding] = useState('');
@@ -163,6 +202,16 @@ export default function AssessmentDetailPage() {
       return res.data as Assessment;
     },
     enabled: !!assessmentId,
+  });
+
+  const { data: linkedTemplate } = useQuery({
+    queryKey: ['assessment-linked-template', assessment?.template_id],
+    queryFn: async () => {
+      const res = await vendorRiskApi.getTemplates({ limit: 200 });
+      const items = (Array.isArray(res.data) ? res.data : res.data?.items ?? []) as QuestionnaireTemplateLite[];
+      return items.find((t) => t.id === assessment?.template_id) || null;
+    },
+    enabled: !!assessment?.template_id,
   });
 
   // ── Mutations ───────────────────────────────────────────────
@@ -561,6 +610,29 @@ export default function AssessmentDetailPage() {
               <ClipboardList className="h-10 w-10 text-gray-300 mx-auto mb-3" />
               <p className="text-sm text-gray-500 mb-2">No questionnaire responses linked to this assessment.</p>
               <p className="text-xs text-gray-400">Send a questionnaire to the vendor from the Questionnaires page, then responses will appear here.</p>
+              {linkedTemplate && (linkedTemplate.questions || []).length > 0 && (
+                <div className="mt-6 text-left border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                    <p className="text-sm font-semibold text-gray-800">Questions linked to this assessment</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Template: {linkedTemplate.name} • Category: {linkedTemplate.category || getAssessmentCategory(assessment.assessment_type)}
+                    </p>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {linkedTemplate.questions.map((q, idx) => (
+                      <div key={q.id || String(idx)} className="px-4 py-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs text-gray-500">Q{idx + 1}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                            {getQuestionCategory(q, assessment.assessment_type)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-800">{q.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             (assessment.questionnaire_responses ?? []).map((qr) => {
@@ -570,6 +642,13 @@ export default function AssessmentDetailPage() {
               const answeredCount = questions.filter((q) => qrResponses[q.id] !== undefined && qrResponses[q.id] !== '').length;
               const evidenceRequired = questions.filter((q) => q.evidence_required).length;
               const evidenceProvided = questions.filter((q) => q.evidence_required && qrEvidence[q.id]?.length > 0).length;
+              const groupedQuestions = questions.reduce((acc, q, idx) => {
+                const category = getQuestionCategory(q, assessment.assessment_type);
+                if (!acc[category]) acc[category] = [];
+                acc[category].push({ question: q, index: idx });
+                return acc;
+              }, {} as Record<string, Array<{ question: TemplateQuestion; index: number }>>);
+              const categoryEntries = Object.entries(groupedQuestions);
 
               return (
                 <div key={qr.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -602,6 +681,7 @@ export default function AssessmentDetailPage() {
                     {questions.length > 0 && (
                       <div className="mt-3 flex items-center gap-4 text-xs text-gray-500">
                         <span>{answeredCount}/{questions.length} answered</span>
+                        <span>{questions.length} sent questions</span>
                         {evidenceRequired > 0 && (
                           <span className={evidenceProvided < evidenceRequired ? 'text-orange-500' : 'text-green-600'}>
                             <Paperclip className="h-3 w-3 inline mr-0.5" />
@@ -618,73 +698,80 @@ export default function AssessmentDetailPage() {
                   {/* Questions + Answers */}
                   <div className="divide-y divide-gray-100">
                     {questions.length > 0 ? (
-                      questions.map((q, idx) => {
-                        const answer = qrResponses[q.id];
-                        const qEvFiles = qrEvidence[q.id] || [];
-                        const isAnswered = answer !== undefined && answer !== '';
-
-                        return (
-                          <div key={q.id} className="px-5 py-4">
-                            <div className="flex items-start gap-3">
-                              <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${isAnswered ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                                {isAnswered ? <CheckCircle2 className="h-3.5 w-3.5" /> : idx + 1}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-gray-800">{q.text}</p>
-                                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                  <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded capitalize">{q.type.replace('_', '/')}</span>
-                                  {q.weight > 3 && <span className="text-xs text-gray-400">Weight: {q.weight}/5</span>}
-                                  {q.evidence_required && (
-                                    <span className={`text-xs flex items-center gap-0.5 ${qEvFiles.length > 0 ? 'text-green-600' : 'text-orange-500'}`}>
-                                      <Paperclip className="h-3 w-3" />
-                                      {qEvFiles.length > 0 ? 'Evidence provided' : 'Evidence required'}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Answer display */}
-                                <div className="mt-2">
-                                  {!isAnswered ? (
-                                    <p className="text-sm text-gray-300 italic">No answer provided</p>
-                                  ) : q.type === 'yes_no' ? (
-                                    <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
-                                      String(answer).toLowerCase() === 'yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                    }`}>
-                                      {String(answer).charAt(0).toUpperCase() + String(answer).slice(1)}
-                                    </span>
-                                  ) : q.type === 'rating' ? (
-                                    <div className="flex items-center gap-0.5">
-                                      {[1, 2, 3, 4, 5].map((s) => (
-                                        <Star key={s} className={`h-4 w-4 ${Number(answer) >= s ? 'text-yellow-500 fill-yellow-500' : 'text-gray-200'}`} />
-                                      ))}
-                                      <span className="text-sm text-gray-500 ml-1">{String(answer)}/5</span>
-                                    </div>
-                                  ) : q.type === 'multiple_choice' ? (
-                                    <span className="inline-flex px-3 py-1 rounded-lg text-sm bg-blue-50 text-blue-700 border border-blue-200">
-                                      {String(answer)}
-                                    </span>
-                                  ) : (
-                                    <p className="text-sm text-gray-900 bg-gray-50 rounded-lg p-3">{String(answer)}</p>
-                                  )}
-                                </div>
-
-                                {/* Evidence files */}
-                                {qEvFiles.length > 0 && (
-                                  <div className="mt-2 space-y-1">
-                                    {qEvFiles.map((ev) => (
-                                      <div key={ev.id} className="flex items-center gap-2 text-xs text-gray-500">
-                                        <FileText className="h-3 w-3 text-green-500" />
-                                        <span className="truncate">{ev.file_name}</span>
-                                        <span className="text-gray-300">({ev.file_type})</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                      categoryEntries.map(([category, rows]) => (
+                        <div key={category} className="border-t border-gray-100 first:border-t-0">
+                          <div className="px-5 py-2 bg-gray-50 border-b border-gray-100">
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                              {category} ({rows.length})
+                            </p>
                           </div>
-                        );
-                      })
+                          {rows.map(({ question: q, index: idx }) => {
+                            const answer = qrResponses[q.id];
+                            const qEvFiles = qrEvidence[q.id] || [];
+                            const isAnswered = answer !== undefined && answer !== '';
+
+                            return (
+                              <div key={`${category}-${q.id}-${idx}`} className="px-5 py-4 border-b border-gray-50 last:border-b-0">
+                                <div className="flex items-start gap-3">
+                                  <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${isAnswered ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                                    {isAnswered ? <CheckCircle2 className="h-3.5 w-3.5" /> : idx + 1}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-gray-800">{q.text}</p>
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                      <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded capitalize">{q.type.replace('_', '/')}</span>
+                                      {q.weight > 3 && <span className="text-xs text-gray-400">Weight: {q.weight}/5</span>}
+                                      {q.evidence_required && (
+                                        <span className={`text-xs flex items-center gap-0.5 ${qEvFiles.length > 0 ? 'text-green-600' : 'text-orange-500'}`}>
+                                          <Paperclip className="h-3 w-3" />
+                                          {qEvFiles.length > 0 ? 'Evidence provided' : 'Evidence required'}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="mt-2">
+                                      {!isAnswered ? (
+                                        <p className="text-sm text-gray-300 italic">No answer provided</p>
+                                      ) : q.type === 'yes_no' ? (
+                                        <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
+                                          String(answer).toLowerCase() === 'yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                        }`}>
+                                          {String(answer).charAt(0).toUpperCase() + String(answer).slice(1)}
+                                        </span>
+                                      ) : q.type === 'rating' ? (
+                                        <div className="flex items-center gap-0.5">
+                                          {[1, 2, 3, 4, 5].map((s) => (
+                                            <Star key={s} className={`h-4 w-4 ${Number(answer) >= s ? 'text-yellow-500 fill-yellow-500' : 'text-gray-200'}`} />
+                                          ))}
+                                          <span className="text-sm text-gray-500 ml-1">{String(answer)}/5</span>
+                                        </div>
+                                      ) : q.type === 'multiple_choice' ? (
+                                        <span className="inline-flex px-3 py-1 rounded-lg text-sm bg-blue-50 text-blue-700 border border-blue-200">
+                                          {String(answer)}
+                                        </span>
+                                      ) : (
+                                        <p className="text-sm text-gray-900 bg-gray-50 rounded-lg p-3">{String(answer)}</p>
+                                      )}
+                                    </div>
+
+                                    {qEvFiles.length > 0 && (
+                                      <div className="mt-2 space-y-1">
+                                        {qEvFiles.map((ev) => (
+                                          <div key={ev.id} className="flex items-center gap-2 text-xs text-gray-500">
+                                            <FileText className="h-3 w-3 text-green-500" />
+                                            <span className="truncate">{ev.file_name}</span>
+                                            <span className="text-gray-300">({ev.file_type})</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))
                     ) : (
                       /* Fallback: raw response display when no template questions */
                       <div className="px-5 py-4">

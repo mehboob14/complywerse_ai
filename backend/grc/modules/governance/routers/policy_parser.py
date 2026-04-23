@@ -341,6 +341,14 @@ _reparse_proposals = {}
 
 
 def serialize_statement(statement: PolicyStatement, compliance_id: Optional[int] = None) -> dict:
+    current_version = 0
+    if hasattr(statement, 'versions') and statement.versions:
+        version_numbers = [v.version_number for v in statement.versions if v.version_number is not None]
+        if version_numbers:
+            min_version = min(version_numbers)
+            version_offset = min_version if min_version > 0 else 0
+            current_version = max(version_numbers) - version_offset
+
     return {
         "id": statement.id,
         "document_id": statement.document_id,
@@ -360,7 +368,7 @@ def serialize_statement(statement: PolicyStatement, compliance_id: Optional[int]
         "effective_date": statement.effective_date.isoformat() if statement.effective_date else None,
         "created_at": statement.created_at.isoformat() if statement.created_at else None,
         "updated_at": statement.updated_at.isoformat() if statement.updated_at else None,
-        "current_version": len(statement.versions) if hasattr(statement, 'versions') and statement.versions else 1,
+        "current_version": current_version,
         "created_by": statement.created_by,
         "compliance_id": compliance_id
     }
@@ -369,12 +377,13 @@ def serialize_statement(statement: PolicyStatement, compliance_id: Optional[int]
 def _create_version_snapshot(db: Session, statement: PolicyStatement, change_type: str, changed_by: int, change_reason: str = None):
     max_version = db.query(func.max(PolicyStatementVersion.version_number)).filter(
         PolicyStatementVersion.statement_id == statement.id
-    ).scalar() or 0
+    ).scalar()
+    next_version_number = 0 if max_version is None else (max_version + 1)
     
     version = PolicyStatementVersion(
         tenant_id=statement.tenant_id,
         statement_id=statement.id,
-        version_number=max_version + 1,
+        version_number=next_version_number,
         statement_text=statement.statement_text,
         statement_summary=statement.statement_summary,
         category=statement.category,
@@ -810,8 +819,6 @@ def update_policy_statement(
             detail="Policy statement not found for this document"
         )
 
-    _create_version_snapshot(db, statement, "manual_edit", current_user.id, request.change_reason)
-
     if request.statement_text is not None:
         statement.statement_text = request.statement_text[:10000]
     if request.statement_summary is not None:
@@ -826,6 +833,10 @@ def update_policy_statement(
         statement.source_section = request.source_section
 
     statement.updated_at = datetime.utcnow()
+
+    # Snapshot the resulting state so version history always includes the edited content.
+    _create_version_snapshot(db, statement, "manual_edit", current_user.id, request.change_reason)
+
     db.commit()
     db.refresh(statement)
 
@@ -859,6 +870,9 @@ def get_statement_versions(
         PolicyStatementVersion.statement_id == statement_id
     ).order_by(PolicyStatementVersion.version_number.desc()).all()
 
+    min_version = min((v.version_number for v in versions), default=0)
+    version_offset = min_version if min_version > 0 else 0
+
     result = []
     for v in versions:
         changer_name = None
@@ -868,7 +882,7 @@ def get_statement_versions(
                 changer_name = changer.display_name
         result.append({
             "id": v.id,
-            "version_number": v.version_number,
+            "version_number": (v.version_number - version_offset) if v.version_number is not None else 0,
             "statement_text": v.statement_text,
             "statement_summary": v.statement_summary,
             "category": v.category,
@@ -924,9 +938,6 @@ def rollback_statement(
     if not target_version:
         raise HTTPException(status_code=404, detail="Version not found")
 
-    _create_version_snapshot(db, statement, "rollback", current_user.id,
-                           f"Rolled back to version {target_version.version_number}")
-
     statement.statement_text = target_version.statement_text
     statement.statement_summary = target_version.statement_summary
     statement.category = target_version.category
@@ -940,6 +951,21 @@ def rollback_statement(
     statement.status = target_version.status
     statement.updated_at = datetime.utcnow()
 
+    min_version = db.query(func.min(PolicyStatementVersion.version_number)).filter(
+        PolicyStatementVersion.statement_id == statement_id
+    ).scalar()
+    version_offset = min_version if (min_version is not None and min_version > 0) else 0
+    target_display_version = target_version.version_number - version_offset
+
+    # Snapshot the resulting rolled-back state.
+    _create_version_snapshot(
+        db,
+        statement,
+        "rollback",
+        current_user.id,
+        f"Rolled back to version {target_display_version}"
+    )
+
     audit = AuditLog(
         tenant_id=document.tenant_id,
         user_id=current_user.id,
@@ -949,7 +975,7 @@ def rollback_statement(
         changes={
             "document_id": document_id,
             "statement_code": statement.statement_code,
-            "rolled_back_to_version": target_version.version_number,
+            "rolled_back_to_version": target_display_version,
             "target_version_id": target_version_id,
         }
     )
@@ -962,7 +988,7 @@ def rollback_statement(
     ).first()
 
     return {
-        "message": f"Statement rolled back to version {target_version.version_number}",
+        "message": f"Statement rolled back to version {target_display_version}",
         "statement": serialize_statement(statement, compliance.id if compliance else None)
     }
 
@@ -993,6 +1019,11 @@ def compare_versions(
     if not va or not vb:
         raise HTTPException(status_code=404, detail="One or both versions not found")
 
+    min_version = db.query(func.min(PolicyStatementVersion.version_number)).filter(
+        PolicyStatementVersion.statement_id == statement_id
+    ).scalar()
+    version_offset = min_version if (min_version is not None and min_version > 0) else 0
+
     fields_to_compare = ["statement_text", "statement_summary", "category", "priority", "is_mandatory", "source_section", "status"]
     changes = []
     for field in fields_to_compare:
@@ -1009,14 +1040,14 @@ def compare_versions(
     text_diff = list(difflib.unified_diff(
         (va.statement_text or "").splitlines(keepends=True),
         (vb.statement_text or "").splitlines(keepends=True),
-        fromfile=f"Version {va.version_number}",
-        tofile=f"Version {vb.version_number}",
+        fromfile=f"Version {va.version_number - version_offset}",
+        tofile=f"Version {vb.version_number - version_offset}",
         lineterm=""
     ))
 
     return {
-        "version_a": {"id": va.id, "version_number": va.version_number, "changed_at": va.changed_at.isoformat() if va.changed_at else None, "change_type": va.change_type},
-        "version_b": {"id": vb.id, "version_number": vb.version_number, "changed_at": vb.changed_at.isoformat() if vb.changed_at else None, "change_type": vb.change_type},
+        "version_a": {"id": va.id, "version_number": va.version_number - version_offset, "changed_at": va.changed_at.isoformat() if va.changed_at else None, "change_type": va.change_type},
+        "version_b": {"id": vb.id, "version_number": vb.version_number - version_offset, "changed_at": vb.changed_at.isoformat() if vb.changed_at else None, "change_type": vb.change_type},
         "field_changes": changes,
         "text_diff": text_diff,
         "total_changes": len(changes)
@@ -1093,8 +1124,6 @@ def apply_reparse_proposals(
                     PolicyStatement.id == proposal["existing_statement_id"]
                 ).first()
                 if statement:
-                    _create_version_snapshot(db, statement, "ai_reparse", current_user.id, "Re-parsed from document")
-
                     statement.statement_text = new_data.get("statement_text", statement.statement_text)[:10000]
                     statement.statement_summary = new_data.get("statement_summary", statement.statement_summary)
                     if new_data.get("statement_summary"):
@@ -1106,6 +1135,8 @@ def apply_reparse_proposals(
                     statement.ai_confidence = new_data.get("ai_confidence", statement.ai_confidence)
                     statement.ai_extracted_keywords = new_data.get("ai_extracted_keywords", statement.ai_extracted_keywords)
                     statement.updated_at = datetime.utcnow()
+
+                    _create_version_snapshot(db, statement, "ai_reparse", current_user.id, "Re-parsed from document")
                     accepted += 1
 
             elif proposal["type"] == "new":

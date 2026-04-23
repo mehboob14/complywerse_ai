@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import re
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 from ..models import (
     NormalizedControl, ControlMapping, GRCRequiredEvidence,
     FrameworkControl, Framework, GRCUser, get_db,
-    ParsedFrameworkControl, UploadedFramework, EvidenceControlMapping
+    ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping
 )
 from ..schemas import (
     NormalizedControlCreate, NormalizedControlUpdate, NormalizedControlResponse,
@@ -29,6 +30,66 @@ class ControlAIRecommendationRequest(BaseModel):
     control_title: str
     control_description: Optional[str] = None
     framework_name: Optional[str] = None
+
+
+class FrameworkControlEvidenceLinkCreate(BaseModel):
+    evidence_id: int
+
+
+def _natural_tokens(value: Optional[str]) -> tuple:
+    text = (value or "").strip()
+    if not text:
+        return ((3, ""),)
+
+    parts = re.findall(r"\d+|[A-Za-z]+|[^A-Za-z0-9]+", text)
+    tokens = []
+    for part in parts:
+        if part.isdigit():
+            tokens.append((0, int(part)))
+        elif part.isalpha():
+            tokens.append((1, part.lower()))
+        else:
+            tokens.append((2, part))
+    return tuple(tokens)
+
+
+def _framework_control_natural_key(control: ParsedFrameworkControl) -> tuple:
+    display_reference = control.original_reference or control.control_id or ""
+    framework_name = (control.uploaded_framework.name if control.uploaded_framework else "").lower()
+    title = (control.title or "").lower()
+    return (
+        _natural_tokens(display_reference),
+        framework_name,
+        title,
+        control.id
+    )
+
+
+def get_framework_control_or_404(
+    framework_control_id: int,
+    user_tenants: List[int],
+    db: Session
+) -> ParsedFrameworkControl:
+    access_filter = or_(
+        UploadedFramework.tenant_id.in_(user_tenants),
+        UploadedFramework.tenant_id.is_(None)
+    ) if user_tenants else UploadedFramework.tenant_id.is_(None)
+
+    control = db.query(ParsedFrameworkControl).join(
+        UploadedFramework,
+        ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
+    ).filter(
+        ParsedFrameworkControl.id == framework_control_id,
+        UploadedFramework.is_active == True,
+        access_filter
+    ).first()
+
+    if not control:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Framework control not found"
+        )
+    return control
 
 
 def get_openai_client() -> OpenAI:
@@ -358,6 +419,8 @@ def list_framework_controls(
     framework_id: Optional[int] = None,
     domain: Optional[str] = None,
     search: Optional[str] = None,
+    sort_by: Optional[str] = "framework_name",
+    sort_order: Optional[str] = "asc",
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -418,19 +481,56 @@ def list_framework_controls(
             (ParsedFrameworkControl.description.ilike(f"%{search}%"))
         )
     
+    sort_key = (sort_by or "framework_name").lower()
+    sort_direction = "desc" if (sort_order or "").lower() == "desc" else "asc"
+    descending = sort_direction == "desc"
+
+    evidence_count_sq = None
+    if sort_key in {"evidence", "evidence_count"}:
+        evidence_count_sq = db.query(
+            EvidenceControlMapping.parsed_control_id.label("parsed_control_id"),
+            func.count(EvidenceControlMapping.id).label("evidence_count")
+        ).group_by(EvidenceControlMapping.parsed_control_id).subquery()
+        query = query.outerjoin(
+            evidence_count_sq,
+            ParsedFrameworkControl.id == evidence_count_sq.c.parsed_control_id
+        )
+
+    if sort_key in {"control_id", "id", "reference"}:
+        primary_sort = ParsedFrameworkControl.control_id
+    elif sort_key in {"title", "name"}:
+        primary_sort = ParsedFrameworkControl.title
+    elif sort_key in {"domain"}:
+        primary_sort = ParsedFrameworkControl.domain
+    elif sort_key in {"priority"}:
+        primary_sort = ParsedFrameworkControl.priority
+    elif sort_key in {"status", "is_verified", "verification"}:
+        primary_sort = ParsedFrameworkControl.is_verified
+    elif sort_key in {"evidence", "evidence_count"}:
+        primary_sort = func.coalesce(evidence_count_sq.c.evidence_count, 0)
+    else:
+        primary_sort = UploadedFramework.name
+
+    order_clause = primary_sort.desc() if descending else primary_sort.asc()
+    framework_order = UploadedFramework.name.desc() if descending else UploadedFramework.name.asc()
+    control_order = ParsedFrameworkControl.control_id.desc() if descending else ParsedFrameworkControl.control_id.asc()
+
     total = query.count()
-    
-    from sqlalchemy import text, func, cast, Integer
-    
-    # Database-agnostic ordering: fallback to control_id string order for SQLite
-    from ..models import DATABASE_URL
-    
-    controls = query.options(
-        joinedload(ParsedFrameworkControl.uploaded_framework)
-    ).order_by(
-        UploadedFramework.name,
-        ParsedFrameworkControl.control_id  # Simple string order that works on all databases
-    ).offset(skip).limit(limit).all()
+
+    if sort_key in {"control_id", "id", "reference"}:
+        controls = query.options(
+            joinedload(ParsedFrameworkControl.uploaded_framework)
+        ).all()
+        controls = sorted(controls, key=_framework_control_natural_key, reverse=descending)
+        controls = controls[skip:skip + limit]
+    else:
+        controls = query.options(
+            joinedload(ParsedFrameworkControl.uploaded_framework)
+        ).order_by(
+            order_clause,
+            framework_order,
+            control_order
+        ).offset(skip).limit(limit).all()
     
     control_ids = [c.id for c in controls]
     evidence_counts = {}
@@ -486,15 +586,8 @@ def get_framework_control_detail(
     current_user: GRCUser = Depends(require_auth)
 ):
     """Get details of a specific framework control with evidence requirements"""
-    control = db.query(ParsedFrameworkControl).options(
-        joinedload(ParsedFrameworkControl.uploaded_framework)
-    ).filter(ParsedFrameworkControl.id == framework_control_id).first()
-    
-    if not control:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Framework control not found"
-        )
+    user_tenants = get_user_tenants(current_user, db)
+    control = get_framework_control_or_404(framework_control_id, user_tenants, db)
     
     # Get evidence count
     evidence_count = db.query(func.count(EvidenceControlMapping.id)).filter(
@@ -524,6 +617,127 @@ def get_framework_control_detail(
         "evidence_requirements": control.evidence_requirements or [],
         "evidence_count": evidence_count,
     }
+
+
+@router.get("/framework-control/{framework_control_id}/evidence")
+def list_framework_control_evidence(
+    framework_control_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    control = get_framework_control_or_404(framework_control_id, user_tenants, db)
+
+    links = db.query(EvidenceControlMapping).options(
+        joinedload(EvidenceControlMapping.evidence)
+    ).filter(
+        EvidenceControlMapping.parsed_control_id == control.id
+    ).join(
+        Evidence,
+        Evidence.id == EvidenceControlMapping.evidence_id
+    ).filter(
+        Evidence.tenant_id.in_(user_tenants)
+    ).order_by(
+        EvidenceControlMapping.created_at.desc()
+    ).all()
+
+    result = []
+    for link in links:
+        ev = link.evidence
+        if not ev:
+            continue
+        result.append({
+            "id": link.id,
+            "evidence_id": ev.id,
+            "title": ev.name or ev.file_name or f"Evidence #{ev.id}",
+            "description": ev.description,
+            "evidence_type": ev.evidence_type,
+            "status": ev.status,
+            "file_name": ev.file_name,
+            "linked_at": link.created_at.isoformat() if link.created_at else None,
+        })
+    return result
+
+
+@router.post("/framework-control/{framework_control_id}/evidence", status_code=status.HTTP_201_CREATED)
+def link_evidence_to_framework_control(
+    framework_control_id: int,
+    data: FrameworkControlEvidenceLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    control = get_framework_control_or_404(framework_control_id, user_tenants, db)
+
+    evidence = db.query(Evidence).filter(
+        Evidence.id == data.evidence_id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
+    if not evidence:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence not found"
+        )
+
+    existing = db.query(EvidenceControlMapping).filter(
+        EvidenceControlMapping.parsed_control_id == control.id,
+        EvidenceControlMapping.evidence_id == evidence.id
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Evidence already linked to this control"
+        )
+
+    link = EvidenceControlMapping(
+        evidence_id=evidence.id,
+        parsed_control_id=control.id,
+        uploaded_framework_id=control.uploaded_framework_id,
+        created_by_ai=False
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+
+    return {
+        "id": link.id,
+        "evidence_id": evidence.id,
+        "title": evidence.name or evidence.file_name or f"Evidence #{evidence.id}",
+        "description": evidence.description,
+        "evidence_type": evidence.evidence_type,
+        "status": evidence.status,
+        "file_name": evidence.file_name,
+        "linked_at": link.created_at.isoformat() if link.created_at else None,
+    }
+
+
+@router.delete("/framework-control/{framework_control_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_evidence_from_framework_control(
+    framework_control_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    control = get_framework_control_or_404(framework_control_id, user_tenants, db)
+
+    link = db.query(EvidenceControlMapping).join(
+        Evidence,
+        Evidence.id == EvidenceControlMapping.evidence_id
+    ).filter(
+        EvidenceControlMapping.id == link_id,
+        EvidenceControlMapping.parsed_control_id == control.id,
+        Evidence.tenant_id.in_(user_tenants)
+    ).first()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence link not found"
+        )
+
+    db.delete(link)
+    db.commit()
+    return None
 
 
 @router.get("/{control_id}", response_model=dict)

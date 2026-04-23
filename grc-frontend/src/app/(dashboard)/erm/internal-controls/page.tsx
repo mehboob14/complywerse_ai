@@ -28,7 +28,7 @@ import Link from 'next/link';
 import { evidenceApi } from '@/lib/api';
 import dynamic from 'next/dynamic';
 
-const { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } = {
+const { ResponsiveContainer, PieChart, Pie, Tooltip } = {
   ResponsiveContainer: dynamic(
     () => import('recharts').then((mod) => mod.ResponsiveContainer),
     { ssr: false }
@@ -38,7 +38,6 @@ const { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } = {
     { ssr: false }
   ),
   Pie: dynamic(() => import('recharts').then((mod) => mod.Pie), { ssr: false }),
-  Cell: dynamic(() => import('recharts').then((mod) => mod.Cell), { ssr: false }),
   Tooltip: dynamic(() => import('recharts').then((mod) => mod.Tooltip), { ssr: false }),
 };
 
@@ -129,6 +128,20 @@ const EFFECTIVENESS_STYLES: Record<string, { bg: string; text: string; label: st
   partially_effective: { bg: 'bg-yellow-100', text: 'text-slate-800', label: 'Partially Effective' },
   ineffective: { bg: 'bg-red-100', text: 'text-slate-800', label: 'Ineffective' },
   not_tested: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Not Tested' },
+};
+
+const STATUS_PIE_COLORS: Record<string, string> = {
+  Active: '#22c55e',
+  Draft: '#94a3b8',
+  Pending: '#eab308',
+  Inactive: '#ef4444',
+};
+
+const EFFECTIVENESS_PIE_COLORS: Record<string, string> = {
+  Effective: '#22c55e',
+  Partial: '#eab308',
+  Ineffective: '#ef4444',
+  'Not Tested': '#94a3b8',
 };
 
 function getStatusStyle(status: string) {
@@ -481,6 +494,28 @@ export default function InternalControlsPage() {
     return { total, keyCount, effectiveCount, pendingCount, activeCount, draftCount, inactiveCount, partialCount, ineffectiveCount, notTestedCount };
   }, [filteredControls]);
 
+  const statusBreakdownData = useMemo(
+    () =>
+      [
+        { name: 'Active', value: metrics.activeCount, fill: STATUS_PIE_COLORS.Active },
+        { name: 'Draft', value: metrics.draftCount, fill: STATUS_PIE_COLORS.Draft },
+        { name: 'Pending', value: metrics.pendingCount, fill: STATUS_PIE_COLORS.Pending },
+        { name: 'Inactive', value: metrics.inactiveCount, fill: STATUS_PIE_COLORS.Inactive },
+      ].filter((d) => d.value > 0),
+    [metrics.activeCount, metrics.draftCount, metrics.pendingCount, metrics.inactiveCount]
+  );
+
+  const effectivenessBreakdownData = useMemo(
+    () =>
+      [
+        { name: 'Effective', value: metrics.effectiveCount, fill: EFFECTIVENESS_PIE_COLORS.Effective },
+        { name: 'Partial', value: metrics.partialCount, fill: EFFECTIVENESS_PIE_COLORS.Partial },
+        { name: 'Ineffective', value: metrics.ineffectiveCount, fill: EFFECTIVENESS_PIE_COLORS.Ineffective },
+        { name: 'Not Tested', value: metrics.notTestedCount, fill: EFFECTIVENESS_PIE_COLORS['Not Tested'] },
+      ].filter((d) => d.value > 0),
+    [metrics.effectiveCount, metrics.partialCount, metrics.ineffectiveCount, metrics.notTestedCount]
+  );
+
   const availableModalSubCategories = useMemo(() => {
     return CONTROL_SUBCATEGORIES[selectedModalCategory] || [];
   }, [selectedModalCategory]);
@@ -543,14 +578,11 @@ export default function InternalControlsPage() {
                 <PieChart>
                   <Pie
                     data={[
-                      { name: 'Key', value: metrics.keyCount },
-                      { name: 'Other', value: Math.max(0, metrics.total - metrics.keyCount) },
+                      { name: 'Key', value: metrics.keyCount, fill: '#7c3aed' },
+                      { name: 'Other', value: Math.max(0, metrics.total - metrics.keyCount), fill: '#cbd5e1' },
                     ]}
                     cx="50%" cy="50%" innerRadius={22} outerRadius={33} dataKey="value" paddingAngle={2}
-                  >
-                    <Cell fill="#7c3aed" />
-                    <Cell fill="#e2e8f0" />
-                  </Pie>
+                  />
                   <Tooltip formatter={(v, n) => [v, n]} />
                 </PieChart>
               </ResponsiveContainer>
@@ -581,19 +613,9 @@ export default function InternalControlsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={[
-                      { name: 'Active', value: metrics.activeCount },
-                      { name: 'Draft', value: metrics.draftCount },
-                      { name: 'Pending', value: metrics.pendingCount },
-                      { name: 'Inactive', value: metrics.inactiveCount },
-                    ].filter((d) => d.value > 0)}
+                    data={statusBreakdownData}
                     cx="50%" cy="50%" innerRadius={22} outerRadius={33} dataKey="value" paddingAngle={2}
-                  >
-                    <Cell fill="#22c55e" />
-                    <Cell fill="#94a3b8" />
-                    <Cell fill="#eab308" />
-                    <Cell fill="#ef4444" />
-                  </Pie>
+                  />
                   <Tooltip formatter={(v, n) => [v, n]} />
                 </PieChart>
               </ResponsiveContainer>
@@ -630,19 +652,9 @@ export default function InternalControlsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={[
-                      { name: 'Effective', value: metrics.effectiveCount },
-                      { name: 'Partial', value: metrics.partialCount },
-                      { name: 'Ineffective', value: metrics.ineffectiveCount },
-                      { name: 'Not Tested', value: metrics.notTestedCount },
-                    ].filter((d) => d.value > 0)}
+                    data={effectivenessBreakdownData}
                     cx="50%" cy="50%" innerRadius={22} outerRadius={33} dataKey="value" paddingAngle={2}
-                  >
-                    <Cell fill="#22c55e" />
-                    <Cell fill="#eab308" />
-                    <Cell fill="#ef4444" />
-                    <Cell fill="#e2e8f0" />
-                  </Pie>
+                  />
                   <Tooltip formatter={(v, n) => [v, n]} />
                 </PieChart>
               </ResponsiveContainer>
@@ -683,12 +695,9 @@ export default function InternalControlsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={[{ value: score }, { value: 100 - score }]}
+                        data={[{ value: score, fill: scoreColor }, { value: 100 - score, fill: '#cbd5e1' }]}
                         cx="50%" cy="50%" innerRadius={22} outerRadius={33} dataKey="value" startAngle={90} endAngle={-270}
-                      >
-                        <Cell fill={scoreColor} />
-                        <Cell fill="#e2e8f0" />
-                      </Pie>
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
